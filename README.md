@@ -1,18 +1,32 @@
 # Markdown 問答系統
 
-```
-maya_sawa/
-├── __init__.py
-├── main.py              # FastAPI 應用程式入口點
-├── api/                 # API 路由模組
-│   ├── __init__.py
-│   └── qa.py           # 問答相關的 API 路由
-└── core/               # 核心功能模組
-    ├── __init__.py
-    └── qa_engine.py    # 問答引擎的核心邏輯
-```
+
 
 這是一個基於 FastAPI、LangChain 和 ChromaDB 建構的強大文件問答系統。你可以對你的 Markdown 文件提問，系統會根據文件內容提供 AI 驅動的答案。
+
+
+## 專案結構
+
+```
+maya_sawa/
+├── maya_sawa/          # 主要程式碼目錄
+│   ├── __init__.py
+│   ├── main.py         # FastAPI 應用程式入口點
+│   ├── api/            # API 路由模組
+│   │   ├── __init__.py
+│   │   └── qa.py       # 問答相關的 API 路由
+│   └── core/           # 核心功能模組
+│       ├── __init__.py
+│       ├── loader.py   # 文件載入和分塊
+│       ├── embed.py    # 向量存儲和檢索
+│       └── qa_chain.py # 問答鏈實作
+├── data/               # 資料目錄
+│   ├── uploads/        # 上傳的文件存放處
+│   └── chroma/         # ChromaDB 向量存儲（自動生成）
+│       └── chroma.sqlite3  # ChromaDB 的資料庫文件
+├── pyproject.toml      # Poetry 專案配置
+└── README.md          # 本文件
+```
 
 ## 功能特點
 
@@ -53,43 +67,58 @@ OPENAI_API_KEY=sk-your-api-key-here
 
 ## 使用方式
 
-1. 將你的 Markdown 文件放在 `data/` 目錄下。
+1. 準備你的文件：
+   - 將 Markdown 或 PDF 文件放在 `data/uploads/` 目錄下
+   - 或者直接通過 API 上傳文件
 
 2. 啟動伺服器：
+
+Windows PowerShell:
+```powershell
+$env:PYTHONPATH = "."; poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
+```
+
+Unix/Linux/macOS:
 ```bash
-poetry run uvicorn maya_sawa.main:app --reload
+PYTHONPATH=. poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
 ```
 
 3. 上傳文件：
+
+方法一：上傳文件
+
+Windows PowerShell:
+```powershell
+Invoke-WebRequest -Method POST -Form @{file=Get-Item "data/uploads/haha.md"} -Uri "http://localhost:8000/qa/upload"
+```
+
+Git Bash/Unix/Linux/macOS:
 ```bash
-curl -X POST -F "file=@your_document.md" http://localhost:8000/qa/upload
+curl -X POST -F "file=@/f/002-workspace/maya-sawa/data/uploads/haha.md" http://localhost:8000/qa/upload
+```
+
+方法二：直接上傳文本內容
+
+Windows PowerShell:
+```powershell
+Invoke-WebRequest -Method POST -Form @{content=(Get-Content "data/uploads/haha.md" -Raw); filename="haha.md"} -Uri "http://localhost:8000/qa/upload"
+```
+
+Unix/Linux/macOS:
+```bash
+curl -X POST -F "content=$(cat data/uploads/haha.md)" -F "filename=haha.md" http://localhost:8000/qa/upload
 ```
 
 4. 提問：
+
+Windows PowerShell:
+```powershell
+Invoke-WebRequest -Method POST -Body (@{text="你的問題"} | ConvertTo-Json) -ContentType "application/json" -Uri "http://localhost:8000/qa/query"
+```
+
+Unix/Linux/macOS:
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"text":"你的問題"}' http://localhost:8000/qa/query
-```
-
-## 專案結構
-
-```
-maya_sawa/
-├── maya_sawa/          # 主要程式碼目錄
-│   ├── __init__.py
-│   ├── main.py         # FastAPI 應用程式入口點
-│   ├── api/            # API 路由模組
-│   │   ├── __init__.py
-│   │   └── qa.py       # 問答相關的 API 路由
-│   └── core/           # 核心功能模組
-│       ├── __init__.py
-│       ├── loader.py   # 文件載入和分塊
-│       ├── embed.py    # 向量存儲和檢索
-│       └── qa_chain.py # 問答鏈實作
-├── data/               # 資料目錄
-│   ├── uploads/        # 上傳的文件
-│   └── chroma/         # ChromaDB 向量存儲
-├── pyproject.toml      # Poetry 專案配置
-└── README.md          # 本文件
 ```
 
 ## 授權條款

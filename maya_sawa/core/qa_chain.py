@@ -1,13 +1,46 @@
 from typing import List, Dict
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQAWithSourcesChain
-from langchain.prompts import PromptTemplate
+from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain.schema import Document
+from langchain.schema.runnable import RunnablePassthrough
+from langchain.schema.output_parser import StrOutputParser
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class QAChain:
     def __init__(self):
-        self.llm = ChatOpenAI(temperature=0)
-        self.chain = None
+        api_key = os.getenv("OPENAI_API_KEY")
+        api_base = os.getenv("OPENAI_API_BASE")
+        logger.debug(f"QAChain - Using API Base: {api_base}")
+        
+        self.llm = ChatOpenAI(
+            model="gpt-3.5-turbo",
+            temperature=0,
+            openai_organization="org-Fn0OFYXnMJGYRxvbjTbyZX6T",
+            base_url=api_base,
+            api_key=api_key
+        )
+        
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", """你是一個專業的助手，負責回答關於上傳文件的問題。
+            請根據提供的文件內容來回答問題。如果問題與文件內容無關，請禮貌地說明。
+            回答時請：
+            1. 保持專業和準確
+            2. 使用清晰的語言
+            3. 如果可能，提供具體的例子或引用
+            4. 如果不確定，請誠實說明"""),
+            ("human", "文件內容：\n{context}\n\n問題：{question}")
+        ])
+        
+        self.chain = (
+            {"context": RunnablePassthrough(), "question": RunnablePassthrough()}
+            | self.prompt
+            | self.llm
+            | StrOutputParser()
+        )
 
     def _create_chain(self, retriever):
         """創建問答鏈"""
@@ -49,4 +82,8 @@ class QAChain:
         return {
             "answer": result["answer"],
             "sources": [doc.metadata.get("source", "Unknown") for doc in result["source_documents"]]
-        } 
+        }
+
+    def get_answer_from_file(self, question: str, context: str) -> str:
+        """獲取問題的答案"""
+        return self.chain.invoke({"context": context, "question": question}) 

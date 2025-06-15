@@ -1,7 +1,7 @@
 from typing import List
-from langchain_community.document_loaders import UnstructuredMarkdownLoader, PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
+from langchain_community.document_loaders import TextLoader, PyPDFLoader
 
 class DocumentLoader:
     def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
@@ -14,7 +14,7 @@ class DocumentLoader:
 
     def load_markdown(self, file_path: str) -> List[Document]:
         """載入 Markdown 文件並分塊"""
-        loader = UnstructuredMarkdownLoader(file_path)
+        loader = TextLoader(file_path, encoding='utf-8')
         documents = loader.load()
         return self.text_splitter.split_documents(documents)
 
