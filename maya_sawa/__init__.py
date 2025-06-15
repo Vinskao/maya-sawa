@@ -1,5 +1,5 @@
 """
-Maya-Sawa: A document Q&A system using LangChain and ChromaDB
+Maya Sawa - Markdown Q&A System
 """
 
 __version__ = "0.1.0" 

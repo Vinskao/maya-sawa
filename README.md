@@ -1,87 +1,97 @@
-# Maya-Sawa: Document Q&A System
+# Markdown 問答系統
 
-A powerful document question-answering system built with LangChain and ChromaDB. This system allows you to ask questions about your markdown documents and get AI-powered answers based on the content.
+```
+maya_sawa/
+├── __init__.py
+├── main.py              # FastAPI 應用程式入口點
+├── api/                 # API 路由模組
+│   ├── __init__.py
+│   └── qa.py           # 問答相關的 API 路由
+└── core/               # 核心功能模組
+    ├── __init__.py
+    └── qa_engine.py    # 問答引擎的核心邏輯
+```
 
-## Features
+這是一個基於 FastAPI、LangChain 和 ChromaDB 建構的強大文件問答系統。你可以對你的 Markdown 文件提問，系統會根據文件內容提供 AI 驅動的答案。
 
-- Document ingestion and processing
-- Text chunking with overlap
-- Vector storage using ChromaDB
-- OpenAI embeddings and chat model integration
-- Interactive CLI interface for Q&A
+## 功能特點
 
-## Prerequisites
+- 文件載入與處理
+- 文本分塊（支援重疊）
+- 使用 ChromaDB 進行向量存儲
+- 整合 OpenAI 的嵌入模型和聊天模型
+- FastAPI REST API 介面
 
-- Python 3.9 or higher
-- Poetry (Python package manager)
-- OpenAI API key
+## 環境需求
 
-## Installation
+- Python 3.12 或更高版本
+- Poetry（Python 套件管理器）
+- OpenAI API 金鑰
 
-1. Clone the repository:
+## 安裝步驟
+
+1. 複製專案：
 ```bash
 git clone https://github.com/yourusername/maya-sawa.git
 cd maya-sawa
 ```
 
-2. Install dependencies using Poetry:
+2. 使用 Poetry 安裝依賴：
 ```bash
 poetry install
 ```
 
-3. Create a `.env` file:
+3. 建立 `.env` 檔案：
 ```bash
 cp .env.example .env
 ```
 
-4. Edit `.env` and add your OpenAI API key:
+4. 編輯 `.env` 並加入你的 OpenAI API 金鑰：
 ```
 OPENAI_API_KEY=sk-your-api-key-here
 ```
 
-## Usage
+## 使用方式
 
-1. Place your markdown documents in the `docs/` directory.
+1. 將你的 Markdown 文件放在 `data/` 目錄下。
 
-2. Process the documents and create the vector store:
+2. 啟動伺服器：
 ```bash
-poetry run python ingest.py
+poetry run uvicorn maya_sawa.main:app --reload
 ```
 
-3. Start the Q&A chat interface:
+3. 上傳文件：
 ```bash
-poetry run python qa_chat.py
+curl -X POST -F "file=@your_document.md" http://localhost:8000/qa/upload
 ```
 
-4. Ask questions about your documents! Type 'exit' to quit.
-
-## Project Structure
-
-```
-maya-sawa/
-├── docs/                # Markdown documents
-├── chroma_db/           # ChromaDB vector store
-├── ingest.py           # Document processing script
-├── qa_chat.py          # Q&A chat interface
-├── .env.example        # Environment variables template
-├── pyproject.toml      # Poetry project configuration
-└── README.md           # This file
+4. 提問：
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"text":"你的問題"}' http://localhost:8000/qa/query
 ```
 
-## How It Works
+## 專案結構
 
-1. **Document Processing** (`ingest.py`):
-   - Reads markdown files from the `docs/` directory
-   - Splits documents into chunks using RecursiveCharacterTextSplitter
-   - Creates embeddings using OpenAI's text-embedding-3-small model
-   - Stores vectors in ChromaDB
+```
+maya_sawa/
+├── maya_sawa/          # 主要程式碼目錄
+│   ├── __init__.py
+│   ├── main.py         # FastAPI 應用程式入口點
+│   ├── api/            # API 路由模組
+│   │   ├── __init__.py
+│   │   └── qa.py       # 問答相關的 API 路由
+│   └── core/           # 核心功能模組
+│       ├── __init__.py
+│       ├── loader.py   # 文件載入和分塊
+│       ├── embed.py    # 向量存儲和檢索
+│       └── qa_chain.py # 問答鏈實作
+├── data/               # 資料目錄
+│   ├── uploads/        # 上傳的文件
+│   └── chroma/         # ChromaDB 向量存儲
+├── pyproject.toml      # Poetry 專案配置
+└── README.md          # 本文件
+```
 
-2. **Q&A System** (`qa_chat.py`):
-   - Loads the vector store
-   - Uses GPT-3.5-turbo for generating answers
-   - Provides source documents for answers
-   - Interactive CLI interface for questions
-
-## License
+## 授權條款
 
 MIT License
