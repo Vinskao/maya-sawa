@@ -94,7 +94,7 @@ Invoke-WebRequest -Method POST -Form @{file=Get-Item "data/uploads/haha.md"} -Ur
 
 Git Bash/Unix/Linux/macOS:
 ```bash
-curl -X POST -F "file=@/f/002-workspace/maya-sawa/data/uploads/haha.md" http://localhost:8000/qa/upload
+curl -X POST -F "file=@data/uploads/haha.md" http://localhost:8000/qa/upload
 ```
 
 方法二：直接上傳文本內容
@@ -118,7 +118,7 @@ Invoke-WebRequest -Method POST -Body (@{text="你的問題"} | ConvertTo-Json) -
 
 Unix/Linux/macOS:
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"text":"你的問題"}' http://localhost:8000/qa/query
+curl -X POST -H "Content-Type: application/json" -d '{"text":"文件主旨是什麼"}' http://localhost:8000/qa/query
 ```
 
 ## 授權條款

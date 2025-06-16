@@ -26,7 +26,7 @@ class VectorStore:
     def add_documents(self, documents: List[Document]) -> None:
         """添加文件到向量存儲"""
         self.vector_store.add_documents(documents)
-        self.vector_store.persist()
+        # No need to call persist() in ChromaDB 1.0.12 as it's automatic
 
     def similarity_search(self, query: str, k: int = 4) -> List[Document]:
         """搜尋相似文件"""

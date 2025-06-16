@@ -78,10 +78,15 @@ class QAChain:
             retriever = SimpleRetriever(documents)
             self._create_chain(retriever)
 
-        result = self.chain({"question": query})
+        # Convert documents to context string
+        context = "\n\n".join([doc.page_content for doc in documents])
+        
+        # Use the chain with invoke instead of direct call
+        result = self.chain.invoke({"context": context, "question": query})
+        
         return {
-            "answer": result["answer"],
-            "sources": [doc.metadata.get("source", "Unknown") for doc in result["source_documents"]]
+            "answer": result,
+            "sources": [doc.metadata.get("source", "Unknown") for doc in documents]
         }
 
     def get_answer_from_file(self, question: str, context: str) -> str:
