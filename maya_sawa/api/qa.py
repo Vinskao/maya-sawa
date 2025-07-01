@@ -6,7 +6,6 @@ import httpx
 import asyncio
 from ..core.postgres_store import PostgresVectorStore
 from ..core.qa_chain import QAChain
-from ..core.loader import DocumentLoader
 from ..core.chat_history import ChatHistoryManager
 from langchain.schema import Document
 from typing import List, Dict, Any

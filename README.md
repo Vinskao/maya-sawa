@@ -202,6 +202,47 @@ docker run -p 8000:8000 \
    - 生產環境：`https://peoplesystem.tatdvsonorth.com/maya-sawa/`
    - API 文檔：`https://peoplesystem.tatdvsonorth.com/maya-sawa/docs`
 
+### 部署後 API 使用示例
+
+#### 1. 同步文章
+```bash
+curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/sync-from-api" \
+  -H "Content-Type: application/json" \
+  -d '{"remote_url":"https://peoplesystem.tatdvsonorth.com/paprika/articles"}'
+```
+
+#### 2. 問答查詢
+```bash
+curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"What is Java OOP?","user_id":"user123"}'
+```
+
+#### 3. 查看聊天歷史
+```bash
+curl -X GET "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/chat-history/user123"
+```
+
+#### 4. 查看聊天統計
+```bash
+curl -X GET "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/chat-stats/user123"
+```
+
+#### 5. 清除聊天歷史
+```bash
+curl -X DELETE "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/chat-history/user123"
+```
+
+#### 6. 查看所有用戶
+```bash
+curl -X GET "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/chat-users"
+```
+
+#### 7. 查看文章統計
+```bash
+curl -X GET "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/stats"
+```
+
 ### Jenkins 定時同步設置
 
 創建 Jenkins Pipeline 用於定時同步文章：
