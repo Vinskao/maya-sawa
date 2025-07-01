@@ -14,14 +14,15 @@ class QAChain:
     def __init__(self):
         api_key = os.getenv("OPENAI_API_KEY")
         api_base = os.getenv("OPENAI_API_BASE")
+        openai_organization = os.getenv("OPENAI_ORGANIZATION")
         logger.debug(f"QAChain - Using API Base: {api_base}")
         
         self.llm = ChatOpenAI(
             model="gpt-3.5-turbo",
             temperature=0,
-            openai_organization="org-Fn0OFYXnMJGYRxvbjTbyZX6T",
             base_url=api_base,
-            api_key=api_key
+            api_key=api_key,
+            openai_organization=openai_organization
         )
         
         self.prompt = ChatPromptTemplate.from_messages([
@@ -78,8 +79,28 @@ class QAChain:
             retriever = SimpleRetriever(documents)
             self._create_chain(retriever)
 
-        # Convert documents to context string
-        context = "\n\n".join([doc.page_content for doc in documents])
+        # 限制 context 長度，避免超過 token 限制
+        max_context_length = 8000  # 預留空間給 prompt 和問題
+        context_parts = []
+        current_length = 0
+        
+        for doc in documents:
+            doc_content = doc.page_content
+            if current_length + len(doc_content) > max_context_length:
+                # 如果加上這個文件會超過限制，就截斷
+                remaining_length = max_context_length - current_length
+                if remaining_length > 100:  # 至少保留 100 字符
+                    doc_content = doc_content[:remaining_length] + "..."
+                else:
+                    break
+            
+            context_parts.append(doc_content)
+            current_length += len(doc_content)
+        
+        # 合併 context
+        context = "\n\n".join(context_parts)
+        
+        logger.debug(f"Context length: {len(context)} characters")
         
         # Use the chain with invoke instead of direct call
         result = self.chain.invoke({"context": context, "question": query})

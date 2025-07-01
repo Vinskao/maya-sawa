@@ -14,10 +14,9 @@ python-multipart = "^0.0.9"
 python-dotenv = "^1.0.1"
 langchain = "0.3.25"
 langchain-openai = "0.3.23"
-langchain-chroma = "^0.2.4"
-langchain-community = "0.3.25"
-chromadb = "^1.0.12"
-markdown = "^3.5.2"
+psycopg2-binary = "^2.9.9"
+httpx = "^0.27.0"
+redis = "^5.0.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

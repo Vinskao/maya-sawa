@@ -12,6 +12,14 @@ class DocumentLoader:
             is_separator_regex=False,
         )
 
+    def load_from_text(self, text: str, filename: str) -> List[Document]:
+        """從文本內容創建文檔並分塊"""
+        document = Document(
+            page_content=text,
+            metadata={"source": filename}
+        )
+        return self.text_splitter.split_documents([document])
+
     def load_markdown(self, file_path: str) -> List[Document]:
         """載入 Markdown 文件並分塊"""
         loader = TextLoader(file_path, encoding='utf-8')
