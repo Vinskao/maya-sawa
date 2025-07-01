@@ -194,13 +194,6 @@ async def query_document(request: QueryRequest):
         # 獲取答案
         result = qa_chain.get_answer(request.text, documents)
         
-        # 儲存對話記錄
-        chat_history_manager.save_conversation(
-            user_message=request.text,
-            ai_answer=result["answer"],
-            user_id=request.user_id
-        )
-        
         # 格式化返回的資料（移除 content 欄位，前端可以自己查看）
         formatted_data = []
         for doc in documents:
@@ -212,6 +205,14 @@ async def query_document(request: QueryRequest):
                 "tags": doc.metadata.get("tags", []),
                 "similarity": doc.metadata.get("similarity", 0.0)
             })
+        
+        # 儲存對話記錄（包含參考文章信息）
+        chat_history_manager.save_conversation(
+            user_message=request.text,
+            ai_answer=result["answer"],
+            user_id=request.user_id,
+            reference_data=formatted_data  # 添加參考文章信息
+        )
         
         return {
             "success": True,

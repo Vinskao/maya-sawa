@@ -44,6 +44,7 @@ class ChatHistoryManager:
                          user_message: str, 
                          ai_answer: str, 
                          user_id: str = "default",
+                         reference_data: List[Dict[str, Any]] = None,
                          ttl_seconds: int = 3600) -> bool:
         """
         儲存對話記錄
@@ -52,6 +53,7 @@ class ChatHistoryManager:
             user_message: 用戶問題
             ai_answer: AI 回答
             user_id: 用戶 ID（預設為 "default"）
+            reference_data: 參考文章信息列表
             ttl_seconds: 過期時間（秒），預設 1 小時
             
         Returns:
@@ -66,7 +68,8 @@ class ChatHistoryManager:
                 "user_message": user_message,
                 "ai_answer": ai_answer,
                 "timestamp": timestamp,
-                "user_id": user_id
+                "user_id": user_id,
+                "reference_data": reference_data or []  # 添加參考文章信息
             }
             
             # 推入 Redis List
