@@ -11,7 +11,7 @@ from langchain.schema import Document
 from typing import List, Dict, Any
 
 # 從環境變數獲取 API base URL
-PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "https://peoplesystem.tatdvsonorth.com")
+PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "")
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +48,21 @@ class QueryRequest(BaseModel):
     user_id: str = "default"  # 新增用戶 ID 欄位
 
 class SyncRequest(BaseModel):
-    remote_url: str = f"{PUBLIC_API_BASE_URL}/paprika/articles"
+    remote_url: str = None
 
 class SyncFromAPIRequest(BaseModel):
-    remote_url: str = f"{PUBLIC_API_BASE_URL}/paprika/articles"
+    remote_url: str = None
 
 @router.post("/sync-from-api")
 async def sync_articles_from_api(request: SyncFromAPIRequest):
     """從遠端 API 同步文章並使用預計算的 embedding"""
     try:
+        # 使用預設 URL 如果沒有提供
+        remote_url = request.remote_url or f"{PUBLIC_API_BASE_URL}/paprika/articles"
+        
         # 從遠端 API 獲取文章
         async with httpx.AsyncClient() as client:
-            response = await client.get(request.remote_url)
+            response = await client.get(remote_url)
             response.raise_for_status()
             data = response.json()
         
@@ -100,9 +103,12 @@ async def sync_articles_from_api(request: SyncFromAPIRequest):
 async def sync_articles_from_remote(request: SyncRequest):
     """從遠端 API 同步文章並生成 embedding（保留原有方法以向後兼容）"""
     try:
+        # 使用預設 URL 如果沒有提供
+        remote_url = request.remote_url or f"{PUBLIC_API_BASE_URL}/paprika/articles"
+        
         # 從遠端 API 獲取文章
         async with httpx.AsyncClient() as client:
-            response = await client.get(request.remote_url)
+            response = await client.get(remote_url)
             response.raise_for_status()
             data = response.json()
         
@@ -194,16 +200,23 @@ async def query_document(request: QueryRequest):
         # 獲取答案
         result = qa_chain.get_answer(request.text, documents)
         
-        # 格式化返回的資料（移除 content 欄位，前端可以自己查看）
+        # 格式化返回的資料（包含完整的參考信息）
         formatted_data = []
         for doc in documents:
+            # 提取內容片段（前200字符）
+            content_preview = doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+            
             formatted_data.append({
                 "id": doc.metadata.get("id"),
                 "file_path": doc.metadata.get("file_path"),
                 "title": doc.metadata.get("title", ""),
                 "description": doc.metadata.get("description", ""),
                 "tags": doc.metadata.get("tags", []),
-                "similarity": doc.metadata.get("similarity", 0.0)
+                "similarity": round(doc.metadata.get("similarity", 0.0), 4),  # 四捨五入到4位小數
+                "content_preview": content_preview,
+                "content_length": len(doc.page_content),
+                "file_date": doc.metadata.get("file_date", ""),
+                "source": doc.metadata.get("source", "")
             })
         
         # 儲存對話記錄（包含參考文章信息）

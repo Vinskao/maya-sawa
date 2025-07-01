@@ -167,6 +167,7 @@ class PostgresVectorStore:
                     id,
                     file_path,
                     content,
+                    file_date,
                     1 - (embedding <=> %s::vector) as similarity
                 FROM articles
                 WHERE 1 - (embedding <=> %s::vector) > %s
@@ -186,7 +187,9 @@ class PostgresVectorStore:
                     metadata={
                         "id": result[0],
                         "file_path": result[1],
-                        "similarity": result[3]
+                        "file_date": result[3].isoformat() if result[3] else "",
+                        "similarity": result[4],
+                        "source": result[1]  # 使用 file_path 作為 source
                     }
                 )
                 documents.append(doc)
