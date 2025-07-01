@@ -202,10 +202,16 @@ docker run -p 8000:8000 \
    - 生產環境：`https://peoplesystem.tatdvsonorth.com/maya-sawa/`
    - API 文檔：`https://peoplesystem.tatdvsonorth.com/maya-sawa/docs`
 
-### 部署後 API 使用示例
+### API 使用示例 (本地開發 vs 生產環境)
 
 #### 1. 同步文章
 ```bash
+# 本地開發
+curl -X POST "http://localhost:8000/qa/sync-from-api" \
+  -H "Content-Type: application/json" \
+  -d '{"remote_url":"https://peoplesystem.tatdvsonorth.com/paprika/articles"}'
+
+# 生產環境
 curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/sync-from-api" \
   -H "Content-Type: application/json" \
   -d '{"remote_url":"https://peoplesystem.tatdvsonorth.com/paprika/articles"}'
@@ -213,6 +219,12 @@ curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/sync-from-api" 
 
 #### 2. 問答查詢
 ```bash
+# 本地開發
+curl -X POST "http://localhost:8000/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"What is Java OOP?","user_id":"user123"}'
+
+# 生產環境
 curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
   -d '{"text":"What is Java OOP?","user_id":"user123"}'
@@ -220,27 +232,56 @@ curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/query" \
 
 #### 3. 查看聊天歷史
 ```bash
+# 本地開發
+curl -X GET "http://localhost:8000/qa/chat-history/user123"
+
+# 生產環境
 curl -X GET "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/chat-history/user123"
 ```
 
 #### 4. 查看聊天統計
 ```bash
+# 本地開發
+curl -X GET "http://localhost:8000/qa/chat-stats/user123"
+
+# 生產環境
 curl -X GET "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/chat-stats/user123"
 ```
 
 #### 5. 清除聊天歷史
 ```bash
+# 本地開發
+curl -X DELETE "http://localhost:8000/qa/chat-history/user123"
+
+# 生產環境
 curl -X DELETE "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/chat-history/user123"
 ```
 
 #### 6. 查看所有用戶
 ```bash
+# 本地開發
+curl -X GET "http://localhost:8000/qa/chat-users"
+
+# 生產環境
 curl -X GET "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/chat-users"
 ```
 
 #### 7. 查看文章統計
 ```bash
+# 本地開發
+curl -X GET "http://localhost:8000/qa/stats"
+
+# 生產環境
 curl -X GET "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/stats"
+```
+
+#### 8. API 文檔
+```bash
+# 本地開發
+open http://localhost:8000/docs
+
+# 生產環境
+open https://peoplesystem.tatdvsonorth.com/maya-sawa/docs
 ```
 
 ### Jenkins 定時同步設置

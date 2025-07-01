@@ -25,7 +25,8 @@ if not api_base:
 app = FastAPI(
     title="Markdown Q&A System",
     description="A powerful document Q&A system based on FastAPI, LangChain, and ChromaDB",
-    version="0.1.0"
+    version="0.1.0",
+    root_path="/maya-sawa"
 )
 
 # 設置 CORS
