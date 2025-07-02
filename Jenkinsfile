@@ -148,9 +148,16 @@ pipeline {
                                     envsubst < k8s/deployment.yaml > k8s/deployment.yaml.tmp
                                     mv k8s/deployment.yaml.tmp k8s/deployment.yaml
                                     
+                                    # 替換 cronjob.yaml 中的環境變數
+                                    envsubst < k8s/cronjob.yaml > k8s/cronjob.yaml.tmp
+                                    mv k8s/cronjob.yaml.tmp k8s/cronjob.yaml
+                                    
                                     # 部署 Maya Sawa
                                     kubectl apply -f k8s/deployment.yaml
                                     kubectl rollout restart deployment maya-sawa
+                                    
+                                    # 部署 CronJob
+                                    kubectl apply -f k8s/cronjob.yaml
                                 '''
                             }
                         }

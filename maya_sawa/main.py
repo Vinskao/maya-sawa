@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .api.qa import router as qa_router
+from .core.scheduler import ArticleSyncScheduler
 import os
 from dotenv import load_dotenv
 import logging
+import asyncio
 
 # 設置日誌
 logging.basicConfig(level=logging.DEBUG)
@@ -40,6 +42,35 @@ app.add_middleware(
 
 # 註冊路由
 app.include_router(qa_router)
+
+# 創建排程器實例
+scheduler = ArticleSyncScheduler()
+
+@app.on_event("startup")
+async def startup_event():
+    """應用程式啟動時執行的事件"""
+    try:
+        # 執行初始同步
+        logger.info("應用程式啟動，開始執行初始同步...")
+        await scheduler.run_initial_sync()
+        
+        # 啟動定期同步任務（每3天凌晨3點執行）
+        await scheduler.start_periodic_sync(interval_days=3, hour=3, minute=0)
+        
+        logger.info("應用程式啟動完成，排程任務已啟動")
+    except Exception as e:
+        logger.error(f"啟動時發生錯誤: {str(e)}")
+        # 不讓啟動錯誤阻止應用程式運行
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """應用程式關閉時執行的事件"""
+    try:
+        # 停止定期同步任務
+        await scheduler.stop_periodic_sync()
+        logger.info("應用程式關閉，排程任務已停止")
+    except Exception as e:
+        logger.error(f"關閉時發生錯誤: {str(e)}")
 
 @app.get("/")
 async def root():

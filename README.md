@@ -284,42 +284,55 @@ open http://localhost:8000/docs
 open https://peoplesystem.tatdvsonorth.com/maya-sawa/docs
 ```
 
-### Jenkins 定時同步設置
+## 自動同步功能
 
-創建 Jenkins Pipeline 用於定時同步文章：
-```groovy
-pipeline {
-    agent any
-    
-    environment {
-        PYTHONPATH = '.'
-    }
-    
-    triggers {
-        cron('0 3 * * *')  // 每天凌晨 3:00 執行
-    }
-    
-    stages {
-        stage('Sync Articles') {
-            steps {
-                script {
-                    // 安裝依賴
-                    sh 'poetry install'
-                    
-                    // 執行同步腳本
-                    sh 'poetry run python scripts/sync_articles.py'
-                }
-            }
-        }
-    }
-    
-    post {
-        always {
-            // 清理工作空間
-            cleanWs()
-        }
-    }
-}
+### 1. 程式啟動時同步
+當 Maya Sawa 應用程式啟動時，會自動執行一次文章同步，確保資料是最新的。
+
+### 2. 定期同步排程
+系統提供兩種定期同步方式：
+
+#### 方式一：應用程式內建排程（推薦）
+- 每 3 天凌晨 3:00 自動執行同步
+- 由應用程式內部管理，無需額外配置
+- 在 `maya_sawa/main.py` 中配置
+
+#### 方式二：Kubernetes CronJob
+- 使用 Kubernetes CronJob 進行排程
+- 每 3 天凌晨 3:00 執行
+- 獨立於應用程式運行
+- 配置在 `k8s/cronjob.yaml`
+
+### 3. 手動同步
+可以使用以下方式手動執行同步：
+
+```bash
+# 使用同步腳本
+poetry run python scripts/sync_articles.py
+
+# 或使用 API 端點
+curl -X POST "http://localhost:8000/qa/sync-from-api" \
+  -H "Content-Type: application/json"
+```
+
+### 4. 同步配置
+同步功能會：
+- 從遠端 API 獲取文章資料
+- 使用預計算的 embedding 進行向量化
+- 更新 PostgreSQL 資料庫
+- 記錄同步日誌
+
+### 5. 監控同步狀態
+```bash
+# 查看 CronJob 狀態
+kubectl get cronjobs
+kubectl get jobs
+
+# 查看同步日誌
+kubectl logs job/maya-sawa-sync-<timestamp>
+
+# 查看應用程式日誌
+kubectl logs deployment/maya-sawa
 ```
 
 ## 資料庫查詢範例

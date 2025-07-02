@@ -1,0 +1,95 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: maya-sawa-sync
+  labels:
+    app.kubernetes.io/name: maya-sawa-sync
+spec:
+  schedule: "0 3 */3 * *"  # 每3天的凌晨3點執行
+  concurrencyPolicy: Forbid  # 防止重複執行
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: jenkins-admin
+          containers:
+          - name: sync-articles
+            image: papakao/maya-sawa:latest
+            command: ["python", "-c"]
+            args:
+            - |
+              import asyncio
+              import sys
+              import os
+              sys.path.append('.')
+              from maya_sawa.api.qa import sync_articles_from_api, SyncFromAPIRequest
+              
+              async def main():
+                  try:
+                      request = SyncFromAPIRequest()
+                      result = await sync_articles_from_api(request)
+                      print(f"同步完成: {result.get('message', '同步完成')}")
+                      return 0
+                  except Exception as e:
+                      print(f"同步失敗: {str(e)}")
+                      return 1
+              
+              if __name__ == "__main__":
+                  exit_code = asyncio.run(main())
+                  sys.exit(exit_code)
+            env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: OPENAI_API_KEY
+            - name: OPENAI_ORGANIZATION
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: OPENAI_ORGANIZATION
+            - name: OPENAI_API_BASE
+              value: "https://api.openai.com/v1"
+            - name: POSTGRES_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: POSTGRES_CONNECTION_STRING
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: REDIS_HOST
+            - name: REDIS_CUSTOM_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: REDIS_CUSTOM_PORT
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: REDIS_PASSWORD
+            - name: REDIS_QUEUE_QA_KM
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: REDIS_QUEUE_QA_KM
+            - name: PUBLIC_API_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: PUBLIC_API_BASE_URL
+            - name: PYTHONPATH
+              value: "."
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "200m"
+          restartPolicy: OnFailure
+          backoffLimit: 3 
