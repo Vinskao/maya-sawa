@@ -375,7 +375,7 @@ async def query_document(request: QueryRequest):
 
     except Exception as e:
         logger.error(f"查詢時發生錯誤: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"查詢失敗: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"查詢失敗: {str(e)}") 
 
 @router.get("/chat-history/{user_id}")
 async def get_user_chat_history(user_id: str = "default", limit: int = 50):
@@ -474,7 +474,7 @@ async def clear_chat_history(user_id: str = "default"):
             }
         else:
             raise HTTPException(status_code=500, detail="清除對話歷史失敗")
-        
+            
     except Exception as e:
         logger.error(f"清除對話歷史時發生錯誤: {str(e)}")
         raise HTTPException(status_code=500, detail=f"清除對話歷史失敗: {str(e)}")

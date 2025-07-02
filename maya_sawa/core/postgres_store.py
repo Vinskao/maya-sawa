@@ -344,6 +344,6 @@ class PostgresVectorStore:
         with psycopg2.connect(self.connection_string) as conn:
             cur = conn.cursor()
             # 使用 TRUNCATE 快速清空表
-            cur.execute("TRUNCATE TABLE articles")
+            cur.execute("TRUNCATE TABLE articles") 
             conn.commit()
             logger.info("All articles have been cleared from the database") 

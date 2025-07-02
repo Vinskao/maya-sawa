@@ -11,6 +11,7 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      backoffLimit: 3  # 移動到正確位置
       template:
         spec:
           serviceAccountName: jenkins-admin
@@ -91,5 +92,4 @@ spec:
               limits:
                 memory: "512Mi"
                 cpu: "200m"
-          restartPolicy: OnFailure
-          backoffLimit: 3 
+          restartPolicy: OnFailure 
