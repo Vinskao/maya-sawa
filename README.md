@@ -6,52 +6,52 @@
 
 ```mermaid
 graph TD
-    %% 用戶層
-    User[用戶] --> WebAPI[Web API]
-    User --> CLI[CLI 工具]
+    %% User Layer
+    User[User] --> WebAPI[Web API]
+    User --> CLI[CLI Tools]
     
-    %% API 層
-    WebAPI --> FastAPI[FastAPI 應用]
+    %% API Layer
+    WebAPI --> FastAPI[FastAPI Application]
     CLI --> FastAPI
     
-    %% 核心服務層
-    FastAPI --> QARouter[問答路由]
-    FastAPI --> SyncRouter[同步路由]
-    FastAPI --> ChatRouter[對話路由]
+    %% Core Service Layer
+    FastAPI --> QARouter[QA Router]
+    FastAPI --> SyncRouter[Sync Router]
+    FastAPI --> ChatRouter[Chat Router]
     
-    %% 業務邏輯層
-    QARouter --> QAChain[問答鏈]
-    QARouter --> VectorStore[向量存儲]
-    QARouter --> ChatHistory[對話歷史]
+    %% Business Logic Layer
+    QARouter --> QAChain[QA Chain]
+    QARouter --> VectorStore[Vector Store]
+    QARouter --> ChatHistory[Chat History]
     
-    SyncRouter --> Scheduler[同步排程器]
+    SyncRouter --> Scheduler[Scheduler]
     SyncRouter --> VectorStore
     
     ChatRouter --> ChatHistory
     
-    %% 數據處理層
+    %% Data Processing Layer
     QAChain --> LLM[OpenAI GPT]
     QAChain --> Embeddings[OpenAI Embeddings]
     
     VectorStore --> Postgres[(PostgreSQL + pgvector)]
     ChatHistory --> Redis[(Redis)]
     
-    %% 外部服務
-    Scheduler --> RemoteAPI[遠端 API]
-    Loader[文檔載入器] --> VectorStore
+    %% External Services
+    Scheduler --> RemoteAPI[Remote API]
+    Loader[Document Loader] --> VectorStore
     
-    %% 連接池管理
-    ConnectionPool[連接池管理器] --> Postgres
+    %% Connection Pool Management
+    ConnectionPool[Connection Pool Manager] --> Postgres
     ConnectionPool --> Redis
     
-    %% 樣式定義
+    %% Style Definitions
     classDef userLayer fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef apiLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef serviceLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
     classDef dataLayer fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef externalLayer fill:#fce4ec,stroke:#880e4f,stroke-width:2px
     
-    %% 應用樣式
+    %% Apply Styles
     class User,WebAPI,CLI userLayer
     class FastAPI,QARouter,SyncRouter,ChatRouter apiLayer
     class QAChain,VectorStore,ChatHistory,Scheduler,Loader,ConnectionPool serviceLayer
