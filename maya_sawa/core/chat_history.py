@@ -1,19 +1,61 @@
-import redis
+"""
+Markdown Q&A System - 對話歷史管理模組
+
+這個模組實現了基於 Redis 的對話歷史管理功能，負責：
+1. 儲存用戶與 AI 的對話記錄
+2. 檢索和查詢對話歷史
+3. 提供對話統計信息
+4. 管理多用戶對話數據
+5. 支持對話記錄的過期清理
+
+主要功能：
+- Redis 數據庫集成
+- 多用戶對話隔離
+- 對話記錄序列化
+- 統計信息收集
+- 自動過期管理
+
+作者: Maya Sawa Team
+版本: 0.1.0
+"""
+
+# 標準庫導入
 import json
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+
+# 第三方庫導入
+import redis
+
+# 環境變數導入
 import os
 
+# ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
 
 class ChatHistoryManager:
+    """
+    對話歷史管理器
+    
+    負責管理用戶與 AI 系統的對話記錄，包括：
+    - 對話記錄的儲存和檢索
+    - 多用戶數據隔離
+    - 統計信息收集
+    - 過期數據清理
+    """
+    
     def __init__(self):
+        """
+        初始化對話歷史管理器
+        
+        設置 Redis 連接配置並測試連接
+        """
         # 從環境變數獲取 Redis 配置
         self.redis_host = os.getenv("REDIS_HOST", "localhost")
         self.redis_port = int(os.getenv("REDIS_CUSTOM_PORT", 6379))
         self.redis_password = os.getenv("REDIS_PASSWORD")
-        self.redis_db = 0
+        self.redis_db = 0  # 使用默認數據庫
         
         # 初始化 Redis 連接
         self.redis_client = redis.Redis(
@@ -21,14 +63,18 @@ class ChatHistoryManager:
             port=self.redis_port,
             password=self.redis_password,
             db=self.redis_db,
-            decode_responses=True  # 自動解碼為字串
+            decode_responses=True  # 自動解碼為字符串
         )
         
         # 測試連接
         self._test_connection()
 
     def _test_connection(self):
-        """測試 Redis 連接"""
+        """
+        測試 Redis 連接
+        
+        驗證 Redis 連接是否正常，確保應用程式啟動時能正常連接到 Redis
+        """
         try:
             self.redis_client.ping()
             logger.info("Successfully connected to Redis")
@@ -37,7 +83,17 @@ class ChatHistoryManager:
             raise
 
     def _get_chat_key(self, user_id: str = "default") -> str:
-        """生成聊天記錄的 Redis key"""
+        """
+        生成聊天記錄的 Redis key
+        
+        為每個用戶生成唯一的 Redis key，確保多用戶數據隔離
+        
+        Args:
+            user_id (str): 用戶 ID，默認為 "default"
+            
+        Returns:
+            str: Redis key 字符串
+        """
         return f"chat:user:{user_id}:ai:qa_system"
 
     def save_conversation(self, 

@@ -2,6 +2,63 @@
 
 這是一個基於 FastAPI、LangChain 和 PostgreSQL (pgvector) 建構的強大文件問答系統。你可以對你的 Markdown 文件提問，系統會根據文件內容提供 AI 驅動的答案。
 
+## 系統架構圖
+
+```mermaid
+graph TD
+    %% 用戶層
+    User[用戶] --> WebAPI[Web API]
+    User --> CLI[CLI 工具]
+    
+    %% API 層
+    WebAPI --> FastAPI[FastAPI 應用]
+    CLI --> FastAPI
+    
+    %% 核心服務層
+    FastAPI --> QARouter[問答路由]
+    FastAPI --> SyncRouter[同步路由]
+    FastAPI --> ChatRouter[對話路由]
+    
+    %% 業務邏輯層
+    QARouter --> QAChain[問答鏈]
+    QARouter --> VectorStore[向量存儲]
+    QARouter --> ChatHistory[對話歷史]
+    
+    SyncRouter --> Scheduler[同步排程器]
+    SyncRouter --> VectorStore
+    
+    ChatRouter --> ChatHistory
+    
+    %% 數據處理層
+    QAChain --> LLM[OpenAI GPT]
+    QAChain --> Embeddings[OpenAI Embeddings]
+    
+    VectorStore --> Postgres[(PostgreSQL + pgvector)]
+    ChatHistory --> Redis[(Redis)]
+    
+    %% 外部服務
+    Scheduler --> RemoteAPI[遠端 API]
+    Loader[文檔載入器] --> VectorStore
+    
+    %% 連接池管理
+    ConnectionPool[連接池管理器] --> Postgres
+    ConnectionPool --> Redis
+    
+    %% 樣式定義
+    classDef userLayer fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef apiLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef serviceLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef dataLayer fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef externalLayer fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    
+    %% 應用樣式
+    class User,WebAPI,CLI userLayer
+    class FastAPI,QARouter,SyncRouter,ChatRouter apiLayer
+    class QAChain,VectorStore,ChatHistory,Scheduler,Loader,ConnectionPool serviceLayer
+    class Postgres,Redis dataLayer
+    class LLM,Embeddings,RemoteAPI externalLayer
+```
+
 ## 專案結構
 
 ```
