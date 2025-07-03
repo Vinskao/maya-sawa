@@ -243,6 +243,7 @@ class QAChain:
             # 創建簡單的文檔檢索器
             class SimpleRetriever(BaseRetriever):
                 def __init__(self, docs):
+                    super().__init__()
                     self.docs = docs
                 def get_relevant_documents(self, query):
                     return self.docs
