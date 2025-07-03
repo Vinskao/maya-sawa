@@ -26,6 +26,8 @@ from dotenv import load_dotenv
 # 本地模組導入
 from .api.qa import router as qa_router
 from .core.scheduler import ArticleSyncScheduler
+from .core.people import sync_data
+from .core.config import Config
 
 # ==================== 日誌配置 ====================
 # 設置日誌級別為 DEBUG，用於開發環境的詳細調試信息
@@ -91,18 +93,55 @@ async def startup_event():
     
     這個函數在 FastAPI 應用程式啟動時自動執行，負責：
     1. 執行初始文章同步
-    2. 啟動定期同步任務
-    3. 記錄啟動日誌
+    2. 執行人員和武器數據同步
+    3. 啟動定期同步任務
+    4. 記錄啟動日誌
     """
     try:
-        # 執行初始同步，確保系統啟動時有最新的文章數據
-        logger.info("應用程式啟動，開始執行初始同步...")
-        await scheduler.run_initial_sync()
+        # 檢查配置
+        missing_config = Config.validate_required_config()
+        if missing_config:
+            logger.warning(f"缺少必要的配置變數: {', '.join(missing_config)}")
         
-        # 啟動定期同步任務，每3天凌晨3點自動執行文章同步
-        await scheduler.start_periodic_sync(interval_days=3, hour=3, minute=0)
+        # 記錄同步配置
+        sync_config = Config.get_sync_config_summary()
+        logger.info(f"同步配置: {sync_config}")
         
-        logger.info("應用程式啟動完成，排程任務已啟動")
+        # 執行初始文章同步（如果啟用）
+        if Config.ENABLE_AUTO_SYNC_ON_STARTUP:
+            logger.info("應用程式啟動，開始執行初始文章同步...")
+            try:
+                await scheduler.run_initial_sync()
+            except Exception as e:
+                logger.error(f"初始文章同步失敗: {str(e)}")
+                # 不讓文章同步失敗阻止應用程式啟動
+        else:
+            logger.info("跳過初始文章同步（已禁用）")
+        
+        # 執行人員和武器數據同步（如果啟用）
+        if Config.ENABLE_PEOPLE_WEAPONS_SYNC:
+            logger.info("開始執行人員和武器數據同步...")
+            try:
+                people_weapons_result = sync_data()
+                logger.info(f"人員和武器數據同步完成: 人員 {people_weapons_result['people_updated']} 條, 武器 {people_weapons_result['weapons_updated']} 條")
+            except Exception as e:
+                logger.error(f"人員和武器數據同步失敗: {str(e)}")
+                # 不讓人員武器同步失敗阻止應用程式啟動
+        else:
+            logger.info("跳過人員和武器數據同步（已禁用）")
+        
+        # 啟動定期同步任務（如果啟用）
+        if Config.ENABLE_PERIODIC_SYNC:
+            await scheduler.start_periodic_sync(
+                interval_days=Config.SYNC_INTERVAL_DAYS, 
+                hour=Config.SYNC_HOUR, 
+                minute=Config.SYNC_MINUTE
+            )
+            logger.info("定期同步任務已啟動")
+        else:
+            logger.info("跳過定期同步任務（已禁用）")
+        
+        logger.info("應用程式啟動完成")
     except Exception as e:
         # 記錄啟動錯誤，但不讓啟動錯誤阻止應用程式運行
         logger.error(f"啟動時發生錯誤: {str(e)}")

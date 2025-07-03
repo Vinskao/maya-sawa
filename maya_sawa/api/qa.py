@@ -35,6 +35,8 @@ from langchain.schema import Document
 from ..core.postgres_store import PostgresVectorStore
 from ..core.qa_chain import QAChain
 from ..core.chat_history import ChatHistoryManager
+from ..core.people import sync_data
+from ..core.config import Config
 
 # ==================== 環境變數配置 ====================
 # 從環境變數獲取公共 API 基礎 URL
@@ -124,6 +126,14 @@ class SyncFromAPIRequest(BaseModel):
     定義從遠端 API 同步文章的請求格式
     """
     remote_url: Optional[str] = None  # 遠端 API URL，可選
+
+class PeopleWeaponsSyncRequest(BaseModel):
+    """
+    人員和武器同步請求模型
+    
+    定義人員和武器數據同步的請求格式
+    """
+    max_time_seconds: Optional[int] = 60  # 最大處理時間（秒）
 
 # ==================== API 端點定義 ====================
 
@@ -508,4 +518,101 @@ async def get_all_chat_users():
         
     except Exception as e:
         logger.error(f"獲取用戶列表時發生錯誤: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"獲取用戶列表失敗: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"獲取用戶列表失敗: {str(e)}")
+
+@router.post("/sync-people-weapons")
+async def sync_people_weapons_data(request: PeopleWeaponsSyncRequest = PeopleWeaponsSyncRequest()):
+    """
+    同步人員和武器數據
+    
+    從外部 API 獲取人員和武器數據，並更新 PostgreSQL 表格，
+    同時生成 embedding 用於語義搜索。
+    
+    Args:
+        request (PeopleWeaponsSyncRequest): 同步請求，包含時間限制
+        
+    Returns:
+        dict: 同步結果，包含成功狀態、消息、更新記錄數量等
+        
+    Raises:
+        HTTPException: 當同步失敗時拋出 HTTP 異常
+    """
+    try:
+        logger.info(f"開始同步人員和武器數據 (最大時間: {request.max_time_seconds}s)...")
+        
+        # 執行數據同步
+        result = sync_data(max_time_seconds=request.max_time_seconds)
+        
+        return {
+            "success": True,
+            "message": f"人員和武器數據同步完成 (耗時: {result.get('total_time_seconds', 0)}s)",
+            "data": {
+                "people_updated": result["people_updated"],
+                "weapons_updated": result["weapons_updated"],
+                "total_updated": result["total_updated"],
+                "total_time_seconds": result.get("total_time_seconds", 0),
+                "people_data_count": result.get("people_data_count", 0),
+                "weapons_data_count": result.get("weapons_data_count", 0)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"同步人員和武器數據時發生錯誤: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"同步失敗: {str(e)}")
+
+@router.get("/sync-config")
+async def get_sync_configuration():
+    """
+    獲取同步配置信息
+    
+    返回當前系統的同步配置設置，包括：
+    - 自動同步開關
+    - 定期同步設置
+    - 人員武器同步設置
+    
+    Returns:
+        dict: 包含同步配置信息的字典
+    """
+    try:
+        config_summary = Config.get_sync_config_summary()
+        missing_config = Config.validate_required_config()
+        
+        return {
+            "success": True,
+            "config": config_summary,
+            "missing_config": missing_config,
+            "has_required_config": len(missing_config) == 0
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取同步配置時發生錯誤: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"獲取配置失敗: {str(e)}")
+
+@router.post("/stop-sync")
+async def stop_sync_tasks():
+    """
+    停止所有同步任務
+    
+    停止正在運行的定期同步任務，包括：
+    - 文章同步任務
+    - 人員武器同步任務
+    
+    Returns:
+        dict: 操作結果字典
+    """
+    try:
+        from ..core.scheduler import scheduler
+        
+        # 停止定期同步任務
+        await scheduler.stop_periodic_sync()
+        
+        return {
+            "success": True,
+            "message": "所有同步任務已停止"
+        }
+        
+    except Exception as e:
+        logger.error(f"停止同步任務時發生錯誤: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"停止同步失敗: {str(e)}")
+
+ 

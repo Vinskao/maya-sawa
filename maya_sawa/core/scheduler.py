@@ -28,6 +28,8 @@ import os
 
 # 本地模組導入
 from ..api.qa import sync_articles_from_api, SyncFromAPIRequest
+from .people import sync_data
+from .config import Config
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -51,6 +53,8 @@ class ArticleSyncScheduler:
         """
         # 同步任務的異步任務對象
         self._sync_task: Optional[asyncio.Task] = None
+        # 停止標誌
+        self._stop_flag = False
         
     async def sync_articles_from_api(self, remote_url: Optional[str] = None) -> dict:
         """
@@ -85,6 +89,27 @@ class ArticleSyncScheduler:
             logger.error(f"同步文章時發生錯誤: {str(e)}")
             raise Exception(f"同步失敗: {str(e)}")
     
+    def sync_people_weapons_data(self) -> dict:
+        """
+        同步人員和武器數據
+        
+        調用人員和武器數據同步功能
+        
+        Returns:
+            dict: 同步結果字典
+            
+        Raises:
+            Exception: 當同步失敗時拋出異常
+        """
+        try:
+            logger.info("開始同步人員和武器數據...")
+            result = sync_data()
+            logger.info(f"人員和武器數據同步完成: 人員 {result['people_updated']} 條, 武器 {result['weapons_updated']} 條")
+            return result
+        except Exception as e:
+            logger.error(f"同步人員和武器數據時發生錯誤: {str(e)}")
+            raise Exception(f"人員武器同步失敗: {str(e)}")
+    
     async def start_periodic_sync(self, interval_days: int = 3, hour: int = 3, minute: int = 0):
         """
         啟動定期同步任務
@@ -117,6 +142,9 @@ class ArticleSyncScheduler:
         - 異常處理
         - 狀態清理
         """
+        # 設置停止標誌
+        self._stop_flag = True
+        
         if self._sync_task and not self._sync_task.done():
             # 取消同步任務
             self._sync_task.cancel()
@@ -143,7 +171,7 @@ class ArticleSyncScheduler:
             hour (int): 同步時間（小時）
             minute (int): 同步時間（分鐘）
         """
-        while True:
+        while not self._stop_flag:
             try:
                 # 計算下次執行時間
                 now = datetime.now()
@@ -157,15 +185,47 @@ class ArticleSyncScheduler:
                 wait_seconds = (next_run - now).total_seconds()
                 logger.info(f"下次同步時間: {next_run.strftime('%Y-%m-%d %H:%M:%S')} (等待 {wait_seconds:.0f} 秒)")
                 
-                await asyncio.sleep(wait_seconds)
+                # 分段等待，每分鐘檢查一次停止標誌
+                for _ in range(int(wait_seconds // 60)):
+                    if self._stop_flag:
+                        logger.info("定期同步任務收到停止信號")
+                        return
+                    await asyncio.sleep(60)
                 
-                # 執行同步操作
-                logger.info("開始執行定期同步...")
-                result = await self.sync_articles_from_api()
-                logger.info(f"定期同步完成: {result.get('message', '同步完成')}")
+                # 等待剩餘時間
+                remaining_seconds = wait_seconds % 60
+                if remaining_seconds > 0:
+                    await asyncio.sleep(remaining_seconds)
                 
-                # 等待指定的天數間隔
-                await asyncio.sleep(interval_days * 24 * 3600)
+                # 檢查停止標誌
+                if self._stop_flag:
+                    logger.info("定期同步任務收到停止信號")
+                    return
+                
+                # 執行文章同步操作（如果啟用）
+                if Config.ENABLE_PERIODIC_SYNC:
+                    logger.info("開始執行定期文章同步...")
+                    try:
+                        articles_result = await self.sync_articles_from_api()
+                        logger.info(f"定期文章同步完成: {articles_result.get('message', '同步完成')}")
+                    except Exception as e:
+                        logger.error(f"定期文章同步失敗: {str(e)}")
+                
+                # 執行人員和武器數據同步操作（如果啟用）
+                if Config.ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC:
+                    logger.info("開始執行定期人員和武器數據同步...")
+                    try:
+                        people_weapons_result = self.sync_people_weapons_data()
+                        logger.info(f"定期人員武器同步完成: 人員 {people_weapons_result['people_updated']} 條, 武器 {people_weapons_result['weapons_updated']} 條")
+                    except Exception as e:
+                        logger.error(f"定期人員武器同步失敗: {str(e)}")
+                
+                # 等待指定的天數間隔（分段等待）
+                for _ in range(interval_days * 24 * 60):  # 每分鐘檢查一次
+                    if self._stop_flag:
+                        logger.info("定期同步任務收到停止信號")
+                        return
+                    await asyncio.sleep(60)
                 
             except asyncio.CancelledError:
                 # 處理任務取消
@@ -190,10 +250,10 @@ class ArticleSyncScheduler:
             Exception: 當初始同步失敗時拋出異常
         """
         try:
-            logger.info("程式啟動，執行初始同步...")
+            logger.info("程式啟動，執行初始文章同步...")
             result = await self.sync_articles_from_api()
-            logger.info(f"初始同步完成: {result.get('message', '同步完成')}")
+            logger.info(f"初始文章同步完成: {result.get('message', '同步完成')}")
             return result
         except Exception as e:
-            logger.error(f"初始同步失敗: {str(e)}")
+            logger.error(f"初始文章同步失敗: {str(e)}")
             raise 

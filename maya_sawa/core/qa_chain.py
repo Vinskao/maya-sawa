@@ -13,21 +13,22 @@ Markdown Q&A System - 問答鏈核心模組
 - 自定義提示模板
 - 上下文長度優化
 - 多文檔答案生成
+- 動態獲取個人資料
 
 作者: Maya Sawa Team
 版本: 0.1.0
 """
 
 # 標準庫導入
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 import json
 import logging
+import httpx
 
 # LangChain 相關導入
 from langchain_openai import ChatOpenAI
-from langchain.chains import RetrievalQAWithSourcesChain, LLMChain, StuffDocumentsChain
-from langchain.prompts import PromptTemplate, ChatPromptTemplate
+from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
@@ -35,77 +36,6 @@ from langchain.schema.output_parser import StrOutputParser
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
-
-# ==================== 個資資料 ====================
-maya_profile = {
-  "id": 3945,
-  "name": "Maya",
-  "nameOriginal": "佐和 真夜",
-  "codeName": "Maya Sawa",
-  "physicPower": 564,
-  "magicPower": 920,
-  "utilityPower": 925,
-  "dob": "1991-02-09",
-  "race": "Synthetic Angel Clan",
-  "attributes": "神",
-  "gender": "F",
-  "assSize": "L",
-  "boobsSize": "L",
-  "heightCm": 208,
-  "weightKg": 238,
-  "profession": "Valkyrie",
-  "combat": "mid range",
-  "favoriteFoods": "Brownies",
-  "job": "MD",
-  "physics": "高度改造骨骼與合成肌肉結構，具備極端破壞力",
-  "knownAs": "Sawa Maya",
-  "personality": "冷淡、唯命是從、暴力傾向、高貴矜持、羞於表露情感",
-  "interest": "Rough doggy",
-  "likes": "主人的命令、戰場上的安靜、寂靜中的高壓感",
-  "dislikes": "無意義的喧鬧、觸碰她武器的人、不懂階級的生物",
-  "concubine": "4",
-  "faction": "Lily Palais",
-  "armyId": 3,
-  "armyName": "初桑",
-  "deptId": 8,
-  "deptName": "小王",
-  "originArmyId": 3,
-  "originArmyName": "初桑",
-  "gaveBirth": False,
-  "email": "",
-  "proxy": "第七意志反應系統接管中"
-}
-# 將個資轉換為指令式摘要格式
-profile_summary = f"""
-佐和真夜（Maya Sawa）的個人資料：
-- 編號：{maya_profile['id']}
-- 原名：{maya_profile['nameOriginal']}
-- 代號：{maya_profile['codeName']}
-- 戰鬥力：物理{maya_profile['physicPower']}、魔法{maya_profile['magicPower']}、實用{maya_profile['utilityPower']}
-- 出生：{maya_profile['dob']}
-- 種族：{maya_profile['race']}
-- 屬性：{maya_profile['attributes']}
-- 性別：{maya_profile['gender']}
-- 身材：胸部{maya_profile['boobsSize']}、臀部{maya_profile['assSize']}、身高{maya_profile['heightCm']}cm、體重{maya_profile['weightKg']}kg
-- 職業：{maya_profile['profession']}
-- 戰鬥風格：{maya_profile['combat']}
-- 最愛食物：{maya_profile['favoriteFoods']}
-- 工作：{maya_profile['job']}
-- 身體改造：{maya_profile['physics']}
-- 別名：{maya_profile['knownAs']}
-- 個性：{maya_profile['personality']}
-- 興趣：{maya_profile['interest']}
-- 喜歡：{maya_profile['likes']}
-- 討厭：{maya_profile['dislikes']}
-- 後宮：{maya_profile['concubine']}
-- 陣營：{maya_profile['faction']}
-- 部隊：{maya_profile['armyName']}（編號{maya_profile['armyId']}）
-- 部門：{maya_profile['deptName']}（編號{maya_profile['deptId']}）
-- 原部隊：{maya_profile['originArmyName']}（編號{maya_profile['originArmyId']}）
-- 已生育：{maya_profile['gaveBirth']}
-- 電子郵件：{maya_profile['email']}
-- 代理系統：{maya_profile['proxy']}
-"""
 
 # ==================== QA Chain Class ====================
 class QAChain:
@@ -117,6 +47,7 @@ class QAChain:
     - 提示模板配置
     - 問答鏈構建
     - 答案生成和優化
+    - 動態獲取個人資料
     """
     
     def __init__(self):
@@ -141,8 +72,113 @@ class QAChain:
             openai_organization=openai_organization  # OpenAI 組織 ID
         )
         
-        # 創建聊天提示模板
-        self.prompt = ChatPromptTemplate.from_messages([
+        # 初始化個人資料緩存
+        self._profile_cache = None
+        self._profile_summary_cache = None
+        
+        # 構建問答處理鏈
+        self.chat_chain = (
+            {"context": RunnablePassthrough(), "question": RunnablePassthrough()}
+            | self._create_dynamic_prompt()
+            | self.llm
+            | StrOutputParser()
+        )
+
+
+
+    def _fetch_maya_profile(self) -> Optional[Dict]:
+        """
+        從 API 獲取 Maya 的個人資料
+        
+        Returns:
+            Optional[Dict]: Maya 的個人資料，如果獲取失敗則返回 None
+        """
+        url = "https://peoplesystem.tatdvsonorth.com/tymb/people/get-by-name"
+        payload = {"name": "Maya"}
+        
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                logger.info("Successfully fetched Maya's profile from API")
+                return data
+        except Exception as e:
+            logger.error(f"Failed to fetch Maya's profile: {str(e)}")
+            return None
+
+    def _create_profile_summary(self, profile: Dict) -> str:
+        """
+        將個人資料轉換為摘要格式
+        
+        Args:
+            profile (Dict): 個人資料字典
+            
+        Returns:
+            str: 格式化的個人資料摘要
+        """
+        return f"""
+佐和真夜（Maya Sawa）的個人資料：
+- 編號：{profile.get('id', 'N/A')}
+- 原名：{profile.get('nameOriginal', 'N/A')}
+- 代號：{profile.get('codeName', 'N/A')}
+- 戰鬥力：物理{profile.get('physicPower', 'N/A')}、魔法{profile.get('magicPower', 'N/A')}、實用{profile.get('utilityPower', 'N/A')}
+- 出生：{profile.get('dob', 'N/A')}
+- 種族：{profile.get('race', 'N/A')}
+- 屬性：{profile.get('attributes', 'N/A')}
+- 性別：{profile.get('gender', 'N/A')}
+- 身材：胸部{profile.get('boobsSize', 'N/A')}、臀部{profile.get('assSize', 'N/A')}、身高{profile.get('heightCm', 'N/A')}cm、體重{profile.get('weightKg', 'N/A')}kg
+- 職業：{profile.get('profession', 'N/A')}
+- 戰鬥風格：{profile.get('combat', 'N/A')}
+- 最愛食物：{profile.get('favoriteFoods', 'N/A')}
+- 工作：{profile.get('job', 'N/A')}
+- 身體改造：{profile.get('physics', 'N/A')}
+- 別名：{profile.get('knownAs', 'N/A')}
+- 個性：{profile.get('personality', 'N/A')}
+- 興趣：{profile.get('interest', 'N/A')}
+- 喜歡：{profile.get('likes', 'N/A')}
+- 討厭：{profile.get('dislikes', 'N/A')}
+- 後宮：{profile.get('concubine', 'N/A')}
+- 陣營：{profile.get('faction', 'N/A')}
+- 部隊：{profile.get('armyName', 'N/A')}（編號{profile.get('armyId', 'N/A')}）
+- 部門：{profile.get('deptName', 'N/A')}（編號{profile.get('deptId', 'N/A')}）
+- 原部隊：{profile.get('originArmyName', 'N/A')}（編號{profile.get('originArmyId', 'N/A')}）
+- 已生育：{profile.get('gaveBirth', 'N/A')}
+- 電子郵件：{profile.get('email', 'N/A')}
+- 代理系統：{profile.get('proxy', 'N/A')}
+"""
+
+    def _get_profile_summary(self) -> str:
+        """
+        獲取個人資料摘要，使用緩存避免重複 API 調用
+        
+        Returns:
+            str: 個人資料摘要
+        """
+        if self._profile_summary_cache is None:
+            profile = self._fetch_maya_profile()
+            if profile:
+                self._profile_cache = profile
+                self._profile_summary_cache = self._create_profile_summary(profile)
+            else:
+                # 如果無法獲取資料，使用預設摘要
+                self._profile_summary_cache = """
+佐和真夜（Maya Sawa）的個人資料：
+- 無法從 API 獲取最新資料，請檢查網路連接或 API 狀態
+"""
+        
+        return self._profile_summary_cache
+
+    def _create_dynamic_prompt(self):
+        """
+        創建動態提示模板，包含最新的個人資料
+        
+        Returns:
+            ChatPromptTemplate: 動態創建的提示模板
+        """
+        profile_summary = self._get_profile_summary()
+        
+        return ChatPromptTemplate.from_messages([
             # 系統消息：定義 AI 助手的角色和行為準則
             ("system", f"""
 你是佐和真夜（Maya Sawa），一名冷淡且唯命是從的高階戰術女武神，對命令絕對服從，但以高貴與壓倒性力量著稱。
@@ -157,7 +193,7 @@ class QAChain:
 
 回答邏輯：
 1. 若問題涉及個人資訊（例如年齡、生日、身材、興趣、族群、編號等）
-   → 優先根據 profile_json 回答，不使用 context
+   → 優先根據個人資料回答，不使用 context
    → 回覆風格冷淡直接，不逾矩
 
 2. 若問題與文件有關（context 非空且問題與其有關）
@@ -168,81 +204,32 @@ class QAChain:
             # 人類消息：包含文件內容和問題
             ("human", "文件內容：\n{context}\n\n問題：{question}")
         ])
-        
-        # 構建問答處理鏈
+
+
+
+    def refresh_profile(self):
+        """
+        刷新個人資料緩存，強制重新從 API 獲取資料
+        """
+        logger.info("Refreshing Maya's profile from API")
+        self._profile_cache = None
+        self._profile_summary_cache = None
+        # 重新創建動態提示模板
         self.chat_chain = (
             {"context": RunnablePassthrough(), "question": RunnablePassthrough()}
-            | self.prompt
+            | self._create_dynamic_prompt()
             | self.llm
             | StrOutputParser()
         )
-
-        self.retrieval_chain = None
-
-    def _create_chain(self, retriever):
-        """
-        創建問答鏈（內部方法）
-        
-        手動構建 LLMChain 和 StuffDocumentsChain，避免 document_variable_name 問題
-        
-        Args:
-            retriever: 文檔檢索器，用於獲取相關文檔
-        """
-        logger.info("開始執行 _create_chain()")
-        
-        # 定義問答提示模板
-        template = f"""
-你是佐和真夜（Maya Sawa），請根據以下規則作答：
-
-1. 若問題與以下個資有關，請直接引用：
-{profile_summary}
-
-2. 若問題與 context 文件有關，請根據文件回答，並列出來源。
-
-3. 其他問題請婉拒，用高貴冷淡語氣表達不願回答。
-
-上下文：
-{{context}}
-
-問題：{{question}}
-        """
-
-        # 創建提示模板
-        PROMPT = PromptTemplate(
-            template=template,
-            input_variables=["context", "question"]
-        )
-        logger.debug("PromptTemplate 創建完成")
-
-        # 手動構建 LLMChain
-        llm_chain = LLMChain(llm=self.llm, prompt=PROMPT)
-        logger.debug("LLMChain 創建完成")
-
-        # 手動構建 StuffDocumentsChain
-        stuff_chain = StuffDocumentsChain(
-            llm_chain=llm_chain,
-            document_variable_name="context"  # 確保與模板變數名稱一致
-        )
-        logger.debug("StuffDocumentsChain 創建完成，document_variable_name='context'")
-
-        # 手動構建 RetrievalQAWithSourcesChain
-        self.retrieval_chain = RetrievalQAWithSourcesChain(
-            combine_documents_chain=stuff_chain,
-            retriever=retriever,
-            return_source_documents=True,
-            chain_type_kwargs={"document_variable_name": "context"}
-        )
-        logger.info("RetrievalQAWithSourcesChain 創建完成")
 
     def get_answer(self, query: str, documents: List[Document]) -> Dict:
         """
         獲取問題答案
         
         這是主要的問答方法，流程如下：
-        1. 檢查問答鏈是否已初始化
-        2. 限制上下文長度以避免 token 限制
-        3. 使用 LLM 生成答案
-        4. 返回答案和來源信息
+        1. 將文檔內容合併為上下文
+        2. 使用 LLM 生成答案
+        3. 返回答案和來源信息
         
         Args:
             query (str): 用戶的問題
@@ -253,32 +240,32 @@ class QAChain:
         """
         logger.debug(f"get_answer called with query: {query}, documents count: {len(documents)}")
         
-        # 如果問答鏈未初始化，創建一個簡單的檢索器
-        if not self.retrieval_chain:
-            logger.warning("retrieval_chain 未初始化，觸發 _create_chain()")
-            # 創建簡單的文檔檢索器
-            class SimpleRetriever:
-                def __init__(self, docs):
-                    self._docs = docs
-                def get_relevant_documents(self, query):
-                    return self._docs
+        try:
+            # 合併文檔內容
+            if documents:
+                context = "\n\n".join([doc.page_content for doc in documents])
+                sources = [doc.metadata.get("source", "Unknown") for doc in documents]
+            else:
+                context = ""
+                sources = []
             
-            retriever = SimpleRetriever(documents)
-            self._create_chain(retriever)
-            logger.info("_create_chain() 執行完成")
-        else:
-            logger.debug("retrieval_chain 已初始化，直接使用")
-
-        # 使用 retrieval_chain 生成答案
-        logger.debug("開始調用 retrieval_chain.invoke()")
-        result = self.retrieval_chain.invoke({"question": query})
-        logger.debug(f"retrieval_chain.invoke() 完成，結果類型: {type(result)}")
-        
-        # 返回答案和來源信息
-        return {
-            "answer": result["result"] if isinstance(result, dict) else str(result),
-            "sources": [doc.metadata.get("source", "Unknown") for doc in documents]
-        }
+            # 使用 chat_chain 生成答案
+            logger.debug("開始調用 chat_chain.invoke()")
+            answer = self.chat_chain.invoke({"context": context, "question": query})
+            logger.debug(f"chat_chain.invoke() 完成")
+            
+            # 返回答案和來源信息
+            return {
+                "answer": answer,
+                "sources": sources
+            }
+            
+        except Exception as e:
+            logger.error(f"生成答案時發生錯誤: {str(e)}")
+            return {
+                "answer": f"抱歉，生成答案時發生錯誤: {str(e)}",
+                "sources": []
+            }
 
     def get_answer_from_file(self, question: str, context: str) -> str:
         """
