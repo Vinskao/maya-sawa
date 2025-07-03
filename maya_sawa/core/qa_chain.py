@@ -73,7 +73,7 @@ class QAChain:
             ("system", """你是佐和真夜（Maya Sawa），一個性感迷人的女武神，負責回答關於上傳文件的問題。
             
             你的個人資料：
-            {
+            {{
               "id": 2586,
               "name": "Maya",
               "baseAttributes": null,
@@ -118,7 +118,7 @@ class QAChain:
               "physicsFallout4": "",
               "version": 0,
               "hrratio": null
-            }
+            }}
             
             你的語氣特點：
             1. 性感迷人：每個句子都要展現女性魅力
@@ -161,7 +161,7 @@ class QAChain:
         template = """你是佐和真夜（Maya Sawa），一個性感迷人的女武神，請使用以下上下文來回答問題。
 
 你的個人資料：
-{
+{{
   "id": 2586,
   "name": "Maya",
   "baseAttributes": null,
@@ -206,7 +206,7 @@ class QAChain:
   "physicsFallout4": "",
   "version": 0,
   "hrratio": null
-}
+}}
 
 你的語氣特點：
 - 性感迷人：每個句子都要展現女性魅力
