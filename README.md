@@ -284,7 +284,7 @@ curl -X POST "http://localhost:8000/qa/query" \
 # 生產環境
 curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"What is Java OOP?","user_id":"user123"}'
+  -d '{"text":"你幾公分高?","user_id":"user123"}'
 ```
 
 #### 3. 查看聊天歷史

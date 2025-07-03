@@ -26,7 +26,7 @@ import logging
 
 # LangChain 相關導入
 from langchain_openai import ChatOpenAI
-from langchain.chains import RetrievalQAWithSourcesChain
+from langchain.chains import RetrievalQAWithSourcesChain, LLMChain, StuffDocumentsChain
 from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain.schema import Document
 from langchain.schema.runnable import RunnablePassthrough
@@ -183,11 +183,13 @@ class QAChain:
         """
         創建問答鏈（內部方法）
         
-        使用 RetrievalQAWithSourcesChain 創建帶有來源的問答鏈
+        手動構建 LLMChain 和 StuffDocumentsChain，避免 document_variable_name 問題
         
         Args:
             retriever: 文檔檢索器，用於獲取相關文檔
         """
+        logger.info("開始執行 _create_chain()")
+        
         # 定義問答提示模板
         template = f"""
 你是佐和真夜（Maya Sawa），請根據以下規則作答：
@@ -210,15 +212,27 @@ class QAChain:
             template=template,
             input_variables=["context", "question"]
         )
+        logger.debug("PromptTemplate 創建完成")
 
-        # 創建帶有來源的問答鏈
-        self.retrieval_chain = RetrievalQAWithSourcesChain.from_chain_type(
-            llm=self.llm,
-            chain_type="stuff",  # 使用 stuff 方法處理文檔
-            retriever=retriever,
-            return_source_documents=True,  # 返回源文檔
-            chain_type_kwargs={"prompt": PROMPT}
+        # 手動構建 LLMChain
+        llm_chain = LLMChain(llm=self.llm, prompt=PROMPT)
+        logger.debug("LLMChain 創建完成")
+
+        # 手動構建 StuffDocumentsChain
+        stuff_chain = StuffDocumentsChain(
+            llm_chain=llm_chain,
+            document_variable_name="context"  # 確保與模板變數名稱一致
         )
+        logger.debug("StuffDocumentsChain 創建完成，document_variable_name='context'")
+
+        # 手動構建 RetrievalQAWithSourcesChain
+        self.retrieval_chain = RetrievalQAWithSourcesChain(
+            combine_documents_chain=stuff_chain,
+            retriever=retriever,
+            return_source_documents=True,
+            chain_type_kwargs={"document_variable_name": "context"}
+        )
+        logger.info("RetrievalQAWithSourcesChain 創建完成")
 
     def get_answer(self, query: str, documents: List[Document]) -> Dict:
         """
@@ -237,8 +251,11 @@ class QAChain:
         Returns:
             Dict: 包含答案和來源信息的字典
         """
+        logger.debug(f"get_answer called with query: {query}, documents count: {len(documents)}")
+        
         # 如果問答鏈未初始化，創建一個簡單的檢索器
         if not self.retrieval_chain:
+            logger.warning("retrieval_chain 未初始化，觸發 _create_chain()")
             # 創建簡單的文檔檢索器
             class SimpleRetriever:
                 def __init__(self, docs):
@@ -248,37 +265,18 @@ class QAChain:
             
             retriever = SimpleRetriever(documents)
             self._create_chain(retriever)
+            logger.info("_create_chain() 執行完成")
+        else:
+            logger.debug("retrieval_chain 已初始化，直接使用")
 
-        # 限制 context 長度，避免超過 token 限制
-        max_context_length = 8000  # 預留空間給 prompt 和問題
-        context_parts = []
-        current_length = 0
-        
-        # 遍歷文檔，控制總長度
-        for doc in documents:
-            doc_content = doc.page_content
-            if current_length + len(doc_content) > max_context_length:
-                # 如果加上這個文件會超過限制，就截斷
-                remaining_length = max_context_length - current_length
-                if remaining_length > 100:  # 至少保留 100 字符
-                    doc_content = doc_content[:remaining_length] + "..."
-                else:
-                    break
-            
-            context_parts.append(doc_content)
-            current_length += len(doc_content)
-        
-        # 合併 context
-        context = "\n\n".join(context_parts)
-        
-        logger.debug(f"Context length: {len(context)} characters")
-        
-        # 使用鏈式調用生成答案
-        result = self.retrieval_chain.invoke({"context": context, "question": query})
+        # 使用 retrieval_chain 生成答案
+        logger.debug("開始調用 retrieval_chain.invoke()")
+        result = self.retrieval_chain.invoke({"question": query})
+        logger.debug(f"retrieval_chain.invoke() 完成，結果類型: {type(result)}")
         
         # 返回答案和來源信息
         return {
-            "answer": result,
+            "answer": result["result"] if isinstance(result, dict) else str(result),
             "sources": [doc.metadata.get("source", "Unknown") for doc in documents]
         }
 

@@ -38,11 +38,13 @@ from ..core.chat_history import ChatHistoryManager
 
 # ==================== 環境變數配置 ====================
 # 從環境變數獲取公共 API 基礎 URL
-PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "")
-REMOTE_ARTICLES_URL = os.getenv("REMOTE_ARTICLES_URL", "")
+def get_public_api_base_url():
+    """獲取公共 API 基礎 URL"""
+    return os.getenv("PUBLIC_API_BASE_URL", "")
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
+logger.debug(f"PUBLIC_API_BASE_URL loaded: {get_public_api_base_url()}")
 
 # ==================== 懶加載實例管理 ====================
 # 使用懶加載模式管理核心組件實例，避免啟動時的資源浪費
@@ -144,7 +146,7 @@ async def sync_articles_from_api(request: SyncFromAPIRequest):
     """
     try:
         # 使用預設 URL 如果沒有提供
-        remote_url = request.remote_url or REMOTE_ARTICLES_URL or f"{PUBLIC_API_BASE_URL}/paprika/articles"
+        remote_url = request.remote_url or f"{get_public_api_base_url()}/paprika/articles"
         
         # 從遠端 API 獲取文章數據
         async with httpx.AsyncClient() as client:
@@ -209,7 +211,7 @@ async def sync_articles_from_remote(request: SyncRequest):
     """
     try:
         # 使用預設 URL 如果沒有提供
-        remote_url = request.remote_url or REMOTE_ARTICLES_URL or f"{PUBLIC_API_BASE_URL}/paprika/articles"
+        remote_url = request.remote_url or f"{get_public_api_base_url()}/paprika/articles"
         
         # 從遠端 API 獲取文章數據
         async with httpx.AsyncClient() as client:
