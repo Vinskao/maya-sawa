@@ -21,7 +21,7 @@ Markdown Q&A System - API 路由模組
 import os
 import logging
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # 第三方庫導入
 from fastapi import APIRouter, HTTPException
@@ -39,6 +39,7 @@ from ..core.chat_history import ChatHistoryManager
 # ==================== 環境變數配置 ====================
 # 從環境變數獲取公共 API 基礎 URL
 PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "")
+REMOTE_ARTICLES_URL = os.getenv("REMOTE_ARTICLES_URL", "")
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -112,7 +113,7 @@ class SyncRequest(BaseModel):
     
     定義文章同步請求的格式
     """
-    remote_url: str = None  # 遠端 API URL，可選
+    remote_url: Optional[str] = None  # 遠端 API URL，可選
 
 class SyncFromAPIRequest(BaseModel):
     """
@@ -120,7 +121,7 @@ class SyncFromAPIRequest(BaseModel):
     
     定義從遠端 API 同步文章的請求格式
     """
-    remote_url: str = None  # 遠端 API URL，可選
+    remote_url: Optional[str] = None  # 遠端 API URL，可選
 
 # ==================== API 端點定義 ====================
 
@@ -143,7 +144,7 @@ async def sync_articles_from_api(request: SyncFromAPIRequest):
     """
     try:
         # 使用預設 URL 如果沒有提供
-        remote_url = request.remote_url or f"{PUBLIC_API_BASE_URL}/paprika/articles"
+        remote_url = request.remote_url or REMOTE_ARTICLES_URL or f"{PUBLIC_API_BASE_URL}/paprika/articles"
         
         # 從遠端 API 獲取文章數據
         async with httpx.AsyncClient() as client:
@@ -208,7 +209,7 @@ async def sync_articles_from_remote(request: SyncRequest):
     """
     try:
         # 使用預設 URL 如果沒有提供
-        remote_url = request.remote_url or f"{PUBLIC_API_BASE_URL}/paprika/articles"
+        remote_url = request.remote_url or REMOTE_ARTICLES_URL or f"{PUBLIC_API_BASE_URL}/paprika/articles"
         
         # 從遠端 API 獲取文章數據
         async with httpx.AsyncClient() as client:

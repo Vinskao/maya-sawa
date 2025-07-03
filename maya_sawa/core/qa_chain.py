@@ -239,14 +239,12 @@ class QAChain:
         """
         # 如果問答鏈未初始化，創建一個簡單的檢索器
         if not self.retrieval_chain:
-            from langchain.schema.retriever import BaseRetriever
             # 創建簡單的文檔檢索器
-            class SimpleRetriever(BaseRetriever):
+            class SimpleRetriever:
                 def __init__(self, docs):
-                    super().__init__()
-                    self.docs = docs
+                    self._docs = docs
                 def get_relevant_documents(self, query):
-                    return self.docs
+                    return self._docs
             
             retriever = SimpleRetriever(documents)
             self._create_chain(retriever)
