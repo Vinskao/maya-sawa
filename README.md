@@ -212,6 +212,11 @@ curl -X POST "http://localhost:8000/qa/query" \
   -H "Content-Type: application/json" \
   -d '{"text":"你身高多高、體重多重?","user_id":"user123"}'
 
+Invoke-RestMethod -Uri "http://localhost:8000/qa/query" `
+  -Method POST `
+  -Headers @{"Content-Type"="application/json"} `
+  -Body '{"text":"你身高多高、體重多重?","user_id":"user123"}'
+  
 # 2. 查看對話歷史：k
 curl -X GET "http://localhost:8000/qa/chat-history/user123"
 
