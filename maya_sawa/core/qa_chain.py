@@ -237,17 +237,17 @@ class QAChain:
         
         return None
 
-    def _detect_all_queried_names(self, question: str) -> List[str]:
+    def _extract_names_with_ai(self, question: str) -> List[str]:
         """
-        偵測問題中是否提及多個人名
+        使用 AI 從問題中提取所有可能的人名
         
         Args:
             question (str): 用戶問題
             
         Returns:
-            List[str]: 檢測到的所有角色名稱列表
+            List[str]: 提取到的所有可能人名列表
         """
-        # 個人資訊相關關鍵詞（加入「誰是」）
+        # 個人資訊相關關鍵詞
         personal_keywords = [
             "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
             "興趣", "喜歡", "討厭", "最愛", "食物", "個性", "性格", "職業", 
@@ -272,23 +272,53 @@ class QAChain:
         if not has_personal_keyword:
             return []
         
-        # 可能的角色名稱列表（可以根據需要擴充）
-        possible_names = [
-            "Sorane", "Yuki", "Shion", "Kagari", "Aoi", "Hina", "Miku", "Rin",
-            "Luna", "Stella", "Nova", "Echo", "Blade", "Shadow", "Phoenix",
-            "Crystal", "Ruby", "Sapphire", "Emerald", "Diamond", "Gold", "Silver",
-            "Maya"  # 加入 Maya 到檢測列表
-        ]
+        # 使用 AI 提取人名
+        name_extraction_prompt = f"""
+請從以下問題中提取所有可能的人名（角色名稱）。只返回人名，用逗號分隔，不要其他內容。
+
+問題：{question}
+
+注意：
+- 只提取看起來像人名的詞彙
+- 忽略明顯不是人名的詞彙
+- 如果沒有找到人名，返回空字符串
+- 不要包含 "Maya" 或 "真夜" 或 "佐和"（這些是系統內建角色）
+
+例如：
+- "誰是Sorane、Chiaki?" → "Sorane,Chiaki"
+- "Yuki的身高是多少?" → "Yuki"
+- "沒有提到任何人名" → ""
+"""
         
-        question_lower = question.lower()
-        detected_names = []
+        try:
+            response = self.llm.invoke(name_extraction_prompt)
+            if hasattr(response, 'content'):
+                response = response.content
+            
+            # 解析 AI 返回的人名
+            if response and response.strip():
+                names = [name.strip() for name in response.split(',') if name.strip()]
+                logger.info(f"AI 提取到的人名: {names}")
+                return names
+            else:
+                logger.info("AI 沒有提取到任何人名")
+                return []
+                
+        except Exception as e:
+            logger.error(f"AI 提取人名時發生錯誤: {str(e)}")
+            return []
+
+    def _detect_all_queried_names(self, question: str) -> List[str]:
+        """
+        偵測問題中是否提及多個人名（保持向後兼容）
         
-        # 檢查所有角色名稱
-        for name in possible_names:
-            if name.lower() in question_lower:
-                detected_names.append(name)
-        
-        return detected_names
+        Args:
+            question (str): 用戶問題
+            
+        Returns:
+            List[str]: 檢測到的所有角色名稱列表
+        """
+        return self._extract_names_with_ai(question)
 
     def _create_dynamic_prompt(self):
         """
@@ -410,19 +440,34 @@ class QAChain:
                             else:
                                 # 使用 LLM 生成總結
                                 summary_prompt = f"""
-根據以下個人資料，為用戶提供一個簡潔、友善的總結回答：
+根據以下個人資料，為用戶提供一個詳細且生動的總結回答：
 
 {profile_summary}
 
-請以 Maya 的身份，用冷淡高貴的語氣，簡潔地介紹這個角色。重點包括：
-- 角色名稱和基本身份
-- 主要特徵（戰鬥力、職業、個性等）
+請以 Maya 的身份，用冷淡高貴的語氣，詳細介紹這個角色。重點突出以下項目：
 
-回答要簡潔，不要直接列出所有數據，除非用戶明確要求詳細資料。
+**必備項目：**
+- 角色名稱和基本身份（職業、戰鬥力）
+- 身體特徵（physics）
+- 別名（knownAs）
+- 個性特徵（personality）
+- 興趣愛好（interest）
+- 喜歡的事物（likes）
+- 討厭的事物（dislikes）
+
+**回答要求：**
+- 用生動的語言描述角色的獨特特徵
+- 突出角色的個性和行為模式
+- 保持 Maya 的冷淡高貴語氣
+
+回答要詳細且有趣，展現角色的獨特性格。
 """
                                 
                                 try:
                                     summary_answer = self.llm.invoke(summary_prompt)
+                                    # 確保返回的是字符串
+                                    if hasattr(summary_answer, 'content'):
+                                        summary_answer = summary_answer.content
                                     return {
                                         "answer": summary_answer,
                                         "sources": []
@@ -444,19 +489,30 @@ class QAChain:
                 elif len(detected_names) > 1:
                     profiles = []
                     not_found = []
+                    found_names = []
+                    
+                    logger.info(f"處理多角色查詢: {detected_names}")
                     
                     for name in detected_names:
+                        logger.info(f"正在處理角色: {name}")
                         if name.lower() == "maya":
                             # Maya 使用內建資料
                             maya_summary = self._get_profile_summary()
                             profiles.append(maya_summary)
+                            found_names.append("Maya")
+                            logger.info(f"Maya 資料已添加")
                         else:
                             # 其他角色查詢 API
                             profile_summary = self._get_other_profile_summary(name)
                             if profile_summary:
                                 profiles.append(profile_summary)
+                                found_names.append(name)
+                                logger.info(f"{name} 資料已添加")
                             else:
                                 not_found.append(name)
+                                logger.warning(f"無法找到 {name} 的資料")
+                    
+                    logger.info(f"找到的資料數量: {len(profiles)}, 找不到的角色: {not_found}")
                     
                     # 組合所有找到的資料並生成總結
                     if profiles:
@@ -475,20 +531,35 @@ class QAChain:
                         else:
                             # 使用 LLM 生成總結
                             summary_prompt = f"""
-根據以下個人資料，為用戶提供一個簡潔、友善的總結回答：
+根據以下個人資料，為用戶提供一個詳細且生動的總結回答：
 
 {combined_profiles}
 
-請以 Maya 的身份，用冷淡高貴的語氣，簡潔地介紹這些角色。重點包括：
-- 角色名稱和基本身份
-- 主要特徵（戰鬥力、職業、個性等）
-- 如果有找不到的角色，請說明
+請以 Maya 的身份，用冷淡高貴的語氣，詳細介紹這些角色。重點突出以下項目：
 
-回答要簡潔，不要直接列出所有數據，除非用戶明確要求詳細資料。
+**必備項目（每個角色都要包含）：**
+- 角色名稱和基本身份（職業、戰鬥力）
+- 身體改造特徵（physics）
+- 別名（knownAs）
+- 個性特徵（personality）
+- 興趣愛好（interest）
+- 喜歡的事物（likes）
+- 討厭的事物（dislikes）
+
+**回答要求：**
+- 用生動的語言描述每個角色的獨特特徵
+- 突出角色的個性和行為模式
+- 保持 Maya 的冷淡高貴語氣
+- 如果用戶詢問的角色中有找不到的，請在回答中說明
+
+回答要詳細且有趣，展現每個角色的獨特性格。
 """
                             
                             try:
                                 summary_answer = self.llm.invoke(summary_prompt)
+                                # 確保返回的是字符串
+                                if hasattr(summary_answer, 'content'):
+                                    summary_answer = summary_answer.content
                                 
                                 # 如果有找不到的角色，在最後加上說明
                                 if not_found:

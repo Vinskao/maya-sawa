@@ -2,7 +2,7 @@
 name = "maya_sawa"
 version = "0.1.0"
 description = "A powerful document Q&A system based on FastAPI, LangChain, and ChromaDB"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["TYK <tianyikao@gmail.com>"]
 readme = "README.md"
 packages = [{include = "maya_sawa"}]
 
