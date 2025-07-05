@@ -78,6 +78,7 @@ class QAChain:
         
         # 初始化其他角色資料緩存
         self._other_profiles_cache = {}
+        self._other_character_names_cache = None
         
         # 構建問答處理鏈
         self.chat_chain = (
@@ -214,6 +215,51 @@ class QAChain:
         else:
             return None
 
+    def _get_other_character_names(self) -> List[str]:
+        """
+        從 API 獲取其他角色名字列表
+        
+        Returns:
+            List[str]: 其他角色名字列表
+        """
+        try:
+            # 檢查緩存
+            if self._other_character_names_cache is not None:
+                return self._other_character_names_cache
+            
+            # 從環境變數獲取 API 基礎 URL
+            api_base = os.getenv("PUBLIC_API_BASE_URL")
+            if not api_base:
+                logger.warning("PUBLIC_API_BASE_URL 未設置，返回空列表")
+                return []
+            
+            # 構建 API URL
+            url = f"{api_base}/tymb/people/names"
+            logger.debug(f"正在從 API 獲取角色名字列表: {url}")
+            
+            # 發送 HTTP 請求
+            response = httpx.get(url, timeout=10.0)
+            response.raise_for_status()
+            
+            # 解析回應
+            names = response.json()
+            if isinstance(names, list):
+                # 過濾掉 Maya（因為她是系統內建角色）
+                filtered_names = [name for name in names if name.lower() != "maya"]
+                logger.info(f"從 API 獲取到 {len(filtered_names)} 個其他角色名字")
+                
+                # 緩存結果
+                self._other_character_names_cache = filtered_names
+                return filtered_names
+            else:
+                logger.error(f"API 回應格式錯誤，預期 list，實際: {type(names)}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"獲取角色名字列表時發生錯誤: {str(e)}")
+            # 發生錯誤時返回空列表
+            return []
+
     def _detect_queried_name(self, question: str) -> Optional[str]:
         """
         偵測問題中是否提及某個人名（單一角色）
@@ -250,10 +296,16 @@ class QAChain:
         # 特殊處理：直接詢問身份的問題
         identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
         if any(keyword in question.lower() for keyword in identity_questions):
-            logger.info("檢測到身份詢問問題，優先加入 Maya")
-            forced_names = ["Maya"]
-        else:
-            forced_names = []
+            logger.info("檢測到身份詢問問題，直接返回 Maya，跳過 AI 抽名")
+            return ["Maya"]  # 直接返回，不進行 AI 抽名
+        
+        # 檢查是否明確提及其他角色名字，如果沒有就不進行 AI 抽名
+        other_character_names = self._get_other_character_names()
+        
+        # 如果問題中完全沒有提到其他角色名字，就不進行 AI 抽名
+        if not any(name.lower() in question.lower() for name in other_character_names):
+            logger.info("問題中未明確提及其他角色名字，跳過 AI 抽名")
+            return []
         
         # 個人資訊相關關鍵詞
         personal_keywords = [
@@ -278,7 +330,7 @@ class QAChain:
         has_personal_keyword = any(keyword in question for keyword in personal_keywords)
         
         if not has_personal_keyword:
-            return forced_names  # 即使沒有個人資訊關鍵詞，也要返回強制加入的名字
+            return []  # 沒有個人資訊關鍵詞，返回空列表
         
         # 使用 AI 提取人名
         name_extraction_prompt = f"""
@@ -311,14 +363,12 @@ class QAChain:
                 logger.info("AI 沒有提取到任何人名")
                 names = []
             
-            # 合併強制名字和 AI 提取的名字，去重並保留順序
-            all_names = list(dict.fromkeys(forced_names + names))
-            logger.info(f"最終合併的人名列表: {all_names}")
-            return all_names
+            logger.info(f"最終人名列表: {names}")
+            return names
                 
         except Exception as e:
             logger.error(f"AI 提取人名時發生錯誤: {str(e)}")
-            return forced_names  # 如果 AI 提取失敗，至少返回強制加入的名字
+            return []  # 如果 AI 提取失敗，返回空列表
 
     def _detect_all_queried_names(self, question: str) -> List[str]:
         """

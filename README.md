@@ -210,7 +210,11 @@ curl -X POST "http://localhost:8000/qa/sync-from-api" \
 # 1. 問答並記錄：
 curl -X POST "http://localhost:8000/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"你身高多高、體重多重?","user_id":"user123"}'
+  -d '{"text":"你身高多高、體重多重?","user_id":"user123","language":"chinese"}'
+
+curl -X POST "http://localhost:8000/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"你是誰?","user_id":"user123","language":"chinese"}'
 
 curl -X POST "http://localhost:8000/qa/query" \
   -H "Content-Type: application/json" \
