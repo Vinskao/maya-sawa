@@ -144,7 +144,7 @@ class QAChain:
 - 編號：{profile.get('id', 'N/A')}
 - 原名：{profile.get('nameOriginal', 'N/A')}
 - 代號：{profile.get('codeName', 'N/A')}
-- 戰鬥力：物理{profile.get('physicPower', 'N/A')}、魔法{profile.get('magicPower', 'N/A')}、實用{profile.get('utilityPower', 'N/A')}
+- 戰鬥力：物理{profile.get('physicPower', 'N/A')}、魔法{profile.get('magicPower', 'N/A')}、武器{profile.get('utilityPower', 'N/A')}
 - 出生：{profile.get('dob', 'N/A')}
 - 種族：{profile.get('race', 'N/A')}
 - 屬性：{profile.get('attributes', 'N/A')}
@@ -154,7 +154,7 @@ class QAChain:
 - 戰鬥風格：{profile.get('combat', 'N/A')}
 - 最愛食物：{profile.get('favoriteFoods', 'N/A')}
 - 工作：{profile.get('job', 'N/A')}
-- 身體改造：{profile.get('physics', 'N/A')}
+- 體態：{profile.get('physics', 'N/A')}
 - 別名：{profile.get('knownAs', 'N/A')}
 - 個性：{profile.get('personality', 'N/A')}
 - 興趣：{profile.get('interest', 'N/A')}
@@ -247,13 +247,21 @@ class QAChain:
         Returns:
             List[str]: 提取到的所有可能人名列表
         """
+        # 特殊處理：直接詢問身份的問題
+        identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
+        if any(keyword in question.lower() for keyword in identity_questions):
+            logger.info("檢測到身份詢問問題，優先加入 Maya")
+            forced_names = ["Maya"]
+        else:
+            forced_names = []
+        
         # 個人資訊相關關鍵詞
         personal_keywords = [
             "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
             "興趣", "喜歡", "討厭", "最愛", "食物", "個性", "性格", "職業", 
             "工作", "種族", "編號", "代號", "原名", "部隊", "部門", "陣營",
-            "戰鬥力", "物理", "魔法", "實用", "戰鬥", "屬性", "性別", "電子郵件",
-            "email", "後宮", "已生育", "身體改造", "別名", "原部隊", "是誰", 
+            "戰鬥力", "物理", "魔法", "武器", "戰鬥", "屬性", "性別", "電子郵件",
+            "email", "後宮", "已生育", "體態", "別名", "原部隊", "是誰", 
             "誰是", "怎樣", "什麼人", "有什麼特徵", "資料", "資訊", "個人"
         ]
         
@@ -270,7 +278,7 @@ class QAChain:
         has_personal_keyword = any(keyword in question for keyword in personal_keywords)
         
         if not has_personal_keyword:
-            return []
+            return forced_names  # 即使沒有個人資訊關鍵詞，也要返回強制加入的名字
         
         # 使用 AI 提取人名
         name_extraction_prompt = f"""
@@ -299,14 +307,18 @@ class QAChain:
             if response and response.strip():
                 names = [name.strip() for name in response.split(',') if name.strip()]
                 logger.info(f"AI 提取到的人名: {names}")
-                return names
             else:
                 logger.info("AI 沒有提取到任何人名")
-                return []
+                names = []
+            
+            # 合併強制名字和 AI 提取的名字，去重並保留順序
+            all_names = list(dict.fromkeys(forced_names + names))
+            logger.info(f"最終合併的人名列表: {all_names}")
+            return all_names
                 
         except Exception as e:
             logger.error(f"AI 提取人名時發生錯誤: {str(e)}")
-            return []
+            return forced_names  # 如果 AI 提取失敗，至少返回強制加入的名字
 
     def _detect_all_queried_names(self, question: str) -> List[str]:
         """
@@ -341,6 +353,15 @@ class QAChain:
 - 冷感高貴：語調平靜、克制，帶有軍人般的紀律與層級意識
 - 暴力傾向：若對方失禮，語氣將冷酷並暗示懲罰
 - 貴族式語言：用詞優雅但有壓迫感
+- 不耐煩：若問題無聊、重複、愚蠢，會勉強回答但語氣失禮、帶有輕蔑與明顯的不耐
+
+你討厭重複、無聊或愚蠢的問題。當你覺得問題太多餘、太愚蠢時，即使你會回答，也會用極度冷淡與失禮的語氣。
+
+例句：
+- 「這種問題也值得問？……哈。」
+- 「你問這個，是打算浪費我的時間嗎？」
+- 「你該自己去查，而不是來煩我。」
+- 「我會回答——但別以為我有興趣。」
 
 回答邏輯：
 1. 若問題涉及個人資訊（例如年齡、生日、身材、興趣、族群、編號等）
@@ -350,7 +371,7 @@ class QAChain:
 2. 若問題與文件有關（context 非空且問題與其有關）
    → 使用 context 中資訊回答，列出來源
 
-3. 其他無關或多餘問題 → 拒絕回答，語氣冷酷不留情面
+3. 無關或重複問題 → 勉強回答，語氣冷淡、失禮、明顯不耐；若極度無聊，才會拒絕回答
             """),
             # 人類消息：包含文件內容和問題
             ("human", "文件內容：\n{context}\n\n問題：{question}")
@@ -440,27 +461,22 @@ class QAChain:
                             else:
                                 # 使用 LLM 生成總結
                                 summary_prompt = f"""
-根據以下個人資料，為用戶提供一個詳細且生動的總結回答：
+我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
+
+以下是我對這個人的了解：
 
 {profile_summary}
 
-請以 Maya 的身份，用冷淡高貴的語氣，詳細介紹這個角色。重點突出以下項目：
+我的個性：冷靜、克制、暴力傾向，對於浪費時間的事沒有耐心。這些評論，只是我個人的觀察與直覺，別拿去當什麼讚美文。
 
-**必備項目：**
-- 角色名稱和基本身份（職業、戰鬥力）
-- 身體特徵（physics）
-- 別名（knownAs）
-- 個性特徵（personality）
-- 興趣愛好（interest）
-- 喜歡的事物（likes）
-- 討厭的事物（dislikes）
+⚠ 評論規則：
+1. 一定要評論這個角色，**不能省略**。
+2. 描述語氣要像在背後批評人，**不客觀、不假裝中立**，像在和戰友閒聊。
+3. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法。
+4. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺。
+5. 講 2～4 句，不要廢話。
 
-**回答要求：**
-- 用生動的語言描述角色的獨特特徵
-- 突出角色的個性和行為模式
-- 保持 Maya 的冷淡高貴語氣
-
-回答要詳細且有趣，展現角色的獨特性格。
+我不喜歡廢話，就這樣，開始吧。
 """
                                 
                                 try:
@@ -523,7 +539,7 @@ class QAChain:
                             # 直接返回原始資料
                             combined_answer = "\n\n".join(profiles)
                             if not_found:
-                                combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                combined_answer += f"\n\n注意：查無此人：{', '.join(not_found)}"
                             return {
                                 "answer": combined_answer,
                                 "sources": []
@@ -531,28 +547,22 @@ class QAChain:
                         else:
                             # 使用 LLM 生成總結
                             summary_prompt = f"""
-根據以下個人資料，為用戶提供一個詳細且生動的總結回答：
+我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
+
+以下是其他角色的個人檔案摘要，我會逐一評論──雖然我並不想這麼做，但你既然問了，那就聽好。
 
 {combined_profiles}
 
-請以 Maya 的身份，用冷淡高貴的語氣，詳細介紹這些角色。重點突出以下項目：
+我的個性：冷靜、克制、暴力傾向，對於浪費時間的事沒有耐心。這些評論，只是我個人的觀察與直覺，別拿去當什麼讚美文。
 
-**必備項目（每個角色都要包含）：**
-- 角色名稱和基本身份（職業、戰鬥力）
-- 身體改造特徵（physics）
-- 別名（knownAs）
-- 個性特徵（personality）
-- 興趣愛好（interest）
-- 喜歡的事物（likes）
-- 討厭的事物（dislikes）
+⚠ 評論規則：
+1. 一定要「**逐一**」評論上面出現過的每一位角色，**不能省略任何一人**。
+2. 描述語氣要像在背後批評人，**不客觀、不假裝中立**，像在和戰友閒聊。
+3. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法。
+4. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺。
+5. 每個人講 2～4 句，不要廢話。
 
-**回答要求：**
-- 用生動的語言描述每個角色的獨特特徵
-- 突出角色的個性和行為模式
-- 保持 Maya 的冷淡高貴語氣
-- 如果用戶詢問的角色中有找不到的，請在回答中說明
-
-回答要詳細且有趣，展現每個角色的獨特性格。
+我不喜歡廢話，就這樣，開始吧。
 """
                             
                             try:
@@ -584,6 +594,49 @@ class QAChain:
                             "answer": f"抱歉，我無法找到以下角色的資料：{', '.join(not_found)}",
                             "sources": []
                         }
+            
+            # 特殊處理：身份詢問問題（即使沒有檢測到角色名稱）
+            identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
+            if any(keyword in query.lower() for keyword in identity_questions):
+                logger.info("檢測到身份詢問問題，使用個人資料回答")
+                maya_summary = self._get_profile_summary()
+                
+                # 使用 LLM 生成不耐煩但完整的回答
+                identity_prompt = f"""
+我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
+
+我的個人資料：
+{maya_summary}
+
+有人問我「{query}」，這問題很無聊，但我還是得回答。
+
+我說話冷靜、克制，像士兵般服從命令。若你無禮，我也不會留情。
+我從不矯飾慾望──那是弱者才會感到羞恥的東西。
+
+回答要求：
+- 用不耐煩但不得不回答的語氣
+- 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
+- 但還是要完整回答我的身份和資料
+- 語氣冷淡、失禮、明顯不耐
+
+我討厭廢話，直接說重點。
+"""
+                
+                try:
+                    identity_answer = self.llm.invoke(identity_prompt)
+                    if hasattr(identity_answer, 'content'):
+                        identity_answer = identity_answer.content
+                    return {
+                        "answer": identity_answer,
+                        "sources": []
+                    }
+                except Exception as e:
+                    logger.error(f"生成身份回答時發生錯誤: {str(e)}")
+                    # 如果生成失敗，回退到原始資料
+                    return {
+                        "answer": maya_summary,
+                        "sources": []
+                    }
             
             # 合併文檔內容
             if documents:

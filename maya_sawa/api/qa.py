@@ -38,6 +38,47 @@ from ..core.chat_history import ChatHistoryManager
 from ..core.people import sync_data
 from ..core.config import Config
 
+# ==================== 翻譯功能 ====================
+async def translate_to_english(text: str) -> str:
+    """
+    將中文文本翻譯為英語
+    
+    Args:
+        text (str): 要翻譯的中文文本
+        
+    Returns:
+        str: 翻譯後的英語文本
+    """
+    try:
+        # 使用 QAChain 的 LLM 進行翻譯
+        qa_chain = get_qa_chain()
+        
+        translation_prompt = f"""
+請將以下中文文本翻譯為英語，保持原有的語氣和風格：
+
+{text}
+
+翻譯要求：
+1. 保持原文的語氣和風格
+2. 如果是 Maya 的回答，保持她冷淡高貴的語氣
+3. 如果是角色描述，保持生動的描述風格
+4. 確保翻譯準確且自然
+
+只返回翻譯結果，不要添加任何解釋。
+"""
+        
+        translated = qa_chain.llm.invoke(translation_prompt)
+        if hasattr(translated, 'content'):
+            translated = translated.content
+        
+        logger.info(f"翻譯完成: {text[:50]}... -> {translated[:50]}...")
+        return translated
+        
+    except Exception as e:
+        logger.error(f"翻譯失敗: {str(e)}")
+        # 如果翻譯失敗，返回原文
+        return text
+
 # ==================== 環境變數配置 ====================
 # 從環境變數獲取公共 API 基礎 URL
 def get_public_api_base_url():
@@ -110,6 +151,7 @@ class QueryRequest(BaseModel):
     """
     text: str  # 用戶的問題文本
     user_id: str = "default"  # 用戶 ID，預設為 "default"
+    language: str = "chinese"  # 語言參數，預設為 "chinese"
 
 class SyncRequest(BaseModel):
     """
@@ -315,11 +357,12 @@ async def query_document(request: QueryRequest):
     1. 檢查是否為個人資訊問題，如果是則直接回答
     2. 使用向量搜索找到相關文檔
     3. 使用 LLM 生成答案
-    4. 保存對話記錄
-    5. 返回答案和參考來源
+    4. 如果語言為英語，翻譯答案
+    5. 保存對話記錄
+    6. 返回答案和參考來源
     
     Args:
-        request (QueryRequest): 查詢請求，包含問題文本和用戶 ID
+        request (QueryRequest): 查詢請求，包含問題文本、用戶 ID 和語言參數
         
     Returns:
         dict: 包含答案、參考來源和相關信息的字典
@@ -338,8 +381,8 @@ async def query_document(request: QueryRequest):
             "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
             "興趣", "喜歡", "討厭", "最愛", "食物", "個性", "性格", "職業", 
             "工作", "種族", "編號", "代號", "原名", "部隊", "部門", "陣營",
-            "戰鬥力", "物理", "魔法", "實用", "戰鬥", "屬性", "性別", "電子郵件",
-            "email", "後宮", "已生育", "身體改造", "別名", "原部隊", "是誰", 
+            "戰鬥力", "物理", "魔法", "武器", "戰鬥", "屬性", "性別", "電子郵件",
+            "email", "後宮", "已生育", "體態", "別名", "原部隊", "是誰", 
             "誰是", "怎樣", "什麼人", "有什麼特徵", "資料", "資訊", "個人"
         ]
         
@@ -349,16 +392,23 @@ async def query_document(request: QueryRequest):
             # 個人資訊問題：直接使用個人資料回答，不搜索文件
             result = qa_chain.get_answer(request.text, [])  # 傳入空文件列表
             
+            # 如果語言為英語，翻譯答案
+            if request.language.lower() == "english":
+                translated_answer = await translate_to_english(result["answer"])
+                final_answer = translated_answer
+            else:
+                final_answer = result["answer"]
+            
             # 儲存對話記錄（個人資訊問題不包含參考文件）
             chat_history_manager.save_conversation(
                 user_message=request.text,
-                ai_answer=result["answer"],
+                ai_answer=final_answer,
                 user_id=request.user_id
             )
             
             return {
                 "success": True,
-                "answer": result["answer"],
+                "answer": final_answer,
                 "data": []  # 個人資訊問題不返回文件資料
             }
         
@@ -367,20 +417,31 @@ async def query_document(request: QueryRequest):
         
         if not documents:
             # 即使沒有找到相關文件，也記錄對話
+            error_message = "抱歉，我沒有找到相關的文件內容來回答您的問題。"
+            if request.language.lower() == "english":
+                error_message = await translate_to_english(error_message)
+            
             chat_history_manager.save_conversation(
                 user_message=request.text,
-                ai_answer="抱歉，我沒有找到相關的文件內容來回答您的問題。",
+                ai_answer=error_message,
                 user_id=request.user_id
             )
             
             return {
                 "success": False,
-                "message": "抱歉，我沒有找到相關的文件內容來回答您的問題。",
+                "message": error_message,
                 "data": []
             }
 
         # 獲取答案
         result = qa_chain.get_answer(request.text, documents)
+        
+        # 如果語言為英語，翻譯答案
+        if request.language.lower() == "english":
+            translated_answer = await translate_to_english(result["answer"])
+            final_answer = translated_answer
+        else:
+            final_answer = result["answer"]
         
         # 格式化返回的資料（包含完整的參考信息）
         formatted_data = []
@@ -405,14 +466,14 @@ async def query_document(request: QueryRequest):
         # 儲存對話記錄（包含參考文章信息）
         chat_history_manager.save_conversation(
             user_message=request.text,
-            ai_answer=result["answer"],
+            ai_answer=final_answer,
             user_id=request.user_id,
             reference_data=formatted_data  # 添加參考文章信息
         )
         
         return {
             "success": True,
-            "answer": result["answer"],
+            "answer": final_answer,
             "data": formatted_data
         }
 
