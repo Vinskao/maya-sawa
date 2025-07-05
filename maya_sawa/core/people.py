@@ -402,6 +402,8 @@ class PeopleWeaponManager:
             if conn:
                 self.pool_manager.return_postgres_connection(conn)
         
+        return updated_count
+        
 
     
     def update_weapons_table(self, weapons_data: List[Dict[str, Any]], max_time_seconds: int = 60) -> int:
@@ -447,7 +449,7 @@ class PeopleWeaponManager:
                     # Prepare data for insertion/update
                     data = {
                         'name': weapon.get('name'),
-                        'weapon': weapon.get('weapon'),
+                        'weapon_type': weapon.get('weapon'),  # Changed from 'weapon' to 'weapon_type'
                         'attributes': weapon.get('attributes'),
                         'base_damage': weapon.get('baseDamage'),
                         'bonus_damage': weapon.get('bonusDamage'),
@@ -460,13 +462,14 @@ class PeopleWeaponManager:
                     # Use UPSERT (INSERT ... ON CONFLICT UPDATE)
                     query = """
                     INSERT INTO weapon (
-                        name, weapon, attributes, base_damage, bonus_damage,
+                        name, weapon_type, attributes, base_damage, bonus_damage,
                         bonus_attributes, state_attributes, embedding, updated_at
                     ) VALUES (
-                        %(name)s, %(weapon)s, %(attributes)s, %(base_damage)s, %(bonus_damage)s,
+                        %(name)s, %(weapon_type)s, %(attributes)s, %(base_damage)s, %(bonus_damage)s,
                         %(bonus_attributes)s, %(state_attributes)s, %(embedding)s, %(updated_at)s
                     )
-                    ON CONFLICT (name, weapon) DO UPDATE SET
+                    ON CONFLICT (name) DO UPDATE SET
+                        weapon_type = EXCLUDED.weapon_type,
                         attributes = EXCLUDED.attributes,
                         base_damage = EXCLUDED.base_damage,
                         bonus_damage = EXCLUDED.bonus_damage,
@@ -532,6 +535,10 @@ class PeopleWeaponManager:
             # Update tables with time limits
             people_count = self.update_people_table(people_data, max_time_seconds=int(remaining_time * 0.6))  # 60% of remaining time
             weapons_count = self.update_weapons_table(weapons_data, max_time_seconds=int(remaining_time * 0.4))  # 40% of remaining time
+            
+            # Ensure counts are integers (handle None values)
+            people_count = people_count or 0
+            weapons_count = weapons_count or 0
             
             total_time = time.time() - start_time
             

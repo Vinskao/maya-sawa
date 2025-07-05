@@ -76,6 +76,9 @@ class QAChain:
         self._profile_cache = None
         self._profile_summary_cache = None
         
+        # 初始化其他角色資料緩存
+        self._other_profiles_cache = {}
+        
         # 構建問答處理鏈
         self.chat_chain = (
             {"context": RunnablePassthrough(), "question": RunnablePassthrough()}
@@ -93,32 +96,51 @@ class QAChain:
         Returns:
             Optional[Dict]: Maya 的個人資料，如果獲取失敗則返回 None
         """
+        return self._fetch_other_profile("Maya")
+
+    def _fetch_other_profile(self, name: str) -> Optional[Dict]:
+        """
+        查詢指定角色的個人資料
+        
+        Args:
+            name (str): 角色名稱
+            
+        Returns:
+            Optional[Dict]: 角色個人資料，如果獲取失敗則返回 None
+        """
         url = "https://peoplesystem.tatdvsonorth.com/tymb/people/get-by-name"
-        payload = {"name": "Maya"}
+        payload = {"name": name}
         
         try:
-            with httpx.Client(timeout=30.0) as client:
+            with httpx.Client(timeout=10.0) as client:
                 response = client.post(url, json=payload)
                 response.raise_for_status()
                 data = response.json()
-                logger.info("Successfully fetched Maya's profile from API")
+                logger.info(f"Successfully fetched {name}'s profile from API")
                 return data
         except Exception as e:
-            logger.error(f"Failed to fetch Maya's profile: {str(e)}")
+            logger.error(f"Failed to fetch {name}'s profile: {str(e)}")
             return None
 
-    def _create_profile_summary(self, profile: Dict) -> str:
+    def _create_profile_summary(self, profile: Dict, name: str = None) -> str:
         """
         將個人資料轉換為摘要格式
         
         Args:
             profile (Dict): 個人資料字典
+            name (str): 角色名稱，如果為 None 則使用 profile 中的資料
             
         Returns:
             str: 格式化的個人資料摘要
         """
+        # 確定角色名稱
+        if name is None:
+            display_name = f"{profile.get('nameOriginal', 'N/A')}（{profile.get('name', 'N/A')}）"
+        else:
+            display_name = f"{profile.get('nameOriginal', name)}（{profile.get('name', name)}）"
+        
         return f"""
-佐和真夜（Maya Sawa）的個人資料：
+{display_name}的個人資料：
 - 編號：{profile.get('id', 'N/A')}
 - 原名：{profile.get('nameOriginal', 'N/A')}
 - 代號：{profile.get('codeName', 'N/A')}
@@ -168,6 +190,105 @@ class QAChain:
 """
         
         return self._profile_summary_cache
+
+    def _get_other_profile_summary(self, name: str) -> Optional[str]:
+        """
+        獲取其他角色的個人資料摘要，使用緩存避免重複 API 調用
+        
+        Args:
+            name (str): 角色名稱
+            
+        Returns:
+            Optional[str]: 個人資料摘要，如果獲取失敗則返回 None
+        """
+        # 檢查緩存
+        if name in self._other_profiles_cache:
+            return self._other_profiles_cache[name]
+        
+        # 從 API 獲取資料
+        profile = self._fetch_other_profile(name)
+        if profile:
+            summary = self._create_profile_summary(profile, name)
+            self._other_profiles_cache[name] = summary
+            return summary
+        else:
+            return None
+
+    def _detect_queried_name(self, question: str) -> Optional[str]:
+        """
+        偵測問題中是否提及某個人名（單一角色）
+        
+        Args:
+            question (str): 用戶問題
+            
+        Returns:
+            Optional[str]: 檢測到的角色名稱，如果是 Maya 或沒有檢測到則返回 None
+        """
+        detected_names = self._detect_all_queried_names(question)
+        
+        # 如果只檢測到一個角色，返回該角色
+        if len(detected_names) == 1:
+            return detected_names[0]
+        
+        # 如果檢測到多個角色，優先返回非 Maya 的角色
+        non_maya_names = [name for name in detected_names if name.lower() != "maya"]
+        if non_maya_names:
+            return non_maya_names[0]  # 返回第一個非 Maya 的角色
+        
+        return None
+
+    def _detect_all_queried_names(self, question: str) -> List[str]:
+        """
+        偵測問題中是否提及多個人名
+        
+        Args:
+            question (str): 用戶問題
+            
+        Returns:
+            List[str]: 檢測到的所有角色名稱列表
+        """
+        # 個人資訊相關關鍵詞（加入「誰是」）
+        personal_keywords = [
+            "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
+            "興趣", "喜歡", "討厭", "最愛", "食物", "個性", "性格", "職業", 
+            "工作", "種族", "編號", "代號", "原名", "部隊", "部門", "陣營",
+            "戰鬥力", "物理", "魔法", "實用", "戰鬥", "屬性", "性別", "電子郵件",
+            "email", "後宮", "已生育", "身體改造", "別名", "原部隊", "是誰", 
+            "誰是", "怎樣", "什麼人", "有什麼特徵", "資料", "資訊", "個人"
+        ]
+        
+        # 詳細資料關鍵詞
+        detailed_keywords = [
+            "詳細", "完整", "全部", "所有", "具體", "詳細資料", "完整資料", 
+            "所有資料", "具體資料", "詳細資訊", "完整資訊", "所有資訊", "具體資訊"
+        ]
+        
+        # 檢查是否要求詳細資料
+        self._request_detailed = any(keyword in question for keyword in detailed_keywords)
+        
+        # 檢查是否包含個人資訊關鍵詞
+        has_personal_keyword = any(keyword in question for keyword in personal_keywords)
+        
+        if not has_personal_keyword:
+            return []
+        
+        # 可能的角色名稱列表（可以根據需要擴充）
+        possible_names = [
+            "Sorane", "Yuki", "Shion", "Kagari", "Aoi", "Hina", "Miku", "Rin",
+            "Luna", "Stella", "Nova", "Echo", "Blade", "Shadow", "Phoenix",
+            "Crystal", "Ruby", "Sapphire", "Emerald", "Diamond", "Gold", "Silver",
+            "Maya"  # 加入 Maya 到檢測列表
+        ]
+        
+        question_lower = question.lower()
+        detected_names = []
+        
+        # 檢查所有角色名稱
+        for name in possible_names:
+            if name.lower() in question_lower:
+                detected_names.append(name)
+        
+        return detected_names
 
     def _create_dynamic_prompt(self):
         """
@@ -222,14 +343,36 @@ class QAChain:
             | StrOutputParser()
         )
 
+    def refresh_other_profile(self, name: str):
+        """
+        刷新指定角色的個人資料緩存
+        
+        Args:
+            name (str): 角色名稱
+        """
+        logger.info(f"Refreshing {name}'s profile from API")
+        if name in self._other_profiles_cache:
+            del self._other_profiles_cache[name]
+
+    def clear_all_profiles_cache(self):
+        """
+        清除所有角色資料緩存
+        """
+        logger.info("Clearing all profiles cache")
+        self._profile_cache = None
+        self._profile_summary_cache = None
+        self._other_profiles_cache.clear()
+
     def get_answer(self, query: str, documents: List[Document]) -> Dict:
         """
         獲取問題答案
         
         這是主要的問答方法，流程如下：
-        1. 將文檔內容合併為上下文
-        2. 使用 LLM 生成答案
-        3. 返回答案和來源信息
+        1. 檢查是否詢問其他角色的個人資料
+        2. 如果是，直接返回該角色的資料摘要
+        3. 否則，將文檔內容合併為上下文
+        4. 使用 LLM 生成答案
+        5. 返回答案和來源信息
         
         Args:
             query (str): 用戶的問題
@@ -241,6 +384,136 @@ class QAChain:
         logger.debug(f"get_answer called with query: {query}, documents count: {len(documents)}")
         
         try:
+            # 嘗試偵測是否詢問角色的個人資料
+            detected_names = self._detect_all_queried_names(query)
+            
+            if detected_names:
+                logger.info(f"檢測到詢問角色: {detected_names}")
+                
+                # 如果只詢問一個角色
+                if len(detected_names) == 1:
+                    name = detected_names[0]
+                    if name.lower() == "maya":
+                        # Maya 使用內建資料，讓 chat_chain 處理
+                        pass
+                    else:
+                        # 其他角色查詢 API
+                        profile_summary = self._get_other_profile_summary(name)
+                        if profile_summary:
+                            # 檢查是否要求詳細資料
+                            if hasattr(self, '_request_detailed') and self._request_detailed:
+                                # 直接返回原始資料
+                                return {
+                                    "answer": profile_summary,
+                                    "sources": []
+                                }
+                            else:
+                                # 使用 LLM 生成總結
+                                summary_prompt = f"""
+根據以下個人資料，為用戶提供一個簡潔、友善的總結回答：
+
+{profile_summary}
+
+請以 Maya 的身份，用冷淡高貴的語氣，簡潔地介紹這個角色。重點包括：
+- 角色名稱和基本身份
+- 主要特徵（戰鬥力、職業、個性等）
+
+回答要簡潔，不要直接列出所有數據，除非用戶明確要求詳細資料。
+"""
+                                
+                                try:
+                                    summary_answer = self.llm.invoke(summary_prompt)
+                                    return {
+                                        "answer": summary_answer,
+                                        "sources": []
+                                    }
+                                except Exception as e:
+                                    logger.error(f"生成總結時發生錯誤: {str(e)}")
+                                    # 如果生成總結失敗，回退到原始資料
+                                    return {
+                                        "answer": profile_summary,
+                                        "sources": []
+                                    }
+                        else:
+                            return {
+                                "answer": f"抱歉，我無法找到名為 {name} 的角色資料。",
+                                "sources": []
+                            }
+                
+                # 如果詢問多個角色
+                elif len(detected_names) > 1:
+                    profiles = []
+                    not_found = []
+                    
+                    for name in detected_names:
+                        if name.lower() == "maya":
+                            # Maya 使用內建資料
+                            maya_summary = self._get_profile_summary()
+                            profiles.append(maya_summary)
+                        else:
+                            # 其他角色查詢 API
+                            profile_summary = self._get_other_profile_summary(name)
+                            if profile_summary:
+                                profiles.append(profile_summary)
+                            else:
+                                not_found.append(name)
+                    
+                    # 組合所有找到的資料並生成總結
+                    if profiles:
+                        combined_profiles = "\n\n".join(profiles)
+                        
+                        # 檢查是否要求詳細資料
+                        if hasattr(self, '_request_detailed') and self._request_detailed:
+                            # 直接返回原始資料
+                            combined_answer = "\n\n".join(profiles)
+                            if not_found:
+                                combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                            return {
+                                "answer": combined_answer,
+                                "sources": []
+                            }
+                        else:
+                            # 使用 LLM 生成總結
+                            summary_prompt = f"""
+根據以下個人資料，為用戶提供一個簡潔、友善的總結回答：
+
+{combined_profiles}
+
+請以 Maya 的身份，用冷淡高貴的語氣，簡潔地介紹這些角色。重點包括：
+- 角色名稱和基本身份
+- 主要特徵（戰鬥力、職業、個性等）
+- 如果有找不到的角色，請說明
+
+回答要簡潔，不要直接列出所有數據，除非用戶明確要求詳細資料。
+"""
+                            
+                            try:
+                                summary_answer = self.llm.invoke(summary_prompt)
+                                
+                                # 如果有找不到的角色，在最後加上說明
+                                if not_found:
+                                    summary_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                
+                                return {
+                                    "answer": summary_answer,
+                                    "sources": []
+                                }
+                            except Exception as e:
+                                logger.error(f"生成總結時發生錯誤: {str(e)}")
+                                # 如果生成總結失敗，回退到原始資料
+                                combined_answer = "\n\n".join(profiles)
+                                if not_found:
+                                    combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                return {
+                                    "answer": combined_answer,
+                                    "sources": []
+                                }
+                    else:
+                        return {
+                            "answer": f"抱歉，我無法找到以下角色的資料：{', '.join(not_found)}",
+                            "sources": []
+                        }
+            
             # 合併文檔內容
             if documents:
                 context = "\n\n".join([doc.page_content for doc in documents])

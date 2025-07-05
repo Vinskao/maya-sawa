@@ -312,10 +312,11 @@ async def query_document(request: QueryRequest):
     查詢文件內容
     
     這是系統的核心問答功能，流程如下：
-    1. 使用向量搜索找到相關文檔
-    2. 使用 LLM 生成答案
-    3. 保存對話記錄
-    4. 返回答案和參考來源
+    1. 檢查是否為個人資訊問題，如果是則直接回答
+    2. 使用向量搜索找到相關文檔
+    3. 使用 LLM 生成答案
+    4. 保存對話記錄
+    5. 返回答案和參考來源
     
     Args:
         request (QueryRequest): 查詢請求，包含問題文本和用戶 ID
@@ -332,8 +333,37 @@ async def query_document(request: QueryRequest):
         qa_chain = get_qa_chain()
         chat_history_manager = get_chat_history()
         
-        # 搜尋相關文件（限制數量以減少 token 使用）
-        documents = vector_store.similarity_search(request.text, k=3)  # 從 4 減少到 3
+        # 檢查是否為個人資訊問題（包含 Maya 和其他角色）
+        personal_info_keywords = [
+            "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
+            "興趣", "喜歡", "討厭", "最愛", "食物", "個性", "性格", "職業", 
+            "工作", "種族", "編號", "代號", "原名", "部隊", "部門", "陣營",
+            "戰鬥力", "物理", "魔法", "實用", "戰鬥", "屬性", "性別", "電子郵件",
+            "email", "後宮", "已生育", "身體改造", "別名", "原部隊", "是誰", 
+            "誰是", "怎樣", "什麼人", "有什麼特徵", "資料", "資訊", "個人"
+        ]
+        
+        is_personal_question = any(keyword in request.text for keyword in personal_info_keywords)
+        
+        if is_personal_question:
+            # 個人資訊問題：直接使用個人資料回答，不搜索文件
+            result = qa_chain.get_answer(request.text, [])  # 傳入空文件列表
+            
+            # 儲存對話記錄（個人資訊問題不包含參考文件）
+            chat_history_manager.save_conversation(
+                user_message=request.text,
+                ai_answer=result["answer"],
+                user_id=request.user_id
+            )
+            
+            return {
+                "success": True,
+                "answer": result["answer"],
+                "data": []  # 個人資訊問題不返回文件資料
+            }
+        
+        # 非個人資訊問題：搜索相關文件
+        documents = vector_store.similarity_search(request.text, k=3)
         
         if not documents:
             # 即使沒有找到相關文件，也記錄對話
