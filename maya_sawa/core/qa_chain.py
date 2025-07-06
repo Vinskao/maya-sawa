@@ -142,8 +142,11 @@ class QAChain:
             display_name = f"{profile.get('nameOriginal', name)}（{profile.get('name', name)}）"
             character_name = name
         
-        # 構建圖片連結
-        image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/{character_name}.png"
+        # 構建四種圖片連結
+        base_image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/{character_name}.png"
+        fighting_image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/{character_name}Fighting.png"
+        ruined_image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/{character_name}Ruined.png"
+        ravishing_image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/Ravishing{character_name}.png"
         
         return f"""
 {display_name}的個人資料：
@@ -175,7 +178,11 @@ class QAChain:
 - 電子郵件：{profile.get('email', 'N/A')}
 - 代理系統：{profile.get('proxy', 'N/A')}
 
-圖片連結：{image_url}
+圖片連結：
+- 基本圖片：{base_image_url}
+- 戰鬥圖片：{fighting_image_url}
+- 毀壞圖片：{ruined_image_url}
+- 迷人圖片：{ravishing_image_url}
 """
 
     def _get_profile_summary(self) -> str:
@@ -608,7 +615,13 @@ class QAChain:
 3. 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
 4. 但還是要準確回答數據
 5. 語氣冷淡、失禮、明顯不耐
-6. **重要：回答後面要加上該角色的圖片連結**
+6. **重要：回答後面要加上該角色的四種圖片連結，格式如下：**
+
+圖片連結：
+- 基本圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名].png
+- 戰鬥圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Fighting.png
+- 毀壞圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Ruined.png
+- 迷人圖片：https://peoplesystem.tatdvsonorth.com/images/people/Ravishing[角色名].png
 
 我討厭廢話，直接說重點。
 """
@@ -646,7 +659,13 @@ class QAChain:
 4. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
 5. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
 6. 講 2～4 句，不要廢話
-7. **重要：評論後面要加上該角色的圖片連結**
+7. **重要：評論後面要加上該角色的四種圖片連結，格式如下：**
+
+圖片連結：
+- 基本圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名].png
+- 戰鬥圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Fighting.png
+- 毀壞圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Ruined.png
+- 迷人圖片：https://peoplesystem.tatdvsonorth.com/images/people/Ravishing[角色名].png
 
 我討厭廢話，就這樣，開始吧。
 """
@@ -764,7 +783,13 @@ class QAChain:
 5. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
 6. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
 7. 每個人講 2～4 句，不要廢話
-8. **重要：每個角色的評論後面要加上該角色的圖片連結**
+8. **重要：每個角色的評論後面要加上該角色的四種圖片連結，格式如下：**
+
+圖片連結：
+- 基本圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名].png
+- 戰鬥圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Fighting.png
+- 毀壞圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Ruined.png
+- 迷人圖片：https://peoplesystem.tatdvsonorth.com/images/people/Ravishing[角色名].png
 
 我討厭廢話，就這樣，開始吧。
 """
@@ -884,7 +909,13 @@ class QAChain:
 5. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
 6. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
 7. 每個人講 2～4 句，不要廢話
-8. **重要：每個角色的評論後面要加上該角色的圖片連結**
+8. **重要：每個角色的評論後面要加上該角色的四種圖片連結，格式如下：**
+
+圖片連結：
+- 基本圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名].png
+- 戰鬥圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Fighting.png
+- 毀壞圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Ruined.png
+- 迷人圖片：https://peoplesystem.tatdvsonorth.com/images/people/Ravishing[角色名].png
 
 我討厭廢話，就這樣，開始吧。
 """
