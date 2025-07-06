@@ -293,20 +293,6 @@ class QAChain:
         Returns:
             List[str]: 提取到的所有可能人名列表
         """
-        # 特殊處理：直接詢問身份的問題
-        identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
-        if any(keyword in question.lower() for keyword in identity_questions):
-            logger.info("檢測到身份詢問問題，直接返回 Maya，跳過 AI 抽名")
-            return ["Maya"]  # 直接返回，不進行 AI 抽名
-        
-        # 檢查是否明確提及其他角色名字，如果沒有就不進行 AI 抽名
-        other_character_names = self._get_other_character_names()
-        
-        # 如果問題中完全沒有提到其他角色名字，就不進行 AI 抽名
-        if not any(name.lower() in question.lower() for name in other_character_names):
-            logger.info("問題中未明確提及其他角色名字，跳過 AI 抽名")
-            return []
-        
         # 個人資訊相關關鍵詞
         personal_keywords = [
             "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
@@ -332,22 +318,27 @@ class QAChain:
         if not has_personal_keyword:
             return []  # 沒有個人資訊關鍵詞，返回空列表
         
+        # 如果有個人資訊關鍵詞，就進行 AI 抽名（不管是否明確提到已知角色）
+        logger.info("檢測到個人資訊關鍵詞，進行 AI 抽名")
+        
         # 使用 AI 提取人名
         name_extraction_prompt = f"""
-請從以下問題中提取所有可能的人名（角色名稱）。只返回人名，用逗號分隔，不要其他內容。
+請從以下問題中精確找出所有「明確在問題文字中出現」的人名（角色名稱）。格式要求如下：
+
+1. 僅回傳問題中出現過的人名
+2. 不要加入任何未出現的人名
+3. 如果完全沒有人名，就返回空字串
+4. 不要進行任何猜測或補全
+5. 結果請僅用英文逗號分隔人名，不要包含任何敘述或格式
+6. 不要包含 "Maya" 或 "真夜" 或 "佐和"（這些是系統內建角色）
+
+範例：
+- 問題：「誰是 Chiaki？」 → 回應：「Chiaki」
+- 問題：「請比較 Yuki 和 Tsubasa」→ 回應：「Yuki,Tsubasa」
+- 問題：「你是誰？」→ 回應：「」
+- 問題：「Sorane的身高是多少？」→ 回應：「Sorane」
 
 問題：{question}
-
-注意：
-- 只提取看起來像人名的詞彙
-- 忽略明顯不是人名的詞彙
-- 如果沒有找到人名，返回空字符串
-- 不要包含 "Maya" 或 "真夜" 或 "佐和"（這些是系統內建角色）
-
-例如：
-- "誰是Sorane、Chiaki?" → "Sorane,Chiaki"
-- "Yuki的身高是多少?" → "Yuki"
-- "沒有提到任何人名" → ""
 """
         
         try:
@@ -359,12 +350,31 @@ class QAChain:
             if response and response.strip():
                 names = [name.strip() for name in response.split(',') if name.strip()]
                 logger.info(f"AI 提取到的人名: {names}")
+                
+                # 驗證提取的人名是否真的在問題中出現，並且在已知角色名單中
+                validated_names = []
+                known_names = self._get_other_character_names()  # 獲取已知角色名單
+                
+                for name in names:
+                    # 清理人名（移除引號等）
+                    clean_name = name.strip().strip('"').strip("'")
+                    
+                    # 檢查：1. 在問題中出現 2. 在已知角色名單中
+                    if (clean_name.lower() in question.lower() and 
+                        clean_name in known_names):
+                        validated_names.append(clean_name)
+                        logger.info(f"驗證通過: '{clean_name}'")
+                    else:
+                        if clean_name.lower() not in question.lower():
+                            logger.warning(f"AI 提取到的人名 '{name}' 在問題中未出現，已過濾")
+                        elif clean_name not in known_names:
+                            logger.warning(f"AI 提取到的人名 '{name}' 不在已知角色名單中，已過濾")
+                
+                logger.info(f"驗證後的人名: {validated_names}")
+                return validated_names
             else:
                 logger.info("AI 沒有提取到任何人名")
-                names = []
-            
-            logger.info(f"最終人名列表: {names}")
-            return names
+                return []
                 
         except Exception as e:
             logger.error(f"AI 提取人名時發生錯誤: {str(e)}")
@@ -380,7 +390,27 @@ class QAChain:
         Returns:
             List[str]: 檢測到的所有角色名稱列表
         """
-        return self._extract_names_with_ai(question)
+        # 先使用 AI 提取人名
+        extracted_names = self._extract_names_with_ai(question)
+        
+        # 檢查是否為身份詢問問題
+        identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
+        has_identity_question = any(keyword in question.lower() for keyword in identity_questions)
+        
+        # 如果沒有提取到任何人名，但有身份詢問，則添加 Maya
+        if not extracted_names and has_identity_question:
+            logger.info("檢測到純身份詢問問題（無其他角色），添加 Maya")
+            extracted_names.append("Maya")
+        # 如果有提取到人名，且包含身份詢問，也添加 Maya（但要去重）
+        elif extracted_names and has_identity_question:
+            logger.info("檢測到身份詢問問題且包含其他角色，添加 Maya")
+            if "Maya" not in extracted_names:
+                extracted_names.append("Maya")
+        
+        # 去重並返回
+        unique_names = list(dict.fromkeys(extracted_names))  # 保持順序的去重
+        logger.info(f"最終檢測到的角色名稱: {unique_names}")
+        return unique_names
 
     def _create_dynamic_prompt(self):
         """
@@ -553,22 +583,141 @@ class QAChain:
                 
                 # 如果詢問多個角色
                 elif len(detected_names) > 1:
-                    profiles = []
-                    not_found = []
-                    found_names = []
+                    # 檢查是否包含 Maya
+                    has_maya = any(name.lower() == "maya" for name in detected_names)
+                    other_names = [name for name in detected_names if name.lower() != "maya"]
                     
-                    logger.info(f"處理多角色查詢: {detected_names}")
+                    logger.info(f"處理多角色查詢: {detected_names} (包含Maya: {has_maya})")
                     
-                    for name in detected_names:
-                        logger.info(f"正在處理角色: {name}")
-                        if name.lower() == "maya":
-                            # Maya 使用內建資料
-                            maya_summary = self._get_profile_summary()
-                            profiles.append(maya_summary)
-                            found_names.append("Maya")
-                            logger.info(f"Maya 資料已添加")
+                    if has_maya:
+                        # 如果包含 Maya，需要特殊處理：先回答自己的身份，再評論其他角色
+                        logger.info("檢測到包含 Maya 的多角色查詢，使用特殊處理邏輯")
+                        
+                        # 獲取其他角色的資料
+                        other_profiles = []
+                        not_found = []
+                        
+                        for name in other_names:
+                            profile_summary = self._get_other_profile_summary(name)
+                            if profile_summary:
+                                other_profiles.append(profile_summary)
+                                logger.info(f"{name} 資料已添加")
+                            else:
+                                not_found.append(name)
+                                logger.warning(f"無法找到 {name} 的資料")
+                        
+                        # 構建特殊的多角色回答提示
+                        if other_profiles:
+                            combined_other_profiles = "\n\n".join(other_profiles)
+                            
+                            # 檢查是否要求詳細資料
+                            if hasattr(self, '_request_detailed') and self._request_detailed:
+                                # 直接返回原始資料
+                                maya_summary = self._get_profile_summary()
+                                combined_answer = f"我的個人資料：\n{maya_summary}\n\n其他角色資料：\n{combined_other_profiles}"
+                                if not_found:
+                                    combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                return {
+                                    "answer": combined_answer,
+                                    "sources": []
+                                }
+                            else:
+                                # 使用 LLM 生成特殊的多角色回答
+                                multi_character_prompt = f"""
+我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
+
+有人問我「{query}」，這問題很無聊，但我還是得回答。
+
+首先，關於我自己：
+- 我是佐和真夜（Maya Sawa），冷淡、唯命是從的高階戰術女武神
+- 我對命令絕對服從，但以高貴與壓倒性力量著稱
+- 我討厭重複、無聊或愚蠢的問題
+
+接著，關於其他角色：
+
+{combined_other_profiles}
+
+⚠ 回答要求：
+1. **先回答自己的身份**，用不耐煩但不得不回答的語氣
+2. **然後逐一評論其他角色**，語氣要像在背後批評人，不客觀、不假裝中立
+3. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
+4. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
+5. 每個人講 2～4 句，不要廢話
+
+我討厭廢話，就這樣，開始吧。
+"""
+                                
+                                try:
+                                    multi_character_answer = self.llm.invoke(multi_character_prompt)
+                                    if hasattr(multi_character_answer, 'content'):
+                                        multi_character_answer = multi_character_answer.content
+                                    
+                                    # 如果有找不到的角色，在最後加上說明
+                                    if not_found:
+                                        multi_character_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                    
+                                    return {
+                                        "answer": multi_character_answer,
+                                        "sources": []
+                                    }
+                                except Exception as e:
+                                    logger.error(f"生成多角色回答時發生錯誤: {str(e)}")
+                                    # 如果生成失敗，回退到原始資料
+                                    maya_summary = self._get_profile_summary()
+                                    combined_answer = f"我的個人資料：\n{maya_summary}\n\n其他角色資料：\n{combined_other_profiles}"
+                                    if not_found:
+                                        combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                    return {
+                                        "answer": combined_answer,
+                                        "sources": []
+                                    }
                         else:
-                            # 其他角色查詢 API
+                            # 只有 Maya，沒有其他角色資料
+                            logger.info("只有 Maya，沒有其他角色資料，使用身份詢問邏輯")
+                            maya_summary = self._get_profile_summary()
+                            
+                            identity_prompt = f"""
+我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
+
+我的個人資料：
+{maya_summary}
+
+有人問我「{query}」，這問題很無聊，但我還是得回答。
+
+我說話冷靜、克制，像士兵般服從命令。若你無禮，我也不會留情。
+我從不矯飾慾望──那是弱者才會感到羞恥的東西。
+
+回答要求：
+- 用不耐煩但不得不回答的語氣
+- 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
+- 但還是要完整回答我的身份和資料
+- 語氣冷淡、失禮、明顯不耐
+
+我討厭廢話，直接說重點。
+"""
+                            
+                            try:
+                                identity_answer = self.llm.invoke(identity_prompt)
+                                if hasattr(identity_answer, 'content'):
+                                    identity_answer = identity_answer.content
+                                return {
+                                    "answer": identity_answer,
+                                    "sources": []
+                                }
+                            except Exception as e:
+                                logger.error(f"生成身份回答時發生錯誤: {str(e)}")
+                                return {
+                                    "answer": maya_summary,
+                                    "sources": []
+                                }
+                    else:
+                        # 不包含 Maya，使用原有的多角色評論邏輯
+                        profiles = []
+                        not_found = []
+                        found_names = []
+                        
+                        for name in detected_names:
+                            logger.info(f"正在處理角色: {name}")
                             profile_summary = self._get_other_profile_summary(name)
                             if profile_summary:
                                 profiles.append(profile_summary)
@@ -577,26 +726,26 @@ class QAChain:
                             else:
                                 not_found.append(name)
                                 logger.warning(f"無法找到 {name} 的資料")
-                    
-                    logger.info(f"找到的資料數量: {len(profiles)}, 找不到的角色: {not_found}")
-                    
-                    # 組合所有找到的資料並生成總結
-                    if profiles:
-                        combined_profiles = "\n\n".join(profiles)
                         
-                        # 檢查是否要求詳細資料
-                        if hasattr(self, '_request_detailed') and self._request_detailed:
-                            # 直接返回原始資料
-                            combined_answer = "\n\n".join(profiles)
-                            if not_found:
-                                combined_answer += f"\n\n注意：查無此人：{', '.join(not_found)}"
-                            return {
-                                "answer": combined_answer,
-                                "sources": []
-                            }
-                        else:
-                            # 使用 LLM 生成總結
-                            summary_prompt = f"""
+                        logger.info(f"找到的資料數量: {len(profiles)}, 找不到的角色: {not_found}")
+                        
+                        # 組合所有找到的資料並生成總結
+                        if profiles:
+                            combined_profiles = "\n\n".join(profiles)
+                            
+                            # 檢查是否要求詳細資料
+                            if hasattr(self, '_request_detailed') and self._request_detailed:
+                                # 直接返回原始資料
+                                combined_answer = "\n\n".join(profiles)
+                                if not_found:
+                                    combined_answer += f"\n\n注意：查無此人：{', '.join(not_found)}"
+                                return {
+                                    "answer": combined_answer,
+                                    "sources": []
+                                }
+                            else:
+                                # 使用 LLM 生成總結
+                                summary_prompt = f"""
 我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
 
 以下是其他角色的個人檔案摘要，我會逐一評論──雖然我並不想這麼做，但你既然問了，那就聽好。
@@ -614,41 +763,41 @@ class QAChain:
 
 我不喜歡廢話，就這樣，開始吧。
 """
-                            
-                            try:
-                                summary_answer = self.llm.invoke(summary_prompt)
-                                # 確保返回的是字符串
-                                if hasattr(summary_answer, 'content'):
-                                    summary_answer = summary_answer.content
                                 
-                                # 如果有找不到的角色，在最後加上說明
-                                if not_found:
-                                    summary_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
-                                
-                                return {
-                                    "answer": summary_answer,
-                                    "sources": []
-                                }
-                            except Exception as e:
-                                logger.error(f"生成總結時發生錯誤: {str(e)}")
-                                # 如果生成總結失敗，回退到原始資料
-                                combined_answer = "\n\n".join(profiles)
-                                if not_found:
-                                    combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
-                                return {
-                                    "answer": combined_answer,
-                                    "sources": []
-                                }
-                    else:
-                        return {
-                            "answer": f"抱歉，我無法找到以下角色的資料：{', '.join(not_found)}",
-                            "sources": []
-                        }
+                                try:
+                                    summary_answer = self.llm.invoke(summary_prompt)
+                                    # 確保返回的是字符串
+                                    if hasattr(summary_answer, 'content'):
+                                        summary_answer = summary_answer.content
+                                    
+                                    # 如果有找不到的角色，在最後加上說明
+                                    if not_found:
+                                        summary_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                    
+                                    return {
+                                        "answer": summary_answer,
+                                        "sources": []
+                                    }
+                                except Exception as e:
+                                    logger.error(f"生成總結時發生錯誤: {str(e)}")
+                                    # 如果生成總結失敗，回退到原始資料
+                                    combined_answer = "\n\n".join(profiles)
+                                    if not_found:
+                                        combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                    return {
+                                        "answer": combined_answer,
+                                        "sources": []
+                                    }
+                        else:
+                            return {
+                                "answer": f"抱歉，我無法找到以下角色的資料：{', '.join(not_found)}",
+                                "sources": []
+                            }
             
-            # 特殊處理：身份詢問問題（即使沒有檢測到角色名稱）
+            # 特殊處理：身份詢問問題（只有在沒有檢測到其他角色時才處理）
             identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
-            if any(keyword in query.lower() for keyword in identity_questions):
-                logger.info("檢測到身份詢問問題，使用個人資料回答")
+            if not detected_names and any(keyword in query.lower() for keyword in identity_questions):
+                logger.info("檢測到純身份詢問問題（無其他角色），使用個人資料回答")
                 maya_summary = self._get_profile_summary()
                 
                 # 使用 LLM 生成不耐煩但完整的回答

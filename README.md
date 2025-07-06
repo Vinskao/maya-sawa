@@ -214,7 +214,7 @@ curl -X POST "http://localhost:8000/qa/query" \
 
 curl -X POST "http://localhost:8000/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"你是誰?","user_id":"user123","language":"chinese"}'
+  -d '{"text":"你是誰? 誰是Sorane","user_id":"user123","language":"chinese"}'
 
 curl -X POST "http://localhost:8000/qa/query" \
   -H "Content-Type: application/json" \
