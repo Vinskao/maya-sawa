@@ -293,6 +293,8 @@ class QAChain:
         Returns:
             List[str]: 提取到的所有可能人名列表
         """
+        # 記錄原始提取的人名，用於後續處理
+        self._original_extracted_names = []
         # 個人資訊相關關鍵詞
         personal_keywords = [
             "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
@@ -333,10 +335,9 @@ class QAChain:
 6. 不要包含 "Maya" 或 "真夜" 或 "佐和"（這些是系統內建角色）
 
 範例：
-- 問題：「誰是 Chiaki？」 → 回應：「Chiaki」
-- 問題：「請比較 Yuki 和 Tsubasa」→ 回應：「Yuki,Tsubasa」
 - 問題：「你是誰？」→ 回應：「」
-- 問題：「Sorane的身高是多少？」→ 回應：「Sorane」
+- 問題：「Alice的身高是多少？」→ 回應：「Alice」
+- 問題：「請比較 Bob 和 Carol」→ 回應：「Bob,Carol」
 
 問題：{question}
 """
@@ -351,6 +352,9 @@ class QAChain:
                 names = [name.strip() for name in response.split(',') if name.strip()]
                 logger.info(f"AI 提取到的人名: {names}")
                 
+                # 記錄原始提取的人名
+                self._original_extracted_names = names
+                
                 # 驗證提取的人名是否真的在問題中出現，並且在已知角色名單中
                 validated_names = []
                 known_names = self._get_other_character_names()  # 獲取已知角色名單
@@ -363,7 +367,7 @@ class QAChain:
                     if (clean_name.lower() in question.lower() and 
                         clean_name in known_names):
                         validated_names.append(clean_name)
-                        logger.info(f"驗證通過: '{clean_name}'")
+                        logger.info(f"驗證通過: {clean_name}")
                     else:
                         if clean_name.lower() not in question.lower():
                             logger.warning(f"AI 提取到的人名 '{name}' 在問題中未出現，已過濾")
@@ -518,6 +522,44 @@ class QAChain:
             # 嘗試偵測是否詢問角色的個人資料
             detected_names = self._detect_all_queried_names(query)
             
+            # 檢查是否有 AI 提取到但驗證失敗的人名
+            if hasattr(self, '_original_extracted_names') and self._original_extracted_names and not detected_names:
+                # AI 提取到了人名但驗證失敗，說明這些角色不存在
+                logger.info(f"AI 提取到但驗證失敗的人名: {self._original_extracted_names}")
+                
+                # 使用 Maya 的語氣告訴用戶找不到這些角色
+                not_found_names = [name.strip().strip('"').strip("'") for name in self._original_extracted_names]
+                not_found_prompt = f"""
+我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
+
+有人問我「{query}」，這問題很無聊，但我還是得回答。
+
+⚠ 回答要求：
+1. 告訴對方你找不到這些角色：{', '.join(not_found_names)}
+2. 用不耐煩但不得不回答的語氣
+3. 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
+4. 語氣冷淡、失禮、明顯不耐
+5. 不要提供任何假資料
+
+我討厭廢話，就這樣，開始吧。
+"""
+                
+                try:
+                    not_found_answer = self.llm.invoke(not_found_prompt)
+                    if hasattr(not_found_answer, 'content'):
+                        not_found_answer = not_found_answer.content
+                    return {
+                        "answer": not_found_answer,
+                        "sources": []
+                    }
+                except Exception as e:
+                    logger.error(f"生成找不到角色回答時發生錯誤: {str(e)}")
+                    # 如果生成失敗，使用預設回答
+                    return {
+                        "answer": f"抱歉，我無法找到以下角色的資料：{', '.join(not_found_names)}",
+                        "sources": []
+                    }
+            
             if detected_names:
                 logger.info(f"檢測到詢問角色: {detected_names}")
                 
@@ -531,6 +573,10 @@ class QAChain:
                         # 其他角色查詢 API
                         profile_summary = self._get_other_profile_summary(name)
                         if profile_summary:
+                            # 檢查是否為具體數據問題
+                            specific_data_keywords = ["身高", "體重", "年齡", "生日", "出生", "胸部", "臀部", "身材", "編號", "代號", "原名", "部隊", "部門", "陣營", "戰鬥力", "物理", "魔法", "武器", "屬性", "性別", "電子郵件", "email", "後宮", "已生育", "體態", "別名", "原部隊"]
+                            is_specific_data_question = any(keyword in query for keyword in specific_data_keywords)
+                            
                             # 檢查是否要求詳細資料
                             if hasattr(self, '_request_detailed') and self._request_detailed:
                                 # 直接返回原始資料
@@ -538,25 +584,62 @@ class QAChain:
                                     "answer": profile_summary,
                                     "sources": []
                                 }
-                            else:
-                                # 使用 LLM 生成總結
-                                summary_prompt = f"""
+                            elif is_specific_data_question:
+                                # 具體數據問題：直接回答數據，但保持 Maya 的語氣
+                                data_answer_prompt = f"""
 我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
 
-以下是我對這個人的了解：
+有人問我「{query}」，這問題很無聊，但我還是得回答。
+
+以下是這個角色的資料：
 
 {profile_summary}
 
-我的個性：冷靜、克制、暴力傾向，對於浪費時間的事沒有耐心。這些評論，只是我個人的觀察與直覺，別拿去當什麼讚美文。
+⚠ 回答要求：
+1. **直接回答問題中詢問的具體數據**
+2. 用不耐煩但不得不回答的語氣
+3. 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
+4. 但還是要準確回答數據
+5. 語氣冷淡、失禮、明顯不耐
 
-⚠ 評論規則：
-1. 一定要評論這個角色，**不能省略**。
-2. 描述語氣要像在背後批評人，**不客觀、不假裝中立**，像在和戰友閒聊。
-3. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法。
-4. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺。
-5. 講 2～4 句，不要廢話。
+我討厭廢話，直接說重點。
+"""
+                                
+                                try:
+                                    data_answer = self.llm.invoke(data_answer_prompt)
+                                    if hasattr(data_answer, 'content'):
+                                        data_answer = data_answer.content
+                                    return {
+                                        "answer": data_answer,
+                                        "sources": []
+                                    }
+                                except Exception as e:
+                                    logger.error(f"生成數據回答時發生錯誤: {str(e)}")
+                                    # 如果生成失敗，回退到原始資料
+                                    return {
+                                        "answer": profile_summary,
+                                        "sources": []
+                                    }
+                            else:
+                                # 一般性問題：使用 LLM 生成總結評論
+                                summary_prompt = f"""
+我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
 
-我不喜歡廢話，就這樣，開始吧。
+有人問我「{query}」，這問題很無聊，但我還是得回答。
+
+以下是我對這個人的完整了解（基於實際資料）：
+
+{profile_summary}
+
+⚠ 回答要求：
+1. **基於上述實際資料回答問題**，不要憑空想像
+2. 如果問題涉及具體數據（如身高、體重、身材等），要準確引用資料中的數值
+3. 描述語氣要像在背後批評人，**不客觀、不假裝中立**，像在和戰友閒聊
+4. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
+5. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
+6. 講 2～4 句，不要廢話
+
+我討厭廢話，就這樣，開始吧。
 """
                                 
                                 try:
@@ -576,10 +659,37 @@ class QAChain:
                                         "sources": []
                                     }
                         else:
-                            return {
-                                "answer": f"抱歉，我無法找到名為 {name} 的角色資料。",
-                                "sources": []
-                            }
+                            # 找不到角色時，使用 Maya 的語氣回答
+                            not_found_prompt = f"""
+我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
+
+有人問我「{query}」，這問題很無聊，但我還是得回答。
+
+⚠ 回答要求：
+1. 告訴對方你找不到這個角色
+2. 用不耐煩但不得不回答的語氣
+3. 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
+4. 語氣冷淡、失禮、明顯不耐
+5. 不要提供任何假資料
+
+我討厭廢話，就這樣，開始吧。
+"""
+                            
+                            try:
+                                not_found_answer = self.llm.invoke(not_found_prompt)
+                                if hasattr(not_found_answer, 'content'):
+                                    not_found_answer = not_found_answer.content
+                                return {
+                                    "answer": not_found_answer,
+                                    "sources": []
+                                }
+                            except Exception as e:
+                                logger.error(f"生成找不到角色回答時發生錯誤: {str(e)}")
+                                # 如果生成失敗，使用預設回答
+                                return {
+                                    "answer": f"抱歉，我無法找到名為 {name} 的角色資料。",
+                                    "sources": []
+                                }
                 
                 # 如果詢問多個角色
                 elif len(detected_names) > 1:
@@ -616,7 +726,7 @@ class QAChain:
                                 maya_summary = self._get_profile_summary()
                                 combined_answer = f"我的個人資料：\n{maya_summary}\n\n其他角色資料：\n{combined_other_profiles}"
                                 if not_found:
-                                    combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                    combined_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
                                 return {
                                     "answer": combined_answer,
                                     "sources": []
@@ -633,16 +743,18 @@ class QAChain:
 - 我對命令絕對服從，但以高貴與壓倒性力量著稱
 - 我討厭重複、無聊或愚蠢的問題
 
-接著，關於其他角色：
+接著，關於其他角色（基於實際資料）：
 
 {combined_other_profiles}
 
 ⚠ 回答要求：
-1. **先回答自己的身份**，用不耐煩但不得不回答的語氣
-2. **然後逐一評論其他角色**，語氣要像在背後批評人，不客觀、不假裝中立
-3. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
-4. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
-5. 每個人講 2～4 句，不要廢話
+1. **基於上述實際資料回答問題**，不要憑空想像
+2. 如果問題涉及具體數據（如身高、體重、身材等），要準確引用資料中的數值
+3. **先回答自己的身份**，用不耐煩但不得不回答的語氣
+4. **然後逐一評論其他角色**，語氣要像在背後批評人，不客觀、不假裝中立
+5. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
+6. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
+7. 每個人講 2～4 句，不要廢話
 
 我討厭廢話，就這樣，開始吧。
 """
@@ -654,7 +766,7 @@ class QAChain:
                                     
                                     # 如果有找不到的角色，在最後加上說明
                                     if not_found:
-                                        multi_character_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                        multi_character_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
                                     
                                     return {
                                         "answer": multi_character_answer,
@@ -738,7 +850,7 @@ class QAChain:
                                 # 直接返回原始資料
                                 combined_answer = "\n\n".join(profiles)
                                 if not_found:
-                                    combined_answer += f"\n\n注意：查無此人：{', '.join(not_found)}"
+                                    combined_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
                                 return {
                                     "answer": combined_answer,
                                     "sources": []
@@ -748,20 +860,22 @@ class QAChain:
                                 summary_prompt = f"""
 我是佐和真夜（Maya Sawa），冷淡、服從命令的高階戰術女武神。
 
-以下是其他角色的個人檔案摘要，我會逐一評論──雖然我並不想這麼做，但你既然問了，那就聽好。
+有人問我「{query}」，這問題很無聊，但我還是得回答。
+
+以下是其他角色的完整資料（基於實際數據），我會逐一評論──雖然我並不想這麼做，但你既然問了，那就聽好。
 
 {combined_profiles}
 
-我的個性：冷靜、克制、暴力傾向，對於浪費時間的事沒有耐心。這些評論，只是我個人的觀察與直覺，別拿去當什麼讚美文。
+⚠ 回答要求：
+1. **基於上述實際資料回答問題**，不要憑空想像
+2. 如果問題涉及具體數據（如身高、體重、身材等），要準確引用資料中的數值
+3. 一定要「**逐一**」評論上面出現過的每一位角色，**不能省略任何一人**
+4. 描述語氣要像在背後批評人，**不客觀、不假裝中立**，像在和戰友閒聊
+5. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
+6. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
+7. 每個人講 2～4 句，不要廢話
 
-⚠ 評論規則：
-1. 一定要「**逐一**」評論上面出現過的每一位角色，**不能省略任何一人**。
-2. 描述語氣要像在背後批評人，**不客觀、不假裝中立**，像在和戰友閒聊。
-3. 請**完全站在我的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法。
-4. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺。
-5. 每個人講 2～4 句，不要廢話。
-
-我不喜歡廢話，就這樣，開始吧。
+我討厭廢話，就這樣，開始吧。
 """
                                 
                                 try:
@@ -772,7 +886,7 @@ class QAChain:
                                     
                                     # 如果有找不到的角色，在最後加上說明
                                     if not_found:
-                                        summary_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
+                                        summary_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
                                     
                                     return {
                                         "answer": summary_answer,
