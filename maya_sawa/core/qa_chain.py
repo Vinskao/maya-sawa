@@ -346,10 +346,11 @@ class QAChain:
 3. 如果完全沒有人名，就返回空字串
 4. 不要進行任何猜測或補全
 5. 結果請僅用英文逗號分隔人名，不要包含任何敘述或格式
-6. 不要包含 "Maya" 或 "真夜" 或 "佐和"（這些是系統內建角色）
+6. 如果問題是身份詢問（如「你是誰？」「你叫什麼？」等），請返回 "Maya"
 
 範例：
-- 問題：「你是誰？」→ 回應：「」
+- 問題：「你是誰？」→ 回應：「Maya」
+- 問題：「你叫什麼名字？」→ 回應：「Maya」
 - 問題：「Alice的身高是多少？」→ 回應：「Alice」
 - 問題：「請比較 Bob 和 Carol」→ 回應：「Bob,Carol」
 
@@ -376,6 +377,12 @@ class QAChain:
                 for name in names:
                     # 清理人名（移除引號等）
                     clean_name = name.strip().strip('"').strip("'")
+                    
+                    # 特殊處理：Maya 是系統內建角色，不需要驗證
+                    if clean_name.lower() == "maya":
+                        validated_names.append(clean_name)
+                        logger.info(f"驗證通過（系統內建角色）: {clean_name}")
+                        continue
                     
                     # 檢查：1. 在問題中出現 2. 在已知角色名單中
                     if (clean_name.lower() in question.lower() and 
@@ -424,6 +431,10 @@ class QAChain:
             logger.info("檢測到身份詢問問題且包含其他角色，添加 Maya")
             if "Maya" not in extracted_names:
                 extracted_names.append("Maya")
+        
+        # 如果 AI 直接返回了 "Maya"，也要處理
+        if "Maya" in extracted_names:
+            logger.info("AI 直接識別出身份詢問，包含 Maya")
         
         # 去重並返回
         unique_names = list(dict.fromkeys(extracted_names))  # 保持順序的去重
