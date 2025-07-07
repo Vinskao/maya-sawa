@@ -29,7 +29,7 @@ class QAChain:
         )
         
         # 初始化組件
-        self.name_detector = NameDetector()
+        self.name_detector = NameDetector(llm=self.llm, get_known_names_func=self._get_known_names)
         self.profile_manager = ProfileManager()
         self.personality_builder = PersonalityPromptBuilder()
         self.people_manager = PeopleWeaponManager()
@@ -44,6 +44,30 @@ class QAChain:
         )
         
         logger.info("QAChain 初始化完成")
+
+    def _get_known_names(self) -> List[str]:
+        """
+        獲取已知的角色名稱列表
+        
+        Returns:
+            List[str]: 已知角色名稱列表
+        """
+        try:
+            # 從 people manager 獲取所有角色名稱
+            people_data = self.people_manager.get_all_people()
+            if people_data and 'data' in people_data:
+                names = [person.get('name', '') for person in people_data['data'] if person.get('name')]
+                # 添加 Maya 作為系統內建角色
+                if 'Maya' not in names:
+                    names.append('Maya')
+                return names
+            else:
+                # 如果無法獲取，至少返回 Maya
+                return ['Maya']
+        except Exception as e:
+            logger.error(f"獲取已知角色名稱時發生錯誤: {str(e)}")
+            # 如果發生錯誤，至少返回 Maya
+            return ['Maya']
 
     def _create_dynamic_prompt(self):
         """
@@ -115,101 +139,111 @@ class QAChain:
             if detected_names:
                 logger.info("檢測到角色名稱，處理角色相關問題")
                 
-                # 檢查是否詢問 Maya 自己
-                if "maya" in [name.lower() for name in detected_names] or "佐和" in detected_names or "真夜" in detected_names:
-                    logger.info("檢測到詢問 Maya 的問題")
-                    maya_summary = self.profile_manager.get_profile_summary()
-                    
-                    # 使用 LLM 生成自然回答
-                    identity_prompt = self.personality_builder.create_identity_prompt(query, maya_summary)
-                    
-                    try:
-                        identity_answer = self.llm.invoke(identity_prompt)
-                        if hasattr(identity_answer, 'content'):
-                            identity_answer = identity_answer.content
-                        return {
-                            "answer": identity_answer,
-                            "sources": []
-                        }
-                    except Exception as e:
-                        logger.error(f"生成身份回答時發生錯誤: {str(e)}")
-                        return {
-                            "answer": maya_summary,
-                            "sources": []
-                        }
+                # 分離 Maya 和其他角色
+                maya_names = [name for name in detected_names if name.lower() == "maya" or name in ["佐和", "真夜"]]
+                other_names = [name for name in detected_names if name not in maya_names]
                 
-                # 處理其他角色的問題
-                else:
-                    logger.info("檢測到詢問其他角色的問題")
-                    profiles = []
-                    found_names = []
-                    not_found = []
+                logger.info(f"Maya 相關角色: {maya_names}, 其他角色: {other_names}")
+                
+                # 收集所有角色的資料
+                all_profiles = []
+                found_names = []
+                not_found = []
+                
+                # 處理 Maya 相關問題
+                if maya_names:
+                    logger.info("處理 Maya 相關問題")
+                    maya_summary = self.profile_manager.get_profile_summary()
+                    if maya_summary:
+                        all_profiles.append(f"=== Maya 的資料 ===\n{maya_summary}")
+                        found_names.append("Maya")
+                        logger.info("Maya 資料已添加")
+                    else:
+                        not_found.append("Maya")
+                        logger.warning("無法找到 Maya 的資料")
+                
+                # 處理其他角色問題
+                for name in other_names:
+                    logger.info(f"正在處理角色: {name}")
+                    profile_summary = self.profile_manager.get_other_profile_summary(name)
+                    if profile_summary:
+                        all_profiles.append(f"=== {name} 的資料 ===\n{profile_summary}")
+                        found_names.append(name)
+                        logger.info(f"{name} 資料已添加")
+                    else:
+                        not_found.append(name)
+                        logger.warning(f"無法找到 {name} 的資料，可能是 API 調用失敗或角色不存在")
+                
+                logger.info(f"處理結果 - 找到的角色: {found_names}, 找不到的角色: {not_found}")
+                logger.info(f"all_profiles 數量: {len(all_profiles)}")
+                
+                logger.info(f"找到的資料數量: {len(all_profiles)}, 找不到的角色: {not_found}")
+                
+                # 組合所有找到的資料並生成總結
+                if all_profiles:
+                    combined_profiles = "\n\n".join(all_profiles)
                     
-                    for name in detected_names:
-                        logger.info(f"正在處理角色: {name}")
-                        profile_summary = self.profile_manager.get_other_profile_summary(name)
-                        if profile_summary:
-                            profiles.append(profile_summary)
-                            found_names.append(name)
-                            logger.info(f"{name} 資料已添加")
-                        else:
-                            not_found.append(name)
-                            logger.warning(f"無法找到 {name} 的資料")
-                    
-                    logger.info(f"找到的資料數量: {len(profiles)}, 找不到的角色: {not_found}")
-                    
-                    # 組合所有找到的資料並生成總結
-                    if profiles:
-                        combined_profiles = "\n\n".join(profiles)
+                    # 檢查是否要求詳細資料
+                    if hasattr(self.name_detector, '_request_detailed') and self.name_detector._request_detailed:
+                        # 直接返回原始資料
+                        combined_answer = "\n\n".join(all_profiles)
+                        if not_found:
+                            combined_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
+                        return {
+                            "answer": combined_answer,
+                            "sources": []
+                        }
+                    else:
+                        # 使用 LLM 生成總結
+                        summary_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles)
                         
-                        # 檢查是否要求詳細資料
-                        if hasattr(self.name_detector, '_request_detailed') and self.name_detector._request_detailed:
-                            # 直接返回原始資料
-                            combined_answer = "\n\n".join(profiles)
+                        try:
+                            summary_answer = self.llm.invoke(summary_prompt)
+                            # 確保返回的是字符串
+                            if hasattr(summary_answer, 'content'):
+                                summary_answer = summary_answer.content
+                            
+                            # 如果有找不到的角色，在最後加上說明
                             if not_found:
-                                combined_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
+                                summary_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
+                            
+                            return {
+                                "answer": summary_answer,
+                                "sources": []
+                            }
+                        except Exception as e:
+                            logger.error(f"生成總結時發生錯誤: {str(e)}")
+                            # 如果生成總結失敗，回退到原始資料
+                            combined_answer = "\n\n".join(all_profiles)
+                            if not_found:
+                                combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
                             return {
                                 "answer": combined_answer,
                                 "sources": []
                             }
-                        else:
-                            # 使用 LLM 生成總結
-                            summary_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles)
-                            
-                            try:
-                                summary_answer = self.llm.invoke(summary_prompt)
-                                # 確保返回的是字符串
-                                if hasattr(summary_answer, 'content'):
-                                    summary_answer = summary_answer.content
-                                
-                                # 如果有找不到的角色，在最後加上說明
-                                if not_found:
-                                    summary_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
-                                
-                                return {
-                                    "answer": summary_answer,
-                                    "sources": []
-                                }
-                            except Exception as e:
-                                logger.error(f"生成總結時發生錯誤: {str(e)}")
-                                # 如果生成總結失敗，回退到原始資料
-                                combined_answer = "\n\n".join(profiles)
-                                if not_found:
-                                    combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
-                                return {
-                                    "answer": combined_answer,
-                                    "sources": []
-                                }
-                    else:
-                        return {
-                            "answer": f"抱歉，我無法找到以下角色的資料：{', '.join(not_found)}",
-                            "sources": []
-                        }
+                else:
+                    return {
+                        "answer": f"抱歉，我無法找到以下角色的資料：{', '.join(not_found)}",
+                        "sources": []
+                    }
             
-            # 特殊處理：身份詢問問題（只有在沒有檢測到其他角色時才處理）
+            # 特殊處理：身份詢問問題和針對 Maya 的個人資訊問題
             identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
-            if not detected_names and any(keyword in query.lower() for keyword in identity_questions):
-                logger.info("檢測到純身份詢問問題（無其他角色），使用個人資料回答")
+            maya_personal_questions = ["你身高", "你體重", "你年齡", "你生日", "你身材", "你胸部", "你臀部", 
+                                     "你興趣", "你喜歡", "你討厭", "你最愛", "你食物", "你個性", "你性格", 
+                                     "你職業", "你工作", "你種族", "你編號", "你代號", "你原名", "你部隊", 
+                                     "你部門", "你陣營", "你戰鬥力", "你物理", "你魔法", "你武器", "你戰鬥", 
+                                     "你屬性", "你性別", "你電子郵件", "你email", "你後宮", "你已生育", 
+                                     "你體態", "你別名", "你原部隊"]
+            
+            is_maya_question = (
+                not detected_names and  # 沒有檢測到其他角色
+                (any(keyword in query.lower() for keyword in identity_questions) or  # 身份詢問
+                 any(keyword in query for keyword in maya_personal_questions))  # 針對 Maya 的個人資訊
+            )
+            
+            if is_maya_question:
+                logger.info("檢測到針對 Maya 的問題（身份詢問或個人資訊），使用個人資料回答")
                 maya_summary = self.profile_manager.get_profile_summary()
                 
                 # 使用 LLM 生成不耐煩但完整的回答
