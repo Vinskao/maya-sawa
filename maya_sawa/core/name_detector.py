@@ -106,7 +106,7 @@ class NameDetector:
                 # 記錄原始提取的人名
                 self._original_extracted_names = names
                 
-                # 驗證提取的人名是否真的在問題中出現，並且在已知角色名單中
+                # 驗證提取的人名是否真的在問題中出現
                 validated_names = []
                 known_names = self.get_known_names_func() if self.get_known_names_func else []
                 
@@ -120,16 +120,15 @@ class NameDetector:
                         logger.info(f"驗證通過（系統內建角色）: {clean_name}")
                         continue
                     
-                    # 檢查：1. 在問題中出現 2. 在已知角色名單中
-                    if (clean_name.lower() in question.lower() and 
-                        clean_name in known_names):
+                    # 檢查：1. 在問題中出現（主要驗證）
+                    if clean_name.lower() in question.lower():
                         validated_names.append(clean_name)
-                        logger.info(f"驗證通過: {clean_name}")
+                        if clean_name in known_names:
+                            logger.info(f"驗證通過（已知角色）: {clean_name}")
+                        else:
+                            logger.info(f"驗證通過（未知角色，將嘗試獲取資料）: {clean_name}")
                     else:
-                        if clean_name.lower() not in question.lower():
-                            logger.warning(f"AI 提取到的人名 '{name}' 在問題中未出現，已過濾")
-                        elif clean_name not in known_names:
-                            logger.warning(f"AI 提取到的人名 '{name}' 不在已知角色名單中，已過濾")
+                        logger.warning(f"AI 提取到的人名 '{name}' 在問題中未出現，已過濾")
                 
                 logger.info(f"驗證後的人名: {validated_names}")
                 return validated_names
