@@ -71,7 +71,16 @@ async def translate_to_english(text: str) -> str:
         if hasattr(translated, 'content'):
             translated = translated.content
         
-        logger.info(f"翻譯完成: {text[:50]}... -> {translated[:50]}...")
+        # 確保 translated 是字符串
+        if not isinstance(translated, str):
+            logger.warning(f"翻譯結果不是字符串: {type(translated)}")
+            return text
+        
+        # 安全地進行字符串切片
+        text_preview = text[:50] + "..." if len(text) > 50 else text
+        translated_preview = translated[:50] + "..." if len(translated) > 50 else translated
+        
+        logger.info(f"翻譯完成: {text_preview} -> {translated_preview}")
         return translated
         
     except Exception as e:
