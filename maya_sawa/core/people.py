@@ -168,7 +168,7 @@ class PeopleWeaponManager:
         if person.get('age'):
             text_parts.append(f"Age: {person['age']}")
         
-        # Power stats
+        # Power stats (重點突出)
         if person.get('physicPower'):
             text_parts.append(f"Physical Power: {person['physicPower']}")
         if person.get('magicPower'):
@@ -176,11 +176,15 @@ class PeopleWeaponManager:
         if person.get('utilityPower'):
             text_parts.append(f"Utility Power: {person['utilityPower']}")
         
-        # Personal details
+        # Combat and fighting related (重點突出)
+        if person.get('combat'):
+            text_parts.append(f"Combat Style: {person['combat']}")
         if person.get('profession'):
             text_parts.append(f"Profession: {person['profession']}")
         if person.get('job'):
             text_parts.append(f"Job: {person['job']}")
+        
+        # Personality and preferences (重點突出)
         if person.get('personality'):
             text_parts.append(f"Personality: {person['personality']}")
         if person.get('interest'):
@@ -189,8 +193,6 @@ class PeopleWeaponManager:
             text_parts.append(f"Likes: {person['likes']}")
         if person.get('dislikes'):
             text_parts.append(f"Dislikes: {person['dislikes']}")
-        if person.get('favoriteFoods'):
-            text_parts.append(f"Favorite Foods: {person['favoriteFoods']}")
         
         # Organizational info
         if person.get('faction'):
@@ -199,6 +201,9 @@ class PeopleWeaponManager:
             text_parts.append(f"Army: {person['armyName']}")
         if person.get('deptName'):
             text_parts.append(f"Department: {person['deptName']}")
+        
+        # 移除一些無關的欄位，專注於戰鬥和個性相關
+        # 不包含: email, proxy, gave_birth, concubine, physics, known_as, favorite_foods
         
         return " | ".join(text_parts)
     
@@ -252,6 +257,7 @@ class PeopleWeaponManager:
         conn = None
         updated_count = 0
         embedding_count = 0
+        skipped_count = 0
         start_time = time.time()
         total_records = len(people_data)
         
@@ -269,111 +275,214 @@ class PeopleWeaponManager:
                     break
                 
                 try:
-                    # Generate embedding text
-                    embedding_text = self.create_people_text_for_embedding(person)
-                    embedding = self.generate_embedding(embedding_text)
+                    person_name = person.get('name', 'unknown')
                     
-                    if embedding:
-                        embedding_count += 1
+                    # 檢查是否已有 embedding
+                    cursor.execute("SELECT embedding FROM people WHERE name = %s", (person_name,))
+                    existing_record = cursor.fetchone()
                     
-                    # Prepare data for insertion/update
-                    data = {
-                        'name_original': person.get('nameOriginal'),
-                        'code_name': person.get('codeName'),
-                        'name': person.get('name'),
-                        'physic_power': person.get('physicPower'),
-                        'magic_power': person.get('magicPower'),
-                        'utility_power': person.get('utilityPower'),
-                        'dob': person.get('dob'),
-                        'race': person.get('race'),
-                        'attributes': person.get('attributes'),
-                        'gender': person.get('gender'),
-                        'ass_size': person.get('assSize'),
-                        'boobs_size': person.get('boobsSize'),
-                        'height_cm': person.get('heightCm'),
-                        'weight_kg': person.get('weightKg'),
-                        'profession': person.get('profession'),
-                        'combat': person.get('combat'),
-                        'favorite_foods': person.get('favoriteFoods'),
-                        'job': person.get('job'),
-                        'physics': person.get('physics'),
-                        'known_as': person.get('knownAs'),
-                        'personality': person.get('personality'),
-                        'interest': person.get('interest'),
-                        'likes': person.get('likes'),
-                        'dislikes': person.get('dislikes'),
-                        'concubine': person.get('concubine'),
-                        'faction': person.get('faction'),
-                        'army_id': person.get('armyId'),
-                        'army_name': person.get('armyName'),
-                        'dept_id': person.get('deptId'),
-                        'dept_name': person.get('deptName'),
-                        'origin_army_id': person.get('originArmyId'),
-                        'origin_army_name': person.get('originArmyName'),
-                        'gave_birth': person.get('gaveBirth'),
-                        'email': person.get('email'),
-                        'age': person.get('age'),
-                        'proxy': person.get('proxy'),
-                        'embedding': embedding,
-                        'updated_at': datetime.now()
-                    }
-                    
-                    # Use UPSERT (INSERT ... ON CONFLICT UPDATE)
-                    query = """
-                    INSERT INTO people (
-                        name_original, code_name, name, physic_power, magic_power, utility_power,
-                        dob, race, attributes, gender, ass_size, boobs_size, height_cm, weight_kg,
-                        profession, combat, favorite_foods, job, physics, known_as, personality,
-                        interest, likes, dislikes, concubine, faction, army_id, army_name,
-                        dept_id, dept_name, origin_army_id, origin_army_name, gave_birth,
-                        email, age, proxy, embedding, updated_at
-                    ) VALUES (
-                        %(name_original)s, %(code_name)s, %(name)s, %(physic_power)s, %(magic_power)s, %(utility_power)s,
-                        %(dob)s, %(race)s, %(attributes)s, %(gender)s, %(ass_size)s, %(boobs_size)s, %(height_cm)s, %(weight_kg)s,
-                        %(profession)s, %(combat)s, %(favorite_foods)s, %(job)s, %(physics)s, %(known_as)s, %(personality)s,
-                        %(interest)s, %(likes)s, %(dislikes)s, %(concubine)s, %(faction)s, %(army_id)s, %(army_name)s,
-                        %(dept_id)s, %(dept_name)s, %(origin_army_id)s, %(origin_army_name)s, %(gave_birth)s,
-                        %(email)s, %(age)s, %(proxy)s, %(embedding)s, %(updated_at)s
-                    )
-                    ON CONFLICT (name) DO UPDATE SET
-                        name_original = EXCLUDED.name_original,
-                        code_name = EXCLUDED.code_name,
-                        physic_power = EXCLUDED.physic_power,
-                        magic_power = EXCLUDED.magic_power,
-                        utility_power = EXCLUDED.utility_power,
-                        dob = EXCLUDED.dob,
-                        race = EXCLUDED.race,
-                        attributes = EXCLUDED.attributes,
-                        gender = EXCLUDED.gender,
-                        ass_size = EXCLUDED.ass_size,
-                        boobs_size = EXCLUDED.boobs_size,
-                        height_cm = EXCLUDED.height_cm,
-                        weight_kg = EXCLUDED.weight_kg,
-                        profession = EXCLUDED.profession,
-                        combat = EXCLUDED.combat,
-                        favorite_foods = EXCLUDED.favorite_foods,
-                        job = EXCLUDED.job,
-                        physics = EXCLUDED.physics,
-                        known_as = EXCLUDED.known_as,
-                        personality = EXCLUDED.personality,
-                        interest = EXCLUDED.interest,
-                        likes = EXCLUDED.likes,
-                        dislikes = EXCLUDED.dislikes,
-                        concubine = EXCLUDED.concubine,
-                        faction = EXCLUDED.faction,
-                        army_id = EXCLUDED.army_id,
-                        army_name = EXCLUDED.army_name,
-                        dept_id = EXCLUDED.dept_id,
-                        dept_name = EXCLUDED.dept_name,
-                        origin_army_id = EXCLUDED.origin_army_id,
-                        origin_army_name = EXCLUDED.origin_army_name,
-                        gave_birth = EXCLUDED.gave_birth,
-                        email = EXCLUDED.email,
-                        age = EXCLUDED.age,
-                        proxy = EXCLUDED.proxy,
-                        embedding = EXCLUDED.embedding,
-                        updated_at = EXCLUDED.updated_at
-                    """
+                    if existing_record and existing_record[0] is not None:
+                        # 已有 embedding，跳過生成新的
+                        logger.debug(f"Skipping embedding generation for {person_name} - already exists")
+                        skipped_count += 1
+                        
+                        # 只更新其他資料，不更新 embedding
+                        data = {
+                            'name_original': person.get('nameOriginal'),
+                            'code_name': person.get('codeName'),
+                            'name': person.get('name'),
+                            'physic_power': person.get('physicPower'),
+                            'magic_power': person.get('magicPower'),
+                            'utility_power': person.get('utilityPower'),
+                            'dob': person.get('dob'),
+                            'race': person.get('race'),
+                            'attributes': person.get('attributes'),
+                            'gender': person.get('gender'),
+                            'ass_size': person.get('assSize'),
+                            'boobs_size': person.get('boobsSize'),
+                            'height_cm': person.get('heightCm'),
+                            'weight_kg': person.get('weightKg'),
+                            'profession': person.get('profession'),
+                            'combat': person.get('combat'),
+                            'favorite_foods': person.get('favoriteFoods'),
+                            'job': person.get('job'),
+                            'physics': person.get('physics'),
+                            'known_as': person.get('knownAs'),
+                            'personality': person.get('personality'),
+                            'interest': person.get('interest'),
+                            'likes': person.get('likes'),
+                            'dislikes': person.get('dislikes'),
+                            'concubine': person.get('concubine'),
+                            'faction': person.get('faction'),
+                            'army_id': person.get('armyId'),
+                            'army_name': person.get('armyName'),
+                            'dept_id': person.get('deptId'),
+                            'dept_name': person.get('deptName'),
+                            'origin_army_id': person.get('originArmyId'),
+                            'origin_army_name': person.get('originArmyName'),
+                            'gave_birth': person.get('gaveBirth'),
+                            'email': person.get('email'),
+                            'age': person.get('age'),
+                            'proxy': person.get('proxy'),
+                            'updated_at': datetime.now()
+                        }
+                        
+                        # 只更新非 embedding 欄位
+                        query = """
+                        UPDATE people SET
+                            name_original = %(name_original)s,
+                            code_name = %(code_name)s,
+                            physic_power = %(physic_power)s,
+                            magic_power = %(magic_power)s,
+                            utility_power = %(utility_power)s,
+                            dob = %(dob)s,
+                            race = %(race)s,
+                            attributes = %(attributes)s,
+                            gender = %(gender)s,
+                            ass_size = %(ass_size)s,
+                            boobs_size = %(boobs_size)s,
+                            height_cm = %(height_cm)s,
+                            weight_kg = %(weight_kg)s,
+                            profession = %(profession)s,
+                            combat = %(combat)s,
+                            favorite_foods = %(favorite_foods)s,
+                            job = %(job)s,
+                            physics = %(physics)s,
+                            known_as = %(known_as)s,
+                            personality = %(personality)s,
+                            interest = %(interest)s,
+                            likes = %(likes)s,
+                            dislikes = %(dislikes)s,
+                            concubine = %(concubine)s,
+                            faction = %(faction)s,
+                            army_id = %(army_id)s,
+                            army_name = %(army_name)s,
+                            dept_id = %(dept_id)s,
+                            dept_name = %(dept_name)s,
+                            origin_army_id = %(origin_army_id)s,
+                            origin_army_name = %(origin_army_name)s,
+                            gave_birth = %(gave_birth)s,
+                            email = %(email)s,
+                            age = %(age)s,
+                            proxy = %(proxy)s,
+                            updated_at = %(updated_at)s
+                        WHERE name = %(name)s
+                        """
+                        
+                    else:
+                        # 沒有 embedding，需要生成新的
+                        logger.debug(f"Generating new embedding for {person_name}")
+                        
+                        # Generate embedding text
+                        embedding_text = self.create_people_text_for_embedding(person)
+                        logger.debug(f"Generated embedding text for {person_name}: {len(embedding_text)} chars")
+                        
+                        embedding = self.generate_embedding(embedding_text)
+                        
+                        if embedding:
+                            embedding_count += 1
+                            logger.debug(f"Successfully generated embedding for {person_name}: {len(embedding)} dimensions")
+                        else:
+                            logger.warning(f"Failed to generate embedding for {person_name} - embedding is None")
+                        
+                        # Prepare data for insertion/update with embedding
+                        data = {
+                            'name_original': person.get('nameOriginal'),
+                            'code_name': person.get('codeName'),
+                            'name': person.get('name'),
+                            'physic_power': person.get('physicPower'),
+                            'magic_power': person.get('magicPower'),
+                            'utility_power': person.get('utilityPower'),
+                            'dob': person.get('dob'),
+                            'race': person.get('race'),
+                            'attributes': person.get('attributes'),
+                            'gender': person.get('gender'),
+                            'ass_size': person.get('assSize'),
+                            'boobs_size': person.get('boobsSize'),
+                            'height_cm': person.get('heightCm'),
+                            'weight_kg': person.get('weightKg'),
+                            'profession': person.get('profession'),
+                            'combat': person.get('combat'),
+                            'favorite_foods': person.get('favoriteFoods'),
+                            'job': person.get('job'),
+                            'physics': person.get('physics'),
+                            'known_as': person.get('knownAs'),
+                            'personality': person.get('personality'),
+                            'interest': person.get('interest'),
+                            'likes': person.get('likes'),
+                            'dislikes': person.get('dislikes'),
+                            'concubine': person.get('concubine'),
+                            'faction': person.get('faction'),
+                            'army_id': person.get('armyId'),
+                            'army_name': person.get('armyName'),
+                            'dept_id': person.get('deptId'),
+                            'dept_name': person.get('deptName'),
+                            'origin_army_id': person.get('originArmyId'),
+                            'origin_army_name': person.get('originArmyName'),
+                            'gave_birth': person.get('gaveBirth'),
+                            'email': person.get('email'),
+                            'age': person.get('age'),
+                            'proxy': person.get('proxy'),
+                            'embedding': embedding,
+                            'updated_at': datetime.now()
+                        }
+                        
+                        # Use UPSERT (INSERT ... ON CONFLICT UPDATE)
+                        query = """
+                        INSERT INTO people (
+                            name_original, code_name, name, physic_power, magic_power, utility_power,
+                            dob, race, attributes, gender, ass_size, boobs_size, height_cm, weight_kg,
+                            profession, combat, favorite_foods, job, physics, known_as, personality,
+                            interest, likes, dislikes, concubine, faction, army_id, army_name,
+                            dept_id, dept_name, origin_army_id, origin_army_name, gave_birth,
+                            email, age, proxy, embedding, updated_at
+                        ) VALUES (
+                            %(name_original)s, %(code_name)s, %(name)s, %(physic_power)s, %(magic_power)s, %(utility_power)s,
+                            %(dob)s, %(race)s, %(attributes)s, %(gender)s, %(ass_size)s, %(boobs_size)s, %(height_cm)s, %(weight_kg)s,
+                            %(profession)s, %(combat)s, %(favorite_foods)s, %(job)s, %(physics)s, %(known_as)s, %(personality)s,
+                            %(interest)s, %(likes)s, %(dislikes)s, %(concubine)s, %(faction)s, %(army_id)s, %(army_name)s,
+                            %(dept_id)s, %(dept_name)s, %(origin_army_id)s, %(origin_army_name)s, %(gave_birth)s,
+                            %(email)s, %(age)s, %(proxy)s, %(embedding)s, %(updated_at)s
+                        )
+                        ON CONFLICT (name) DO UPDATE SET
+                            name_original = EXCLUDED.name_original,
+                            code_name = EXCLUDED.code_name,
+                            physic_power = EXCLUDED.physic_power,
+                            magic_power = EXCLUDED.magic_power,
+                            utility_power = EXCLUDED.utility_power,
+                            dob = EXCLUDED.dob,
+                            race = EXCLUDED.race,
+                            attributes = EXCLUDED.attributes,
+                            gender = EXCLUDED.gender,
+                            ass_size = EXCLUDED.ass_size,
+                            boobs_size = EXCLUDED.boobs_size,
+                            height_cm = EXCLUDED.height_cm,
+                            weight_kg = EXCLUDED.weight_kg,
+                            profession = EXCLUDED.profession,
+                            combat = EXCLUDED.combat,
+                            favorite_foods = EXCLUDED.favorite_foods,
+                            job = EXCLUDED.job,
+                            physics = EXCLUDED.physics,
+                            known_as = EXCLUDED.known_as,
+                            personality = EXCLUDED.personality,
+                            interest = EXCLUDED.interest,
+                            likes = EXCLUDED.likes,
+                            dislikes = EXCLUDED.dislikes,
+                            concubine = EXCLUDED.concubine,
+                            faction = EXCLUDED.faction,
+                            army_id = EXCLUDED.army_id,
+                            army_name = EXCLUDED.army_name,
+                            dept_id = EXCLUDED.dept_id,
+                            dept_name = EXCLUDED.dept_name,
+                            origin_army_id = EXCLUDED.origin_army_id,
+                            origin_army_name = EXCLUDED.origin_army_name,
+                            gave_birth = EXCLUDED.gave_birth,
+                            email = EXCLUDED.email,
+                            age = EXCLUDED.age,
+                            proxy = EXCLUDED.proxy,
+                            embedding = EXCLUDED.embedding,
+                            updated_at = EXCLUDED.updated_at
+                        """
                     
                     cursor.execute(query, data)
                     updated_count += 1
@@ -381,7 +490,7 @@ class PeopleWeaponManager:
                     # Log progress every 10 records or every 10 seconds
                     if (i + 1) % 10 == 0 or elapsed_time % 10 < 1:
                         progress = (i + 1) / total_records * 100
-                        logger.info(f"Progress: {i + 1}/{total_records} ({progress:.1f}%) - {elapsed_time:.1f}s elapsed")
+                        logger.info(f"Progress: {i + 1}/{total_records} ({progress:.1f}%) - {elapsed_time:.1f}s elapsed (embeddings: {embedding_count}, skipped: {skipped_count})")
                     
                 except Exception as e:
                     logger.error(f"Failed to process person {person.get('name', 'unknown')}: {str(e)}")
@@ -389,7 +498,7 @@ class PeopleWeaponManager:
             
             conn.commit()
             final_time = time.time() - start_time
-            logger.info(f"People sync completed: {updated_count}/{total_records} records processed in {final_time:.1f}s with {embedding_count} embeddings")
+            logger.info(f"People sync completed: {updated_count}/{total_records} records processed in {final_time:.1f}s with {embedding_count} new embeddings and {skipped_count} skipped")
             
         except Exception as e:
             if conn:
@@ -557,6 +666,93 @@ class PeopleWeaponManager:
         except Exception as e:
             logger.error(f"Data synchronization failed: {str(e)}")
             raise
+
+    def search_people_by_embedding(self, query_embedding: List[float], limit: int = 5, threshold: float = 0.5, sort_by_power: bool = False) -> List[Dict[str, Any]]:
+        """
+        基於 embedding 搜索人員資料
+        
+        使用向量相似度搜索找到與查詢最相關的人員記錄
+        
+        Args:
+            query_embedding (List[float]): 查詢的 embedding 向量
+            limit (int): 返回結果的最大數量
+            threshold (float): 相似度閾值，低於此值的結果會被過濾
+            sort_by_power (bool): 是否按戰鬥力排序（在相似度過濾後）
+            
+        Returns:
+            List[Dict[str, Any]]: 相關人員記錄列表，按相似度排序
+        """
+        conn = None
+        try:
+            conn = self.pool_manager.get_postgres_connection()
+            cursor = conn.cursor()
+            
+            # 將 Python 列表轉換為 PostgreSQL vector 格式
+            embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
+            
+            if sort_by_power:
+                # 先按相似度過濾，再按戰鬥力排序
+                cursor.execute(
+                    """
+                    SELECT 
+                        name,
+                        physic_power,
+                        magic_power,
+                        utility_power,
+                        1 - (embedding <=> %s::vector) as similarity
+                    FROM people
+                    WHERE embedding IS NOT NULL 
+                    AND 1 - (embedding <=> %s::vector) > %s
+                    ORDER BY (physic_power + magic_power + utility_power) DESC
+                    LIMIT %s
+                    """,
+                    (embedding_str, embedding_str, threshold, limit)
+                )
+            else:
+                # 按相似度排序
+                cursor.execute(
+                    """
+                    SELECT 
+                        name,
+                        physic_power,
+                        magic_power,
+                        utility_power,
+                        1 - (embedding <=> %s::vector) as similarity
+                    FROM people
+                    WHERE embedding IS NOT NULL 
+                    AND 1 - (embedding <=> %s::vector) > %s
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT %s
+                    """,
+                    (embedding_str, embedding_str, threshold, embedding_str, limit)
+                )
+            
+            results = cursor.fetchall()
+            
+            # 轉換為字典格式
+            people_results = []
+            for result in results:
+                total_power = result[1] + result[2] + result[3]  # physic + magic + utility
+                people_results.append({
+                    "name": result[0],
+                    "physic_power": result[1],
+                    "magic_power": result[2],
+                    "utility_power": result[3],
+                    "total_power": total_power,
+                    "similarity": round(result[4], 4)  # 四捨五入到4位小數
+                })
+            
+            logger.info(f"Found {len(people_results)} people matching query with threshold {threshold}")
+            return people_results
+            
+        except Exception as e:
+            logger.error(f"Failed to search people by embedding: {str(e)}")
+            raise
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                self.pool_manager.return_postgres_connection(conn)
 
 # ==================== 全局管理器實例 ====================
 _manager = None

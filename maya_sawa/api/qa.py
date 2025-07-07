@@ -177,6 +177,17 @@ class PeopleWeaponsSyncRequest(BaseModel):
     """
     max_time_seconds: Optional[int] = 60  # 最大處理時間（秒）
 
+class PeopleSearchRequest(BaseModel):
+    """
+    人員語義搜索請求模型
+    
+    定義人員語義搜索的請求格式
+    """
+    query: str  # 搜索查詢文本
+    limit: int = 5  # 返回結果數量限制
+    threshold: float = 0.5  # 相似度閾值
+    sort_by_power: bool = False  # 是否按戰鬥力排序
+
 # ==================== API 端點定義 ====================
 
 @router.post("/sync-from-api")
@@ -705,5 +716,58 @@ async def stop_sync_tasks():
     except Exception as e:
         logger.error(f"停止同步任務時發生錯誤: {str(e)}")
         raise HTTPException(status_code=500, detail=f"停止同步失敗: {str(e)}")
+
+@router.post("/search-people")
+async def search_people_by_semantics(request: PeopleSearchRequest):
+    """
+    基於語義搜索人員資料
+    
+    使用 embedding 進行語義搜索，找到與查詢最相關的人員記錄。
+    只返回 name 和 embedding 欄位，其他資料可通過 tymb API 獲取。
+    
+    Args:
+        request (PeopleSearchRequest): 搜索請求，包含查詢文本、結果數量限制和相似度閾值
+        
+    Returns:
+        dict: 搜索結果，包含相關人員列表和相似度分數
+        
+    Raises:
+        HTTPException: 當搜索失敗時拋出 HTTP 異常
+    """
+    try:
+        from ..core.people import PeopleWeaponManager
+        
+        # 初始化人員管理器
+        manager = PeopleWeaponManager()
+        
+        # 檢查 OpenAI client 是否可用
+        if not manager.openai_client:
+            raise HTTPException(status_code=500, detail="OpenAI client 不可用，無法生成 embedding")
+        
+        # 生成查詢的 embedding
+        query_embedding = manager.generate_embedding(request.query)
+        if not query_embedding:
+            raise HTTPException(status_code=500, detail="無法生成查詢的 embedding")
+        
+        # 執行語義搜索
+        results = manager.search_people_by_embedding(
+            query_embedding=query_embedding,
+            limit=request.limit,
+            threshold=request.threshold,
+            sort_by_power=request.sort_by_power
+        )
+        
+        return {
+            "success": True,
+            "query": request.query,
+            "results": results,
+            "total_found": len(results)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"人員語義搜索時發生錯誤: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"搜索失敗: {str(e)}")
 
  

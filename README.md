@@ -197,7 +197,7 @@ $env:PYTHONPATH = "."; poetry run uvicorn maya_sawa.main:app --reload --log-leve
 Unix/Linux/macOS:
 ```bash
 # 1. 啟動服務器（Debug 模式）
-PYTHONPATH=. poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
+poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
 
 # 2. 同步文章（使用預計算的 embedding）
 curl -X POST "http://localhost:8000/qa/sync-from-api" \

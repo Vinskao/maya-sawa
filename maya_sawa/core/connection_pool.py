@@ -28,6 +28,10 @@ from typing import Optional
 import psycopg2
 from psycopg2 import pool
 import redis
+from dotenv import load_dotenv
+
+# 載入環境變數
+load_dotenv()
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)

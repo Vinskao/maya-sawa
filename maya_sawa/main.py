@@ -118,15 +118,20 @@ async def startup_event():
         else:
             logger.info("跳過初始文章同步（已禁用）")
         
-        # 執行人員和武器數據同步（如果啟用）
+        # 執行人員和武器數據同步（如果啟用）- 改為背景任務
         if Config.ENABLE_PEOPLE_WEAPONS_SYNC:
-            logger.info("開始執行人員和武器數據同步...")
-            try:
-                people_weapons_result = sync_data()
-                logger.info(f"人員和武器數據同步完成: 人員 {people_weapons_result['people_updated']} 條, 武器 {people_weapons_result['weapons_updated']} 條")
-            except Exception as e:
-                logger.error(f"人員和武器數據同步失敗: {str(e)}")
-                # 不讓人員武器同步失敗阻止應用程式啟動
+            logger.info("開始執行人員和武器數據同步（背景任務）...")
+            
+            async def sync_people_weapons_background():
+                """背景任務：同步人員和武器數據"""
+                try:
+                    people_weapons_result = sync_data()
+                    logger.info(f"人員和武器數據同步完成: 人員 {people_weapons_result['people_updated']} 條, 武器 {people_weapons_result['weapons_updated']} 條")
+                except Exception as e:
+                    logger.error(f"人員和武器數據同步失敗: {str(e)}")
+            
+            # 創建背景任務，不阻塞主線程
+            asyncio.create_task(sync_people_weapons_background())
         else:
             logger.info("跳過人員和武器數據同步（已禁用）")
         
