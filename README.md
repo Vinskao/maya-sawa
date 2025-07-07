@@ -200,7 +200,7 @@ Unix/Linux/macOS:
 poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
 
 # 2. 同步文章（使用預計算的 embedding）
-curl -X POST "http://localhost:8000/qa/sync-from-api" \
+curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" \
   -H "Content-Type: application/json" \
   -d '{"remote_url":"${PUBLIC_API_BASE_URL}/paprika/articles"}'
 ```
@@ -208,7 +208,7 @@ curl -X POST "http://localhost:8000/qa/sync-from-api" \
 ## 有對話紀錄版本
 ```bash
 # 1. 問答並記錄：
-curl -X POST "http://localhost:8000/qa/query" \
+curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
   -d '{"text":"你身高多高、體重多重?","user_id":"user123","language":"chinese"}'
 

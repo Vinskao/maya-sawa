@@ -61,7 +61,8 @@ if not api_base:
 app = FastAPI(
     title="Markdown Q&A System",  # API 文檔標題
     description="A powerful document Q&A system based on FastAPI, LangChain, and ChromaDB",  # API 描述
-    version="0.1.0"  # API 版本
+    version="0.1.0",  # API 版本
+    root_path="/maya-sawa"  # 添加根路徑支持，用於 Kubernetes Ingress 路徑前綴
 )
 
 # ==================== CORS 中間件配置 ====================
