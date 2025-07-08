@@ -130,6 +130,10 @@ curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
   -d '{"text":"你認識 sorane嗎?","user_id":"dev","language":"chinese"}'
+
+curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"你是誰?","user_id":"dev","language":"chinese"}'
 ```
 
 **Check chat history:**

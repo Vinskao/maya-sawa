@@ -30,7 +30,8 @@ class NameAdapter:
             "sorane": "Sorane",
             "wavo": "Wavo",
             "alice": "Alice",
-            "bob": "Bob"
+            "bob": "Bob",
+            "ai": "Maya"  # 將 AI 視為系統角色 Maya 的別稱
         }
         
         # 常見的問句模式

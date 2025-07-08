@@ -127,7 +127,7 @@ class NameDetector:
                     
                     # 特殊處理：Maya 需額外驗證——只有在問題中出現 "maya" 或明確為對「你」的身份詢問時才自動通過
                     if clean_name.lower() == "maya":
-                        identity_pronouns = ["你是", "你叫", "我是誰", "我叫什麼"]
+                        identity_pronouns = ["你是", "你叫", "我是誰", "我叫什麼", "ai是", "AI是"]
                         # 若問題文本包含 "maya" 或任何第一人稱身份詢問關鍵詞，才視為有效
                         if "maya" in question.lower() or any(p in question for p in identity_pronouns):
                             validated_names.append(clean_name)
@@ -193,7 +193,7 @@ class NameDetector:
         extracted_names = self.extract_names_with_ai(question)
         
         # 檢查是否為關於 Maya 的身份詢問問題
-        identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
+        identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜", "誰是ai", "誰是AI", "ai是誰", "AI是誰", "who is ai", "who is AI"]
         is_maya_identity_question = any(keyword in question.lower() for keyword in identity_questions)
         
         # 只有在沒有提取到任何其他角色名稱，並且是身份詢問時，才將其視為對 Maya 的問題
@@ -220,7 +220,7 @@ class NameDetector:
         Returns:
             bool: 是否為身份詢問問題
         """
-        identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
+        identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜", "誰是ai", "誰是AI", "ai是誰", "AI是誰", "who is ai", "who is AI"]
         return any(keyword in question.lower() for keyword in identity_questions)
 
     def get_original_extracted_names(self) -> List[str]:
