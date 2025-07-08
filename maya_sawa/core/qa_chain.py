@@ -1,8 +1,8 @@
 import logging
 from typing import Dict, List, Optional
-from langchain_core.documents import Document
+from langchain.schema import Document
 from langchain.chains import LLMChain
-from langchain_core.prompts import PromptTemplate
+from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 import os
 from .name_detector import NameDetector
@@ -237,7 +237,12 @@ class QAChain:
                     }
             
             # 特殊處理：身份詢問問題和針對 Maya 的個人資訊問題
-            identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
+            # 身份詢問關鍵詞（中文 & 英文常見寫法）
+            identity_questions = [
+                "你是誰", "你叫什麼", "妳是誰", "妳叫什麼",  # 中文
+                "who are you", "who r u", "who are u",           # 英文
+                "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"
+            ]
             maya_personal_questions = ["你身高", "你體重", "你年齡", "你生日", "你身材", "你胸部", "你臀部", 
                                      "你興趣", "你喜歡", "你討厭", "你最愛", "你食物", "你個性", "你性格", 
                                      "你職業", "你工作", "你種族", "你編號", "你代號", "你原名", "你部隊", 
