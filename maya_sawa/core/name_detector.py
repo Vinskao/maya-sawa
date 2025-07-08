@@ -45,14 +45,24 @@ class NameDetector:
         # 記錄原始提取的人名，用於後續處理
         self._original_extracted_names = []
         
-        # 個人資訊相關關鍵詞
+        # 個人資訊相關關鍵詞 (中英雙語)
         personal_keywords = [
+            # Chinese
             "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
             "興趣", "喜歡", "討厭", "最愛", "食物", "個性", "性格", "職業", 
             "工作", "種族", "編號", "代號", "原名", "部隊", "部門", "陣營",
             "戰鬥力", "物理", "魔法", "武器", "戰鬥", "屬性", "性別", "電子郵件",
-            "email", "後宮", "已生育", "體態", "別名", "原部隊", "是誰", 
-            "誰是", "怎樣", "什麼人", "有什麼特徵", "資料", "資訊", "個人"
+            "後宮", "已生育", "體態", "別名", "原部隊", "是誰", 
+            "誰是", "怎樣", "什麼人", "有什麼特徵", "資料", "資訊", "個人",
+            "認識", "知道", "見過",
+
+            # English
+            "who is", "who are", "tell me about", "what is", "what are",
+            "height", "weight", "age", "birthday", "birth", "body",
+            "interests", "likes", "dislikes", "favorite", "personality",
+            "occupation", "job", "race", "faction", "combat power",
+            "weapon", "attributes", "gender", "email", "do you know",
+            "have you met", "recognize"
         ]
         
         # 詳細資料關鍵詞
@@ -89,6 +99,7 @@ class NameDetector:
 - 問題：「你叫什麼名字？」→ 回應：「Maya」
 - 問題：「Alice的身高是多少？」→ 回應：「Alice」
 - 問題：「請比較 Bob 和 Carol」→ 回應：「Bob,Carol」
+- 問題：「你認識 Wavo 跟 Alice 嗎？」→ 回應：「Wavo,Alice」
 
 問題：{question}
 """
@@ -114,10 +125,15 @@ class NameDetector:
                     # 清理人名（移除引號等）
                     clean_name = name.strip().strip('"').strip("'")
                     
-                    # 特殊處理：Maya 是系統內建角色，不需要驗證
+                    # 特殊處理：Maya 需額外驗證——只有在問題中出現 "maya" 或明確為對「你」的身份詢問時才自動通過
                     if clean_name.lower() == "maya":
-                        validated_names.append(clean_name)
-                        logger.info(f"驗證通過（系統內建角色）: {clean_name}")
+                        identity_pronouns = ["你是", "你叫", "我是誰", "我叫什麼"]
+                        # 若問題文本包含 "maya" 或任何第一人稱身份詢問關鍵詞，才視為有效
+                        if "maya" in question.lower() or any(p in question for p in identity_pronouns):
+                            validated_names.append(clean_name)
+                            logger.info(f"驗證通過（系統內建角色）: {clean_name}")
+                        else:
+                            logger.warning(f"AI 提取到 'Maya' 但問題中未直接提及，也非身份詢問，已過濾")
                         continue
                     
                     # 檢查：1. 在問題中出現（主要驗證）
@@ -176,19 +192,14 @@ class NameDetector:
         # 先使用 AI 提取人名
         extracted_names = self.extract_names_with_ai(question)
         
-        # 檢查是否為身份詢問問題
+        # 檢查是否為關於 Maya 的身份詢問問題
         identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"]
-        has_identity_question = any(keyword in question.lower() for keyword in identity_questions)
+        is_maya_identity_question = any(keyword in question.lower() for keyword in identity_questions)
         
-        # 如果沒有提取到任何人名，但有身份詢問，則添加 Maya
-        if not extracted_names and has_identity_question:
+        # 只有在沒有提取到任何其他角色名稱，並且是身份詢問時，才將其視為對 Maya 的問題
+        if not extracted_names and is_maya_identity_question:
             logger.info("檢測到純身份詢問問題（無其他角色），添加 Maya")
             extracted_names.append("Maya")
-        # 如果有提取到人名，且包含身份詢問，也添加 Maya（但要去重）
-        elif extracted_names and has_identity_question:
-            logger.info("檢測到身份詢問問題且包含其他角色，添加 Maya")
-            if "Maya" not in extracted_names:
-                extracted_names.append("Maya")
         
         # 如果 AI 直接返回了 "Maya"，也要處理
         if "Maya" in extracted_names:

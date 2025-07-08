@@ -1,14 +1,15 @@
 import logging
 from typing import Dict, List, Optional
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 import os
 from .name_detector import NameDetector
 from .profile_manager import ProfileManager
 from .personality import PersonalityPromptBuilder
 from .people import PeopleWeaponManager
+from .name_adapter import NameAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class QAChain:
         """
         # 初始化 OpenAI 模型
         self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
+            model="gpt-4.1-nano",
             temperature=0.7,
             max_tokens=2000
         )
@@ -33,15 +34,13 @@ class QAChain:
         self.profile_manager = ProfileManager()
         self.personality_builder = PersonalityPromptBuilder()
         self.people_manager = PeopleWeaponManager()
+        self.name_adapter = NameAdapter()
         
         # 創建動態提示模板
         self._create_dynamic_prompt()
         
         # 初始化聊天鏈
-        self.chat_chain = LLMChain(
-            llm=self.llm,
-            prompt=self.prompt_template
-        )
+        self.chat_chain = self.prompt_template | self.llm
         
         logger.info("QAChain 初始化完成")
 
@@ -54,9 +53,9 @@ class QAChain:
         """
         try:
             # 從 people manager 獲取所有角色名稱
-            people_data = self.people_manager.get_all_people()
-            if people_data and 'data' in people_data:
-                names = [person.get('name', '') for person in people_data['data'] if person.get('name')]
+            people_data = self.people_manager.fetch_people_data()
+            if people_data:
+                names = [person.get('name', '') for person in people_data if person.get('name')]
                 # 添加 Maya 作為系統內建角色
                 if 'Maya' not in names:
                     names.append('Maya')
@@ -79,7 +78,7 @@ class QAChain:
         # 創建提示模板
         self.prompt_template = PromptTemplate(
             input_variables=["context", "question"],
-            template=f"""你是 Maya，一個來自《Maya Sawa》世界的角色。以下是你的基本資料：
+            template=f"""你是 Maya，一個來自遠古合成惑星的女武神。以下是你的基本資料：
 
 {maya_profile}
 
@@ -116,7 +115,7 @@ class QAChain:
         """
         清除所有個人資料快取
         """
-        self.profile_manager.clear_all_cache()
+        self.profile_manager.clear_all_profiles_cache()
         logger.info("所有個人資料快取已清除")
 
     def get_answer(self, query: str, documents: List[Document]) -> Dict:
@@ -128,7 +127,7 @@ class QAChain:
             documents (List[Document]): 相關文檔列表
             
         Returns:
-            Dict: 包含答案和來源的字典
+            Dict: 包含答案、來源和找到的角色的字典
         """
         try:
             # 檢測問題中提到的角色名稱
@@ -165,11 +164,12 @@ class QAChain:
                 # 處理其他角色問題
                 for name in other_names:
                     logger.info(f"正在處理角色: {name}")
-                    profile_summary = self.profile_manager.get_other_profile_summary(name)
+                    normalized_name = self.name_adapter.normalize_name(name)
+                    profile_summary = self.profile_manager.get_other_profile_summary(normalized_name)
                     if profile_summary:
-                        all_profiles.append(f"=== {name} 的資料 ===\n{profile_summary}")
-                        found_names.append(name)
-                        logger.info(f"{name} 資料已添加")
+                        all_profiles.append(f"=== {normalized_name} 的資料 ===\n{profile_summary}")
+                        found_names.append(normalized_name)
+                        logger.info(f"{normalized_name} 資料已添加")
                     else:
                         not_found.append(name)
                         logger.warning(f"無法找到 {name} 的資料，可能是 API 調用失敗或角色不存在")
@@ -191,7 +191,8 @@ class QAChain:
                             combined_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
                         return {
                             "answer": combined_answer,
-                            "sources": []
+                            "sources": [],
+                            "found_characters": found_names
                         }
                     else:
                         # 使用 LLM 生成總結
@@ -203,13 +204,19 @@ class QAChain:
                             if hasattr(summary_answer, 'content'):
                                 summary_answer = summary_answer.content
                             
+                            # 空答案容錯：若 LLM 罕見地返回空內容，回退至原始資料
+                            if not summary_answer or not summary_answer.strip():
+                                logger.warning("LLM 返回空內容，使用原始角色資料作為回答")
+                                summary_answer = combined_profiles
+                            
                             # 如果有找不到的角色，在最後加上說明
                             if not_found:
                                 summary_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
                             
                             return {
                                 "answer": summary_answer,
-                                "sources": []
+                                "sources": [],
+                                "found_characters": found_names
                             }
                         except Exception as e:
                             logger.error(f"生成總結時發生錯誤: {str(e)}")
@@ -219,12 +226,14 @@ class QAChain:
                                 combined_answer += f"\n\n注意：無法找到以下角色的資料：{', '.join(not_found)}"
                             return {
                                 "answer": combined_answer,
-                                "sources": []
+                                "sources": [],
+                                "found_characters": found_names
                             }
                 else:
                     return {
                         "answer": f"抱歉，我無法找到以下角色的資料：{', '.join(not_found)}",
-                        "sources": []
+                        "sources": [],
+                        "found_characters": []
                     }
             
             # 特殊處理：身份詢問問題和針對 Maya 的個人資訊問題
@@ -235,6 +244,92 @@ class QAChain:
                                      "你部門", "你陣營", "你戰鬥力", "你物理", "你魔法", "你武器", "你戰鬥", 
                                      "你屬性", "你性別", "你電子郵件", "你email", "你後宮", "你已生育", 
                                      "你體態", "你別名", "你原部隊"]
+            
+            # 檢查是否為認識類問題（優先處理）
+            is_recognition_question = self.name_adapter.is_recognition_question(query)
+            if is_recognition_question:
+                logger.info("檢測到認識類問題，優先處理")
+                # 從認識類問題中提取名稱
+                extracted_names = self.name_adapter.extract_names_from_recognition_question(query)
+                if extracted_names:
+                    logger.info(f"從認識類問題中提取到名稱: {extracted_names}")
+                    # 處理提取到的名稱
+                    found_names = []
+                    not_found_names = []
+                    
+                    for name in extracted_names:
+                        logger.info(f"Processing extracted name: {name}")
+                        normalized_name = self.name_adapter.normalize_name(name)
+                        profile_summary = self.profile_manager.get_other_profile_summary(normalized_name)
+                        logger.info(f"Profile summary for {normalized_name}: {'Found' if profile_summary else 'Not found'}")
+                        if profile_summary:
+                            found_names.append(normalized_name)
+                        else:
+                            not_found_names.append(name)
+                    
+                    # 構建人物資料回答
+                    if found_names:
+                        # 獲取找到的人物的詳細資料
+                        people_profiles = []
+                        for name in found_names:
+                            normalized_name = self.name_adapter.normalize_name(name)
+                            profile_summary = self.profile_manager.get_other_profile_summary(normalized_name)
+                            if profile_summary:
+                                people_profiles.append(f"=== {normalized_name} 的資料 ===\n{profile_summary}")
+                        
+                        if people_profiles:
+                            logger.info(f"Found {len(people_profiles)} people profiles")
+                            combined_profiles = "\n\n".join(people_profiles)
+                            logger.info(f"Combined profiles length: {len(combined_profiles)} characters")
+                            
+                            # 使用 LLM 生成個性化回答
+                            recognition_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles)
+                            logger.info(f"Recognition prompt length: {len(recognition_prompt)} characters")
+                            
+                            try:
+                                logger.info("Calling LLM for recognition answer...")
+                                recognition_answer = self.llm.invoke(recognition_prompt)
+                                logger.info(f"LLM response type: {type(recognition_answer)}")
+                                if hasattr(recognition_answer, 'content'):
+                                    recognition_answer = recognition_answer.content
+                                    logger.info(f"LLM response content length: {len(recognition_answer)} characters")
+                                
+                                # 如果有找不到的角色，在最後加上說明
+                                if not_found_names:
+                                    recognition_answer += f"\n\n至於 {', '.join(not_found_names)}？沒聽過這個人。"
+                                
+                                logger.info("Returning recognition answer")
+                                return {
+                                    "answer": recognition_answer,
+                                    "sources": [],
+                                    "found_characters": found_names
+                                }
+                            except Exception as e:
+                                logger.error(f"生成認識類回答時發生錯誤: {str(e)}")
+                                # 如果生成失敗，回退到簡單回答
+                                fallback_answer = f"認識啊，{', '.join(found_names)} 我當然認識。"
+                                if not_found_names:
+                                    fallback_answer += f"\n\n至於 {', '.join(not_found_names)}？沒聽過這個人。"
+                                return {
+                                    "answer": fallback_answer,
+                                    "sources": [],
+                                    "found_characters": found_names
+                                }
+                    
+                    # 如果沒有找到任何人物資料
+                    if not_found_names:
+                        return {
+                            "answer": f"至於 {', '.join(not_found_names)}？沒聽過這些人。",
+                            "sources": [],
+                            "found_characters": []
+                        }
+                    
+                    # 如果既沒有找到也沒有找不到的（理論上不會發生）
+                    return {
+                        "answer": "你在問什麼？我聽不懂。",
+                        "sources": [],
+                        "found_characters": []
+                    }
             
             is_maya_question = (
                 not detected_names and  # 沒有檢測到其他角色
@@ -255,14 +350,16 @@ class QAChain:
                         identity_answer = identity_answer.content
                     return {
                         "answer": identity_answer,
-                        "sources": []
+                        "sources": [],
+                        "found_characters": ["Maya"]
                     }
                 except Exception as e:
                     logger.error(f"生成身份回答時發生錯誤: {str(e)}")
                     # 如果生成失敗，回退到原始資料
                     return {
                         "answer": maya_summary,
-                        "sources": []
+                        "sources": [],
+                        "found_characters": ["Maya"]
                     }
             
             # 特殊處理：人員語義搜索（當問題涉及人員但沒有明確提到具體人名時）
@@ -300,10 +397,11 @@ class QAChain:
                             found_people = []
                             for result in search_results:
                                 name = result["name"]
-                                profile_summary = self.profile_manager.get_other_profile_summary(name)
+                                normalized_name = self.name_adapter.normalize_name(name)
+                                profile_summary = self.profile_manager.get_other_profile_summary(normalized_name)
                                 if profile_summary:
                                     found_people.append({
-                                        "name": name,
+                                        "name": normalized_name,
                                         "profile": profile_summary,
                                         "similarity": result["similarity"],
                                         "total_power": result.get("total_power", 0)
@@ -319,7 +417,8 @@ class QAChain:
                                         search_answer = search_answer.content
                                     return {
                                         "answer": search_answer,
-                                        "sources": []
+                                        "sources": [],
+                                        "found_characters": [p['name'] for p in found_people]
                                     }
                                 except Exception as e:
                                     logger.error(f"生成人員搜索回答時發生錯誤: {str(e)}")
@@ -330,7 +429,8 @@ class QAChain:
                                         answer_parts.append(f"\n• {person['name']}{power_info} (相似度: {person['similarity']})")
                                     return {
                                         "answer": "\n".join(answer_parts),
-                                        "sources": []
+                                        "sources": [],
+                                        "found_characters": [p['name'] for p in found_people]
                                     }
                     
                     # 如果語義搜索失敗或沒有結果，繼續到文件搜索
@@ -350,20 +450,22 @@ class QAChain:
             
             # 使用 chat_chain 生成答案
             logger.debug("開始調用 chat_chain.invoke()")
-            answer = self.chat_chain.invoke({"context": context, "question": query})
+            answer_content = self.chat_chain.invoke({"context": context, "question": query}).content
             logger.debug(f"chat_chain.invoke() 完成")
             
             # 返回答案和來源信息
             return {
-                "answer": answer,
-                "sources": sources
+                "answer": answer_content,
+                "sources": sources,
+                "found_characters": []
             }
             
         except Exception as e:
             logger.error(f"生成答案時發生錯誤: {str(e)}")
             return {
                 "answer": f"抱歉，生成答案時發生錯誤: {str(e)}",
-                "sources": []
+                "sources": [],
+                "found_characters": []
             }
 
     def get_answer_from_file(self, question: str, context: str) -> str:
@@ -379,4 +481,4 @@ class QAChain:
         Returns:
             str: AI 生成的答案
         """
-        return self.chat_chain.invoke({"context": context, "question": question}) 
+        return self.chat_chain.invoke({"context": context, "question": question}).content 
