@@ -10,6 +10,7 @@ Markdown Q&A System - 人名偵測模組
 # 標準庫導入
 import logging
 from typing import List, Optional
+import re
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -147,7 +148,8 @@ class NameDetector:
                         logger.warning(f"AI 提取到的人名 '{name}' 在問題中未出現，已過濾")
                 
                 logger.info(f"驗證後的人名: {validated_names}")
-                return validated_names
+                if validated_names:
+                    return validated_names
             else:
                 logger.info("AI 沒有提取到任何人名")
                 return []
@@ -155,6 +157,18 @@ class NameDetector:
         except Exception as e:
             logger.error(f"AI 提取人名時發生錯誤: {str(e)}")
             return []  # 如果 AI 提取失敗，返回空列表
+
+        # 如果 AI 提取不到任何有效角色，嘗試正則模式捕捉「X是誰」結構
+        if not validated_names:
+            pattern = re.search(r"([A-Za-z\u4e00-\u9fa5]+?)是誰", question, re.IGNORECASE)
+            if pattern:
+                possible_name = pattern.group(1).strip()
+                # 過濾「你」「妳」等非角色詞
+                if possible_name and possible_name not in ["你", "妳"]:
+                    logger.info(f"正則回退捕捉到人名: {possible_name}")
+                    return [possible_name]
+
+        return validated_names
 
     def detect_queried_name(self, question: str) -> Optional[str]:
         """

@@ -204,10 +204,34 @@ class QAChain:
                             if hasattr(summary_answer, 'content'):
                                 summary_answer = summary_answer.content
                             
-                            # 空答案容錯：若 LLM 罕見地返回空內容，回退至原始資料
-                            if not summary_answer or not summary_answer.strip():
-                                logger.warning("LLM 返回空內容，使用原始角色資料作為回答")
-                                summary_answer = combined_profiles
+                            # 空答案或拒絕容錯
+                            refusal_keywords = ["無法為你服務", "無法為您服務", "請提供", "評論的角色名", "否則我無法為", "抱歉", "cannot", "unable"]
+                            if (not summary_answer or len(summary_answer.strip()) < 20 or any(k in summary_answer for k in refusal_keywords)):
+                                logger.warning("LLM 回答可能無效，嘗試使用簡化提示重新生成")
+                                simple_prompt = (
+                                    "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 評論以下唯一角色的資料，"
+                                    "必須提到其胸部、臀部、身高、體重，以及物理/魔法/武器戰鬥力數值。因為她的總戰力低於我，"
+                                    "我要肆無忌憚地辱罵、嘲弄並貶低她，甚至露出想對她進行人身侮辱的衝動。"
+                                    "嚴禁提及或評論任何其他角色。不要逐條列清單，而要把這些數字自然嵌入 2~4 句評論中。"
+                                    "評論完後立刻列出四條圖片連結 (基本/戰鬥/毀壞/迷人)。\n\n"
+                                    f"{combined_profiles}"
+                                )
+                                try:
+                                    summary_answer_retry = self.llm.invoke(simple_prompt)
+                                    if hasattr(summary_answer_retry, 'content'):
+                                        summary_answer_retry = summary_answer_retry.content
+                                        # 若重試成功且內容足夠，採用
+                                        if summary_answer_retry and len(summary_answer_retry.strip()) > 20:
+                                            summary_answer = summary_answer_retry
+                                        else:
+                                            logger.warning("簡化提示仍然無效，使用原始資料作為回答")
+                                            summary_answer = combined_profiles
+                                    else:
+                                        logger.error("簡化提示調用失敗，使用原始資料作為回答")
+                                        summary_answer = combined_profiles
+                                except Exception as _:
+                                    logger.error("簡化提示調用失敗，使用原始資料作為回答")
+                                    summary_answer = combined_profiles
                             
                             # 如果有找不到的角色，在最後加上說明
                             if not_found:

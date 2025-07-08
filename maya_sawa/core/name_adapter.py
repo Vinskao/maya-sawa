@@ -41,7 +41,9 @@ class NameAdapter:
             r"你見過(.+?)[嗎麼不？]",
             r"你認識(.+?)$",  # 處理沒有結尾標點的情況
             r"你知道(.+?)$",
-            r"你見過(.+?)$"
+            r"你見過(.+?)$",
+            r"(.+?)是誰[？?]?",   # 新增：例如 "Wavo是誰?"
+            r"who is (.+?)$"      # 英文形式
         ]
     
     def normalize_name(self, name: str) -> str:
@@ -109,6 +111,9 @@ class NameAdapter:
                     # 移除可能的標點符號
                     name = re.sub(r'[，。！？、；：""''（）【】]', '', name)
                     if name:
+                        # 過濾非角色詞
+                        if name in ["你", "妳"]:
+                            continue
                         extracted_names.append(name)
         
         # 標準化提取到的名稱
