@@ -45,6 +45,105 @@ graph TD
     H --> I;
 ```
 
+### System Architecture (External APIs & Data Stores)
+
+This diagram shows how the internal layers interact with each other and with all external services (databases, OpenAI, and public APIs).
+
+```mermaid
+flowchart TD
+    subgraph "API Layer"
+        APIRouter["FastAPI Router<br/>(maya_sawa/api/qa.py)"]
+    end
+
+    subgraph "Q&A Layer"
+        QAEngine["QAEngine"]
+        QAChain["QAChain"]
+    end
+
+    subgraph "Support Layer"
+        NameDetector["NameDetector"]
+        ProfileManager["ProfileManager"]
+        PeopleWeaponManager["PeopleWeaponManager"]
+        PersonalityPromptBuilder["PersonalityPromptBuilder"]
+        NameAdapter["NameAdapter"]
+        VectorStore["PostgresVectorStore"]
+        ChatHistoryManager["ChatHistoryManager"]
+    end
+
+    subgraph "External Services"
+        OpenAIAPI["OpenAI API<br/>Chat & Embeddings"]
+        PeopleAPI["People System API<br/>/tymb/people/*"]
+        ArticleAPI["Public Article API<br/>/paprika/articles"]
+        PostgresDB["PostgreSQL"]
+    end
+
+    Client["Client / Frontend"] --> APIRouter
+    APIRouter --> QAEngine
+    QAEngine --> QAChain
+    APIRouter --> VectorStore
+    APIRouter --> ChatHistoryManager
+
+    ChatHistoryManager --> PostgresDB
+
+    QAChain --> NameDetector
+    QAChain --> ProfileManager
+    QAChain --> PeopleWeaponManager
+    QAChain --> PersonalityPromptBuilder
+    QAChain --> NameAdapter
+    QAChain --> VectorStore
+
+    NameDetector --> OpenAIAPI
+    QAChain --> OpenAIAPI
+
+    ProfileManager --> PeopleAPI
+    PeopleWeaponManager --> PeopleAPI
+
+    VectorStore --> PostgresDB
+    VectorStore --> ArticleAPI
+
+    PeopleWeaponManager --> PostgresDB
+```
+
+### Data Synchronization & Vector Pipeline
+
+This diagram outlines how article, people, and weapon data are synchronized from external APIs, converted into vector embeddings, and stored in PostgreSQL for semantic search.
+
+```mermaid
+flowchart TD
+    %% ---------------- Article sync ----------------
+    subgraph "Article & Embedding Sync"
+        RemoteAPI["Remote Article API<br/>/paprika/articles (JSON + embedding)"]
+        SyncEndpoint["POST /qa/sync-from-api"]
+        VectorStore["PostgresVectorStore.add_articles_from_api"]
+        ArticlesTable["articles table (vector)"]
+        RemoteAPI --> SyncEndpoint --> VectorStore --> ArticlesTable
+    end
+
+    %% ---------------- People & Weapons sync ----------------
+    subgraph "People & Weapons Sync"
+        PeopleAPI["People System API<br/>/tymb/people/get-all"]
+        WeaponsAPI["People System API<br/>/tymb/weapons"]
+        CronJob["k8s CronJob / scripts<br/>sync_people_weapons.py"]
+        PWManager["PeopleWeaponManager.sync_all_data"]
+        EmbeddingGen["OpenAI Embedding\ntext-embedding-ada-002"]
+        PeopleTable["people table (vector)"]
+        WeaponsTable["weapon table (vector)"]
+
+        PeopleAPI --> PWManager
+        WeaponsAPI --> PWManager
+        CronJob --> PWManager
+
+        PWManager --> EmbeddingGen
+        EmbeddingGen --> PeopleTable
+        EmbeddingGen --> WeaponsTable
+        PWManager --> PeopleTable
+        PWManager --> WeaponsTable
+    end
+
+    %% Shared DB
+    ArticlesTable & PeopleTable & WeaponsTable --> DB[(PostgreSQL + pgvector)]
+```
+
 ## Getting Started
 
 <details>
