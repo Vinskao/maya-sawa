@@ -20,9 +20,19 @@ import logging
 import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-import httpx
-from psycopg2.extras import RealDictCursor
-import psycopg2
+# Optional third-party imports – fallback stubs for static analysis
+try:
+    import httpx  # type: ignore
+except ImportError:  # pragma: no cover
+    httpx = None  # type: ignore
+
+try:
+    from psycopg2.extras import RealDictCursor  # type: ignore
+    import psycopg2  # type: ignore
+except ImportError:  # pragma: no cover
+    RealDictCursor = None  # type: ignore
+    import types
+    psycopg2 = types.ModuleType("psycopg2")  # type: ignore
 
 # Import connection pool
 from .connection_pool import get_pool_manager
@@ -82,14 +92,14 @@ class PeopleWeaponManager:
             raise
     
     def fetch_weapons_data(self) -> List[Dict[str, Any]]:
-        """
-        Fetch weapons data from the API
-        
+        """Fetch all weapons data from the API (new format).
+
         Returns:
             List[Dict[str, Any]]: List of weapons data
         """
-        url = "https://peoplesystem.tatdvsonorth.com/tymb/weapons"
-        
+        base_url = os.getenv("PUBLIC_API_BASE_URL", "")
+        url = f"{base_url}/tymb/weapons"
+
         try:
             with httpx.Client(timeout=30.0) as client:
                 response = client.get(url)
@@ -100,6 +110,42 @@ class PeopleWeaponManager:
         except Exception as e:
             logger.error(f"Failed to fetch weapons data: {str(e)}")
             raise
+
+    def fetch_weapons_by_owner(self, owner: str) -> List[Dict[str, Any]]:
+        """Fetch weapons owned by a specific character."""
+        base_url = os.getenv("PUBLIC_API_BASE_URL", "")
+        url = f"{base_url}/tymb/weapons/owner/{owner}"
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"Failed to fetch weapon for {owner}: {str(e)}")
+            return []
+
+    def fetch_total_damage_with_weapon(self, name: str) -> Optional[int]:
+        """Fetch total damage (physic + weapon) calculated by remote API."""
+        base_url = os.getenv("PUBLIC_API_BASE_URL", "")
+        url = f"{base_url}/tymb/people/damageWithWeapon?name={name}"
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                return int(response.text)
+        except Exception as e:
+            logger.error(f"Failed to fetch damageWithWeapon for {name}: {str(e)}")
+            return None
+
+    def _send_weapon_update(self, weapon: Dict[str, Any]):
+        """Send updated weapon (with embedding) back to API."""
+        base_url = os.getenv("PUBLIC_API_BASE_URL", "")
+        url = f"{base_url}/tymb/weapons"
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                client.post(url, json=weapon)
+        except Exception as e:
+            logger.warning(f"Failed to POST updated weapon for {weapon.get('owner')}: {str(e)}")
     
     def generate_embedding(self, text: str) -> Optional[List[float]]:
         """
@@ -220,8 +266,8 @@ class PeopleWeaponManager:
         text_parts = []
         
         # Basic weapon info
-        if weapon.get('name'):
-            text_parts.append(f"Owner: {weapon['name']}")
+        if weapon.get('owner'):
+            text_parts.append(f"Owner: {weapon['owner']}")
         if weapon.get('weapon'):
             text_parts.append(f"Weapon: {weapon['weapon']}")
         if weapon.get('attributes'):
@@ -557,7 +603,7 @@ class PeopleWeaponManager:
                     
                     # Prepare data for insertion/update
                     data = {
-                        'name': weapon.get('name'),
+                        'name': weapon.get('owner'),
                         'weapon_type': weapon.get('weapon'),  # Changed from 'weapon' to 'weapon_type'
                         'attributes': weapon.get('attributes'),
                         'base_damage': weapon.get('baseDamage'),
@@ -589,6 +635,11 @@ class PeopleWeaponManager:
                     """
                     
                     cursor.execute(query, data)
+                    # Post updated embedding back to API (non-blocking best-effort)
+                    if embedding:
+                        weapon_payload = weapon.copy()
+                        weapon_payload['embedding'] = embedding
+                        self._send_weapon_update(weapon_payload)
                     updated_count += 1
                     
                     # Log progress every 10 records or every 10 seconds
