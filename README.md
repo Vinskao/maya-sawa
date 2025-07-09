@@ -45,6 +45,65 @@ graph TD
     H --> I;
 ```
 
+### System Architecture (External APIs & Data Stores)
+
+This diagram shows how the internal layers interact with each other and with all external services (databases, OpenAI, and public APIs).
+
+```mermaid
+flowchart TD
+    subgraph "API Layer"
+        APIRouter["FastAPI Router<br/>(maya_sawa/api/qa.py)"]
+    end
+
+    subgraph "Q&A Layer"
+        QAEngine["QAEngine"]
+        QAChain["QAChain"]
+    end
+
+    subgraph "Support Layer"
+        NameDetector["NameDetector"]
+        ProfileManager["ProfileManager"]
+        PeopleWeaponManager["PeopleWeaponManager"]
+        PersonalityPromptBuilder["PersonalityPromptBuilder"]
+        NameAdapter["NameAdapter"]
+        VectorStore["PostgresVectorStore"]
+        ChatHistoryManager["ChatHistoryManager"]
+    end
+
+    subgraph "External Services"
+        OpenAIAPI["OpenAI API<br/>Chat & Embeddings"]
+        PeopleAPI["People System API<br/>/tymb/people/*"]
+        ArticleAPI["Public Article API<br/>/paprika/articles"]
+        PostgresDB["PostgreSQL"]
+    end
+
+    Client["Client / Frontend"] --> APIRouter
+    APIRouter --> QAEngine
+    QAEngine --> QAChain
+    APIRouter --> VectorStore
+    APIRouter --> ChatHistoryManager
+
+    ChatHistoryManager --> PostgresDB
+
+    QAChain --> NameDetector
+    QAChain --> ProfileManager
+    QAChain --> PeopleWeaponManager
+    QAChain --> PersonalityPromptBuilder
+    QAChain --> NameAdapter
+    QAChain --> VectorStore
+
+    NameDetector --> OpenAIAPI
+    QAChain --> OpenAIAPI
+
+    ProfileManager --> PeopleAPI
+    PeopleWeaponManager --> PeopleAPI
+
+    VectorStore --> PostgresDB
+    VectorStore --> ArticleAPI
+
+    PeopleWeaponManager --> PostgresDB
+```
+
 ## Getting Started
 
 <details>
