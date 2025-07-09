@@ -27,6 +27,9 @@ import psycopg2
 # Import connection pool
 from .connection_pool import get_pool_manager
 
+# Import config
+from .config import Config
+
 # Import OpenAI for embeddings
 try:
     from openai import OpenAI
@@ -68,7 +71,7 @@ class PeopleWeaponManager:
         Returns:
             List[Dict[str, Any]]: List of people data
         """
-        url = "https://peoplesystem.tatdvsonorth.com/tymb/people/get-all"
+        url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/get-all"
         
         try:
             with httpx.Client(timeout=30.0) as client:
@@ -88,7 +91,7 @@ class PeopleWeaponManager:
         Returns:
             List[Dict[str, Any]]: List of weapons data
         """
-        url = "https://peoplesystem.tatdvsonorth.com/tymb/weapons"
+        url = f"{Config.PUBLIC_API_BASE_URL}/tymb/weapons"
         
         try:
             with httpx.Client(timeout=30.0) as client:

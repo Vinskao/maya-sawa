@@ -9,6 +9,11 @@ Markdown Q&A System - 個性提示建構模組
 
 # 標準庫導入
 import logging
+import httpx
+from typing import Dict, List, Optional
+
+# 本地導入
+from .config import Config
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -124,24 +129,43 @@ class PersonalityPromptBuilder:
 
 記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。"""
 
-    def create_multi_character_prompt(self, query: str, combined_other_profiles: str) -> str:
+    def create_multi_character_prompt(self, query: str, combined_other_profiles: str, character_names: List[str] = None) -> str:
         """
         創建多角色評論的個性提示
         
         Args:
             query (str): 用戶的問題
             combined_other_profiles (str): 其他角色的資料摘要
+            character_names (List[str]): 角色名稱列表，用於獲取戰力和武器信息
             
         Returns:
             str: 多角色評論的個性提示
         """
+        # 獲取戰力和武器信息
+        power_weapon_info = ""
+        if character_names:
+            power_weapon_info = "\n\n戰力與武器信息：\n"
+            for name in character_names:
+                if name.lower() != "maya":  # 跳過 Maya 自己
+                    info = self.compare_power_and_get_weapons(name)
+                    if info["power_comparison"]:
+                        comparison_text = {
+                            "higher": "比我強",
+                            "lower": "比我弱", 
+                            "equal": "與我相當"
+                        }.get(info["power_comparison"], "未知")
+                        
+                        power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
+                    else:
+                        power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
+        
         return f"""你是佐和真夜（Maya Sawa），{self.maya_personality}
 
 有人問你「{query}」，這種問題也值得問？……算了，既然你問了。
 
 關於其他角色（基於實際資料）：
 
-{combined_other_profiles}
+{combined_other_profiles}{power_weapon_info}
 
 ⚠ 回答要求：
 1. **基於上述實際資料回答問題**，不要憑空想像
@@ -159,31 +183,50 @@ class PersonalityPromptBuilder:
 9. **重要：每個角色的評論後面要加上該角色的四種圖片連結，格式如下：**
 
 圖片連結：
-- 基本圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名].png
-- 戰鬥圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Fighting.png
-- 毀壞圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Ruined.png
-- 迷人圖片：https://peoplesystem.tatdvsonorth.com/images/people/Ravishing[角色名].png
+- 基本圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名].png
+- 戰鬥圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Fighting.png
+- 毀壞圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Ruined.png
+- 迷人圖片：{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing[角色名].png
 
 記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。"""
 
-    def create_summary_prompt(self, query: str, combined_profiles: str) -> str:
+    def create_summary_prompt(self, query: str, combined_profiles: str, character_names: List[str] = None) -> str:
         """
         創建總結評論的個性提示
         
         Args:
             query (str): 用戶的問題
             combined_profiles (str): 角色資料摘要
+            character_names (List[str]): 角色名稱列表，用於獲取戰力和武器信息
             
         Returns:
             str: 總結評論的個性提示
         """
+        # 獲取戰力和武器信息
+        power_weapon_info = ""
+        if character_names:
+            power_weapon_info = "\n\n戰力與武器信息：\n"
+            for name in character_names:
+                if name.lower() != "maya":  # 跳過 Maya 自己
+                    info = self.compare_power_and_get_weapons(name)
+                    if info["power_comparison"]:
+                        comparison_text = {
+                            "higher": "比我強",
+                            "lower": "比我弱", 
+                            "equal": "與我相當"
+                        }.get(info["power_comparison"], "未知")
+                        
+                        power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
+                    else:
+                        power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
+        
         return f"""你是佐和真夜（Maya Sawa），{self.maya_personality}
 
 有人問你「{query}」，這種問題也值得問？……算了，既然你問了。
 
 以下是相關角色的資料：
 
-{combined_profiles}
+{combined_profiles}{power_weapon_info}
 
 ⚠ 回答要求：
 1. **基於上述實際資料回答問題**，不要憑空想像
@@ -205,10 +248,10 @@ class PersonalityPromptBuilder:
 10. 圖片連結格式如下（請替換 [角色名]）：
 
 圖片連結：
-- 基本圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名].png
-- 戰鬥圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Fighting.png
-- 毀壞圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Ruined.png
-- 迷人圖片：https://peoplesystem.tatdvsonorth.com/images/people/Ravishing[角色名].png
+- 基本圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名].png
+- 戰鬥圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Fighting.png
+- 毀壞圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Ruined.png
+- 迷人圖片：{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing[角色名].png
 
 記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。"""
 
@@ -240,10 +283,10 @@ class PersonalityPromptBuilder:
 6. **重要：回答後面要加上該角色的四種圖片連結，格式如下：**
 
 圖片連結：
-- 基本圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名].png
-- 戰鬥圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Fighting.png
-- 毀壞圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Ruined.png
-- 迷人圖片：https://peoplesystem.tatdvsonorth.com/images/people/Ravishing[角色名].png
+- 基本圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名].png
+- 戰鬥圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Fighting.png
+- 毀壞圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Ruined.png
+- 迷人圖片：{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing[角色名].png
 
 記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。"""
 
@@ -275,6 +318,110 @@ class PersonalityPromptBuilder:
         
         return self.create_personality_prompt(query, context)
 
+    def get_character_total_power(self, character_name: str) -> Optional[int]:
+        """
+        獲取角色的總戰力（包含武器加成）
+        
+        Args:
+            character_name (str): 角色名稱
+            
+        Returns:
+            Optional[int]: 總戰力數值，如果獲取失敗則返回 None
+        """
+        try:
+            url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/damageWithWeapon"
+            payload = {"name": character_name}
+            
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+                total_power = response.json()
+                
+                if isinstance(total_power, int):
+                    logger.debug(f"獲取到 {character_name} 的總戰力: {total_power}")
+                    return total_power
+                else:
+                    logger.warning(f"API 返回的戰力格式不正確: {total_power}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"獲取 {character_name} 的總戰力失敗: {str(e)}")
+            return None
+
+    def get_character_weapons(self, character_name: str) -> List[Dict]:
+        """
+        獲取角色擁有的武器列表
+        
+        Args:
+            character_name (str): 角色名稱
+            
+        Returns:
+            List[Dict]: 武器列表，如果獲取失敗則返回空列表
+        """
+        try:
+            url = f"{Config.PUBLIC_API_BASE_URL}/tymb/weapons/owner/{character_name}"
+            
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                weapons = response.json()
+                
+                if isinstance(weapons, list):
+                    logger.debug(f"獲取到 {character_name} 的武器: {len(weapons)} 件")
+                    return weapons
+                else:
+                    logger.warning(f"API 返回的武器格式不正確: {weapons}")
+                    return []
+                    
+        except Exception as e:
+            logger.error(f"獲取 {character_name} 的武器失敗: {str(e)}")
+            return []
+
+    def compare_power_and_get_weapons(self, character_name: str) -> Dict:
+        """
+        比較戰力並獲取武器信息
+        
+        Args:
+            character_name (str): 角色名稱
+            
+        Returns:
+            Dict: 包含戰力比較和武器信息的字典
+        """
+        # 獲取 Maya 的總戰力
+        maya_power = self.get_character_total_power("Maya")
+        
+        # 獲取目標角色的總戰力
+        target_power = self.get_character_total_power(character_name)
+        
+        # 獲取目標角色的武器
+        weapons = self.get_character_weapons(character_name)
+        
+        result = {
+            "maya_power": maya_power,
+            "target_power": target_power,
+            "target_weapons": weapons,
+            "power_comparison": None,
+            "weapon_info": ""
+        }
+        
+        # 計算戰力比較
+        if maya_power is not None and target_power is not None:
+            if target_power > maya_power:
+                result["power_comparison"] = "higher"
+            elif target_power < maya_power:
+                result["power_comparison"] = "lower"
+            else:
+                result["power_comparison"] = "equal"
+        
+        # 構建武器信息
+        if weapons:
+            weapon_names = [weapon.get('weapon', '未知武器') for weapon in weapons]
+            result["weapon_info"] = f"擁有武器: {', '.join(weapon_names)}"
+        else:
+            result["weapon_info"] = "沒有武器"
+        
+        return result
+
     def create_people_search_prompt(self, query: str, found_people: list) -> str:
         """
         創建人員搜索結果的個性提示
@@ -288,13 +435,33 @@ class PersonalityPromptBuilder:
         """
         # 構建找到的人員資料
         people_info = []
+        character_names = []
         for person in found_people:
             people_info.append(f"""
 {person['name']} (相似度: {person['similarity']}):
 {person['profile']}
 """)
+            character_names.append(person['name'])
         
         combined_people_info = "\n".join(people_info)
+        
+        # 獲取戰力和武器信息
+        power_weapon_info = ""
+        if character_names:
+            power_weapon_info = "\n\n戰力與武器信息：\n"
+            for name in character_names:
+                if name.lower() != "maya":  # 跳過 Maya 自己
+                    info = self.compare_power_and_get_weapons(name)
+                    if info["power_comparison"]:
+                        comparison_text = {
+                            "higher": "比我強",
+                            "lower": "比我弱", 
+                            "equal": "與我相當"
+                        }.get(info["power_comparison"], "未知")
+                        
+                        power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
+                    else:
+                        power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
         
         return f"""你是佐和真夜（Maya Sawa），{self.maya_personality}
 
@@ -302,7 +469,7 @@ class PersonalityPromptBuilder:
 
 根據你的問題，我找到了以下相關人員：
 
-{combined_people_info}
+{combined_people_info}{power_weapon_info}
 
 ⚠ 回答要求：
 1. **基於上述實際資料回答問題**，不要憑空想像
@@ -320,9 +487,9 @@ class PersonalityPromptBuilder:
 9. **重要：每個角色的評論後面要加上該角色的四種圖片連結，格式如下：**
 
 圖片連結：
-- 基本圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名].png
-- 戰鬥圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Fighting.png
-- 毀壞圖片：https://peoplesystem.tatdvsonorth.com/images/people/[角色名]Ruined.png
-- 迷人圖片：https://peoplesystem.tatdvsonorth.com/images/people/Ravishing[角色名].png
+- 基本圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名].png
+- 戰鬥圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Fighting.png
+- 毀壞圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Ruined.png
+- 迷人圖片：{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing[角色名].png
 
 記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。""" 

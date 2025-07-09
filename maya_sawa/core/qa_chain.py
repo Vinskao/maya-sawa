@@ -196,7 +196,7 @@ class QAChain:
                         }
                     else:
                         # 使用 LLM 生成總結
-                        summary_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles)
+                        summary_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles, found_names)
                         
                         try:
                             summary_answer = self.llm.invoke(summary_prompt)
@@ -205,8 +205,16 @@ class QAChain:
                                 summary_answer = summary_answer.content
                             
                             # 空答案或拒絕容錯
-                            refusal_keywords = ["無法為你服務", "無法為您服務", "請提供", "評論的角色名", "否則我無法為", "抱歉", "cannot", "unable"]
-                            if (not summary_answer or len(summary_answer.strip()) < 20 or any(k in summary_answer for k in refusal_keywords)):
+                            refusal_keywords = [
+                                "無法為你服務", "無法為您服務", "請提供", "評論的角色名", "否則我無法為", "抱歉", "cannot", "unable", "Please provide", "provide the character",
+                                "想知道", "沒空", "自己去查", "浪費時間"
+                            ]
+                            # 若答案過短 (<100 字) 或包含拒絕關鍵詞，視為無效
+                            if (
+                                not summary_answer or
+                                len(summary_answer.strip()) < 100 or
+                                any(k in summary_answer for k in refusal_keywords)
+                            ):
                                 logger.warning("LLM 回答可能無效，嘗試使用簡化提示重新生成")
                                 simple_prompt = (
                                     "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 評論以下唯一角色的資料，"
@@ -312,7 +320,7 @@ class QAChain:
                             logger.info(f"Combined profiles length: {len(combined_profiles)} characters")
                             
                             # 使用 LLM 生成個性化回答
-                            recognition_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles)
+                            recognition_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles, found_names)
                             logger.info(f"Recognition prompt length: {len(recognition_prompt)} characters")
                             
                             try:
@@ -322,7 +330,43 @@ class QAChain:
                                 if hasattr(recognition_answer, 'content'):
                                     recognition_answer = recognition_answer.content
                                     logger.info(f"LLM response content length: {len(recognition_answer)} characters")
-                                
+
+                                # === 無效回答檢測與重試 ===
+                                refusal_keywords = [
+                                    "無法為你服務", "無法為您服務", "請提供", "評論的角色名", "否則我無法為", "抱歉",
+                                    "cannot", "unable", "Please provide", "provide the character",
+                                    "想知道", "沒空", "自己去查", "浪費時間"
+                                ]
+
+                                if (
+                                    not recognition_answer or
+                                    len(recognition_answer.strip()) < 100 or
+                                    any(k in recognition_answer for k in refusal_keywords)
+                                ):
+                                    logger.warning("Recognition LLM 回答可能無效，嘗試使用簡化提示重新生成")
+
+                                    simple_prompt = (
+                                        "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 評論以下唯一角色的資料，"
+                                        "必須提到其胸部、臀部、身高、體重，以及物理/魔法/武器戰鬥力數值。因為她的總戰力可能低於我，"
+                                        "我要肆無忌憚地辱罵、嘲弄並貶低她。"
+                                        "嚴禁提及或評論任何其他角色。不要逐條列清單，而要把這些數字自然嵌入 2~4 句評論中。"
+                                        "評論完後立刻列出四條圖片連結 (基本/戰鬥/毀壞/迷人)。\n\n"
+                                        f"{combined_profiles}"
+                                    )
+
+                                    try:
+                                        recognition_answer_retry = self.llm.invoke(simple_prompt)
+                                        if hasattr(recognition_answer_retry, 'content'):
+                                            recognition_answer_retry = recognition_answer_retry.content
+
+                                        if recognition_answer_retry and len(recognition_answer_retry.strip()) > 50:
+                                            recognition_answer = recognition_answer_retry
+                                            logger.info("簡化提示成功生成有效回答")
+                                        else:
+                                            logger.warning("簡化提示仍無效，保留原始回答")
+                                    except Exception as _:
+                                        logger.error("簡化提示調用失敗，保留原始回答")
+
                                 # 如果有找不到的角色，在最後加上說明
                                 if not_found_names:
                                     recognition_answer += f"\n\n至於 {', '.join(not_found_names)}？沒聽過這個人。"

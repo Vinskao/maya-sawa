@@ -61,6 +61,9 @@ class NameAdapter:
             
         # 清理名稱
         clean_name = name.strip()
+
+        # 移除常見標點符號（包括中英文）
+        clean_name = re.sub(r"[\s,，。!！?？;；:：'\"\(\)\[\]{}]+", "", clean_name)
         
         # 檢查特殊名稱映射
         lower_name = clean_name.lower()
@@ -109,7 +112,7 @@ class NameAdapter:
                 name = match.strip()
                 if name:
                     # 移除可能的標點符號
-                    name = re.sub(r'[，。！？、；：""''（）【】]', '', name)
+                    name = re.sub(r'[，。！？、；：?？!！""\'\'（）【】,]', '', name)
                     if name:
                         # 過濾非角色詞
                         if name in ["你", "妳"]:

@@ -15,6 +15,9 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Import config
+from maya_sawa.core.config import Config
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -148,7 +151,7 @@ def test_api_connection():
         import httpx
         
         # Test people API
-        people_url = "https://peoplesystem.tatdvsonorth.com/tymb/people/get-all"
+        people_url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/get-all"
         with httpx.Client(timeout=10.0) as client:
             response = client.post(people_url)
             if response.status_code == 200:
@@ -158,7 +161,7 @@ def test_api_connection():
                 print(f"❌ People API error - Status: {response.status_code}")
         
         # Test weapons API
-        weapons_url = "https://peoplesystem.tatdvsonorth.com/tymb/weapons"
+        weapons_url = f"{Config.PUBLIC_API_BASE_URL}/tymb/weapons"
         with httpx.Client(timeout=10.0) as client:
             response = client.get(weapons_url)
             if response.status_code == 200:

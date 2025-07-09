@@ -27,6 +27,12 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import httpx
+# 可能可用的翻譯備援
+try:
+    from googletrans import Translator as GoogleTranslator
+    _google_translator_available = True
+except ImportError:
+    _google_translator_available = False
 
 # LangChain 相關導入
 from langchain.schema import Document
@@ -70,7 +76,47 @@ async def translate_to_english(text: str) -> str:
         translated = qa_chain.llm.invoke(translation_prompt)
         if hasattr(translated, 'content'):
             translated = translated.content
-        
+
+        # ------------------  檢查翻譯質量 ------------------
+        def _is_translation_valid(src: str, tgt: str) -> bool:
+            """簡單檢查目標語句是否包含大量中文或常見拒絕語句"""
+            if not tgt:
+                return False
+            chinese_ratio = sum(1 for ch in tgt if '\u4e00' <= ch <= '\u9fff') / max(len(tgt), 1)
+            refusal_keywords = [
+                "Please provide", "provide the character", "Please input", "I'm sorry", "抱歉", "對不起"
+            ]
+            if chinese_ratio > 0.3:
+                return False
+            if any(k.lower() in tgt.lower() for k in refusal_keywords):
+                return False
+            return True
+
+        if not _is_translation_valid(text, translated):
+            # 若主要翻譯失敗且可用 Google 翻譯，作為備援
+            if _google_translator_available:
+                try:
+                    translator = GoogleTranslator(service_urls=["translate.googleapis.com"])
+                    translated_google = translator.translate(text, src="zh-CN", dest="en").text
+                    if _is_translation_valid(text, translated_google):
+                        translated = translated_google
+                except Exception as e:
+                    logger.warning(f"Google translate fallback failed: {str(e)}")
+
+        # 如果依舊無效，最終退回原文
+        if not _is_translation_valid(text, translated):
+            logger.warning("Translation still invalid after fallback, returning original text")
+            translated = text
+ 
+        # ---- 確保圖片/連結行保留 ----
+        try:
+            src_link_lines = [ln.strip() for ln in text.splitlines() if "http" in ln]
+            for ln in src_link_lines:
+                if ln and ln not in translated:
+                    translated += "\n" + ln
+        except Exception as _:
+            pass
+
         # 確保 translated 是字符串
         if not isinstance(translated, str):
             logger.warning(f"翻譯結果不是字符串: {type(translated)}")
@@ -92,7 +138,8 @@ async def translate_to_english(text: str) -> str:
 # 從環境變數獲取公共 API 基礎 URL
 def get_public_api_base_url():
     """獲取公共 API 基礎 URL"""
-    return os.getenv("PUBLIC_API_BASE_URL", "")
+    from ..core.config import Config
+    return Config.PUBLIC_API_BASE_URL
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)

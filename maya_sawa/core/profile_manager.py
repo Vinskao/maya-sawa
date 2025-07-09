@@ -13,6 +13,9 @@ import logging
 import httpx
 from typing import Dict, List, Optional
 
+# 本地導入
+from .config import Config
+
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
 
@@ -41,7 +44,7 @@ class ProfileManager:
         Returns:
             Optional[Dict]: 角色個人資料，如果獲取失敗則返回 None
         """
-        url = "https://peoplesystem.tatdvsonorth.com/tymb/people/get-by-name"
+        url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/get-by-name"
         payload = {"name": name}
         
         try:
@@ -84,10 +87,10 @@ class ProfileManager:
             character_name = name
         
         # 構建四種圖片連結
-        base_image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/{character_name}.png"
-        fighting_image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/{character_name}Fighting.png"
-        ruined_image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/{character_name}Ruined.png"
-        ravishing_image_url = f"https://peoplesystem.tatdvsonorth.com/images/people/Ravishing{character_name}.png"
+        base_image_url = f"{Config.PUBLIC_API_BASE_URL}/images/people/{character_name}.png"
+        fighting_image_url = f"{Config.PUBLIC_API_BASE_URL}/images/people/{character_name}Fighting.png"
+        ruined_image_url = f"{Config.PUBLIC_API_BASE_URL}/images/people/{character_name}Ruined.png"
+        ravishing_image_url = f"{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{character_name}.png"
         
         return f"""
 {display_name}的個人資料：
@@ -189,14 +192,13 @@ class ProfileManager:
             if self._other_character_names_cache is not None:
                 return self._other_character_names_cache
             
-            # 從環境變數獲取 API 基礎 URL
-            api_base = os.getenv("PUBLIC_API_BASE_URL")
-            if not api_base:
+            # 從配置獲取 API 基礎 URL
+            if not Config.PUBLIC_API_BASE_URL:
                 logger.warning("PUBLIC_API_BASE_URL 未設置，返回空列表")
                 return []
             
             # 構建 API URL
-            url = f"{api_base}/tymb/people/names"
+            url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/names"
             logger.debug(f"正在從 API 獲取角色名字列表: {url}")
             
             # 發送 HTTP 請求

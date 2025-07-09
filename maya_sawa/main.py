@@ -43,12 +43,11 @@ load_dotenv(env_path, override=True)
 # 從環境變數獲取 OpenAI API 配置
 api_key = os.getenv("OPENAI_API_KEY")
 api_base = os.getenv("OPENAI_API_BASE")
-public_api_base = os.getenv("PUBLIC_API_BASE_URL")
 
 # 記錄 API 配置信息（隱藏敏感信息）
 logger.debug(f"API Key loaded: {api_key[:8]}...{api_key[-4:] if api_key else 'None'}")
 logger.debug(f"API Base URL: {api_base}")
-logger.debug(f"PUBLIC_API_BASE_URL: {public_api_base}")
+logger.debug(f"PUBLIC_API_BASE_URL: {Config.PUBLIC_API_BASE_URL}")
 
 # 檢查關鍵環境變數是否正確載入
 if not api_key:
