@@ -28,7 +28,7 @@ import os
 
 # 本地模組導入
 from ..api.qa import sync_articles_from_api, SyncFromAPIRequest
-from .people import sync_data
+from ..people import sync_data
 from .config import Config
 
 # ==================== 日誌配置 ====================

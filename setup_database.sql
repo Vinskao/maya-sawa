@@ -67,3 +67,72 @@ SELECT
     indexdef
 FROM pg_indexes 
 WHERE tablename = 'articles'; 
+
+-- ===============================================
+-- 新增 people 與 weapon 資料表（供同步腳本使用）
+-- ===============================================
+
+-- People table
+CREATE TABLE IF NOT EXISTS people (
+    name VARCHAR(200) PRIMARY KEY,
+    name_original VARCHAR(200),
+    code_name VARCHAR(200),
+    physic_power INT,
+    magic_power INT,
+    utility_power INT,
+    dob DATE,
+    race VARCHAR(100),
+    attributes TEXT,
+    gender VARCHAR(20),
+    ass_size INT,
+    boobs_size INT,
+    height_cm INT,
+    weight_kg INT,
+    profession VARCHAR(200),
+    combat TEXT,
+    favorite_foods TEXT,
+    job VARCHAR(200),
+    physics TEXT,
+    known_as VARCHAR(200),
+    personality TEXT,
+    interest TEXT,
+    likes TEXT,
+    dislikes TEXT,
+    concubine TEXT,
+    faction VARCHAR(200),
+    army_id INT,
+    army_name VARCHAR(200),
+    dept_id INT,
+    dept_name VARCHAR(200),
+    origin_army_id INT,
+    origin_army_name VARCHAR(200),
+    gave_birth BOOLEAN,
+    email VARCHAR(200),
+    age INT,
+    proxy TEXT,
+    embedding vector(1536),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Weapon table
+CREATE TABLE IF NOT EXISTS weapon (
+    owner VARCHAR(200) PRIMARY KEY, -- weapon owner (person's name)
+    weapon VARCHAR(200),
+    attributes TEXT,
+    base_damage INT,
+    bonus_damage INT,
+    bonus_attributes TEXT,
+    state_attributes TEXT,
+    embedding vector(1536),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 向量索引
+CREATE INDEX IF NOT EXISTS idx_people_embedding ON people 
+USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
+
+CREATE INDEX IF NOT EXISTS idx_weapon_embedding ON weapon 
+USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100); 

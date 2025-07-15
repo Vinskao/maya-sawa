@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 # 本地模組導入
 from .api.qa import router as qa_router
 from .core.scheduler import ArticleSyncScheduler
-from .core.people import sync_data
+from .people import sync_data
 from .core.config import Config
 
 # ==================== 日誌配置 ====================

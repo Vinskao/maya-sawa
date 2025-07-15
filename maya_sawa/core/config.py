@@ -10,6 +10,16 @@ Version: 0.1.0
 
 import os
 from typing import Optional
+from pathlib import Path
+try:
+    from dotenv import load_dotenv
+    # Load .env located at project root
+    _env_path = Path(__file__).resolve().parents[2] / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)
+except ImportError:
+    # dotenv not installed – ignore
+    pass
 
 class Config:
     """
@@ -33,14 +43,14 @@ class Config:
     
     # Synchronization Configuration
     ENABLE_AUTO_SYNC_ON_STARTUP = os.getenv("ENABLE_AUTO_SYNC_ON_STARTUP", "true").lower() == "true"
-    ENABLE_PERIODIC_SYNC = os.getenv("ENABLE_PERIODIC_SYNC", "false").lower() == "true"  # 默認關閉定期同步
+    ENABLE_PERIODIC_SYNC = os.getenv("ENABLE_PERIODIC_SYNC", "true").lower() == "true"  # 默認關閉定期同步
     SYNC_INTERVAL_DAYS = int(os.getenv("SYNC_INTERVAL_DAYS", "3"))
     SYNC_HOUR = int(os.getenv("SYNC_HOUR", "3"))
     SYNC_MINUTE = int(os.getenv("SYNC_MINUTE", "0"))
     
     # People and Weapons Sync Configuration
     ENABLE_PEOPLE_WEAPONS_SYNC = os.getenv("ENABLE_PEOPLE_WEAPONS_SYNC", "true").lower() == "true"
-    ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC = os.getenv("ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC", "false").lower() == "true"  # 默認關閉定期同步
+    ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC = os.getenv("ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC", "true").lower() == "true"  # 默認關閉定期同步
     
     # Logging Configuration
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

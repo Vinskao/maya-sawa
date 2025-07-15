@@ -180,7 +180,7 @@ def test_sync_process():
     print("=== Sync Process Test ===")
     
     try:
-        from maya_sawa.core.people import PeopleWeaponManager
+        from maya_sawa.people import PeopleWeaponManager
         
         manager = PeopleWeaponManager()
         

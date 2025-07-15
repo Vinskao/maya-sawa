@@ -28,7 +28,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-from maya_sawa.core.people import sync_data
+from maya_sawa.people import sync_data
 
 def main():
     """Main function to run the data synchronization"""

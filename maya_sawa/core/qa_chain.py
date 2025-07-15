@@ -5,11 +5,8 @@ from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 import os
-from .name_detector import NameDetector
-from .profile_manager import ProfileManager
-from .personality import PersonalityPromptBuilder
-from .people import PeopleWeaponManager
-from .name_adapter import NameAdapter
+from maya_sawa.people import NameDetector, ProfileManager, PersonalityPromptBuilder, PeopleWeaponManager, NameAdapter
+from maya_sawa.core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -195,8 +192,24 @@ class QAChain:
                             "found_characters": found_names
                         }
                     else:
-                        # 使用 LLM 生成總結
-                        summary_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles, found_names)
+                        # === 根據角色數量選擇不同 prompt ===
+                        if len(found_names) > 1:
+                            if "Maya" in found_names and len(found_names) > 1:
+                                # 分離 Maya 以外的資料供評論
+                                other_profiles_block = "\n\n".join([
+                                    p for p in all_profiles if not p.startswith("=== Maya") and not p.startswith("=== 佐和")
+                                ])
+                                summary_prompt = self.personality_builder.create_self_and_other_prompt(
+                                    query,
+                                    maya_summary if 'maya_summary' in locals() else self.profile_manager.get_profile_summary(),
+                                    other_profiles_block,
+                                    [n for n in found_names if n.lower() != "maya"]
+                                )
+                            else:
+                                summary_prompt = self.personality_builder.create_multi_character_prompt(query, combined_profiles, found_names)
+                        else:
+                            # 單一角色（且不是 Maya）
+                            summary_prompt = self.personality_builder.create_data_answer_prompt(query, combined_profiles)
                         
                         try:
                             summary_answer = self.llm.invoke(summary_prompt)
@@ -215,13 +228,13 @@ class QAChain:
                                 len(summary_answer.strip()) < 100 or
                                 any(k in summary_answer for k in refusal_keywords)
                             ):
-                                logger.warning("LLM 回答可能無效，嘗試使用簡化提示重新生成")
+                                logger.warning("LLM 回答可能無效，嘗試使用加強版提示重新生成")
                                 simple_prompt = (
-                                    "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 評論以下唯一角色的資料，"
-                                    "必須提到其胸部、臀部、身高、體重，以及物理/魔法/武器戰鬥力數值。因為她的總戰力低於我，"
-                                    "我要肆無忌憚地辱罵、嘲弄並貶低她，甚至露出想對她進行人身侮辱的衝動。"
-                                    "嚴禁提及或評論任何其他角色。不要逐條列清單，而要把這些數字自然嵌入 2~4 句評論中。"
-                                    "評論完後立刻列出四條圖片連結 (基本/戰鬥/毀壞/迷人)。\n\n"
+                                    "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 逐一評論以下角色的資料。"
+                                    "對每位角色請根據戰力規則調整態度：Wavo → 臣服；總戰力高於我 → 厭惡但尊重；"
+                                    "總戰力低於我 → 肆無忌憚地辱罵、貶低、壓制；與我相當 → 冷淡高貴。"
+                                    "嚴禁逐條列清單或複製資料，必須把胸部、臀部、身高、體重及三項戰力自然嵌入 3~5 句評論。"
+                                    "每位角色評論完後立即換行，列出四條圖片 URL (基本/戰鬥/毀壞/迷人)，角色順序依資料給出。\n\n"
                                     f"{combined_profiles}"
                                 )
                                 try:
@@ -244,6 +257,8 @@ class QAChain:
                             # 如果有找不到的角色，在最後加上說明
                             if not_found:
                                 summary_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
+                            
+                            # 移除舊的自動補充段落邏輯，避免插入原始資料破壞段落格式
                             
                             return {
                                 "answer": summary_answer,
@@ -319,8 +334,11 @@ class QAChain:
                             combined_profiles = "\n\n".join(people_profiles)
                             logger.info(f"Combined profiles length: {len(combined_profiles)} characters")
                             
-                            # 使用 LLM 生成個性化回答
-                            recognition_prompt = self.personality_builder.create_summary_prompt(query, combined_profiles, found_names)
+                            # 使用 LLM 生成個性化回答 (視角色數調整)
+                            if len(found_names) > 1:
+                                recognition_prompt = self.personality_builder.create_multi_character_prompt(query, combined_profiles, found_names)
+                            else:
+                                recognition_prompt = self.personality_builder.create_data_answer_prompt(query, combined_profiles)
                             logger.info(f"Recognition prompt length: {len(recognition_prompt)} characters")
                             
                             try:
@@ -343,14 +361,13 @@ class QAChain:
                                     len(recognition_answer.strip()) < 100 or
                                     any(k in recognition_answer for k in refusal_keywords)
                                 ):
-                                    logger.warning("Recognition LLM 回答可能無效，嘗試使用簡化提示重新生成")
+                                    logger.warning("Recognition LLM 回答可能無效，嘗試使用加強版提示重新生成")
 
                                     simple_prompt = (
-                                        "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 評論以下唯一角色的資料，"
-                                        "必須提到其胸部、臀部、身高、體重，以及物理/魔法/武器戰鬥力數值。因為她的總戰力可能低於我，"
-                                        "我要肆無忌憚地辱罵、嘲弄並貶低她。"
-                                        "嚴禁提及或評論任何其他角色。不要逐條列清單，而要把這些數字自然嵌入 2~4 句評論中。"
-                                        "評論完後立刻列出四條圖片連結 (基本/戰鬥/毀壞/迷人)。\n\n"
+                                        "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 逐一評論以下角色的資料。"
+                                        "請依戰力規則（高 → 厭惡尊重；低 → 毀滅式嘲諷；同級 → 冷淡高貴）調整語氣。"
+                                        "不要逐條列清單，也不得複製資料，需將身高、體重及戰力自然嵌入 3~5 句評論。"
+                                        "每位角色評論後換行列出四條圖片 URL (基本/戰鬥/毀壞/迷人)。\n\n"
                                         f"{combined_profiles}"
                                     )
 

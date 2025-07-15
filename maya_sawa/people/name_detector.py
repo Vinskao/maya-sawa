@@ -205,20 +205,64 @@ class NameDetector:
         """
         # 先使用 AI 提取人名
         extracted_names = self.extract_names_with_ai(question)
-        
+
+        # === NEW FALLBACK: 若 AI 未成功提取，嘗試從已知角色名單中直接掃描 ===
+        if not extracted_names:
+            # 1) 特殊處理 '誰是 X、Y' / 'who is X, Y' 這類列表式問題
+            pattern_tw = re.search(r"誰是([A-Za-z\u4e00-\u9fa5、,，\s]+)", question)
+            pattern_en = re.search(r"who is ([A-Za-z\u4e00-\u9fa5,\s]+)", question, re.IGNORECASE)
+            names_str = None
+            if pattern_tw:
+                names_str = pattern_tw.group(1)
+            elif pattern_en:
+                names_str = pattern_en.group(1)
+            if names_str:
+                # 使用常見分隔符切分
+                possible_names = re.split(r"[、,，和及與&\s]+", names_str)
+                for n in possible_names:
+                    n_clean = n.strip()
+                    if not n_clean:
+                        continue
+                    # 將第二人稱代詞映射為 Maya
+                    if n_clean in ["你", "妳", "you", "You"]:
+                        extracted_names.append("Maya")
+                        continue
+                    if n_clean not in ["你", "妳"]:
+                        extracted_names.append(n_clean)
+                logger.info(f"透過 '誰是/Who is' 解析捕捉到人名: {extracted_names}")
+
+        # 2) 若仍無結果且 get_known_names_func 可用，掃描已知人名
+        if not extracted_names and self.get_known_names_func:
+            known_names = self.get_known_names_func()
+            # 依照在問題中出現的順序保留順序
+            lowered_question = question.lower()
+            matched_names = []
+            for name in known_names:
+                if name and name.lower() != "maya" and name.lower() in lowered_question:
+                    matched_names.append(name)
+            if matched_names:
+                extracted_names.extend(matched_names)
+                logger.info(f"透過字面掃描補捉到人名: {matched_names}")
+
         # 檢查是否為關於 Maya 的身份詢問問題
         identity_questions = ["你是誰", "你叫什麼", "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜", "誰是ai", "誰是AI", "ai是誰", "AI是誰", "who is ai", "who is AI"]
         is_maya_identity_question = any(keyword in question.lower() for keyword in identity_questions)
-        
+
         # 只有在沒有提取到任何其他角色名稱，並且是身份詢問時，才將其視為對 Maya 的問題
         if not extracted_names and is_maya_identity_question:
             logger.info("檢測到純身份詢問問題（無其他角色），添加 Maya")
             extracted_names.append("Maya")
-        
+
         # 如果 AI 直接返回了 "Maya"，也要處理
         if "Maya" in extracted_names:
             logger.info("AI 直接識別出身份詢問，包含 Maya")
-        
+
+        # === 若問題中直接以第二人稱提及，補上 Maya ===
+        pronouns = ["你", "妳", "you", "You", "u", "U"]
+        if any(p in question for p in pronouns) and "Maya" not in extracted_names:
+            logger.info("問題中包含第二人稱，補充 Maya 至角色名單")
+            extracted_names.insert(0, "Maya")
+
         # 去重並返回
         unique_names = list(dict.fromkeys(extracted_names))  # 保持順序的去重
         logger.info(f"最終檢測到的角色名稱: {unique_names}")

@@ -34,11 +34,9 @@ except ImportError:  # pragma: no cover
     import types
     psycopg2 = types.ModuleType("psycopg2")  # type: ignore
 
-# Import connection pool
-from .connection_pool import get_pool_manager
-
-# Import config
-from .config import Config
+# Import connection pool & config from core package
+from maya_sawa.core.connection_pool import get_pool_manager
+from maya_sawa.core.config import Config
 
 # Import OpenAI for embeddings
 try:
@@ -541,6 +539,9 @@ class PeopleWeaponManager:
                         logger.info(f"Progress: {i + 1}/{total_records} ({progress:.1f}%) - {elapsed_time:.1f}s elapsed (embeddings: {embedding_count}, skipped: {skipped_count})")
                     
                 except Exception as e:
+                    # Roll back the current transaction so we can continue processing
+                    if conn:
+                        conn.rollback()
                     logger.error(f"Failed to process person {person.get('name', 'unknown')}: {str(e)}")
                     continue  # Continue with next record instead of failing completely
             
@@ -605,28 +606,29 @@ class PeopleWeaponManager:
                     
                     # Prepare data for insertion/update
                     data = {
-                        'name': weapon.get('owner'),
-                        'weapon_type': weapon.get('weapon'),  # Changed from 'weapon' to 'weapon_type'
+                        'owner': weapon.get('owner'),
+                        'weapon': weapon.get('weapon'),
                         'attributes': weapon.get('attributes'),
                         'base_damage': weapon.get('baseDamage'),
                         'bonus_damage': weapon.get('bonusDamage'),
                         'bonus_attributes': weapon.get('bonusAttributes'),
                         'state_attributes': weapon.get('stateAttributes'),
                         'embedding': embedding,
+                        'created_at': datetime.now(),
                         'updated_at': datetime.now()
                     }
                     
                     # Use UPSERT (INSERT ... ON CONFLICT UPDATE)
                     query = """
                     INSERT INTO weapon (
-                        name, weapon_type, attributes, base_damage, bonus_damage,
-                        bonus_attributes, state_attributes, embedding, updated_at
+                        owner, weapon, attributes, base_damage, bonus_damage,
+                        bonus_attributes, state_attributes, embedding, created_at, updated_at
                     ) VALUES (
-                        %(name)s, %(weapon_type)s, %(attributes)s, %(base_damage)s, %(bonus_damage)s,
-                        %(bonus_attributes)s, %(state_attributes)s, %(embedding)s, %(updated_at)s
+                        %(owner)s, %(weapon)s, %(attributes)s, %(base_damage)s, %(bonus_damage)s,
+                        %(bonus_attributes)s, %(state_attributes)s, %(embedding)s, %(created_at)s, %(updated_at)s
                     )
-                    ON CONFLICT (name) DO UPDATE SET
-                        weapon_type = EXCLUDED.weapon_type,
+                    ON CONFLICT (owner) DO UPDATE SET
+                        weapon = EXCLUDED.weapon,
                         attributes = EXCLUDED.attributes,
                         base_damage = EXCLUDED.base_damage,
                         bonus_damage = EXCLUDED.bonus_damage,
@@ -650,6 +652,9 @@ class PeopleWeaponManager:
                         logger.info(f"Progress: {i + 1}/{total_records} ({progress:.1f}%) - {elapsed_time:.1f}s elapsed")
                     
                 except Exception as e:
+                    # Roll back the current transaction so we can continue processing
+                    if conn:
+                        conn.rollback()
                     logger.error(f"Failed to process weapon {weapon.get('weapon', 'unknown')}: {str(e)}")
                     continue  # Continue with next record instead of failing completely
             

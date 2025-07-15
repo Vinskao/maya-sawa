@@ -41,8 +41,9 @@ from langchain.schema import Document
 from ..core.postgres_store import PostgresVectorStore
 from ..core.qa_chain import QAChain
 from ..core.chat_history import ChatHistoryManager
-from ..core.people import sync_data
 from ..core.config import Config
+from ..people import PeopleWeaponManager
+from ..people import sync_data
 
 # ==================== 翻譯功能 ====================
 async def translate_to_english(text: str) -> str:
@@ -753,8 +754,6 @@ async def search_people_by_semantics(request: PeopleSearchRequest):
         HTTPException: 當搜索失敗時拋出 HTTP 異常
     """
     try:
-        from ..core.people import PeopleWeaponManager
-        
         # 初始化人員管理器
         manager = PeopleWeaponManager()
         

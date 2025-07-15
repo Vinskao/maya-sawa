@@ -10,11 +10,14 @@ Markdown Q&A System - 角色資料管理模組
 # 標準庫導入
 import os
 import logging
-import httpx
+try:
+    import httpx  # type: ignore
+except ImportError:  # pragma: no cover
+    httpx = None  # type: ignore
 from typing import Dict, List, Optional
 
 # 本地導入
-from .config import Config
+from ..core.config import Config
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
