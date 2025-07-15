@@ -25,9 +25,10 @@ class QAChain:
         
         # 初始化組件
         self.self_name = "Maya"  # 預設系統主角名稱，可被外部覆寫
-        self.name_detector = NameDetector(llm=self.llm, get_known_names_func=self._get_known_names)
+        self.name_detector = NameDetector(llm=self.llm, get_known_names_func=self._get_known_names, self_name=self.self_name)
         self.profile_manager = ProfileManager()
-        self.personality_builder = PersonalityPromptBuilder()
+        # Personality builder 依 self_name 初始化，並共用 profile_manager
+        self.personality_builder = PersonalityPromptBuilder(self.self_name, self.profile_manager)
         self.people_manager = PeopleWeaponManager()
         self.name_adapter = NameAdapter()
         
@@ -51,33 +52,33 @@ class QAChain:
             people_data = self.people_manager.fetch_people_data()
             if people_data:
                 names = [person.get('name', '') for person in people_data if person.get('name')]
-                # 添加 Maya 作為系統內建角色
-                if 'Maya' not in names:
-                    names.append('Maya')
+                # 添加 self_name 作為系統內建角色
+                if self.self_name not in names:
+                    names.append(self.self_name)
                 return names
             else:
-                # 如果無法獲取，至少返回 Maya
-                return ['Maya']
+                # 如果無法獲取，至少返回當前主角名稱
+                return [self.self_name]
         except Exception as e:
             logger.error(f"獲取已知角色名稱時發生錯誤: {str(e)}")
-            # 如果發生錯誤，至少返回 Maya
-            return ['Maya']
+            # 如果發生錯誤，至少返回當前主角名稱
+            return [self.self_name]
 
     def _create_dynamic_prompt(self):
         """
         創建動態提示模板
         """
-        # 獲取 Maya 的個人資料
-        maya_profile = self.profile_manager.get_profile_summary()
+        # 取得主角的個人資料摘要（依目前 self.self_name）
+        self_profile = self.profile_manager.get_profile_summary(self.self_name)
         
         # 創建提示模板
         self.prompt_template = PromptTemplate(
             input_variables=["context", "question"],
-            template=f"""你是 Maya，一個來自遠古合成惑星的女武神。以下是你的基本資料：
+            template=f"""妳/你是 {self.self_name}。以下是你的基本資料：
 
-{maya_profile}
+{self_profile}
 
-請以 Maya 的身份回答問題，保持你的個性和語氣。回答要自然、有趣，不要直接複製資料內容。
+請以 {self.self_name} 的身份回答問題，保持你的個性和語氣。回答要自然、有趣，不要直接複製資料內容。
 
 如果提供了上下文資料，請基於這些資料回答問題。如果沒有提供上下文，請基於你的知識回答。
 
@@ -90,11 +91,11 @@ class QAChain:
 
     def refresh_profile(self):
         """
-        刷新 Maya 的個人資料
+        刷新 self_name 的個人資料
         """
         self.profile_manager.refresh_profile()
         self._create_dynamic_prompt()
-        logger.info("Maya 個人資料已刷新")
+        logger.info("self 個人資料已刷新")
 
     def refresh_other_profile(self, name: str):
         """
@@ -113,7 +114,7 @@ class QAChain:
         self.profile_manager.clear_all_profiles_cache()
         logger.info("所有個人資料快取已清除")
 
-    def get_answer(self, query: str, documents: List[Document], self_name: str = "Maya") -> Dict:
+    def get_answer(self, query: str, documents: List[Document], self_name: Optional[str] = None) -> Dict:
         """
         獲取問題的答案
         
@@ -129,6 +130,11 @@ class QAChain:
             if self_name and self_name != self.self_name:
                 logger.info(f"更新主角名稱: {self.self_name} -> {self_name}")
                 self.self_name = self_name
+                # 同步至 NameDetector 與 PersonalityPromptBuilder
+                self.name_detector.self_name = self_name
+                self.name_detector._main_lower = self_name.lower()
+                self.personality_builder.self_name = self_name
+                self.personality_builder._main_lower = self_name.lower()
             
             # 檢測問題中提到的角色名稱
             detected_names = self.name_detector.detect_all_queried_names(query)
@@ -138,28 +144,28 @@ class QAChain:
             if detected_names:
                 logger.info("檢測到角色名稱，處理角色相關問題")
                 
-                # 分離 Maya 和其他角色
-                maya_names = [name for name in detected_names if name.lower() == "maya" or name in ["佐和", "真夜"]]
-                other_names = [name for name in detected_names if name not in maya_names]
+                # 分離 self 和其他角色
+                self_names = [name for name in detected_names if name.lower() == self.self_name.lower()]
+                other_names = [name for name in detected_names if name.lower() != self.self_name.lower()]
                 
-                logger.info(f"Maya 相關角色: {maya_names}, 其他角色: {other_names}")
+                logger.info(f"self 相關角色: {self.self_name}, 其他角色: {other_names}")
                 
                 # 收集所有角色的資料
                 all_profiles = []
                 found_names = []
                 not_found = []
                 
-                # 處理 Maya 相關問題
-                if maya_names:
-                    logger.info("處理 Maya 相關問題")
-                    maya_summary = self.profile_manager.get_profile_summary()
-                    if maya_summary:
-                        all_profiles.append(f"=== Maya 的資料 ===\n{maya_summary}")
-                        found_names.append("Maya")
-                        logger.info("Maya 資料已添加")
+                # 處理 self 相關問題
+                if self_names:
+                    logger.info("處理 self 相關問題")
+                    self_summary = self.profile_manager.get_profile_summary(self.self_name)
+                    if self_summary:
+                        all_profiles.append(f"=== {self.self_name} 的資料 ===\n{self_summary}")
+                        found_names.append(self.self_name)
+                        logger.info(f"{self.self_name} 資料已添加")
                     else:
-                        not_found.append("Maya")
-                        logger.warning("無法找到 Maya 的資料")
+                        not_found.append(self.self_name)
+                        logger.warning(f"無法找到 {self.self_name} 的資料")
                 
                 # 處理其他角色問題
                 for name in other_names:
@@ -197,16 +203,16 @@ class QAChain:
                     else:
                         # === 根據角色數量選擇不同 prompt ===
                         if len(found_names) > 1:
-                            if "Maya" in found_names and len(found_names) > 1:
-                                # 分離 Maya 以外的資料供評論
+                            if self.self_name in found_names and len(found_names) > 1:
+                                # 分離 self 以外的資料供評論
                                 other_profiles_block = "\n\n".join([
-                                    p for p in all_profiles if not p.startswith("=== Maya") and not p.startswith("=== 佐和")
+                                    p for p in all_profiles if not p.startswith(f"=== {self.self_name}")
                                 ])
                                 summary_prompt = self.personality_builder.create_self_and_other_prompt(
                                     query,
-                                    maya_summary if 'maya_summary' in locals() else self.profile_manager.get_profile_summary(),
+                                    self_summary if 'self_summary' in locals() else self.profile_manager.get_profile_summary(),
                                     other_profiles_block,
-                                    [n for n in found_names if n.lower() != "maya"]
+                                    [n for n in found_names if n.lower() != self.self_name.lower()]
                                 )
                             else:
                                 summary_prompt = self.personality_builder.create_multi_character_prompt(query, combined_profiles, found_names)
@@ -233,7 +239,7 @@ class QAChain:
                             ):
                                 logger.warning("LLM 回答可能無效，嘗試使用加強版提示重新生成")
                                 simple_prompt = (
-                                    "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 逐一評論以下角色的資料。"
+                                    f"以第一人稱 ({self.self_name}) 逐一評論以下角色的資料。"
                                     "對每位角色請根據戰力規則調整態度：Wavo → 臣服；總戰力高於我 → 厭惡但尊重；"
                                     "總戰力低於我 → 肆無忌憚地辱罵、貶低、壓制；與我相當 → 冷淡高貴。"
                                     "嚴禁逐條列清單或複製資料，必須把胸部、臀部、身高、體重及三項戰力自然嵌入 3~5 句評論。"
@@ -286,14 +292,16 @@ class QAChain:
                         "found_characters": []
                     }
             
-            # 特殊處理：身份詢問問題和針對 Maya 的個人資訊問題
+            # 特殊處理：身份詢問問題和針對 self_name 的個人資訊問題
             # 身份詢問關鍵詞（中文 & 英文常見寫法）
+            lower_self = self.self_name.lower()
             identity_questions = [
-                "你是誰", "你叫什麼", "妳是誰", "妳叫什麼",  # 中文
-                "who are you", "who r u", "who are u",           # 英文
-                "誰是maya", "誰是Maya", "誰是佐和", "誰是真夜"
+                "你是誰", "你叫什麼", "妳是誰", "妳叫什麼",
+                "who are you", "who r u", "who are u",
+                f"誰是{lower_self}", f"誰是{self.self_name}",
+                f"who is {lower_self}", f"who is {self.self_name}"
             ]
-            maya_personal_questions = ["你身高", "你體重", "你年齡", "你生日", "你身材", "你胸部", "你臀部", 
+            self_personal_questions = ["你身高", "你體重", "你年齡", "你生日", "你身材", "你胸部", "你臀部", 
                                      "你興趣", "你喜歡", "你討厭", "你最愛", "你食物", "你個性", "你性格", 
                                      "你職業", "你工作", "你種族", "你編號", "你代號", "你原名", "你部隊", 
                                      "你部門", "你陣營", "你戰鬥力", "你物理", "你魔法", "你武器", "你戰鬥", 
@@ -367,7 +375,7 @@ class QAChain:
                                     logger.warning("Recognition LLM 回答可能無效，嘗試使用加強版提示重新生成")
 
                                     simple_prompt = (
-                                        "以冷淡、高貴、不耐的語氣，用第一人稱 (Maya Sawa) 逐一評論以下角色的資料。"
+                                        "以第一人稱逐一評論以下角色的資料。"
                                         "請依戰力規則（高 → 厭惡尊重；低 → 毀滅式嘲諷；同級 → 冷淡高貴）調整語氣。"
                                         "不要逐條列清單，也不得複製資料，需將身高、體重及戰力自然嵌入 3~5 句評論。"
                                         "每位角色評論後換行列出四條圖片 URL (基本/戰鬥/毀壞/迷人)。\n\n"
@@ -427,15 +435,15 @@ class QAChain:
             is_maya_question = (
                 not detected_names and  # 沒有檢測到其他角色
                 (any(keyword in query.lower() for keyword in identity_questions) or  # 身份詢問
-                 any(keyword in query for keyword in maya_personal_questions))  # 針對 Maya 的個人資訊
+                 any(keyword in query for keyword in self_personal_questions))  # 針對 self 的個人資訊
             )
             
             if is_maya_question:
-                logger.info("檢測到針對 Maya 的問題（身份詢問或個人資訊），使用個人資料回答")
-                maya_summary = self.profile_manager.get_profile_summary()
+                logger.info(f"檢測到針對 {self.self_name} 的問題（身份詢問或個人資訊），使用個人資料回答")
+                self_summary = self.profile_manager.get_profile_summary(self.self_name)
                 
                 # 使用 LLM 生成不耐煩但完整的回答
-                identity_prompt = self.personality_builder.create_identity_prompt(query, maya_summary)
+                identity_prompt = self.personality_builder.create_identity_prompt(query, self_summary)
                 
                 try:
                     identity_answer = self.llm.invoke(identity_prompt)
@@ -444,15 +452,15 @@ class QAChain:
                     return {
                         "answer": identity_answer,
                         "sources": [],
-                        "found_characters": ["Maya"]
+                        "found_characters": [self.self_name]
                     }
                 except Exception as e:
                     logger.error(f"生成身份回答時發生錯誤: {str(e)}")
                     # 如果生成失敗，回退到原始資料
                     return {
-                        "answer": maya_summary,
+                        "answer": self_summary,
                         "sources": [],
-                        "found_characters": ["Maya"]
+                        "found_characters": [self.self_name]
                     }
             
             # 特殊處理：人員語義搜索（當問題涉及人員但沒有明確提到具體人名時）

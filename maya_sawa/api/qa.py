@@ -67,7 +67,7 @@ async def translate_to_english(text: str) -> str:
 
 翻譯要求：
 1. 保持原文的語氣和風格
-2. 如果是 Maya 的回答，保持她冷淡高貴的語氣
+2. 如果是 self_name 的回答，保持她冷淡高貴的語氣
 3. 如果是角色描述，保持生動的描述風格
 4. 確保翻譯準確且自然
 
@@ -441,6 +441,8 @@ async def query_document(request: QueryRequest):
         HTTPException: 當查詢失敗時拋出 HTTP 異常
     """
     try:
+        # === DEBUG: 印出前端傳入的原始 JSON ===
+        logger.info(f"/qa/query payload: {request.dict()}")
         # 獲取核心組件實例
         vector_store = get_vector_store()
         qa_chain = get_qa_chain()

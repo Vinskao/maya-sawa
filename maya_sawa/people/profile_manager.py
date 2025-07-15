@@ -22,15 +22,19 @@ from ..core.config import Config
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
 
+# 支援動態 self_name
 class ProfileManager:
     """
     負責角色資料API存取、快取、summary、角色名單
     """
     
-    def __init__(self):
+    def __init__(self, self_name: str = "self_name"):
         """
         初始化角色資料管理器
         """
+        # 主角名稱，可被外部設定
+        self.self_name = self_name
+
         # 初始化快取
         self._profile_cache = None
         self._profile_summary_cache = None
@@ -61,14 +65,15 @@ class ProfileManager:
             logger.error(f"Failed to fetch {name}'s profile: {str(e)}")
             return None
 
-    def fetch_maya_profile(self) -> Optional[Dict]:
+    # 取得主角個人資料
+    def fetch_self_profile(self) -> Optional[Dict]:
         """
-        從 API 獲取 Maya 的個人資料
+        從 API 獲取 self 的個人資料
         
         Returns:
-            Optional[Dict]: Maya 的個人資料，如果獲取失敗則返回 None
+            Optional[Dict]: self_name 的個人資料，如果獲取失敗則返回 None
         """
-        return self.fetch_profile("Maya")
+        return self.fetch_profile(self.self_name)
 
     def create_profile_summary(self, profile: Dict, name: str = None) -> str:
         """
@@ -132,7 +137,7 @@ class ProfileManager:
 - 迷人圖片：{ravishing_image_url}
 """
 
-    def get_profile_summary(self, name: str = "Maya") -> str:
+    def get_profile_summary(self, name: str = None) -> str:
         """
         獲取個人資料摘要，使用緩存避免重複 API 調用
         
@@ -142,17 +147,20 @@ class ProfileManager:
         Returns:
             str: 個人資料摘要
         """
-        if name.lower() == "maya":
-            # Maya 使用特殊快取
+        if name is None:
+            name = self.self_name
+
+        if name.lower() == self.self_name.lower():
+            # self_name 使用特殊快取
             if self._profile_summary_cache is None:
-                profile = self.fetch_maya_profile()
+                profile = self.fetch_self_profile()
                 if profile:
                     self._profile_cache = profile
                     self._profile_summary_cache = self.create_profile_summary(profile)
                 else:
                     # 如果無法獲取資料，使用預設摘要
-                    self._profile_summary_cache = """
-佐和真夜（Maya Sawa）的個人資料：
+                    self._profile_summary_cache = f"""
+{self.self_name} 的個人資料：
 - 無法從 API 獲取最新資料，請檢查網路連接或 API 狀態
 """
             return self._profile_summary_cache
@@ -212,7 +220,7 @@ class ProfileManager:
             names = response.json()
             if isinstance(names, list):
                 # 過濾掉 Maya（因為她是系統內建角色）
-                filtered_names = [name for name in names if name.lower() != "maya"]
+                filtered_names = [name for name in names if name.lower() != self.self_name.lower()]
                 logger.info(f"從 API 獲取到 {len(filtered_names)} 個其他角色名字")
                 
                 # 緩存結果
@@ -227,15 +235,18 @@ class ProfileManager:
             # 發生錯誤時返回空列表
             return []
 
-    def refresh_profile(self, name: str = "Maya"):
+    def refresh_profile(self, name: str = None):
         """
         刷新指定角色的個人資料緩存
         
         Args:
             name (str): 角色名稱，預設為 "Maya"
         """
-        if name.lower() == "maya":
-            logger.info("Refreshing Maya's profile from API")
+        if name is None:
+            name = self.self_name
+
+        if name.lower() == self.self_name.lower():
+            logger.info(f"Refreshing {self.self_name}'s profile from API")
             self._profile_cache = None
             self._profile_summary_cache = None
         else:

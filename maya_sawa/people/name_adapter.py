@@ -22,18 +22,6 @@ class NameAdapter:
         """
         初始化名稱適配器
         """
-        # 特殊名稱映射（小寫 -> 正確格式）
-        self.special_names = {
-            "maya": "Maya",
-            "佐和": "Maya", 
-            "真夜": "Maya",
-            "sorane": "Sorane",
-            "wavo": "Wavo",
-            "alice": "Alice",
-            "bob": "Bob",
-            "ai": "Maya"  # 將 AI 視為系統角色 Maya 的別稱
-        }
-        
         # 常見的問句模式
         self.recognition_patterns = [
             r"你認識(.+?)[嗎麼不？]",
@@ -65,12 +53,7 @@ class NameAdapter:
         # 移除常見標點符號（包括中英文）
         clean_name = re.sub(r"[\s,，。!！?？;；:：'\"\(\)\[\]{}]+", "", clean_name)
         
-        # 檢查特殊名稱映射
-        lower_name = clean_name.lower()
-        if lower_name in self.special_names:
-            return self.special_names[lower_name]
-        
-        # 一般名稱處理：首字母大寫，其餘小寫
+        # 不再使用特殊名稱映射，直接首字大寫
         if len(clean_name) > 0:
             return clean_name[0].upper() + clean_name[1:].lower()
         

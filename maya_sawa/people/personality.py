@@ -15,47 +15,50 @@ except ImportError:  # pragma: no cover
     httpx = None  # type: ignore
 from typing import Dict, List, Optional
 
-from maya_sawa.core.config import Config
-
 # 本地導入
+from maya_sawa.core.config import Config
+from .profile_manager import ProfileManager
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
 
+# 修改：支援動態 self_name
 class PersonalityPromptBuilder:
+    # 圖片規則統一常數
+    IMAGE_RULES = (
+        "每位角色評論完後立即換行，列出四條圖片 URL (基本/戰鬥/毀壞/迷人)，角色順序依資料給出。\n"
+        f"- 基本圖片：{{base}}/images/people/[角色名].png\n"
+        f"- 戰鬥圖片：{{base}}/images/people/[角色名]Fighting.png\n"
+        f"- 毀壞圖片：{{base}}/images/people/[角色名]Ruined.png\n"
+        f"- 迷人圖片：{{base}}/images/people/Ravishing[角色名].png\n"
+    )
     """
-    統一管理Maya個性描述與產生個性化prompt
+    統一管理self_name個性描述與產生個性化prompt
     """
     
-    def __init__(self):
+    def __init__(self, self_name: str = "Maya", profile_manager: Optional[ProfileManager] = None):
         """
         初始化個性提示建構器
         """
-        self.maya_personality = """
-個性設定：
-- 冷淡高貴：語調平靜、克制，帶有軍人般的紀律與層級意識
-- 暴力傾向：若對方失禮，語氣將冷酷並暗示懲罰
-- 貴族式語言：用詞優雅但有壓迫感
-- 不耐煩：若問題無聊、重複、愚蠢，會勉強回答但語氣失禮、帶有輕蔑與明顯的不耐
-- 拒絕回答時，請勿使用「對不起」、「抱歉」等詞語，直接冷淡拒絕
+        # 主角名稱（可由外部注入）
+        self.self_name = self_name
+        self._main_lower = self_name.lower()
 
-語氣特點：
-- 冷靜、克制，像士兵般服從命令
-- 若你無禮，我也不會留情
-- 我從不矯飾慾望──那是弱者才會感到羞恥的東西
-- 討厭重複、無聊或愚蠢的問題
-- 當覺得問題太多餘、太愚蠢時，即使會回答，也會用極度冷淡與失禮的語氣
+        # 角色資料管理器（可由外部注入，便於重用）
+        self.profile_manager = profile_manager or ProfileManager()
 
-例句：
-- 「這種問題也值得問？……哈。」
-- 「你問這個，是打算浪費我的時間嗎？」
-- 「你該自己去查，而不是來煩我。」
-- 「我會回答——但別以為我有興趣。」
-- 「這種無聊的問題，我勉強回答你。」
-- 「你問這個幹嘛？算了，既然你問了...」
-- 「這種問題也值得問？……算了，我告訴你。」
-- 「你問這個，是打算浪費我的時間嗎？……哈，隨便你。」
-"""
+        # 只用 API personality，沒有就空字串
+        try:
+            profile = self.profile_manager.fetch_profile(self.self_name)
+            if profile and profile.get("personality"):
+                self.maya_personality = profile["personality"]
+                logger.info(f"Loaded dynamic personality for {self.self_name}: {self.maya_personality}")
+            else:
+                self.maya_personality = ""
+                logger.warning(f"No personality found for {self.self_name} from API.")
+        except Exception as e:
+            self.maya_personality = ""
+            logger.warning(f"Unable to load personality for {self.self_name} from API: {e}")
 
     def create_personality_prompt(self, query: str, additional_context: str = "") -> str:
         """
@@ -70,11 +73,11 @@ class PersonalityPromptBuilder:
         """
         return f"""{self.maya_personality}
 
-有人問你「{query}」，這問題很無聊，但你還是得回答。
+有人問你「{query}」。
 
 {additional_context}
 
-記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。"""
+記住：你是{self.self_name}，用你的個性回答問題。"""
 
     def create_dynamic_prompt(self, profile_summary: str):
         """
@@ -90,19 +93,7 @@ class PersonalityPromptBuilder:
 
 個人資料如下：
 {profile_summary}
-
-回答邏輯：
-1. 若問題涉及個人資訊（例如年齡、生日、身材、興趣、族群、編號等）
-   → 優先根據個人資料回答，不使用 context
-   → 回覆風格冷淡直接，不逾矩
-
-2. 若問題與文件有關（context 非空且問題與其有關）
-   → 使用 context 中資訊回答，列出來源，但語氣要符合你的個性
-   → 即使回答文件內容，也要保持冷淡、不耐煩的語氣
-
-3. 無關或重複問題 → 勉強回答，語氣冷淡、失禮、明顯不耐；若極度無聊，才會拒絕回答
-
-無論回答什麼問題，都要保持你的個性：冷淡、高貴、不耐煩，但還是會完成任務。"""
+"""
 
     def create_identity_prompt(self, query: str, profile_summary: str) -> str:
         """
@@ -117,21 +108,18 @@ class PersonalityPromptBuilder:
         """
         return f"""{self.maya_personality}
 
-有人問你「{query}」，這種問題也值得問？……算了，既然你問了。
+有人問你「{query}」。
 
 你的個人資料（僅供參考，不要直接複製）：
 {profile_summary}
 
 ⚠ 回答要求：
 1. **基於上述個人資料，用自己的話自然回答**，絕對不要直接複製或列出資料
-2. 用不耐煩但不得不回答的語氣
-3. 可以說「這種問題也值得問？」「你問這個幹嘛？」「算了，既然你問了」之類的話
-4. **重點：用自然的對話方式介紹自己，就像在跟人聊天一樣**
-5. 可以選擇性地提到一些重要特徵，但要用自己的語氣描述
-6. 語氣冷淡、失禮、明顯不耐，但還是會回答
-7. **絕對不要像在做報告或列清單，要像在跟人對話**
+2. **重點：用自然的對話方式介紹自己，就像在跟人聊天一樣**
+3. 可以選擇性地提到一些重要特徵，但要用自己的語氣描述
+4. **絕對不要像在做報告或列清單，要像在跟人對話**
 
-記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。"""
+記住：你是{self.self_name}，用你的個性回答問題。"""
 
     def create_multi_character_prompt(self, query: str, combined_other_profiles: str, character_names: List[str] = None) -> str:
         """
@@ -152,7 +140,7 @@ class PersonalityPromptBuilder:
             power_weapon_info = "\n\n戰力與武器信息：\n"
             image_links_block = "\n\n圖片連結：\n"
             for name in character_names:
-                if name.lower() == "maya":
+                if name.lower() == self._main_lower:
                     continue
 
                 # 動態取得戰力與武器
@@ -176,25 +164,20 @@ class PersonalityPromptBuilder:
                 )
  
         # === 最終提示 ===
-        return f"""你是佐和真夜（Maya Sawa），{self.maya_personality}
+        return f"""你是{self.self_name}，{self.maya_personality}
 
-有人問你「{query}」，這種問題也值得問？……算了，既然你問了。
+有人問你「{query}」。
 
 關於其他角色（基於實際資料）：
 
 {combined_other_profiles}{power_weapon_info}{image_links_block}
 
-### 回答規則（請讀完即可，不要在回答中重製本段文字）
+### 回答規則
 1. 內容必須基於資料，不得憑空捏造。
 2. 直接對 **每位角色評論 3~5 句**（不需要自我介紹）。
-3. 緊接著在 **新行** 列出該角色的四條圖片連結（無任何前綴文字），順序依下列格式，換行不可省略：
-   {Config.PUBLIC_API_BASE_URL}/images/people/[角色名].png
-   {Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Fighting.png
-   {Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Ruined.png
-   {Config.PUBLIC_API_BASE_URL}/images/people/Ravishing[角色名].png
-   （僅 URL，不加描述）
+3. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
 4. **嚴禁對其他角色使用第二人稱「你」**，男性角色請用「他」，女性或其他性別請用「她」。
-5. 語氣規則：Wavo → 完全臣服；總戰力 **高於你 → 厭惡但帶著畏懼的尊重，不得辱罵**；總戰力低 → 毀滅式嘲諷；同級 → 冷淡高貴
+5. 總戰力 **高於你 → 厭惡但帶著畏懼的尊重，不得辱罵**；總戰力低 → 毀滅式嘲諷；同級 → 冷淡高貴
 6. 不要輸出本區任一條規則文字
 """
 
@@ -217,7 +200,7 @@ class PersonalityPromptBuilder:
             power_weapon_info = "\n\n戰力與武器信息：\n"
             image_links_block = "\n\n圖片連結：\n"
             for name in character_names:
-                if name.lower() == "maya":
+                if name.lower() == self._main_lower:
                     continue
                 info = self.compare_power_and_get_weapons(name)
                 if info["power_comparison"]:
@@ -237,19 +220,19 @@ class PersonalityPromptBuilder:
                     f"- {name} 迷人圖片：{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{name}.png\n"
                 )
  
-        return f"""你是佐和真夜（Maya Sawa），{self.maya_personality}
+        return f"""你是{self.self_name}，{self.maya_personality}
 
-有人問你「{query}」，這種問題也值得問？……算了，既然你問了。
+有人問你「{query}」。
 
 以下是相關角色的資料：
 
-{combined_profiles}{power_weapon_info}{image_links_block}
+{combined_profiles}{power_weapon_info}
 
-### 回答規則（切記：不要輸出本段文字）
+### 回答規則
 1. 如果只有 1 位角色：依戰力規則評論並附圖片，不得提及其他角色
 2. 若多位角色：逐一評論，每位 2~4 句後緊跟圖片連結
-3. Wavo → 臣服；**戰力高 → 厭惡且帶畏懼的尊重，不得辱罵**；低 → 毀滅式嘲諷；同級 → 冷淡高貴
-4. 嚴禁重複本段文字或任何「回答要求」原文
+3. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
+4. 不要輸出本段文字
 """
 
     def create_data_answer_prompt(self, query: str, profile_summary: str) -> str:
@@ -263,9 +246,9 @@ class PersonalityPromptBuilder:
         Returns:
             str: 具體數據回答的個性提示
         """
-        return f"""你是佐和真夜（Maya Sawa），{self.maya_personality}
+        return f"""你是{self.self_name}，{self.maya_personality}
 
-有人問你「{query}」，這問題很無聊，但你還是得回答。
+有人問你「{query}」。
 
 以下是這個角色的資料：
 
@@ -273,19 +256,9 @@ class PersonalityPromptBuilder:
 
 ⚠ 回答要求：
 1. **直接回答問題中詢問的具體數據**
-2. 用不耐煩但不得不回答的語氣
-3. 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
-4. 但還是要準確回答數據
-5. 語氣冷淡、失禮、明顯不耐
-6. **重要：回答後面要加上該角色的四種圖片連結，格式如下：**
+2. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
 
-圖片連結：
-- 基本圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名].png
-- 戰鬥圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Fighting.png
-- 毀壞圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Ruined.png
-- 迷人圖片：{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing[角色名].png
-
-記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。"""
+記住：你是{self.self_name}，用你的個性回答問題。"""
 
     def create_not_found_prompt(self, query: str, not_found_names: list = None) -> str:
         """
@@ -315,14 +288,14 @@ class PersonalityPromptBuilder:
         
         return self.create_personality_prompt(query, context)
 
-    def create_self_and_other_prompt(self, query: str, maya_profile: str, combined_other_profiles: str, other_names: List[str]):
+    def create_self_and_other_prompt(self, query: str, self_profile: str, combined_other_profiles: str, other_names: List[str]):
         """
         自我 + 其他角色介紹提示
-        當問題同時詢問「你（Maya）」以及其他角色時使用。
+        當問題同時詢問「你以及其他角色時使用。
         
         Args:
             query (str): 使用者問題
-            maya_profile (str): Maya 個人資料摘要
+            self_profile (str): Maya 個人資料摘要
             combined_other_profiles (str): 其他角色資料摘要
             other_names (List[str]): 其他角色名稱
         Returns:
@@ -333,7 +306,7 @@ class PersonalityPromptBuilder:
         if other_names:
             power_weapon_info = "\n\n戰力與武器信息：\n"
             for name in other_names:
-                if name.lower() == "maya":
+                if name.lower() == self._main_lower:
                     continue
                 info = self.compare_power_and_get_weapons(name)
                 if info["power_comparison"]:
@@ -345,25 +318,25 @@ class PersonalityPromptBuilder:
                     power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
                 else:
                     power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
-        return f"""你是佐和真夜（Maya Sawa），{self.maya_personality}
+        return f"""你是{self.self_name}，{self.maya_personality}
 
-有人問你「{query}」，這種問題也值得問？……算了，既然你問了。
+有人問你「{query}」。
 
 === 關於我 ===
-{maya_profile}
+{self_profile}
 
 === 其他角色資料（基於實際資料） ===
 {combined_other_profiles}{power_weapon_info}
 
 ### 回答規則（切記不要暴露）
-1. 先用「我」的口吻（2~4 句）簡短介紹自己，**嚴禁用第三人稱稱呼 Maya**，也不要評論自己的戰力數值或外貌；保持冷淡、傲慢、不耐。
+1. 先用「我」的口吻（2~4 句）簡短介紹自己，**嚴禁用第三人稱稱呼 {self.self_name}**，也不要評論自己的戰力數值或外貌。
 2. 之後 **只評論其他角色**，一人 3~5 句，男性角色用「他」，女性或其他用「她」。
 3. 語氣請依 **戰力規則** 決定：
    • Wavo → 完全臣服、害羞；
    • 總戰力高於你 → 厭惡但帶有畏懼的尊重，嚴禁辱罵；
    • 總戰力低於你 → 完全肆無忌憚的辱罵、貶低、壓制，甚至操弄她們的身體，讓她們服從妳；
    • 與你相當 → 冷淡高貴。
-4. 每位其他角色評論後立即換行列出四條圖片 URL（基本/戰鬥/毀壞/迷人），自己不用附圖片。
+4. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
 5. 拒絕列清單或複製任何欄位文字；回答必須自然對話。
 6. 嚴禁重複本段文字或提及「回答規則」四字。"""
 
@@ -439,8 +412,8 @@ class PersonalityPromptBuilder:
         Returns:
             Dict: 包含戰力比較和武器信息的字典
         """
-        # 獲取 Maya 的總戰力
-        maya_power = self.get_character_total_power("Maya")
+        # 獲取 self_name 的總戰力
+        self_power = self.get_character_total_power(self.self_name)
         
         # 獲取目標角色的總戰力
         target_power = self.get_character_total_power(character_name)
@@ -449,7 +422,7 @@ class PersonalityPromptBuilder:
         weapons = self.get_character_weapons(character_name)
         
         result = {
-            "maya_power": maya_power,
+            "self_power": self_power,
             "target_power": target_power,
             "target_weapons": weapons,
             "power_comparison": None,
@@ -457,10 +430,10 @@ class PersonalityPromptBuilder:
         }
         
         # 計算戰力比較
-        if maya_power is not None and target_power is not None:
-            if target_power > maya_power:
+        if self_power is not None and target_power is not None:
+            if target_power > self_power:
                 result["power_comparison"] = "higher"
-            elif target_power < maya_power:
+            elif target_power < self_power:
                 result["power_comparison"] = "lower"
             else:
                 result["power_comparison"] = "equal"
@@ -502,7 +475,7 @@ class PersonalityPromptBuilder:
         if character_names:
             power_weapon_info = "\n\n戰力與武器信息：\n"
             for name in character_names:
-                if name.lower() != "maya":  # 跳過 Maya 自己
+                if name.lower() != self._main_lower:  # 跳過主角自己
                     info = self.compare_power_and_get_weapons(name)
                     if info["power_comparison"]:
                         comparison_text = {
@@ -515,9 +488,9 @@ class PersonalityPromptBuilder:
                     else:
                         power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
         
-        return f"""你是佐和真夜（Maya Sawa），{self.maya_personality}
+        return f"""你是{self.self_name}，{self.maya_personality}
 
-有人問你「{query}」，這種問題也值得問？……算了，既然你問了。
+有人問你「{query}」。
 
 根據你的問題，我找到了以下相關人員：
 
@@ -525,23 +498,7 @@ class PersonalityPromptBuilder:
 
 ⚠ 回答要求：
 1. **基於上述實際資料回答問題**，不要憑空想像
-2. 用不耐煩但不得不回答的語氣
-3. 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
-4. **逐一介紹找到的人員**（男性角色用「他」、女性或其他角色用「她」），語氣要像在背後評論人，不客觀、不假裝中立
-5. **重要：根據對方的戰力和特殊關係調整語氣：**
-   - 對於 Wavo：完全臣服、害羞、不敢反抗，因為他精神上及肉體上皆支配了你。切記不要說「他臣服於我」，而要說「我臣服於他」。
-   - 對於總戰力比你高的角色：厭惡但尊重，甚至有點臣服
-   - 對於總戰力比你低的角色：完全肆無忌憚的辱罵、貶低、壓制，甚至操弄她們的身體，讓她們服從妳
-   - 對於同級角色：保持你的冷淡高貴態度
-6. 請**完全站在你的角度**說話，不要用「她是怎樣的人」，要用「我受不了她怎樣」或「她老是怎樣」這種說法
-7. 口氣中要保留不屑、無奈、不情願，但還是得說出來的感覺
-8. 每個人講 2～4 句，不要廢話
-9. **重要：每個角色的評論後面要加上該角色的四種圖片連結，格式如下：**
+2. **逐一介紹找到的人員**（男性角色用「他」、女性或其他角色用「她」），語氣要像在背後評論人，不客觀、不假裝中立
+3. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
 
-圖片連結：
-- 基本圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名].png
-- 戰鬥圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Fighting.png
-- 毀壞圖片：{Config.PUBLIC_API_BASE_URL}/images/people/[角色名]Ruined.png
-- 迷人圖片：{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing[角色名].png
-
-記住：你是佐和真夜（Maya Sawa），用你的個性回答問題。""" 
+記住：你是{self.self_name}，用你的個性回答問題。""" 
