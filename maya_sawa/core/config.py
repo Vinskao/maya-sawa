@@ -42,15 +42,15 @@ class Config:
     PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "")
     
     # Synchronization Configuration
-    ENABLE_AUTO_SYNC_ON_STARTUP = os.getenv("ENABLE_AUTO_SYNC_ON_STARTUP", "true").lower() == "true"
-    ENABLE_PERIODIC_SYNC = os.getenv("ENABLE_PERIODIC_SYNC", "true").lower() == "true"  # 默認關閉定期同步
+    ENABLE_AUTO_SYNC_ON_STARTUP = os.getenv("ENABLE_AUTO_SYNC_ON_STARTUP", "false").lower() == "true"
+    ENABLE_PERIODIC_SYNC = os.getenv("ENABLE_PERIODIC_SYNC", "false").lower() == "true"  # 默認關閉定期同步
     SYNC_INTERVAL_DAYS = int(os.getenv("SYNC_INTERVAL_DAYS", "3"))
     SYNC_HOUR = int(os.getenv("SYNC_HOUR", "3"))
     SYNC_MINUTE = int(os.getenv("SYNC_MINUTE", "0"))
     
     # People and Weapons Sync Configuration
-    ENABLE_PEOPLE_WEAPONS_SYNC = os.getenv("ENABLE_PEOPLE_WEAPONS_SYNC", "true").lower() == "true"
-    ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC = os.getenv("ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC", "true").lower() == "true"  # 默認關閉定期同步
+    ENABLE_PEOPLE_WEAPONS_SYNC = os.getenv("ENABLE_PEOPLE_WEAPONS_SYNC", "false").lower() == "true"
+    ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC = os.getenv("ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC", "false").lower() == "true"  # 默認關閉定期同步
     
     # Logging Configuration
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

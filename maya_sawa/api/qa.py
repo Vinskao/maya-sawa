@@ -35,7 +35,7 @@ except ImportError:
     _google_translator_available = False
 
 # LangChain 相關導入
-from langchain.schema import Document
+from maya_sawa.core.langchain_shim import Document
 
 # 本地模組導入
 from ..core.postgres_store import PostgresVectorStore
@@ -200,6 +200,7 @@ router = APIRouter(prefix="/qa", tags=["Q&A"])
 
 # ==================== 請求模型定義 ====================
 
+# 新增 self 角色名字，讓前端可動態指定
 class QueryRequest(BaseModel):
     """
     查詢請求模型
@@ -209,6 +210,7 @@ class QueryRequest(BaseModel):
     text: str  # 用戶的問題文本
     user_id: str = "default"  # 用戶 ID，預設為 "default"
     language: str = "chinese"  # 語言參數，預設為 "chinese"
+    name: Optional[str] = "Maya"   # 角色名稱，預設 Maya，可由前端覆寫
 
 class SyncRequest(BaseModel):
     """
@@ -448,7 +450,8 @@ async def query_document(request: QueryRequest):
         documents = vector_store.similarity_search(request.text, k=3)
         
         # 獲取答案和分析結果
-        result = qa_chain.get_answer(request.text, documents)
+        # 將前端傳入的 name 轉給 QAChain，若未提供則沿用預設 "Maya"
+        result = qa_chain.get_answer(request.text, documents, self_name=(request.name or "Maya"))
         
         # 如果語言為英語，翻譯答案
         if request.language.lower() == "english":
@@ -786,5 +789,3 @@ async def search_people_by_semantics(request: PeopleSearchRequest):
     except Exception as e:
         logger.error(f"人員語義搜索時發生錯誤: {str(e)}")
         raise HTTPException(status_code=500, detail=f"搜索失敗: {str(e)}")
-
- 

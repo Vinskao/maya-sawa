@@ -1,9 +1,6 @@
 import logging
 from typing import Dict, List, Optional
-from langchain.schema import Document
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+from maya_sawa.core.langchain_shim import Document, LLMChain, PromptTemplate, ChatOpenAI
 import os
 from maya_sawa.people import NameDetector, ProfileManager, PersonalityPromptBuilder, PeopleWeaponManager, NameAdapter
 from maya_sawa.core.config import Config
@@ -27,6 +24,7 @@ class QAChain:
         )
         
         # 初始化組件
+        self.self_name = "Maya"  # 預設系統主角名稱，可被外部覆寫
         self.name_detector = NameDetector(llm=self.llm, get_known_names_func=self._get_known_names)
         self.profile_manager = ProfileManager()
         self.personality_builder = PersonalityPromptBuilder()
@@ -115,7 +113,7 @@ class QAChain:
         self.profile_manager.clear_all_profiles_cache()
         logger.info("所有個人資料快取已清除")
 
-    def get_answer(self, query: str, documents: List[Document]) -> Dict:
+    def get_answer(self, query: str, documents: List[Document], self_name: str = "Maya") -> Dict:
         """
         獲取問題的答案
         
@@ -127,6 +125,11 @@ class QAChain:
             Dict: 包含答案、來源和找到的角色的字典
         """
         try:
+            # 若外部傳入 self_name 與目前不同，更新內部狀態
+            if self_name and self_name != self.self_name:
+                logger.info(f"更新主角名稱: {self.self_name} -> {self_name}")
+                self.self_name = self_name
+            
             # 檢測問題中提到的角色名稱
             detected_names = self.name_detector.detect_all_queried_names(query)
             logger.info(f"檢測到的角色名稱: {detected_names}")
