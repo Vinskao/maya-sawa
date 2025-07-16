@@ -243,57 +243,16 @@ class QAChain:
                                 summary_prompt = self.personality_builder.create_multi_character_prompt(query, combined_profiles, found_names)
                         else:
                             # 單一角色（且不是 Maya）
-                            summary_prompt = self.personality_builder.create_data_answer_prompt(query, combined_profiles)
+                            # 取得被問角色名，若 found_names 有值則用第一個
+                            target_name = found_names[0] if found_names else None
+                            summary_prompt = self.personality_builder.create_data_answer_prompt(query, combined_profiles, target_name=target_name)
                         
                         try:
                             summary_answer = self.llm.invoke(summary_prompt)
-                            # 確保返回的是字符串
                             if hasattr(summary_answer, 'content'):
                                 summary_answer = summary_answer.content
-                            
-                            # 空答案或拒絕容錯
-                            refusal_keywords = [
-                                "無法為你服務", "無法為您服務", "請提供", "評論的角色名", "否則我無法為", "抱歉", "cannot", "unable", "Please provide", "provide the character",
-                                "想知道", "沒空", "自己去查", "浪費時間"
-                            ]
-                            # 若答案過短 (<100 字) 或包含拒絕關鍵詞，視為無效
-                            if (
-                                not summary_answer or
-                                len(summary_answer.strip()) < 100 or
-                                any(k in summary_answer for k in refusal_keywords)
-                            ):
-                                logger.warning("LLM 回答可能無效，嘗試使用加強版提示重新生成")
-                                simple_prompt = (
-                                    f"以第一人稱 ({self.self_name}) 逐一評論以下角色的資料。"
-                                    "對每位角色請根據戰力規則調整態度：Wavo → 臣服；總戰力高於我 → 厭惡但尊重；"
-                                    "總戰力低於我 → 肆無忌憚地辱罵、貶低、壓制；與我相當 → 冷淡高貴。"
-                                    "嚴禁逐條列清單或複製資料，必須把胸部、臀部、身高、體重及三項戰力自然嵌入 3~5 句評論。"
-                                    "每位角色評論完後立即換行，列出四條圖片 URL，角色順序依資料給出。\n\n"
-                                    f"{combined_profiles}"
-                                )
-                                try:
-                                    summary_answer_retry = self.llm.invoke(simple_prompt)
-                                    if hasattr(summary_answer_retry, 'content'):
-                                        summary_answer_retry = summary_answer_retry.content
-                                        # 若重試成功且內容足夠，採用
-                                        if summary_answer_retry and len(summary_answer_retry.strip()) > 20:
-                                            summary_answer = summary_answer_retry
-                                        else:
-                                            logger.warning("簡化提示仍然無效，使用原始資料作為回答")
-                                            summary_answer = combined_profiles
-                                    else:
-                                        logger.error("簡化提示調用失敗，使用原始資料作為回答")
-                                        summary_answer = combined_profiles
-                                except Exception as _:
-                                    logger.error("簡化提示調用失敗，使用原始資料作為回答")
-                                    summary_answer = combined_profiles
-                            
-                            # 如果有找不到的角色，在最後加上說明
                             if not_found:
                                 summary_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
-                            
-                            # 移除舊的自動補充段落邏輯，避免插入原始資料破壞段落格式
-                            
                             return {
                                 "answer": summary_answer,
                                 "sources": [],

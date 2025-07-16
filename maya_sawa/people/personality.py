@@ -99,34 +99,48 @@ class PersonalityPromptBuilder:
 {profile_summary}
 """
 
-    def create_identity_prompt(self, query: str, profile_summary: str) -> str:
-        """
-        創建身份詢問的個性提示
-        
-        Args:
-            query (str): 用戶的問題
-            profile_summary (str): 個人資料摘要
-            
-        Returns:
-            str: 身份詢問的個性提示
-        """
-        return f"""{self.personality}
+    def create_identity_prompt(self, query: str, profile_summary: str, for_self: bool = True) -> str:
+        personality_text = self.parse_personality(for_self=for_self)
+        if for_self:
+            return f"""{personality_text}
 
 有人問你「{query}」。
 
 你的個人資料（僅供參考，不要直接複製）：
 {profile_summary}
 
-⚠ 回答要求：
-1. **用第一人稱「我」自然介紹自己**，絕對不要用第三人稱稱呼自己
-2. **重點：用自然的對話方式介紹自己，就像在跟人聊天一樣**
-3. 可以選擇性地提到一些重要特徵，但要用自己的語氣描述
-4. **絕對不要像在做報告或列清單，要像在跟人對話**
-5. **嚴禁使用「她」「他」「{self.self_name}」等第三人稱稱呼自己**
-6. **必須用「我」「我的」「我是」等第一人稱**
-7. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)}
-
 記住：你是{self.self_name}，用你的個性回答問題。"""
+        else:
+            return f"""請根據下列資料，以第三人稱評論 {self.self_name}，3~5 句，評論要有個性、不要像在做報告。
+
+{self.self_name} 的個性：{personality_text}
+
+=== {self.self_name} 的資料 ===
+{profile_summary}
+
+⚠ 回答要求：
+1. 只能評論 {self.self_name}，不要提及自己。
+2. 必須附上圖片連結。
+3. 不要重複本段文字或提及「回答規則」四字。
+4. 內容必須基於資料，不得憑空捏造。
+{self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)}
+"""
+
+    def create_other_identity_prompt(self, query: str, profile_summary: str, target_name: str) -> str:
+        personality_text = self.parse_personality(for_self=False)
+        return f"""請根據下列資料，以第三人稱評論 {target_name}，3~5 句，評論要有個性、不要像在做報告。
+
+{target_name} 的個性：{personality_text}
+
+=== {target_name} 的資料 ===
+{profile_summary}
+
+⚠ 回答要求：
+1. 只能評論 {target_name}，不要提及自己。
+2. 必須附上圖片連結。
+3. 不要重複本段文字或提及「回答規則」四字。
+4. 內容必須基於資料，不得憑空捏造。
+"""
 
     def create_multi_character_prompt(self, query: str, combined_other_profiles: str, character_names: List[str] = None) -> str:
         """
@@ -242,53 +256,37 @@ class PersonalityPromptBuilder:
 4. 不要輸出本段文字
 """
 
-    def create_data_answer_prompt(self, query: str, profile_summary: str) -> str:
+    def create_data_answer_prompt(self, query: str, profile_summary: str, target_name: str = None) -> str:
         """
         創建具體數據回答的個性提示
         
         Args:
             query (str): 用戶的問題
             profile_summary (str): 角色資料摘要
-            
+            target_name (str): 被問到的角色名稱（可選，預設為 None，表示自己）
         Returns:
             str: 具體數據回答的個性提示
         """
-        # 檢查是否為身份詢問問題
         identity_keywords = ["你是誰", "你叫什麼", "妳是誰", "妳叫什麼", "who are you", "who r u", "who are u"]
         is_identity_question = any(keyword in query.lower() for keyword in identity_keywords)
-        
-        if is_identity_question:
-            # 身份詢問使用特殊的提示，避免第三人稱評論
-            return f"""你是{self.self_name}，{self.personality}
 
-有人問你「{query}」。
+        is_self = False
+        if target_name is None or target_name.lower() == self.self_name.lower():
+            is_self = True
 
-你的個人資料（僅供參考，不要直接複製）：
-{profile_summary}
-
-⚠ 回答要求：
-1. **用第一人稱「我」自然介紹自己**，絕對不要用第三人稱稱呼自己
-2. **重點：用自然的對話方式介紹自己，就像在跟人聊天一樣**
-3. 可以選擇性地提到一些重要特徵，但要用自己的語氣描述
-4. **絕對不要像在做報告或列清單，要像在跟人對話**
-5. **嚴禁使用「她」「他」「{self.self_name}」等第三人稱稱呼自己**
-6. **必須用「我」「我的」「我是」等第一人稱**
-7. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)}
-
-記住：你是{self.self_name}，用你的個性回答問題。"""
+        if is_identity_question or is_self:
+            return self.create_identity_prompt(query, profile_summary, for_self=True)
         else:
-            # 其他具體數據問題使用原來的邏輯
-            return f"""你是{self.self_name}，{self.personality}
+            # 只用她人對自己的認知，且 personality_text 必須明顯出現在最前面
+            personality_text = self.parse_personality(for_self=False)
+            image_block = self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', target_name)
+            return f"""{personality_text}
 
 有人問你「{query}」。
 
-以下是這個角色的資料：
-
 {profile_summary}
 
-⚠ 回答要求：
-1. **直接回答問題中詢問的具體數據**
-2. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)}
+{image_block}
 
 記住：你是{self.self_name}，用你的個性回答問題。"""
 
@@ -534,3 +532,19 @@ class PersonalityPromptBuilder:
 3. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
 
 記住：你是{self.self_name}，用你的個性回答問題。""" 
+
+    def parse_personality(self, for_self: bool = True) -> str:
+        """
+        解析 personality 欄位，根據 for_self 參數回傳對應文本
+        """
+        if not self.personality:
+            return ""
+        parts = self.personality.split(";")
+        other = ""
+        self_ = ""
+        for part in parts:
+            if "她人對自己的認知" in part:
+                other = part.replace("她人對自己的認知：", "").strip()
+            elif "自己對自己的認知" in part:
+                self_ = part.replace("自己對自己的認知：", "").strip()
+        return self_ if for_self else other 
