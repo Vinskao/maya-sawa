@@ -158,6 +158,8 @@ class QAChain:
                 # 同步至 NameDetector 與 PersonalityPromptBuilder
                 self.name_detector.self_name = self_name
                 self.name_detector._main_lower = self_name.lower()
+                self.profile_manager.refresh_profile(self_name)
+                self.personality_builder.refresh_personality(self_name)
                 self.personality_builder.self_name = self_name
                 self.personality_builder._main_lower = self_name.lower()
             

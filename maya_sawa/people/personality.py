@@ -99,10 +99,50 @@ class PersonalityPromptBuilder:
 {profile_summary}
 """
 
+    def _get_gender_instruction(self, profile_summary: str) -> str:
+        """
+        根據 profile_summary 內容自動判斷性別，回傳性別說明
+        """
+        gender = None
+        # 嘗試從 profile_summary 直接抓性別
+        if '性別：' in profile_summary:
+            idx = profile_summary.find('性別：')
+            gender_str = profile_summary[idx+3:idx+5]
+            if '男' in gender_str:
+                gender = 'M'
+            elif '女' in gender_str:
+                gender = 'F'
+        # fallback: 嘗試從英文 Gender
+        elif 'Gender:' in profile_summary:
+            idx = profile_summary.find('Gender:')
+            gender_str = profile_summary[idx+7:idx+10].strip().lower()
+            if 'm' in gender_str:
+                gender = 'M'
+            elif 'f' in gender_str:
+                gender = 'F'
+        # fallback: 直接抓 profile_manager
+        if not gender and hasattr(self.profile_manager, 'fetch_profile'):
+            profile = self.profile_manager.fetch_profile(self.self_name)
+            if profile and profile.get('gender'):
+                g = profile['gender'].strip().upper()
+                if g.startswith('M'):
+                    gender = 'M'
+                elif g.startswith('F'):
+                    gender = 'F'
+        if gender == 'M':
+            return "你是男性，請用男性自稱（如：我、他、國王等）。"
+        elif gender == 'F':
+            return "你是女性，請用女性自稱（如：我、她、女王等）。"
+        else:
+            return "請根據資料使用正確的性別自稱。"
+
     def create_identity_prompt(self, query: str, profile_summary: str, for_self: bool = True) -> str:
         personality_text = self.parse_personality(for_self=for_self)
+        gender_instruction = self._get_gender_instruction(profile_summary)
         if for_self:
             return f"""{personality_text}
+
+{gender_instruction}
 
 有人問你「{query}」。
 
@@ -114,6 +154,8 @@ class PersonalityPromptBuilder:
             return f"""請根據下列資料，以第三人稱評論 {self.self_name}，3~5 句，評論要有個性、不要像在做報告。
 
 {self.self_name} 的個性：{personality_text}
+
+{gender_instruction}
 
 === {self.self_name} 的資料 ===
 {profile_summary}
@@ -257,16 +299,6 @@ class PersonalityPromptBuilder:
 """
 
     def create_data_answer_prompt(self, query: str, profile_summary: str, target_name: str = None) -> str:
-        """
-        創建具體數據回答的個性提示
-        
-        Args:
-            query (str): 用戶的問題
-            profile_summary (str): 角色資料摘要
-            target_name (str): 被問到的角色名稱（可選，預設為 None，表示自己）
-        Returns:
-            str: 具體數據回答的個性提示
-        """
         identity_keywords = ["你是誰", "你叫什麼", "妳是誰", "妳叫什麼", "who are you", "who r u", "who are u"]
         is_identity_question = any(keyword in query.lower() for keyword in identity_keywords)
 
@@ -274,13 +306,18 @@ class PersonalityPromptBuilder:
         if target_name is None or target_name.lower() == self.self_name.lower():
             is_self = True
 
+        gender_instruction = self._get_gender_instruction(profile_summary)
+
         if is_identity_question or is_self:
+            # 絕對不插入圖片區塊
             return self.create_identity_prompt(query, profile_summary, for_self=True)
         else:
             # 只用她人對自己的認知，且 personality_text 必須明顯出現在最前面
             personality_text = self.parse_personality(for_self=False)
             image_block = self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', target_name)
             return f"""{personality_text}
+
+{gender_instruction}
 
 有人問你「{query}」。
 
@@ -548,3 +585,22 @@ class PersonalityPromptBuilder:
             elif "自己對自己的認知" in part:
                 self_ = part.replace("自己對自己的認知：", "").strip()
         return self_ if for_self else other 
+
+    def refresh_personality(self, self_name: str = None):
+        """
+        重新根據 self_name 取得 personality，並同步 self_name, _main_lower
+        """
+        if self_name:
+            self.self_name = self_name
+            self._main_lower = self_name.lower()
+        try:
+            profile = self.profile_manager.fetch_profile(self.self_name)
+            if profile and profile.get("personality"):
+                self.personality = profile["personality"]
+                logger.info(f"[refresh] Loaded dynamic personality for {self.self_name}: {self.personality}")
+            else:
+                self.personality = ""
+                logger.warning(f"[refresh] No personality found for {self.self_name} from API.")
+        except Exception as e:
+            self.personality = ""
+            logger.warning(f"[refresh] Unable to load personality for {self.self_name} from API: {e}") 
