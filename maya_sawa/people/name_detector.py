@@ -84,6 +84,14 @@ class NameDetector:
         if not has_personal_keyword:
             return []  # 沒有個人資訊關鍵詞，返回空列表
         
+        # 優先檢查身份詢問問題，避免不必要的 AI 調用
+        identity_keywords = ["你是誰", "你叫什麼", "妳是誰", "妳叫什麼", "who are you", "who r u", "who are u"]
+        is_identity_question = any(keyword in question.lower() for keyword in identity_keywords)
+        
+        if is_identity_question:
+            logger.info("檢測到身份詢問問題，直接返回主角名稱")
+            return [self.self_name]
+        
         # 如果有個人資訊關鍵詞，就進行 AI 抽名（不管是否明確提到已知角色）
         logger.info("檢測到個人資訊關鍵詞，進行 AI 抽名")
         

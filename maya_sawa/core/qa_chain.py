@@ -32,6 +32,11 @@ class QAChain:
         self.people_manager = PeopleWeaponManager()
         self.name_adapter = NameAdapter()
         
+        # 添加緩存
+        self._known_names_cache = None
+        self._known_names_cache_timestamp = 0
+        self._cache_duration = 300  # 5分鐘緩存
+        
         # 創建動態提示模板
         self._create_dynamic_prompt()
         
@@ -42,11 +47,20 @@ class QAChain:
 
     def _get_known_names(self) -> List[str]:
         """
-        獲取已知的角色名稱列表
+        獲取已知的角色名稱列表（帶緩存）
         
         Returns:
             List[str]: 已知角色名稱列表
         """
+        import time
+        current_time = time.time()
+        
+        # 檢查緩存是否有效
+        if (self._known_names_cache is not None and 
+            current_time - self._known_names_cache_timestamp < self._cache_duration):
+            logger.debug("使用緩存的已知角色名稱列表")
+            return self._known_names_cache
+        
         try:
             # 從 people manager 獲取所有角色名稱
             people_data = self.people_manager.fetch_people_data()
@@ -55,14 +69,25 @@ class QAChain:
                 # 添加 self_name 作為系統內建角色
                 if self.self_name not in names:
                     names.append(self.self_name)
+                
+                # 更新緩存
+                self._known_names_cache = names
+                self._known_names_cache_timestamp = current_time
+                logger.info(f"更新已知角色名稱緩存，共 {len(names)} 個角色")
                 return names
             else:
                 # 如果無法獲取，至少返回當前主角名稱
-                return [self.self_name]
+                fallback_names = [self.self_name]
+                self._known_names_cache = fallback_names
+                self._known_names_cache_timestamp = current_time
+                return fallback_names
         except Exception as e:
             logger.error(f"獲取已知角色名稱時發生錯誤: {str(e)}")
             # 如果發生錯誤，至少返回當前主角名稱
-            return [self.self_name]
+            fallback_names = [self.self_name]
+            self._known_names_cache = fallback_names
+            self._known_names_cache_timestamp = current_time
+            return fallback_names
 
     def _create_dynamic_prompt(self):
         """
@@ -243,7 +268,7 @@ class QAChain:
                                     "對每位角色請根據戰力規則調整態度：Wavo → 臣服；總戰力高於我 → 厭惡但尊重；"
                                     "總戰力低於我 → 肆無忌憚地辱罵、貶低、壓制；與我相當 → 冷淡高貴。"
                                     "嚴禁逐條列清單或複製資料，必須把胸部、臀部、身高、體重及三項戰力自然嵌入 3~5 句評論。"
-                                    "每位角色評論完後立即換行，列出四條圖片 URL (基本/戰鬥/毀壞/迷人)，角色順序依資料給出。\n\n"
+                                    "每位角色評論完後立即換行，列出四條圖片 URL，角色順序依資料給出。\n\n"
                                     f"{combined_profiles}"
                                 )
                                 try:
@@ -378,7 +403,7 @@ class QAChain:
                                         "以第一人稱逐一評論以下角色的資料。"
                                         "請依戰力規則（高 → 厭惡尊重；低 → 毀滅式嘲諷；同級 → 冷淡高貴）調整語氣。"
                                         "不要逐條列清單，也不得複製資料，需將身高、體重及戰力自然嵌入 3~5 句評論。"
-                                        "每位角色評論後換行列出四條圖片 URL (基本/戰鬥/毀壞/迷人)。\n\n"
+                                        "每位角色評論後換行列出四條圖片 URL。\n\n"
                                         f"{combined_profiles}"
                                     )
 

@@ -94,11 +94,9 @@ class ProfileManager:
             display_name = f"{profile.get('nameOriginal', name)}（{profile.get('name', name)}）"
             character_name = name
         
-        # 構建四種圖片連結
-        base_image_url = f"{Config.PUBLIC_API_BASE_URL}/images/people/{character_name}.png"
-        fighting_image_url = f"{Config.PUBLIC_API_BASE_URL}/images/people/{character_name}Fighting.png"
-        ruined_image_url = f"{Config.PUBLIC_API_BASE_URL}/images/people/{character_name}Ruined.png"
-        ravishing_image_url = f"{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{character_name}.png"
+        # 使用統一的圖片規則
+        from .personality import PersonalityPromptBuilder
+        image_rules = PersonalityPromptBuilder.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', character_name)
         
         return f"""
 {display_name}的個人資料：
@@ -131,11 +129,7 @@ class ProfileManager:
 - 代理系統：{profile.get('proxy', 'N/A')}
 
 圖片連結：
-- 基本圖片：{base_image_url}
-- 戰鬥圖片：{fighting_image_url}
-- 毀壞圖片：{ruined_image_url}
-- 迷人圖片：{ravishing_image_url}
-"""
+{image_rules}"""
 
     def get_profile_summary(self, name: str = None) -> str:
         """

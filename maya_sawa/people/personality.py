@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 class PersonalityPromptBuilder:
     # 圖片規則統一常數
     IMAGE_RULES = (
-        "每位角色評論完後立即換行，列出四條圖片 URL (基本/戰鬥/毀壞/迷人)，角色順序依資料給出。\n"
-        f"- 基本圖片：{{base}}/images/people/[角色名].png\n"
-        f"- 戰鬥圖片：{{base}}/images/people/[角色名]Fighting.png\n"
-        f"- 毀壞圖片：{{base}}/images/people/[角色名]Ruined.png\n"
-        f"- 迷人圖片：{{base}}/images/people/Ravishing[角色名].png\n"
+        "每位角色評論完後立即換行，只列出四條圖片連結，不要任何註解：\n"
+        f"{{base}}/images/people/[角色名].png\n"
+        f"{{base}}/images/people/[角色名]Fighting.png\n"
+        f"{{base}}/images/people/[角色名]Ruined.png\n"
+        f"{{base}}/images/people/Ravishing[角色名].png\n"
     )
     """
     統一管理self_name個性描述與產生個性化prompt
@@ -47,17 +47,21 @@ class PersonalityPromptBuilder:
         # 角色資料管理器（可由外部注入，便於重用）
         self.profile_manager = profile_manager or ProfileManager()
 
+        # 添加戰力和武器信息緩存
+        self._power_weapon_cache = {}
+        self._cache_duration = 300  # 5分鐘緩存
+
         # 只用 API personality，沒有就空字串
         try:
             profile = self.profile_manager.fetch_profile(self.self_name)
             if profile and profile.get("personality"):
-                self.maya_personality = profile["personality"]
-                logger.info(f"Loaded dynamic personality for {self.self_name}: {self.maya_personality}")
+                self.personality = profile["personality"]
+                logger.info(f"Loaded dynamic personality for {self.self_name}: {self.personality}")
             else:
-                self.maya_personality = ""
+                self.personality = ""
                 logger.warning(f"No personality found for {self.self_name} from API.")
         except Exception as e:
-            self.maya_personality = ""
+            self.personality = ""
             logger.warning(f"Unable to load personality for {self.self_name} from API: {e}")
 
     def create_personality_prompt(self, query: str, additional_context: str = "") -> str:
@@ -71,7 +75,7 @@ class PersonalityPromptBuilder:
         Returns:
             str: 格式化的個性提示
         """
-        return f"""{self.maya_personality}
+        return f"""{self.personality}
 
 有人問你「{query}」。
 
@@ -89,7 +93,7 @@ class PersonalityPromptBuilder:
         Returns:
             str: 動態創建的提示模板
         """
-        return f"""{self.maya_personality}
+        return f"""{self.personality}
 
 個人資料如下：
 {profile_summary}
@@ -106,7 +110,7 @@ class PersonalityPromptBuilder:
         Returns:
             str: 身份詢問的個性提示
         """
-        return f"""{self.maya_personality}
+        return f"""{self.personality}
 
 有人問你「{query}」。
 
@@ -114,10 +118,13 @@ class PersonalityPromptBuilder:
 {profile_summary}
 
 ⚠ 回答要求：
-1. **基於上述個人資料，用自己的話自然回答**，絕對不要直接複製或列出資料
+1. **用第一人稱「我」自然介紹自己**，絕對不要用第三人稱稱呼自己
 2. **重點：用自然的對話方式介紹自己，就像在跟人聊天一樣**
 3. 可以選擇性地提到一些重要特徵，但要用自己的語氣描述
 4. **絕對不要像在做報告或列清單，要像在跟人對話**
+5. **嚴禁使用「她」「他」「{self.self_name}」等第三人稱稱呼自己**
+6. **必須用「我」「我的」「我是」等第一人稱**
+7. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)}
 
 記住：你是{self.self_name}，用你的個性回答問題。"""
 
@@ -164,7 +171,7 @@ class PersonalityPromptBuilder:
                 )
  
         # === 最終提示 ===
-        return f"""你是{self.self_name}，{self.maya_personality}
+        return f"""你是{self.self_name}，{self.personality}
 
 有人問你「{query}」。
 
@@ -214,13 +221,13 @@ class PersonalityPromptBuilder:
                     power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
 
                 image_links_block += (
-                    f"- {name} 基本圖片：{Config.PUBLIC_API_BASE_URL}/images/people/{name}.png\n"
-                    f"- {name} 戰鬥圖片：{Config.PUBLIC_API_BASE_URL}/images/people/{name}Fighting.png\n"
-                    f"- {name} 毀壞圖片：{Config.PUBLIC_API_BASE_URL}/images/people/{name}Ruined.png\n"
-                    f"- {name} 迷人圖片：{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{name}.png\n"
+                    f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}.png\n"
+                    f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Fighting.png\n"
+                    f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Ruined.png\n"
+                    f"{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{name}.png\n"
                 )
  
-        return f"""你是{self.self_name}，{self.maya_personality}
+        return f"""你是{self.self_name}，{self.personality}
 
 有人問你「{query}」。
 
@@ -246,7 +253,32 @@ class PersonalityPromptBuilder:
         Returns:
             str: 具體數據回答的個性提示
         """
-        return f"""你是{self.self_name}，{self.maya_personality}
+        # 檢查是否為身份詢問問題
+        identity_keywords = ["你是誰", "你叫什麼", "妳是誰", "妳叫什麼", "who are you", "who r u", "who are u"]
+        is_identity_question = any(keyword in query.lower() for keyword in identity_keywords)
+        
+        if is_identity_question:
+            # 身份詢問使用特殊的提示，避免第三人稱評論
+            return f"""你是{self.self_name}，{self.personality}
+
+有人問你「{query}」。
+
+你的個人資料（僅供參考，不要直接複製）：
+{profile_summary}
+
+⚠ 回答要求：
+1. **用第一人稱「我」自然介紹自己**，絕對不要用第三人稱稱呼自己
+2. **重點：用自然的對話方式介紹自己，就像在跟人聊天一樣**
+3. 可以選擇性地提到一些重要特徵，但要用自己的語氣描述
+4. **絕對不要像在做報告或列清單，要像在跟人對話**
+5. **嚴禁使用「她」「他」「{self.self_name}」等第三人稱稱呼自己**
+6. **必須用「我」「我的」「我是」等第一人稱**
+7. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)}
+
+記住：你是{self.self_name}，用你的個性回答問題。"""
+        else:
+            # 其他具體數據問題使用原來的邏輯
+            return f"""你是{self.self_name}，{self.personality}
 
 有人問你「{query}」。
 
@@ -256,7 +288,7 @@ class PersonalityPromptBuilder:
 
 ⚠ 回答要求：
 1. **直接回答問題中詢問的具體數據**
-2. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
+2. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)}
 
 記住：你是{self.self_name}，用你的個性回答問題。"""
 
@@ -318,7 +350,7 @@ class PersonalityPromptBuilder:
                     power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
                 else:
                     power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
-        return f"""你是{self.self_name}，{self.maya_personality}
+        return f"""你是{self.self_name}，{self.personality}
 
 有人問你「{query}」。
 
@@ -488,7 +520,7 @@ class PersonalityPromptBuilder:
                     else:
                         power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
         
-        return f"""你是{self.self_name}，{self.maya_personality}
+        return f"""你是{self.self_name}，{self.personality}
 
 有人問你「{query}」。
 
