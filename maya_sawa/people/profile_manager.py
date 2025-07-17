@@ -131,10 +131,16 @@ class ProfileManager:
 
         # 只有在需要時才添加圖片連結
         if include_images:
-            image_rules = config_manager.get_rule('IMAGE_RULES').format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', character_name)
+            # 使用 IMAGE_URL_TEMPLATES 生成四張圖片連結
+            image_links = (
+                f"{config_manager.get_image_url('NORMAL', Config.PUBLIC_API_BASE_URL, character_name)}\n"
+                f"{config_manager.get_image_url('FIGHTING', Config.PUBLIC_API_BASE_URL, character_name)}\n"
+                f"{config_manager.get_image_url('RUINED', Config.PUBLIC_API_BASE_URL, character_name)}\n"
+                f"{config_manager.get_image_url('RAVISHING', Config.PUBLIC_API_BASE_URL, character_name)}"
+            )
             summary += f"""
 圖片連結：
-{image_rules}"""
+{image_links}"""
         return summary
 
     def get_profile_summary(self, name: str = None, include_images: bool = True) -> str:

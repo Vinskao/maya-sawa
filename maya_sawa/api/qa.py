@@ -438,81 +438,78 @@ async def query_document(request: QueryRequest):
     Raises:
         HTTPException: 當查詢失敗時拋出 HTTP 異常
     """
-    try:
-        # === DEBUG: 印出前端傳入的原始 JSON ===
-        logger.info(f"/qa/query payload: {request.dict()}")
-        # 獲取核心組件實例
-        vector_store = get_vector_store()
-        qa_chain = get_qa_chain()
-        chat_history_manager = get_chat_history()
+    # === DEBUG: 印出前端傳入的原始 JSON ===
+    logger.info(f"/qa/query payload: {request.dict()}")
+    # 獲取核心組件實例
+    vector_store = get_vector_store()
+    qa_chain = get_qa_chain()
+    chat_history_manager = get_chat_history()
+    
+    # 統一流程：始終先搜索文件，由 QAChain 決定是否使用
+    documents = vector_store.similarity_search(request.text, k=3)
+    
+    # 獲取答案和分析結果
+    # 將前端傳入的 name 轉給 QAChain，若未提供則沿用預設 "Maya"
+    result = qa_chain.get_answer(request.text, documents, self_name=(request.name or "Maya"), user_id=request.user_id)
+    
+    # 如果語言為英語，翻譯答案
+    if request.language.lower() == "english":
+        translated_answer = await translate_to_english(result["answer"])
+        final_answer = translated_answer
+    else:
+        final_answer = result["answer"]
         
-        # 統一流程：始終先搜索文件，由 QAChain 決定是否使用
-        documents = vector_store.similarity_search(request.text, k=3)
-        
-        # 獲取答案和分析結果
-        # 將前端傳入的 name 轉給 QAChain，若未提供則沿用預設 "Maya"
-        result = qa_chain.get_answer(request.text, documents, self_name=(request.name or "Maya"), user_id=request.user_id)
-        
-        # 如果語言為英語，翻譯答案
-        if request.language.lower() == "english":
-            translated_answer = await translate_to_english(result["answer"])
-            final_answer = translated_answer
-        else:
-            final_answer = result["answer"]
-            
-        # 根據 QAChain 的結果格式化返回的 `data`
-        formatted_data = []
-        found_characters = result.get("found_characters", [])
-        
-        if found_characters:
-            # 如果是角色問題，來源設定為 PeopleSystem
-            for char_name in found_characters:
-                formatted_data.append({
-                    "source": "PeopleSystem",
-                    "character_name": char_name
-                })
-        elif documents:
-            # 如果是文件問答，來源為文件本身
-            for doc in documents:
-                content_preview = doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
-                formatted_data.append({
-                    "id": doc.metadata.get("id"),
-                    "file_path": doc.metadata.get("file_path"),
-                    "title": doc.metadata.get("title", ""),
-                    "description": doc.metadata.get("description", ""),
-                    "tags": doc.metadata.get("tags", []),
-                    "similarity": round(doc.metadata.get("similarity", 0.0), 4),
-                    "content_preview": content_preview,
-                    "content_length": len(doc.page_content),
-                    "file_date": doc.metadata.get("file_date", ""),
-                    "source": doc.metadata.get("source", "")
-                })
-        else:
-            # 如果沒有找到任何文件，也返回一個友好的消息
-            if not final_answer: # 如果 QAChain 也沒有給出答案
-                error_message = "抱歉，我沒有找到相關的內容來回答您的問題。"
-                if request.language.lower() == "english":
-                    final_answer = await translate_to_english(error_message)
-                else:
-                    final_answer = error_message
+    # 根據 QAChain 的結果格式化返回的 `data`
+    formatted_data = []
+    found_characters = result.get("found_characters", [])
+    
+    if found_characters:
+        # 如果是角色問題，來源設定為 PeopleSystem
+        for char_name in found_characters:
+            formatted_data.append({
+                "source": "PeopleSystem",
+                "character_name": char_name
+            })
+    elif documents:
+        # 如果是文件問答，來源為文件本身
+        for doc in documents:
+            content_preview = doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+            formatted_data.append({
+                "id": doc.metadata.get("id"),
+                "file_path": doc.metadata.get("file_path"),
+                "title": doc.metadata.get("title", ""),
+                "description": doc.metadata.get("description", ""),
+                "tags": doc.metadata.get("tags", []),
+                "similarity": round(doc.metadata.get("similarity", 0.0), 4),
+                "content_preview": content_preview,
+                "content_length": len(doc.page_content),
+                "file_date": doc.metadata.get("file_date", ""),
+                "source": doc.metadata.get("source", "")
+            })
+    else:
+        # 如果沒有找到任何文件，也返回一個友好的消息
+        if not final_answer: # 如果 QAChain 也沒有給出答案
+            error_message = "抱歉，我沒有找到相關的內容來回答您的問題。"
+            if request.language.lower() == "english":
+                final_answer = await translate_to_english(error_message)
+            else:
+                final_answer = error_message
 
-        # 儲存對話記錄
-        chat_history_manager.save_conversation(
-            user_message=request.text,
-            ai_answer=final_answer,
-            user_id=request.user_id,
-            reference_data=formatted_data
-        )
-        
-        return {
-            "success": True,
-            "answer": final_answer,
-            "data": formatted_data
-        }
+    # 儲存對話記錄
+    chat_history_manager.save_conversation(
+        user_message=request.text,
+        ai_answer=final_answer,
+        user_id=request.user_id,
+        reference_data=formatted_data
+    )
+    
+    return {
+        "success": True,
+        "answer": final_answer,
+        "data": formatted_data
+    }
 
-    except Exception as e:
-        logger.error(f"查詢時發生錯誤: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"查詢失敗: {str(e)}")
+    # 移除錯誤處理，直接返回結果
 
 @router.get("/chat-history/{user_id}")
 async def get_user_chat_history(user_id: str = "default", limit: int = 50):

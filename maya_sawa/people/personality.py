@@ -138,6 +138,9 @@ class PersonalityPromptBuilder:
         personality_text = self.parse_personality(for_self=True)
         gender_instruction = self._get_gender_instruction(profile_summary)
         
+        # 獲取全局規則
+        global_rules = config_manager.get_global_rules(self.self_name)
+        
         if for_self:
             # 使用配置管理器獲取提示模板
             template = config_manager.get_prompt("IDENTITY_PROMPT_TEMPLATE")["FOR_SELF"]
@@ -147,7 +150,7 @@ class PersonalityPromptBuilder:
                 query=query,
                 profile_summary=profile_summary,
                 self_name=self.self_name
-            )
+            ) + f"\n\n### 全局規則（最高優先級）\n{global_rules}"
         else:
             # 使用配置管理器獲取提示模板
             template = config_manager.get_prompt("IDENTITY_PROMPT_TEMPLATE")["FOR_OTHER"]
@@ -158,7 +161,7 @@ class PersonalityPromptBuilder:
                 gender_instruction=gender_instruction,
                 profile_summary=profile_summary,
                 image_rules=image_rules
-            )
+            ) + f"\n\n### 全局規則（最高優先級）\n{global_rules}"
 
     def create_other_identity_prompt(self, query: str, profile_summary: str, target_name: str) -> str:
         personality_text = self.parse_personality(for_self=False)
@@ -193,7 +196,6 @@ class PersonalityPromptBuilder:
         image_links_block = ""
         if character_names:
             power_weapon_info = "\n\n戰力與武器信息：\n"
-            image_links_block = "\n\n圖片連結：\n"
             for name in character_names:
                 if name.lower() == self._main_lower:
                     continue
@@ -206,9 +208,9 @@ class PersonalityPromptBuilder:
                 else:
                     power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
 
-                # 使用配置管理器獲取圖片 URL 模板
+                # 為每個角色提供完整的四張圖片連結格式
                 image_links_block += (
-                    f"\n範例：\n{config_manager.get_image_url('NORMAL', Config.PUBLIC_API_BASE_URL, name)}\n"
+                    f"{config_manager.get_image_url('NORMAL', Config.PUBLIC_API_BASE_URL, name)}\n"
                     f"{config_manager.get_image_url('FIGHTING', Config.PUBLIC_API_BASE_URL, name)}\n"
                     f"{config_manager.get_image_url('RUINED', Config.PUBLIC_API_BASE_URL, name)}\n"
                     f"{config_manager.get_image_url('RAVISHING', Config.PUBLIC_API_BASE_URL, name)}\n"
@@ -218,6 +220,9 @@ class PersonalityPromptBuilder:
         # 確保 personality 已載入
         if not self.personality:
             self.refresh_personality()
+        
+        # 獲取全局規則
+        global_rules = config_manager.get_global_rules(self.self_name)
         
         return """你是{self_name}，{personality}
 
@@ -230,13 +235,15 @@ class PersonalityPromptBuilder:
 ### 回答規則
 1. {data_based_rules}
 2. **逐一表達你對每位角色的看法**（每位3~5句），包括對自己的看法，不要描述角色之間的互動。必須回答所有提到的角色。
-3. {image_rules}
+3. **每位角色評論結束後，必須立即換行並依序輸出該角色的四張圖片連結**，不得有任何註解或文字說明。
 4. **嚴禁對其他角色使用第二人稱「你」**，{gender_rules}
 5. {power_rules}
 6. {no_output_rules}
 
 **重要提醒**：戰力比較已在資料中明確標示，必須嚴格按照戰力規則調整語氣！
-""".format(
+
+### 全局規則（最高優先級）
+{global_rules}""".format(
             self_name=self.self_name,
             personality=self.personality,
             query=query,
@@ -244,10 +251,10 @@ class PersonalityPromptBuilder:
             power_weapon_info=power_weapon_info,
             image_links_block=image_links_block,
             data_based_rules=self.rules['DATA_BASED_RULES'],
-            image_rules=self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL),
             gender_rules=self.rules['GENDER_RULES'],
             power_rules=self.rules['POWER_RULES'],
-            no_output_rules=self.rules['NO_OUTPUT_RULES']
+            no_output_rules=self.rules['NO_OUTPUT_RULES'],
+            global_rules=global_rules
         )
 
     def create_summary_prompt(self, query: str, combined_profiles: str, character_names: List[str] = None) -> str:
@@ -267,7 +274,6 @@ class PersonalityPromptBuilder:
         image_links_block = ""
         if character_names:
             power_weapon_info = "\n\n戰力與武器信息：\n"
-            image_links_block = "\n\n圖片連結：\n"
             for name in character_names:
                 if name.lower() == self._main_lower:
                     continue
@@ -278,7 +284,7 @@ class PersonalityPromptBuilder:
                 else:
                     power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
 
-                # 使用配置管理器獲取圖片 URL 模板
+                # 為每個角色提供完整的四張圖片連結格式
                 image_links_block += (
                     f"{config_manager.get_image_url('NORMAL', Config.PUBLIC_API_BASE_URL, name)}\n"
                     f"{config_manager.get_image_url('FIGHTING', Config.PUBLIC_API_BASE_URL, name)}\n"
@@ -292,10 +298,12 @@ class PersonalityPromptBuilder:
 
 以下是相關角色的資料：
 
-{combined_profiles}{power_weapon_info}
+{combined_profiles}{power_weapon_info}{image_links_block}
 
-### 回答規則1. 如果只有1位角色：依戰力規則評論並附圖片，不得提及其他角色2 若多位角色：逐一表達你對每位角色的看法，每位2句後緊跟圖片連結
-3. {image_rules}
+### 回答規則
+1. 如果只有1位角色：依戰力規則評論並附圖片，不得提及其他角色
+2. 若多位角色：逐一表達你對每位角色的看法，每位2句後緊跟圖片連結
+3. **每位角色評論結束後，必須立即換行並依序輸出該角色的四張圖片連結**，不得有任何註解或文字說明。
 4. {gender_rules}
 5. {power_rules}
 6. {no_output_rules}
@@ -305,7 +313,7 @@ class PersonalityPromptBuilder:
             query=query,
             combined_profiles=combined_profiles,
             power_weapon_info=power_weapon_info,
-            image_rules=self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL),
+            image_links_block=image_links_block,
             gender_rules=self.rules['GENDER_RULES'],
             power_rules=self.rules['POWER_RULES'],
             no_output_rules=self.rules['NO_OUTPUT_RULES']
@@ -321,6 +329,9 @@ class PersonalityPromptBuilder:
 
         gender_instruction = self._get_gender_instruction(profile_summary)
 
+        # 獲取全局規則
+        global_rules = config_manager.get_global_rules(self.self_name)
+        
         if is_identity_question or is_self:
             # 身份問題或關於自己的問題，絕對不插入圖片區塊
             personality_text = self.parse_personality(for_self=True)
@@ -332,7 +343,10 @@ class PersonalityPromptBuilder:
 
 {profile_summary}
 
-記住：你是{self.self_name}，用你的個性回答問題。直接回答，不要說「有人問我...時，我會...說：」之類的開場白。"""
+記住：你是{self.self_name}，用你的個性回答問題。直接回答，不要說「有人問我...時，我會...說：」之類的開場白。
+
+### 全局規則（最高優先級）
+{global_rules}"""
         else:
             # 只用她人對自己的認知，且 personality_text 必須明顯出現在最前面
             personality_text = self.parse_personality(for_self=False)
@@ -365,7 +379,10 @@ class PersonalityPromptBuilder:
 
 """ + image_block + f"""
 
-記住：你是{self.self_name}，用你的個性回答問題。""")
+記住：你是{self.self_name}，用你的個性回答問題。
+
+### 全局規則（最高優先級）
+{global_rules}""")
 
     def create_not_found_prompt(self, query: str, not_found_names: list = None) -> str:
         """
@@ -417,15 +434,9 @@ class PersonalityPromptBuilder:
         if not self.personality:
             self.refresh_personality()
 
-        # 為每個其他角色生成具體的圖片規則
-        specific_image_rules = ""
-        for name in other_names:
-            specific_image_rules += f"\n{name} 的圖片連結：\n"
-            specific_image_rules += f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}.png\n"
-            specific_image_rules += f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Fighting.png\n"
-            specific_image_rules += f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Ruined.png\n"
-            specific_image_rules += f"{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{name}.png\n"
-
+        # 獲取全局規則
+        global_rules = config_manager.get_global_rules(self.self_name)
+        
         # 使用配置管理器獲取提示模板
         template = config_manager.get_prompt("SELF_AND_OTHER_PROMPT_TEMPLATE")
         return template.format(
@@ -436,11 +447,10 @@ class PersonalityPromptBuilder:
             combined_other_profiles=combined_other_profiles,
             power_weapon_info=power_weapon_info,
             gender_rules=self.rules['GENDER_RULES'],
-            image_rules=specific_image_rules,
             natural_dialogue_rules=self.rules['NATURAL_DIALOGUE_RULES'],
             power_rules=self.rules['POWER_RULES'],
             no_output_rules=self.rules['NO_OUTPUT_RULES']
-        ) 
+        ) + f"\n\n### 全局規則（最高優先級）\n{global_rules}" 
 
     def get_character_total_power(self, character_name: str) -> Optional[int]:
         """
@@ -576,8 +586,10 @@ class PersonalityPromptBuilder:
         
         # 獲取戰力和武器信息
         power_weapon_info = ""
+        image_links_block = ""
         if character_names:
             power_weapon_info = "\n\n戰力與武器信息：\n"
+            image_links_block = "\n"
             for name in character_names:
                 if name.lower() != self._main_lower:  # 跳過主角自己
                     info = self.compare_power_and_get_weapons(name)
@@ -586,10 +598,21 @@ class PersonalityPromptBuilder:
                         power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
                     else:
                         power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
+                    
+                    # 為每個角色提供完整的四張圖片連結格式
+                    image_links_block += (
+                        f"{config_manager.get_image_url('NORMAL', Config.PUBLIC_API_BASE_URL, name)}\n"
+                        f"{config_manager.get_image_url('FIGHTING', Config.PUBLIC_API_BASE_URL, name)}\n"
+                        f"{config_manager.get_image_url('RUINED', Config.PUBLIC_API_BASE_URL, name)}\n"
+                        f"{config_manager.get_image_url('RAVISHING', Config.PUBLIC_API_BASE_URL, name)}\n"
+                    )
         
         # 確保 personality 已載入
         if not self.personality:
             self.refresh_personality()
+        
+        # 獲取全局規則
+        global_rules = config_manager.get_global_rules(self.self_name)
         
         # 使用配置管理器獲取提示模板
         template = config_manager.get_prompt("PEOPLE_SEARCH_PROMPT_TEMPLATE")
@@ -599,12 +622,12 @@ class PersonalityPromptBuilder:
             query=query,
             combined_people_info=combined_people_info,
             power_weapon_info=power_weapon_info,
+            image_links_block=image_links_block,
             gender_rules=self.rules['GENDER_RULES'],
             power_rules=self.rules['POWER_RULES'],
-            image_rules=self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL),
             natural_dialogue_rules=self.rules['NATURAL_DIALOGUE_RULES'],
             no_output_rules=self.rules['NO_OUTPUT_RULES']
-        ) 
+        ) + f"\n\n### 全局規則（最高優先級）\n{global_rules}" 
 
     def parse_personality(self, for_self: bool = True) -> str:
         """

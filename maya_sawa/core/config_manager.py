@@ -191,6 +191,28 @@ class ConfigManager:
         template = templates.get(template_key, "")
         return template.format(base=base_url, name=name)
     
+    def get_global_rules(self, self_name: str = None) -> str:
+        """
+        獲取全局規則文本
+        
+        Args:
+            self_name (str): 角色名稱，用於替換規則中的佔位符
+            
+        Returns:
+            str: 全局規則文本
+        """
+        global_rules = self.prompts.get("GLOBAL_RULES", {})
+        if not global_rules:
+            return ""
+        
+        rules_text = []
+        for rule_key, rule_content in global_rules.items():
+            if self_name and "{self_name}" in rule_content:
+                rule_content = rule_content.format(self_name=self_name)
+            rules_text.append(f"• {rule_content}")
+        
+        return "\n".join(rules_text)
+    
     def reload_configs(self):
         """
         重新載入所有配置文件
