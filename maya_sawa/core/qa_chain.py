@@ -4,6 +4,7 @@ from maya_sawa.core.langchain_shim import Document, LLMChain, PromptTemplate, Ch
 import os
 from maya_sawa.people import NameDetector, ProfileManager, PersonalityPromptBuilder, PeopleWeaponManager, NameAdapter
 from maya_sawa.core.config import Config
+from maya_sawa.core.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +17,12 @@ class QAChain:
         """
         初始化 QAChain
         """
-        # 初始化 OpenAI 模型
+        # 從配置管理器獲取 LLM 配置
+        llm_config = config_manager.get_constant("LLM_CONFIG")
         self.llm = ChatOpenAI(
-            model="gpt-4.1-nano",
-            temperature=0.7,
-            max_tokens=2000
+            model=llm_config["MODEL"],
+            temperature=llm_config["TEMPERATURE"],
+            max_tokens=llm_config["MAX_TOKENS"]
         )
         
         # 初始化組件
@@ -35,7 +37,7 @@ class QAChain:
         # 添加緩存
         self._known_names_cache = None
         self._known_names_cache_timestamp = 0
-        self._cache_duration = 300  # 5分鐘緩存
+        self._cache_duration = config_manager.get_constant("CACHE_DURATION")  # 從配置管理器獲取緩存時間
         
         # 創建動態提示模板
         self._create_dynamic_prompt()
@@ -139,13 +141,90 @@ class QAChain:
         self.profile_manager.clear_all_profiles_cache()
         logger.info("所有個人資料快取已清除")
 
-    def get_answer(self, query: str, documents: List[Document], self_name: Optional[str] = None) -> Dict:
+    def _fix_gender_pronouns(self, text: str, character_names: List[str]) -> str:
+        """
+        檢查並修正文本中的性別代詞使用
+        
+        Args:
+            text (str): 原始文本
+            character_names (List[str]): 角色名稱列表
+            
+        Returns:
+            str: 修正後的文本
+        """
+        import re
+        
+        # 獲取每個角色的性別信息
+        character_genders = {}
+        for name in character_names:
+            if name.lower() != self.self_name.lower():  # 跳過自己
+                try:
+                    profile = self.profile_manager.fetch_profile(name)
+                    if profile and profile.get('gender'):
+                        gender = profile['gender'].strip().upper()
+                        if gender.startswith('M'):
+                            character_genders[name] = 'M'
+                        elif gender.startswith('F'):
+                            character_genders[name] = 'F'
+                        else:
+                            character_genders[name] = 'F'  # 預設用「她」
+                except Exception as e:
+                    logger.warning(f"無法獲取 {name} 的性別信息: {e}")
+                    character_genders[name] = 'F'  # 預設用「她」
+        
+        # 修正性別代詞
+        corrected_text = text
+        for name, gender in character_genders.items():
+            if gender == 'M':
+                # 確保男性角色用「他」
+                # 使用更簡單但有效的方法：在提到該角色的段落中將「她」替換為「他」
+                lines = corrected_text.split('\n')
+                for i, line in enumerate(lines):
+                    if name in line and '她' in line:
+                        lines[i] = line.replace('她', '他')
+                corrected_text = '\n'.join(lines)
+            elif gender == 'F':
+                # 確保女性角色用「她」
+                lines = corrected_text.split('\n')
+                for i, line in enumerate(lines):
+                    if name in line and '他' in line:
+                        lines[i] = line.replace('他', '她')
+                corrected_text = '\n'.join(lines)
+        
+        if corrected_text != text:
+            logger.info(f"已修正性別代詞使用")
+        
+        return corrected_text
+
+    def _remove_self_images(self, text: str) -> str:
+        """
+        從文本中移除當前角色的圖片連結
+        
+        Args:
+            text (str): 原始文本
+            
+        Returns:
+            str: 移除圖片連結後的文本
+        """
+        import re
+        # 只移除當前角色的圖片連結
+        self_name_pattern = rf"https://[^\n]*/images/people/{re.escape(self.self_name)}[^\n]*\n"
+        text = re.sub(self_name_pattern, "", text)
+        # 如果圖片連結區塊只剩下當前角色的圖片，移除整個區塊
+        image_block_pattern = rf"圖片連結：\n(https://[^\n]*/images/people/{re.escape(self.self_name)}[^\n]*\n)*"
+        text = re.sub(image_block_pattern, "", text)
+        logger.info(f"已移除 {self.self_name} 的圖片連結")
+        return text
+
+    def get_answer(self, query: str, documents: List[Document], self_name: Optional[str] = None, user_id: str = "default") -> Dict:
         """
         獲取問題的答案
         
         Args:
             query (str): 用戶的問題
             documents (List[Document]): 相關文檔列表
+            self_name (Optional[str]): AI 角色名稱
+            user_id (str): 用戶 ID，用於清除特定用戶的聊天記錄
             
         Returns:
             Dict: 包含答案、來源和找到的角色的字典
@@ -154,6 +233,20 @@ class QAChain:
             # 若外部傳入 self_name 與目前不同，更新內部狀態
             if self_name and self_name != self.self_name:
                 logger.info(f"更新主角名稱: {self.self_name} -> {self_name}")
+                
+                # 清除當前用戶的對話紀錄（當 AI 換人時）
+                try:
+                    from maya_sawa.core.chat_history import ChatHistoryManager
+                    chat_history = ChatHistoryManager()
+                    # 只清除當前用戶的對話紀錄
+                    success = chat_history.clear_conversation_history(user_id)
+                    if success:
+                        logger.info(f"已清除用戶 {user_id} 的對話紀錄（AI 換人）")
+                    else:
+                        logger.warning(f"清除用戶 {user_id} 的對話紀錄失敗")
+                except Exception as e:
+                    logger.warning(f"清除對話紀錄時發生錯誤: {e}")
+                
                 self.self_name = self_name
                 # 同步至 NameDetector 與 PersonalityPromptBuilder
                 self.name_detector.self_name = self_name
@@ -253,12 +346,21 @@ class QAChain:
                             summary_answer = self.llm.invoke(summary_prompt)
                             if hasattr(summary_answer, 'content'):
                                 summary_answer = summary_answer.content
+                            
+                            # 修正性別代詞使用
+                            if len(found_names) > 1:
+                                summary_answer = self._fix_gender_pronouns(summary_answer, found_names)
+                            
+                            # 如果只找到自己一個角色，移除圖片連結
+                            if len(found_names) == 1 and found_names[0].lower() == self.self_name.lower():
+                                summary_answer = self._remove_self_images(summary_answer)
+                            
                             if not_found:
                                 summary_answer += f"\n\n至於 {', '.join(not_found)}？我沒聽過這些人，你問錯人了。"
                             return {
-                                "answer": summary_answer,
-                                "sources": [],
-                                "found_characters": found_names
+                               "answer": summary_answer,
+                             "sources": [],
+                            "found_characters": found_names
                             }
                         except Exception as e:
                             logger.error(f"生成總結時發生錯誤: {str(e)}")
@@ -279,20 +381,14 @@ class QAChain:
                     }
             
             # 特殊處理：身份詢問問題和針對 self_name 的個人資訊問題
-            # 身份詢問關鍵詞（中文 & 英文常見寫法）
+            # 從配置管理器獲取關鍵詞
             lower_self = self.self_name.lower()
-            identity_questions = [
-                "你是誰", "你叫什麼", "妳是誰", "妳叫什麼",
-                "who are you", "who r u", "who are u",
+            identity_keywords = config_manager.get_keywords("IDENTITY_KEYWORDS")
+            identity_questions = identity_keywords + [
                 f"誰是{lower_self}", f"誰是{self.self_name}",
                 f"who is {lower_self}", f"who is {self.self_name}"
             ]
-            self_personal_questions = ["你身高", "你體重", "你年齡", "你生日", "你身材", "你胸部", "你臀部", 
-                                     "你興趣", "你喜歡", "你討厭", "你最愛", "你食物", "你個性", "你性格", 
-                                     "你職業", "你工作", "你種族", "你編號", "你代號", "你原名", "你部隊", 
-                                     "你部門", "你陣營", "你戰鬥力", "你物理", "你魔法", "你武器", "你戰鬥", 
-                                     "你屬性", "你性別", "你電子郵件", "你email", "你後宮", "你已生育", 
-                                     "你體態", "你別名", "你原部隊"]
+            self_personal_questions = config_manager.get_keywords("SELF_PERSONAL_QUESTIONS")
             
             # 檢查是否為認識類問題（優先處理）
             is_recognition_question = self.name_adapter.is_recognition_question(query)
@@ -360,12 +456,9 @@ class QAChain:
                                 ):
                                     logger.warning("Recognition LLM 回答可能無效，嘗試使用加強版提示重新生成")
 
-                                    simple_prompt = (
-                                        "以第一人稱逐一評論以下角色的資料。"
-                                        "請依戰力規則（高 → 厭惡尊重；低 → 毀滅式嘲諷；同級 → 冷淡高貴）調整語氣。"
-                                        "不要逐條列清單，也不得複製資料，需將身高、體重及戰力自然嵌入 3~5 句評論。"
-                                        "每位角色評論後換行列出四條圖片 URL。\n\n"
-                                        f"{combined_profiles}"
+                                    # 使用配置管理器獲取簡化提示模板
+                                    simple_prompt = config_manager.get_prompt("SIMPLE_RECOGNITION_PROMPT").format(
+                                        combined_profiles=combined_profiles
                                     )
 
                                     try:
@@ -384,6 +477,14 @@ class QAChain:
                                 # 如果有找不到的角色，在最後加上說明
                                 if not_found_names:
                                     recognition_answer += f"\n\n至於 {', '.join(not_found_names)}？沒聽過這個人。"
+                                
+                                # 修正性別代詞使用
+                                if len(found_names) > 1:
+                                    recognition_answer = self._fix_gender_pronouns(recognition_answer, found_names)
+                                
+                                # 如果只找到自己一個角色，移除圖片連結
+                                if len(found_names) == 1 and found_names[0].lower() == self.self_name.lower():
+                                    recognition_answer = self._remove_self_images(recognition_answer)
                                 
                                 logger.info("Returning recognition answer")
                                 return {
@@ -426,7 +527,7 @@ class QAChain:
             
             if is_maya_question:
                 logger.info(f"檢測到針對 {self.self_name} 的問題（身份詢問或個人資訊），使用個人資料回答")
-                self_summary = self.profile_manager.get_profile_summary(self.self_name)
+                self_summary = self.profile_manager.get_profile_summary(self.self_name, include_images=False)
                 
                 # 使用 LLM 生成不耐煩但完整的回答
                 identity_prompt = self.personality_builder.create_identity_prompt(query, self_summary)
@@ -435,6 +536,10 @@ class QAChain:
                     identity_answer = self.llm.invoke(identity_prompt)
                     if hasattr(identity_answer, 'content'):
                         identity_answer = identity_answer.content
+                    
+                    # 移除身份問題回答中的圖片連結
+                    identity_answer = self._remove_self_images(identity_answer)
+                    
                     return {
                         "answer": identity_answer,
                         "sources": [],
@@ -450,11 +555,7 @@ class QAChain:
                     }
             
             # 特殊處理：人員語義搜索（當問題涉及人員但沒有明確提到具體人名時）
-            people_search_keywords = [
-                "找", "推薦", "介紹", "誰", "哪個", "什麼人", "怎樣的人", "什麼樣的人",
-                "喜歡", "討厭", "擅長", "職業", "種族", "陣營", "部隊", "部門",
-                "身高", "體重", "年齡", "身材", "個性", "性格", "興趣", "愛好"
-            ]
+            people_search_keywords = config_manager.get_keywords("PEOPLE_SEARCH_KEYWORDS")
             
             is_people_search_question = (
                 not detected_names and  # 沒有明確提到具體人名
@@ -469,7 +570,7 @@ class QAChain:
                     query_embedding = self.people_manager.generate_embedding(query)
                     if query_embedding:
                         # 檢查是否包含戰鬥相關關鍵詞，如果是則按戰鬥力排序
-                        combat_keywords = ["戰鬥", "戰力", "強", "厲害", "power", "combat", "fight"]
+                        combat_keywords = config_manager.get_keywords("COMBAT_KEYWORDS")
                         sort_by_power = any(keyword in query.lower() for keyword in combat_keywords)
                         
                         search_results = self.people_manager.search_people_by_embedding(
@@ -502,10 +603,14 @@ class QAChain:
                                     search_answer = self.llm.invoke(search_prompt)
                                     if hasattr(search_answer, 'content'):
                                         search_answer = search_answer.content
+                                    
+                                    # 修正性別代詞使用
+                                    if len(found_people) > 1:
+                                        search_answer = self._fix_gender_pronouns(search_answer, [p['name'] for p in found_people])
+                                    
                                     return {
-                                        "answer": search_answer,
-                                        "sources": [],
-                                        "found_characters": [p['name'] for p in found_people]
+                                      "answer": search_answer,                "sources": [],
+                                    "found_characters": [p['name'] for p in found_people]
                                     }
                                 except Exception as e:
                                     logger.error(f"生成人員搜索回答時發生錯誤: {str(e)}")

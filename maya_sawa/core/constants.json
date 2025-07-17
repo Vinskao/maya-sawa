@@ -1,0 +1,34 @@
+{
+  "POWER_COMPARISON_MAPPING": {
+    "higher": "比我強",
+    "lower": "比我弱",
+    "equal": "與我相當"
+  },
+  "GENDER_MAPPING": {
+    "M": "你是男性，請用男性自稱（如：我、他、國王等）。",
+    "F": "你是女性，請用女性自稱（如：我、她、女王等）。",
+    "DEFAULT": "請根據資料使用正確的性別自稱。"
+  },
+  "CACHE_DURATION": 300,
+  "DEFAULT_LIMIT": 50,
+  "DEFAULT_THRESHOLD": 0.5,
+  "DEFAULT_MAX_TIME_SECONDS": 60,
+  "DEFAULT_TTL_SECONDS": 3600,
+  "IMAGE_URL_TEMPLATES": {
+    "NORMAL": "{base}/images/people/{name}.png",
+    "FIGHTING": "{base}/images/people/{name}Fighting.png",
+    "RUINED": "{base}/images/people/{name}Ruined.png",
+    "RAVISHING": "{base}/images/people/Ravishing{name}.png"
+  },
+  "API_ENDPOINTS": {
+    "PEOPLE_DAMAGE_WITH_WEAPON": "/tymb/people/damageWithWeapon",
+    "WEAPONS_BY_OWNER": "/tymb/weapons/owner",
+    "PEOPLE_GET_BY_NAME": "/tymb/people/get-by-name",
+    "PEOPLE_GET_ALL": "/tymb/people/get-all"
+  },
+  "LLM_CONFIG": {
+    "MODEL": "gpt-4.1-nano",
+    "TEMPERATURE": 0.7,
+    "MAX_TOKENS": 2000
+  }
+} 

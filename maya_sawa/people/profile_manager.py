@@ -18,6 +18,7 @@ from typing import Dict, List, Optional
 
 # 本地導入
 from ..core.config import Config
+from ..core.config_manager import config_manager
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -51,7 +52,8 @@ class ProfileManager:
         Returns:
             Optional[Dict]: 角色個人資料，如果獲取失敗則返回 None
         """
-        url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/get-by-name"
+        endpoint = config_manager.get_constant("API_ENDPOINTS")["PEOPLE_GET_BY_NAME"]
+        url = f"{Config.PUBLIC_API_BASE_URL}{endpoint}"
         payload = {"name": name}
         
         try:
@@ -75,13 +77,14 @@ class ProfileManager:
         """
         return self.fetch_profile(self.self_name)
 
-    def create_profile_summary(self, profile: Dict, name: str = None) -> str:
+    def create_profile_summary(self, profile: Dict, name: str = None, include_images: bool = True) -> str:
         """
         將個人資料轉換為摘要格式
         
         Args:
             profile (Dict): 個人資料字典
             name (str): 角色名稱，如果為 None 則使用 profile 中的資料
+            include_images (bool): 是否包含圖片連結，身份問題時設為 False
             
         Returns:
             str: 格式化的個人資料摘要
@@ -94,11 +97,8 @@ class ProfileManager:
             display_name = f"{profile.get('nameOriginal', name)}（{profile.get('name', name)}）"
             character_name = name
         
-        # 使用統一的圖片規則
-        from .personality import PersonalityPromptBuilder
-        image_rules = PersonalityPromptBuilder.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', character_name)
-        
-        return f"""
+        # 基本資料部分
+        summary = f"""
 {display_name}的個人資料：
 - 編號：{profile.get('id', 'N/A')}
 - 原名：{profile.get('nameOriginal', 'N/A')}
@@ -127,16 +127,23 @@ class ProfileManager:
 - 已生育：{profile.get('gaveBirth', 'N/A')}
 - 電子郵件：{profile.get('email', 'N/A')}
 - 代理系統：{profile.get('proxy', 'N/A')}
+"""
 
+        # 只有在需要時才添加圖片連結
+        if include_images:
+            image_rules = config_manager.get_rule('IMAGE_RULES').format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', character_name)
+            summary += f"""
 圖片連結：
 {image_rules}"""
+        return summary
 
-    def get_profile_summary(self, name: str = None) -> str:
+    def get_profile_summary(self, name: str = None, include_images: bool = True) -> str:
         """
         獲取個人資料摘要，使用緩存避免重複 API 調用
         
         Args:
             name (str): 角色名稱，預設為 "Maya"
+            include_images (bool): 是否包含圖片連結，身份問題時設為 False
             
         Returns:
             str: 個人資料摘要
@@ -150,7 +157,7 @@ class ProfileManager:
                 profile = self.fetch_self_profile()
                 if profile:
                     self._profile_cache = profile
-                    self._profile_summary_cache = self.create_profile_summary(profile)
+                    self._profile_summary_cache = self.create_profile_summary(profile, include_images=include_images)
                 else:
                     # 如果無法獲取資料，使用預設摘要
                     self._profile_summary_cache = f"""
@@ -160,14 +167,15 @@ class ProfileManager:
             return self._profile_summary_cache
         else:
             # 其他角色使用一般快取
-            return self.get_other_profile_summary(name)
+            return self.get_other_profile_summary(name, include_images=include_images)
 
-    def get_other_profile_summary(self, name: str) -> Optional[str]:
+    def get_other_profile_summary(self, name: str, include_images: bool = True) -> Optional[str]:
         """
         獲取其他角色的個人資料摘要，使用緩存避免重複 API 調用
         
         Args:
             name (str): 角色名稱
+            include_images (bool): 是否包含圖片連結，身份問題時設為 False
             
         Returns:
             Optional[str]: 個人資料摘要，如果獲取失敗則返回 None
@@ -179,7 +187,7 @@ class ProfileManager:
         # 從 API 獲取資料
         profile = self.fetch_profile(name)
         if profile:
-            summary = self.create_profile_summary(profile, name)
+            summary = self.create_profile_summary(profile, name, include_images=include_images)
             self._other_profiles_cache[name] = summary
             return summary
         else:

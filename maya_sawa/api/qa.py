@@ -451,7 +451,7 @@ async def query_document(request: QueryRequest):
         
         # 獲取答案和分析結果
         # 將前端傳入的 name 轉給 QAChain，若未提供則沿用預設 "Maya"
-        result = qa_chain.get_answer(request.text, documents, self_name=(request.name or "Maya"))
+        result = qa_chain.get_answer(request.text, documents, self_name=(request.name or "Maya"), user_id=request.user_id)
         
         # 如果語言為英語，翻譯答案
         if request.language.lower() == "english":

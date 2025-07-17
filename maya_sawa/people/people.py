@@ -37,6 +37,7 @@ except ImportError:  # pragma: no cover
 # Import connection pool & config from core package
 from maya_sawa.core.connection_pool import get_pool_manager
 from maya_sawa.core.config import Config
+from maya_sawa.core.config_manager import config_manager
 
 # Import OpenAI for embeddings
 try:
@@ -79,7 +80,8 @@ class PeopleWeaponManager:
         Returns:
             List[Dict[str, Any]]: List of people data
         """
-        url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/get-all"
+        endpoint = config_manager.get_constant("API_ENDPOINTS")["PEOPLE_GET_ALL"]
+        url = f"{Config.PUBLIC_API_BASE_URL}{endpoint}"
         
         try:
             with httpx.Client(timeout=30.0) as client:
@@ -114,7 +116,8 @@ class PeopleWeaponManager:
     def fetch_weapons_by_owner(self, owner: str) -> List[Dict[str, Any]]:
         """Fetch weapons owned by a specific character."""
         base_url = os.getenv("PUBLIC_API_BASE_URL", "")
-        url = f"{base_url}/tymb/weapons/owner/{owner}"
+        endpoint = config_manager.get_constant("API_ENDPOINTS")["WEAPONS_BY_OWNER"]
+        url = f"{base_url}{endpoint}/{owner}"
         try:
             with httpx.Client(timeout=10.0) as client:
                 response = client.get(url)
@@ -127,7 +130,8 @@ class PeopleWeaponManager:
     def fetch_total_damage_with_weapon(self, name: str) -> Optional[int]:
         """Fetch total damage (physic + weapon) calculated by remote API."""
         base_url = os.getenv("PUBLIC_API_BASE_URL", "")
-        url = f"{base_url}/tymb/people/damageWithWeapon?name={name}"
+        endpoint = config_manager.get_constant("API_ENDPOINTS")["PEOPLE_DAMAGE_WITH_WEAPON"]
+        url = f"{base_url}{endpoint}?name={name}"
         try:
             with httpx.Client(timeout=10.0) as client:
                 response = client.get(url)

@@ -11,6 +11,9 @@ import logging
 import re
 from typing import List, Dict, Optional
 
+# 本地導入
+from maya_sawa.core.config_manager import config_manager
+
 logger = logging.getLogger(__name__)
 
 class NameAdapter:
@@ -22,17 +25,8 @@ class NameAdapter:
         """
         初始化名稱適配器
         """
-        # 常見的問句模式
-        self.recognition_patterns = [
-            r"你認識(.+?)[嗎麼不？]",
-            r"你知道(.+?)[嗎麼不？]",
-            r"你見過(.+?)[嗎麼不？]",
-            r"你認識(.+?)$",  # 處理沒有結尾標點的情況
-            r"你知道(.+?)$",
-            r"你見過(.+?)$",
-            r"(.+?)是誰[？?]?",   # 新增：例如 "Wavo是誰?"
-            r"who is (.+?)$"      # 英文形式
-        ]
+        # 從配置管理器獲取識別模式
+        self.recognition_patterns = config_manager.get_keywords("RECOGNITION_PATTERNS")
     
     def normalize_name(self, name: str) -> str:
         """

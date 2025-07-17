@@ -165,6 +165,32 @@ pipeline {
                 }
             }
         }
+
+        stage('Validate JSON Configs') {
+            steps {
+                sh '''
+                    echo "Validating JSON configuration files..."
+                    
+                    # 驗證 rules.json
+                    python3 -c "import json; json.load(open('maya_sawa/core/rules.json'))"
+                    echo "✓ rules.json validated"
+                    
+                    # 驗證 keywords.json
+                    python3 -c "import json; json.load(open('maya_sawa/core/keywords.json'))"
+                    echo "✓ keywords.json validated"
+                    
+                    # 驗證 prompts.json
+                    python3 -c "import json; json.load(open('maya_sawa/core/prompts.json'))"
+                    echo "✓ prompts.json validated"
+                    
+                    # 驗證 constants.json
+                    python3 -c "import json; json.load(open('maya_sawa/core/constants.json'))"
+                    echo "✓ constants.json validated"
+                    
+                    echo "All JSON configuration files validated successfully"
+                '''
+            }
+        }
     }
     post {
         always {

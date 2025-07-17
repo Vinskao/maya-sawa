@@ -9,6 +9,8 @@ Markdown Q&A System - 個性提示建構模組
 
 # 標準庫導入
 import logging
+import os
+import json
 try:
     import httpx  # type: ignore
 except ImportError:  # pragma: no cover
@@ -17,6 +19,7 @@ from typing import Dict, List, Optional
 
 # 本地導入
 from maya_sawa.core.config import Config
+from maya_sawa.core.config_manager import config_manager
 from .profile_manager import ProfileManager
 
 # ==================== 日誌配置 ====================
@@ -24,14 +27,6 @@ logger = logging.getLogger(__name__)
 
 # 修改：支援動態 self_name
 class PersonalityPromptBuilder:
-    # 圖片規則統一常數
-    IMAGE_RULES = (
-        "每位角色評論完後立即換行，只列出四條圖片連結，不要任何註解：\n"
-        f"{{base}}/images/people/[角色名].png\n"
-        f"{{base}}/images/people/[角色名]Fighting.png\n"
-        f"{{base}}/images/people/[角色名]Ruined.png\n"
-        f"{{base}}/images/people/Ravishing[角色名].png\n"
-    )
     """
     統一管理self_name個性描述與產生個性化prompt
     """
@@ -51,18 +46,11 @@ class PersonalityPromptBuilder:
         self._power_weapon_cache = {}
         self._cache_duration = 300  # 5分鐘緩存
 
-        # 只用 API personality，沒有就空字串
-        try:
-            profile = self.profile_manager.fetch_profile(self.self_name)
-            if profile and profile.get("personality"):
-                self.personality = profile["personality"]
-                logger.debug(f"Loaded dynamic personality for {self.self_name}: {self.personality}")
-            else:
-                self.personality = ""
-                logger.debug(f"No personality found for {self.self_name} from API.")
-        except Exception as e:
-            self.personality = ""
-            logger.debug(f"Unable to load personality for {self.self_name} from API: {e}")
+        # 初始化時不載入 personality，避免顯示錯誤角色的個性
+        self.personality = ""
+
+        # 使用配置管理器載入規則
+        self.rules = config_manager.rules
 
     def create_personality_prompt(self, query: str, additional_context: str = "") -> str:
         """
@@ -75,6 +63,10 @@ class PersonalityPromptBuilder:
         Returns:
             str: 格式化的個性提示
         """
+        # 確保 personality 已載入
+        if not self.personality:
+            self.refresh_personality()
+        
         return f"""{self.personality}
 
 有人問你「{query}」。
@@ -93,6 +85,10 @@ class PersonalityPromptBuilder:
         Returns:
             str: 動態創建的提示模板
         """
+        # 確保 personality 已載入
+        if not self.personality:
+            self.refresh_personality()
+        
         return f"""{self.personality}
 
 個人資料如下：
@@ -129,44 +125,40 @@ class PersonalityPromptBuilder:
                     gender = 'M'
                 elif g.startswith('F'):
                     gender = 'F'
-        if gender == 'M':
-            return "你是男性，請用男性自稱（如：我、他、國王等）。"
-        elif gender == 'F':
-            return "你是女性，請用女性自稱（如：我、她、女王等）。"
-        else:
-            return "請根據資料使用正確的性別自稱。"
+        
+        # 使用配置管理器獲取性別說明
+        return config_manager.get_gender_instruction(gender or 'DEFAULT')
 
     def create_identity_prompt(self, query: str, profile_summary: str, for_self: bool = True) -> str:
-        personality_text = self.parse_personality(for_self=for_self)
+        # 確保 personality 已載入
+        if not self.personality:
+            self.refresh_personality()
+        
+        # 身份問題只使用自己對自己的認知
+        personality_text = self.parse_personality(for_self=True)
         gender_instruction = self._get_gender_instruction(profile_summary)
+        
         if for_self:
-            return f"""{personality_text}
-
-{gender_instruction}
-
-有人問你「{query}」。
-
-你的個人資料（僅供參考，不要直接複製）：
-{profile_summary}
-
-記住：你是{self.self_name}，用你的個性回答問題。"""
+            # 使用配置管理器獲取提示模板
+            template = config_manager.get_prompt("IDENTITY_PROMPT_TEMPLATE")["FOR_SELF"]
+            return template.format(
+                personality_text=personality_text,
+                gender_instruction=gender_instruction,
+                query=query,
+                profile_summary=profile_summary,
+                self_name=self.self_name
+            )
         else:
-            return f"""請根據下列資料，以第三人稱評論 {self.self_name}，3~5 句，評論要有個性、不要像在做報告。
-
-{self.self_name} 的個性：{personality_text}
-
-{gender_instruction}
-
-=== {self.self_name} 的資料 ===
-{profile_summary}
-
-⚠ 回答要求：
-1. 只能評論 {self.self_name}，不要提及自己。
-2. 必須附上圖片連結。
-3. 不要重複本段文字或提及「回答規則」四字。
-4. 內容必須基於資料，不得憑空捏造。
-{self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)}
-"""
+            # 使用配置管理器獲取提示模板
+            template = config_manager.get_prompt("IDENTITY_PROMPT_TEMPLATE")["FOR_OTHER"]
+            image_rules = self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', self.self_name)
+            return template.format(
+                target_name=self.self_name,
+                personality_text=personality_text,
+                gender_instruction=gender_instruction,
+                profile_summary=profile_summary,
+                image_rules=image_rules
+            )
 
     def create_other_identity_prompt(self, query: str, profile_summary: str, target_name: str) -> str:
         personality_text = self.parse_personality(for_self=False)
@@ -209,25 +201,25 @@ class PersonalityPromptBuilder:
                 # 動態取得戰力與武器
                 info = self.compare_power_and_get_weapons(name)
                 if info["power_comparison"]:
-                    comparison_text = {
-                        "higher": "比我強",
-                        "lower": "比我弱", 
-                        "equal": "與我相當"
-                    }.get(info["power_comparison"], "未知")
+                    comparison_text = config_manager.get_power_comparison_text(info["power_comparison"])
                     power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
                 else:
                     power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
 
-                # 給規則段落用的範例格式 (不顯示在最終回答)
+                # 使用配置管理器獲取圖片 URL 模板
                 image_links_block += (
-                    f"\n範例：\n{Config.PUBLIC_API_BASE_URL}/images/people/{name}.png\n"
-                    f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Fighting.png\n"
-                    f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Ruined.png\n"
-                    f"{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{name}.png\n"
+                    f"\n範例：\n{config_manager.get_image_url('NORMAL', Config.PUBLIC_API_BASE_URL, name)}\n"
+                    f"{config_manager.get_image_url('FIGHTING', Config.PUBLIC_API_BASE_URL, name)}\n"
+                    f"{config_manager.get_image_url('RUINED', Config.PUBLIC_API_BASE_URL, name)}\n"
+                    f"{config_manager.get_image_url('RAVISHING', Config.PUBLIC_API_BASE_URL, name)}\n"
                 )
  
         # === 最終提示 ===
-        return f"""你是{self.self_name}，{self.personality}
+        # 確保 personality 已載入
+        if not self.personality:
+            self.refresh_personality()
+        
+        return """你是{self_name}，{personality}
 
 有人問你「{query}」。
 
@@ -236,13 +228,27 @@ class PersonalityPromptBuilder:
 {combined_other_profiles}{power_weapon_info}{image_links_block}
 
 ### 回答規則
-1. 內容必須基於資料，不得憑空捏造。
-2. 直接對 **每位角色評論 3~5 句**（不需要自我介紹）。
-3. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
-4. **嚴禁對其他角色使用第二人稱「你」**，男性角色請用「他」，女性或其他性別請用「她」。
-5. 總戰力 **高於你 → 厭惡但帶著畏懼的尊重，不得辱罵**；總戰力低 → 毀滅式嘲諷；同級 → 冷淡高貴
-6. 不要輸出本區任一條規則文字
-"""
+1. {data_based_rules}
+2. **直接表達你對每位角色的看法**（3~5句），不要描述角色之間的互動。
+3. {image_rules}
+4. **嚴禁對其他角色使用第二人稱「你」**，{gender_rules}
+5. {power_rules}
+6. {no_output_rules}
+
+**重要提醒**：戰力比較已在資料中明確標示，必須嚴格按照戰力規則調整語氣！
+""".format(
+            self_name=self.self_name,
+            personality=self.personality,
+            query=query,
+            combined_other_profiles=combined_other_profiles,
+            power_weapon_info=power_weapon_info,
+            image_links_block=image_links_block,
+            data_based_rules=self.rules['DATA_BASED_RULES'],
+            image_rules=self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL),
+            gender_rules=self.rules['GENDER_RULES'],
+            power_rules=self.rules['POWER_RULES'],
+            no_output_rules=self.rules['NO_OUTPUT_RULES']
+        )
 
     def create_summary_prompt(self, query: str, combined_profiles: str, character_names: List[str] = None) -> str:
         """
@@ -267,23 +273,20 @@ class PersonalityPromptBuilder:
                     continue
                 info = self.compare_power_and_get_weapons(name)
                 if info["power_comparison"]:
-                    comparison_text = {
-                        "higher": "比我強",
-                        "lower": "比我弱", 
-                        "equal": "與我相當"
-                    }.get(info["power_comparison"], "未知")
+                    comparison_text = config_manager.get_power_comparison_text(info["power_comparison"])
                     power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
                 else:
                     power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
 
+                # 使用配置管理器獲取圖片 URL 模板
                 image_links_block += (
-                    f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}.png\n"
-                    f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Fighting.png\n"
-                    f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Ruined.png\n"
-                    f"{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{name}.png\n"
+                    f"{config_manager.get_image_url('NORMAL', Config.PUBLIC_API_BASE_URL, name)}\n"
+                    f"{config_manager.get_image_url('FIGHTING', Config.PUBLIC_API_BASE_URL, name)}\n"
+                    f"{config_manager.get_image_url('RUINED', Config.PUBLIC_API_BASE_URL, name)}\n"
+                    f"{config_manager.get_image_url('RAVISHING', Config.PUBLIC_API_BASE_URL, name)}\n"
                 )
  
-        return f"""你是{self.self_name}，{self.personality}
+        return ("""你是{self_name}，{personality}
 
 有人問你「{query}」。
 
@@ -291,15 +294,25 @@ class PersonalityPromptBuilder:
 
 {combined_profiles}{power_weapon_info}
 
-### 回答規則
-1. 如果只有 1 位角色：依戰力規則評論並附圖片，不得提及其他角色
-2. 若多位角色：逐一評論，每位 2~4 句後緊跟圖片連結
-3. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
-4. 不要輸出本段文字
-"""
+### 回答規則1. 如果只有1位角色：依戰力規則評論並附圖片，不得提及其他角色2 若多位角色：逐一表達你對每位角色的看法，每位2句後緊跟圖片連結
+3. {image_rules}
+4. {gender_rules}
+5. {power_rules}
+6. {no_output_rules}
+""").format(
+            self_name=self.self_name,
+            personality=self.personality,
+            query=query,
+            combined_profiles=combined_profiles,
+            power_weapon_info=power_weapon_info,
+            image_rules=self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL),
+            gender_rules=self.rules['GENDER_RULES'],
+            power_rules=self.rules['POWER_RULES'],
+            no_output_rules=self.rules['NO_OUTPUT_RULES']
+        )
 
     def create_data_answer_prompt(self, query: str, profile_summary: str, target_name: str = None) -> str:
-        identity_keywords = ["你是誰", "你叫什麼", "妳是誰", "妳叫什麼", "who are you", "who r u", "who are u"]
+        identity_keywords = ["你是誰", "你叫什麼", "妳是誰", "妳叫什麼", "who are you, who r u", "who are u"]
         is_identity_question = any(keyword in query.lower() for keyword in identity_keywords)
 
         is_self = False
@@ -309,12 +322,8 @@ class PersonalityPromptBuilder:
         gender_instruction = self._get_gender_instruction(profile_summary)
 
         if is_identity_question or is_self:
-            # 絕對不插入圖片區塊
-            return self.create_identity_prompt(query, profile_summary, for_self=True)
-        else:
-            # 只用她人對自己的認知，且 personality_text 必須明顯出現在最前面
-            personality_text = self.parse_personality(for_self=False)
-            image_block = self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', target_name)
+            # 身份問題或關於自己的問題，絕對不插入圖片區塊
+            personality_text = self.parse_personality(for_self=True)
             return f"""{personality_text}
 
 {gender_instruction}
@@ -323,9 +332,40 @@ class PersonalityPromptBuilder:
 
 {profile_summary}
 
-{image_block}
+記住：你是{self.self_name}，用你的個性回答問題。直接回答，不要說「有人問我...時，我會...說：」之類的開場白。"""
+        else:
+            # 只用她人對自己的認知，且 personality_text 必須明顯出現在最前面
+            personality_text = self.parse_personality(for_self=False)
+            image_block = self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL).replace('[角色名]', target_name)
+            
+            # 獲取戰力比較信息
+            power_info = ""
+            if target_name:
+                info = self.compare_power_and_get_weapons(target_name)
+                if info["power_comparison"]:
+                    comparison_text = config_manager.get_power_comparison_text(info["power_comparison"])
+                    power_info = f"\n\n戰力信息：{target_name} 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
+            
+            return (f"""{personality_text}
 
-記住：你是{self.self_name}，用你的個性回答問題。"""
+{gender_instruction}
+
+有人問你「{query}」。
+
+{profile_summary}{power_info}
+
+### 回答規則
+1. {self.rules['DATA_BASED_RULES']}
+2. {self.rules['GENDER_RULES']}
+3. {self.rules['POWER_RULES']}
+4. {self.rules['NATURAL_DIALOGUE_RULES']}
+5. {self.rules['NO_OUTPUT_RULES']}
+
+**重要提醒**：戰力比較已在資料中明確標示，必須嚴格按照戰力規則調整語氣！
+
+""" + image_block + f"""
+
+記住：你是{self.self_name}，用你的個性回答問題。""")
 
     def create_not_found_prompt(self, query: str, not_found_names: list = None) -> str:
         """
@@ -338,20 +378,11 @@ class PersonalityPromptBuilder:
         Returns:
             str: 找不到角色的個性提示
         """
+        # 使用配置管理器獲取提示模板
         if not_found_names:
-            context = f"""⚠ 回答要求：
-1. 告訴對方你找不到這些角色：{', '.join(not_found_names)}
-2. 用不耐煩但不得不回答的語氣
-3. 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
-4. 語氣冷淡、失禮、明顯不耐
-5. 不要提供任何假資料"""
+            context = config_manager.get_prompt("NOT_FOUND_PROMPT")["WITH_NAMES"].format(names=', '.join(not_found_names))
         else:
-            context = """⚠ 回答要求：
-1. 告訴對方你找不到這個角色
-2. 用不耐煩但不得不回答的語氣
-3. 可以說「這種問題也值得問？」「你問這個幹嘛？」之類的話
-4. 語氣冷淡、失禮、明顯不耐
-5. 不要提供任何假資料"""
+            context = config_manager.get_prompt("NOT_FOUND_PROMPT")["WITHOUT_NAMES"]
         
         return self.create_personality_prompt(query, context)
 
@@ -377,35 +408,30 @@ class PersonalityPromptBuilder:
                     continue
                 info = self.compare_power_and_get_weapons(name)
                 if info["power_comparison"]:
-                    comparison_text = {
-                        "higher": "比我強",
-                        "lower": "比我弱", 
-                        "equal": "與我相當"
-                    }.get(info["power_comparison"], "未知")
+                    comparison_text = config_manager.get_power_comparison_text(info["power_comparison"])
                     power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
                 else:
                     power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
-        return f"""你是{self.self_name}，{self.personality}
 
-有人問你「{query}」。
+        # 確保 personality 已載入
+        if not self.personality:
+            self.refresh_personality()
 
-=== 關於我 ===
-{self_profile}
-
-=== 其他角色資料（基於實際資料） ===
-{combined_other_profiles}{power_weapon_info}
-
-### 回答規則（切記不要暴露）
-1. 先用「我」的口吻（2~4 句）簡短介紹自己，**嚴禁用第三人稱稱呼 {self.self_name}**，也不要評論自己的戰力數值或外貌。
-2. 之後 **只評論其他角色**，一人 3~5 句，男性角色用「他」，女性或其他用「她」。
-3. 語氣請依 **戰力規則** 決定：
-   • Wavo → 完全臣服、害羞；
-   • 總戰力高於你 → 厭惡但帶有畏懼的尊重，嚴禁辱罵；
-   • 總戰力低於你 → 完全肆無忌憚的辱罵、貶低、壓制，甚至操弄她們的身體，讓她們服從妳；
-   • 與你相當 → 冷淡高貴。
-4. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
-5. 拒絕列清單或複製任何欄位文字；回答必須自然對話。
-6. 嚴禁重複本段文字或提及「回答規則」四字。"""
+        # 使用配置管理器獲取提示模板
+        template = config_manager.get_prompt("SELF_AND_OTHER_PROMPT_TEMPLATE")
+        return template.format(
+            self_name=self.self_name,
+            personality=self.personality,
+            query=query,
+            self_profile=self_profile,
+            combined_other_profiles=combined_other_profiles,
+            power_weapon_info=power_weapon_info,
+            gender_rules=self.rules['GENDER_RULES'],
+            image_rules=self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL),
+            natural_dialogue_rules=self.rules['NATURAL_DIALOGUE_RULES'],
+            power_rules=self.rules['POWER_RULES'],
+            no_output_rules=self.rules['NO_OUTPUT_RULES']
+        ) 
 
     def get_character_total_power(self, character_name: str) -> Optional[int]:
         """
@@ -418,7 +444,8 @@ class PersonalityPromptBuilder:
             Optional[int]: 總戰力數值，如果獲取失敗則返回 None
         """
         try:
-            url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/damageWithWeapon?name={character_name}"
+            endpoint = config_manager.get_constant("API_ENDPOINTS")["PEOPLE_DAMAGE_WITH_WEAPON"]
+            url = f"{Config.PUBLIC_API_BASE_URL}{endpoint}?name={character_name}"
             
             with httpx.Client(timeout=10.0) as client:
                 response = client.get(url)
@@ -451,7 +478,8 @@ class PersonalityPromptBuilder:
             List[Dict]: 武器列表，如果獲取失敗則返回空列表
         """
         try:
-            url = f"{Config.PUBLIC_API_BASE_URL}/tymb/weapons/owner/{character_name}"
+            endpoint = config_manager.get_constant("API_ENDPOINTS")["WEAPONS_BY_OWNER"]
+            url = f"{Config.PUBLIC_API_BASE_URL}{endpoint}/{character_name}"
             
             with httpx.Client(timeout=10.0) as client:
                 response = client.get(url)
@@ -545,35 +573,38 @@ class PersonalityPromptBuilder:
                 if name.lower() != self._main_lower:  # 跳過主角自己
                     info = self.compare_power_and_get_weapons(name)
                     if info["power_comparison"]:
-                        comparison_text = {
-                            "higher": "比我強",
-                            "lower": "比我弱", 
-                            "equal": "與我相當"
-                        }.get(info["power_comparison"], "未知")
-                        
+                        comparison_text = config_manager.get_power_comparison_text(info["power_comparison"])
                         power_weapon_info += f"- {name}: 總戰力 {info['target_power']} ({comparison_text}), {info['weapon_info']}\n"
                     else:
                         power_weapon_info += f"- {name}: 戰力信息獲取失敗\n"
         
-        return f"""你是{self.self_name}，{self.personality}
-
-有人問你「{query}」。
-
-根據你的問題，我找到了以下相關人員：
-
-{combined_people_info}{power_weapon_info}
-
-⚠ 回答要求：
-1. **基於上述實際資料回答問題**，不要憑空想像
-2. **逐一介紹找到的人員**（男性角色用「他」、女性或其他角色用「她」），語氣要像在背後評論人，不客觀、不假裝中立
-3. {self.IMAGE_RULES.format(base=Config.PUBLIC_API_BASE_URL)}
-
-記住：你是{self.self_name}，用你的個性回答問題。""" 
+        # 確保 personality 已載入
+        if not self.personality:
+            self.refresh_personality()
+        
+        # 使用配置管理器獲取提示模板
+        template = config_manager.get_prompt("PEOPLE_SEARCH_PROMPT_TEMPLATE")
+        return template.format(
+            self_name=self.self_name,
+            personality=self.personality,
+            query=query,
+            combined_people_info=combined_people_info,
+            power_weapon_info=power_weapon_info,
+            gender_rules=self.rules['GENDER_RULES'],
+            power_rules=self.rules['POWER_RULES'],
+            image_rules=self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL),
+            natural_dialogue_rules=self.rules['NATURAL_DIALOGUE_RULES'],
+            no_output_rules=self.rules['NO_OUTPUT_RULES']
+        ) 
 
     def parse_personality(self, for_self: bool = True) -> str:
         """
         解析 personality 欄位，根據 for_self 參數回傳對應文本
         """
+        # 確保 personality 已載入
+        if not self.personality:
+            self.refresh_personality()
+        
         if not self.personality:
             return ""
         parts = self.personality.split(";")

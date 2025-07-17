@@ -51,13 +51,14 @@ class QAEngine:
         self.chain = QAChain()
         logger.info("QAEngine 初始化完成")
 
-    async def get_answer(self, question: str, documents: List[Document] = None) -> Dict:
+    async def get_answer(self, question: str, documents: List[Document] = None, user_id: str = "default") -> Dict:
         """
         異步問答方法，直接調用 QAChain
         
         Args:
             question (str): 用戶的問題
             documents (List[Document], optional): 相關文檔列表，如果為 None 則使用空列表
+            user_id (str): 用戶 ID，用於清除特定用戶的聊天記錄
             
         Returns:
             Dict: 包含答案和來源信息的字典，格式為 {"answer": str, "sources": List[str]}
@@ -70,7 +71,7 @@ class QAEngine:
                 documents = []
             
             # 調用 QAChain 的 get_answer 方法
-            result = self.chain.get_answer(question, documents)
+            result = self.chain.get_answer(question, documents, user_id=user_id)
             
             logger.debug(f"QAEngine.get_answer 完成，答案長度: {len(result.get('answer', ''))}")
             return result

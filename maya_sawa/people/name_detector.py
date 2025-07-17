@@ -12,6 +12,9 @@ import logging
 from typing import List, Optional
 import re
 
+# 本地導入
+from maya_sawa.core.config_manager import config_manager
+
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
 
@@ -41,52 +44,27 @@ class NameDetector:
         使用 AI 從問題中提取所有可能的人名
         """
         self._original_extracted_names = []
-        personal_keywords = [
-            # Chinese
-            "身高", "體重", "年齡", "生日", "出生", "身材", "胸部", "臀部", 
-            "興趣", "喜歡", "討厭", "最愛", "食物", "個性", "性格", "職業", 
-            "工作", "種族", "編號", "代號", "原名", "部隊", "部門", "陣營",
-            "戰鬥力", "物理", "魔法", "武器", "戰鬥", "屬性", "性別", "電子郵件",
-            "後宮", "已生育", "體態", "別名", "原部隊", "是誰", 
-            "誰是", "怎樣", "什麼人", "有什麼特徵", "資料", "資訊", "個人",
-            "認識", "知道", "見過",
-
-            # English
-            "who is", "who are", "tell me about", "what is", "what are",
-            "height", "weight", "age", "birthday", "birth", "body",
-            "interests", "likes", "dislikes", "favorite", "personality",
-            "occupation", "job", "race", "faction", "combat power",
-            "weapon", "attributes", "gender", "email", "do you know",
-            "have you met", "recognize"
-        ]
-        detailed_keywords = [
-            "詳細", "完整", "全部", "所有", "具體", "詳細資料", "完整資料", 
-            "所有資料", "具體資料", "詳細資訊", "完整資訊", "所有資訊", "具體資訊"
-        ]
+        
+        # 從配置管理器獲取關鍵詞
+        personal_keywords_chinese = config_manager.get_keywords("PERSONAL_KEYWORDS")["CHINESE"]
+        personal_keywords_english = config_manager.get_keywords("PERSONAL_KEYWORDS")["ENGLISH"]
+        personal_keywords = personal_keywords_chinese + personal_keywords_english
+        
+        detailed_keywords = config_manager.get_keywords("DETAILED_KEYWORDS")
+        identity_keywords = config_manager.get_keywords("IDENTITY_KEYWORDS")
+        
         self._request_detailed = any(keyword in question for keyword in detailed_keywords)
         has_personal_keyword = any(keyword in question for keyword in personal_keywords)
         if not has_personal_keyword:
             return []
-        identity_keywords = ["你是誰", "你叫什麼", "妳是誰", "妳叫什麼", "who are you", "who r u", "who are u"]
+        
         is_identity_question = any(keyword in question.lower() for keyword in identity_keywords)
-        # 不再直接 return self_name，改為最後補進 validated_names
-        # AI抽名
-        name_extraction_prompt = f"""
-請從以下問題中精確找出所有「明確在問題文字中出現」的人名（角色名稱）。格式要求如下：
-1. 僅回傳問題中出現過的人名
-2. 不要加入任何未出現的人名
-3. 如果完全沒有人名，就返回空字串
-4. 不要進行任何猜測或補全
-5. 結果請僅用英文逗號分隔人名，不要包含任何敘述或格式
-6. 如果問題是身份詢問（如「你是誰？」「你叫什麼？」等），請返回 "{self.self_name}"
-範例：
-- 問題：「你是誰？」→ 回應："{self.self_name}"
-- 問題：「你叫什麼名字？」→ 回應："{self.self_name}"
-- 問題：「Alice的身高是多少？」→ 回應：「Alice」
-- 問題：「請比較 Bob 和 Carol」→ 回應：「Bob,Carol」
-- 問題：「你認識 Wavo 跟 Alice 嗎？」→ 回應：「Wavo,Alice」
-問題：{question}
-"""
+        
+        # 從配置管理器獲取提示模板
+        name_extraction_prompt = config_manager.get_prompt("NAME_EXTRACTION_PROMPT").format(
+            self_name=self.self_name,
+            question=question
+        )
         try:
             response = self.llm.invoke(name_extraction_prompt)
             if hasattr(response, 'content'):
