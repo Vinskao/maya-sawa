@@ -19,7 +19,6 @@ psycopg2-binary = "^2.9.9"
 httpx = "^0.27.0"
 redis = "^5.0.1"
 openai = "^1.0.0"
-googletrans = "4.0.0-rc1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

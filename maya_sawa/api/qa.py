@@ -28,11 +28,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import httpx
 # 可能可用的翻譯備援
-try:
-    from googletrans import Translator as GoogleTranslator
-    _google_translator_available = True
-except ImportError:
-    _google_translator_available = False
+# 移除 googletrans 依賴，只使用 LLM 翻譯
+_google_translator_available = False
 
 # LangChain 相關導入
 from maya_sawa.core.langchain_shim import Document
@@ -97,10 +94,11 @@ async def translate_to_english(text: str) -> str:
             # 若主要翻譯失敗且可用 Google 翻譯，作為備援
             if _google_translator_available:
                 try:
-                    translator = GoogleTranslator(service_urls=["translate.googleapis.com"])
-                    translated_google = translator.translate(text, src="zh-CN", dest="en").text
-                    if _is_translation_valid(text, translated_google):
-                        translated = translated_google
+                    # translator = GoogleTranslator(service_urls=["translate.googleapis.com"])
+                    # translated_google = translator.translate(text, src="zh-CN", dest="en").text
+                    # if _is_translation_valid(text, translated_google):
+                    #     translated = translated_google
+                    pass # 移除 googletrans 依賴，這裡不再有備援翻譯
                 except Exception as e:
                     logger.warning(f"Google translate fallback failed: {str(e)}")
 
