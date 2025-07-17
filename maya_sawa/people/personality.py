@@ -56,13 +56,13 @@ class PersonalityPromptBuilder:
             profile = self.profile_manager.fetch_profile(self.self_name)
             if profile and profile.get("personality"):
                 self.personality = profile["personality"]
-                logger.info(f"Loaded dynamic personality for {self.self_name}: {self.personality}")
+                logger.debug(f"Loaded dynamic personality for {self.self_name}: {self.personality}")
             else:
                 self.personality = ""
-                logger.warning(f"No personality found for {self.self_name} from API.")
+                logger.debug(f"No personality found for {self.self_name} from API.")
         except Exception as e:
             self.personality = ""
-            logger.warning(f"Unable to load personality for {self.self_name} from API: {e}")
+            logger.debug(f"Unable to load personality for {self.self_name} from API: {e}")
 
     def create_personality_prompt(self, query: str, additional_context: str = "") -> str:
         """
