@@ -323,6 +323,15 @@ class QAChain:
                     else:
                         # === 根據角色數量選擇不同 prompt ===
                         if len(found_names) > 1:
+                            # 當問題涉及多個角色時，也要包含 AI 自己的資料
+                            if self.self_name not in found_names:
+                                # 添加 AI 自己的資料
+                                self_summary = self.profile_manager.get_profile_summary(self.self_name)
+                                if self_summary:
+                                    all_profiles.insert(0, f"=== {self.self_name} 的資料 ===\n{self_summary}")
+                                    found_names.insert(0, self.self_name)
+                                    combined_profiles = "\n\n".join(all_profiles)
+                            
                             if self.self_name in found_names and len(found_names) > 1:
                                 # 分離 self 以外的資料供評論
                                 other_profiles_block = "\n\n".join([
@@ -351,8 +360,8 @@ class QAChain:
                             if len(found_names) > 1:
                                 summary_answer = self._fix_gender_pronouns(summary_answer, found_names)
                             
-                            # 如果只找到自己一個角色，移除圖片連結
-                            if len(found_names) == 1 and found_names[0].lower() == self.self_name.lower():
+                            # 如果包含自己，移除自己的圖片連結
+                            if self.self_name in found_names:
                                 summary_answer = self._remove_self_images(summary_answer)
                             
                             if not_found:

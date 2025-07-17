@@ -223,13 +223,13 @@ class PersonalityPromptBuilder:
 
 有人問你「{query}」。
 
-關於其他角色（基於實際資料）：
+關於所有相關角色（包括自己，基於實際資料）：
 
 {combined_other_profiles}{power_weapon_info}{image_links_block}
 
 ### 回答規則
 1. {data_based_rules}
-2. **直接表達你對每位角色的看法**（3~5句），不要描述角色之間的互動。
+2. **逐一表達你對每位角色的看法**（每位3~5句），包括對自己的看法，不要描述角色之間的互動。必須回答所有提到的角色。
 3. {image_rules}
 4. **嚴禁對其他角色使用第二人稱「你」**，{gender_rules}
 5. {power_rules}
@@ -417,6 +417,15 @@ class PersonalityPromptBuilder:
         if not self.personality:
             self.refresh_personality()
 
+        # 為每個其他角色生成具體的圖片規則
+        specific_image_rules = ""
+        for name in other_names:
+            specific_image_rules += f"\n{name} 的圖片連結：\n"
+            specific_image_rules += f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}.png\n"
+            specific_image_rules += f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Fighting.png\n"
+            specific_image_rules += f"{Config.PUBLIC_API_BASE_URL}/images/people/{name}Ruined.png\n"
+            specific_image_rules += f"{Config.PUBLIC_API_BASE_URL}/images/people/Ravishing{name}.png\n"
+
         # 使用配置管理器獲取提示模板
         template = config_manager.get_prompt("SELF_AND_OTHER_PROMPT_TEMPLATE")
         return template.format(
@@ -427,7 +436,7 @@ class PersonalityPromptBuilder:
             combined_other_profiles=combined_other_profiles,
             power_weapon_info=power_weapon_info,
             gender_rules=self.rules['GENDER_RULES'],
-            image_rules=self.rules['IMAGE_RULES'].format(base=Config.PUBLIC_API_BASE_URL),
+            image_rules=specific_image_rules,
             natural_dialogue_rules=self.rules['NATURAL_DIALOGUE_RULES'],
             power_rules=self.rules['POWER_RULES'],
             no_output_rules=self.rules['NO_OUTPUT_RULES']
