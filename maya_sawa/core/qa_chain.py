@@ -118,9 +118,11 @@ class QAChain:
         """
         刷新 self_name 的個人資料
         """
-        self.profile_manager.refresh_profile()
+        self.profile_manager.refresh_profile(self.self_name)
         self._create_dynamic_prompt()
-        logger.info("self 個人資料已刷新")
+        # 重新創建聊天鏈
+        self.chat_chain = self.prompt_template | self.llm
+        logger.info(f"{self.self_name} 個人資料已刷新")
 
     def refresh_other_profile(self, name: str):
         """
@@ -323,6 +325,10 @@ class QAChain:
             self.personality_builder.refresh_personality(self_name)
             self.personality_builder.self_name = self_name
             self.personality_builder._main_lower = self_name.lower()
+            
+            # 重新創建動態提示模板和聊天鏈
+            self._create_dynamic_prompt()
+            self.chat_chain = self.prompt_template | self.llm
         
         # 提前判斷是否為身份詢問
         lower_self = self.self_name.lower()
