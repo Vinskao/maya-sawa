@@ -85,6 +85,41 @@ graph TD
     H --> I;
 ```
 
+### Request Type Decision Flow
+
+This diagram illustrates how the system determines whether to handle a request as page analysis, character questions, or article/document questions.
+
+```mermaid
+graph TD
+    A[收到請求] --> B{analysis_type 以 'page_' 開頭?}
+    B -->|是| C[頁面分析處理]
+    B -->|否| D[QAChain 處理]
+    
+    D --> E{檢測到人物名稱?}
+    E -->|是| F[人物相關回答]
+    E -->|否| G{是身份詢問?}
+    
+    G -->|是| H[身份回答]
+    G -->|否| I{是認識類問題?}
+    
+    I -->|是| J[認識類回答]
+    I -->|否| K{是人員搜索?}
+    
+    K -->|是| L[語義搜索回答]
+    K -->|否| M{有文檔且啟用文章QA?}
+    
+    M -->|是| N[文章/文檔回答]
+    M -->|否| O[找不到相關內容]
+    
+    C --> P[返回頁面分析結果]
+    F --> P
+    H --> P
+    J --> P
+    L --> P
+    N --> P
+    O --> P
+```
+
 ### System Architecture (External APIs & Data Stores)
 
 This diagram shows how the internal layers interact with each other and with all external services (databases, OpenAI, and public APIs).
@@ -273,6 +308,19 @@ curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
   -d '{"text":"你是誰?","user_id":"dev","language":"chinese"}'
+```
+
+**Ask a question with frontend source control:**
+```bash
+# Enable article QA (from TY Multiverse)
+curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","frontend_source":"https://peoplesystem.tatdvsonorth.com/tymultiverse"}'
+
+# Disable article QA (from other domains)
+curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","frontend_source":"https://other-domain.com"}'
 ```
 
 **Check chat history:**

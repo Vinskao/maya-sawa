@@ -209,6 +209,10 @@ class QueryRequest(BaseModel):
     user_id: str = "default"  # 用戶 ID，預設為 "default"
     language: str = "chinese"  # 語言參數，預設為 "chinese"
     name: Optional[str] = "Maya"   # 角色名稱，預設 Maya，可由前端覆寫
+    frontend_source: Optional[str] = None  # 前端來源，用於控制文章QA功能
+    analysis_type: Optional[str] = None    # 分析類型 (如 "page_summary")
+    page_url: Optional[str] = None         # 分析頁面的 URL (可選)
+    content_length: Optional[int] = None   # 客戶端傳來的內容長度 (可選)
 
 class SyncRequest(BaseModel):
     """
@@ -438,15 +442,59 @@ async def query_document(request: QueryRequest):
     Raises:
         HTTPException: 當查詢失敗時拋出 HTTP 異常
     """
+    # ==================== 頁面分析請求專用 ====================
+    from ..core.page_analyzer import PageAnalyzer
+    if request.analysis_type and request.analysis_type.startswith("page_"):
+        logger.info(f"收到頁面分析請求: {request.analysis_type}")
+        page_analyzer = PageAnalyzer()
+        page_result = page_analyzer.analyze_page_content(
+            content=request.text,
+            analysis_type=request.analysis_type.replace("page_", ""),
+            language=request.language
+        )
+        if page_result.get("success"):
+            return {
+                "success": True,
+                "answer": page_result["answer"],
+                "data": [{
+                    "source": "PageAnalyzer",
+                    "analysis_type": page_result["analysis_type"],
+                    "content_length": page_result["content_length"],
+                    "language": page_result.get("language", "chinese")
+                }]
+            }
+        else:
+            raise HTTPException(status_code=500, detail=page_result.get("error", "Page analysis failed"))
     # === DEBUG: 印出前端傳入的原始 JSON ===
     logger.info(f"/qa/query payload: {request.dict()}")
+    
+    # 檢查前端來源，決定是否啟用文章QA功能
+    enable_article_qa = True
+    if request.frontend_source:
+        # 只有當前端來源是 https://peoplesystem.tatdvsonorth.com/tymultiverse 開頭時才啟用文章QA
+        expected_source = get_public_api_base_url() + "/tymultiverse"
+        if not request.frontend_source.startswith(expected_source):
+            enable_article_qa = False
+            logger.info(f"前端來源 {request.frontend_source} 不符合要求，禁用文章QA功能")
+        else:
+            logger.info(f"前端來源 {request.frontend_source} 符合要求，啟用文章QA功能")
+    else:
+        logger.info("未提供前端來源，預設啟用文章QA功能")
+    
     # 獲取核心組件實例
     vector_store = get_vector_store()
     qa_chain = get_qa_chain()
     chat_history_manager = get_chat_history()
     
-    # 統一流程：始終先搜索文件，由 QAChain 決定是否使用
-    documents = vector_store.similarity_search(request.text, k=3)
+    # 根據前端來源決定是否搜索文件
+    if enable_article_qa:
+        # 統一流程：始終先搜索文件，由 QAChain 決定是否使用
+        documents = vector_store.similarity_search(request.text, k=3)
+        logger.info(f"啟用文章QA功能，搜索到 {len(documents)} 個相關文檔")
+    else:
+        # 禁用文章QA功能，不搜索文件
+        documents = []
+        logger.info("禁用文章QA功能，不進行文件搜索")
     
     # 獲取答案和分析結果
     # 將前端傳入的 name 轉給 QAChain，若未提供則沿用預設 "Maya"
@@ -487,9 +535,15 @@ async def query_document(request: QueryRequest):
                 "source": doc.metadata.get("source", "")
             })
     else:
-        # 如果沒有找到任何文件，也返回一個友好的消息
+        # 如果沒有找到任何文件或角色，返回適當的消息
         if not final_answer: # 如果 QAChain 也沒有給出答案
-            error_message = "抱歉，我沒有找到相關的內容來回答您的問題。"
+            if not enable_article_qa:
+                # 當禁用文章QA時，提示用戶只能詢問角色相關問題
+                error_message = "抱歉，我只能回答角色相關的問題。請詢問關於特定角色的問題。"
+            else:
+                # 當啟用文章QA時，提示用戶沒有找到相關內容
+                error_message = "抱歉，我沒有找到相關的內容來回答您的問題。"
+            
             if request.language.lower() == "english":
                 final_answer = await translate_to_english(error_message)
             else:
