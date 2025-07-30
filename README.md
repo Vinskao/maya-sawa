@@ -1,9 +1,49 @@
-# Maya Sawa Q&A System
+# Maya Sawa Multi-AI Agent Q&A System
 
-This is a powerful document Q&A system built with FastAPI, LangChain, and PostgreSQL (using the pgvector extension). It allows you to ask questions about your Markdown documents and receive AI-powered answers based on the content.
+This is a powerful multi-AI agent Q&A system built with FastAPI, LangChain, and PostgreSQL (using the pgvector extension). It allows you to ask questions about your documents and receive AI-powered answers from different AI personas with distinct personalities and tones.
 
-The system is designed with a core personality, "Maya," a cold and noble Valkyrie who answers questions with a distinct, in-character tone.
+The system supports dynamic AI character switching, where each AI agent has unique personality traits, power levels, and response styles. Users can interact with different AI agents, each maintaining their own character profile and conversation history.
 
+## Briefing
+
+### Project Architecture & Extensibility
+
+**Core Architecture Design:**
+
+1. **Modular Configuration Management**
+   - All rules, prompts, keywords, and constants are centrally managed in JSON files (`rules.json`, `prompts.json`, `keywords.json`, `constants.json`)
+   - `ConfigManager` singleton pattern provides global configuration access
+   - Supports dynamic configuration updates without service restart
+
+2. **Multi-AI Agent Mode**
+   - Supports dynamic switching between different AI character identities
+   - Each AI agent maintains unique personality traits, power levels, and response styles
+   - Automatic chat history clearing for specific users when switching characters, maintaining multi-user session isolation
+
+3. **Intelligent Query Processing**
+   - `NameDetector` automatically identifies character names in queries
+   - `ProfileManager` handles character data caching and summarization
+   - `PersonalityPromptBuilder` dynamically generates prompts based on AI character personality
+   - Supports multi-character comparison and power analysis
+
+4. **Vectorized Search Engine**
+   - Uses PostgreSQL + pgvector for semantic search capabilities
+   - Supports vectorized storage of articles, people, and weapon data
+   - Automatic synchronization with external APIs and embedding generation
+
+5. **External API Integration**
+   - People System API (`/tymb/people/*`)
+   - Article System API (`/paprika/articles`)
+   - Weapon System API (`/tymb/weapons`)
+   - Supports scheduled synchronization and real-time queries
+
+**Extensibility Features:**
+
+- **Add New AI Characters**: Simply add character configurations in JSON files without modifying core code
+- **Custom Rules**: Easily adjust AI behavior rules, tone control, and image output formats through JSON files
+- **Multi-language Support**: Supports Chinese, English, and other languages with easy extension
+- **Data Source Expansion**: Easily integrate new external APIs or data sources
+- **Deployment Flexibility**: Supports Docker, Kubernetes deployment with complete CI/CD pipeline
 
 ## Flow Diagrams
 
