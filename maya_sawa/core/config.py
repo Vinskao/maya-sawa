@@ -41,6 +41,12 @@ class Config:
     # API Configuration
     PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "")
     
+    # Vector Search Configuration
+    # Default to 3 matches if not set, per product requirement
+    ARTICLE_MATCH_COUNT = int(os.getenv("MATCH_COUNT", "3"))
+    # Keep threshold configurable as well (optional usage)
+    SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.5"))
+    
     # Synchronization Configuration
     ENABLE_AUTO_SYNC_ON_STARTUP = os.getenv("ENABLE_AUTO_SYNC_ON_STARTUP", "false").lower() == "true"
     ENABLE_PERIODIC_SYNC = os.getenv("ENABLE_PERIODIC_SYNC", "false").lower() == "true"  # 默認關閉定期同步

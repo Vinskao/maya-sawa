@@ -489,7 +489,8 @@ async def query_document(request: QueryRequest):
     # 根據前端來源決定是否搜索文件
     if enable_article_qa:
         # 統一流程：始終先搜索文件，由 QAChain 決定是否使用
-        documents = vector_store.similarity_search(request.text, k=3)
+        # 使用環境變數設定的檢索數量，預設 3
+        documents = vector_store.similarity_search(request.text, k=Config.ARTICLE_MATCH_COUNT)
         logger.info(f"啟用文章QA功能，搜索到 {len(documents)} 個相關文檔")
     else:
         # 禁用文章QA功能，不搜索文件

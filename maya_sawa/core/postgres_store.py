@@ -31,6 +31,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain.schema import Document
 import psycopg2
 from psycopg2.extras import execute_values
+from .config import Config
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -234,7 +235,7 @@ class PostgresVectorStore:
             
             conn.commit()
 
-    def similarity_search(self, query: str, k: int = 4, threshold: float = 0.5) -> List[Document]:
+    def similarity_search(self, query: str, k: int = None, threshold: float = None) -> List[Document]:
         """
         執行相似度搜索
         
@@ -243,12 +244,18 @@ class PostgresVectorStore:
         
         Args:
             query (str): 搜索查詢文本
-            k (int): 返回結果的最大數量
-            threshold (float): 相似度閾值，低於此值的結果會被過濾
+            k (int): 返回結果的最大數量（默認取 Config.ARTICLE_MATCH_COUNT）
+            threshold (float): 相似度閾值（默認取 Config.SIMILARITY_THRESHOLD）
             
         Returns:
             List[Document]: 相關文檔列表，按相似度排序
         """
+        # 應用預設設定
+        if k is None:
+            k = Config.ARTICLE_MATCH_COUNT
+        if threshold is None:
+            threshold = Config.SIMILARITY_THRESHOLD
+
         # 生成查詢的嵌入向量
         query_embedding = self.embeddings.embed_query(query)
         
