@@ -21,10 +21,10 @@
     "RAVISHING": "{base}/images/people/Ravishing{name}.png"
   },
   "API_ENDPOINTS": {
-    "PEOPLE_DAMAGE_WITH_WEAPON": "/tymb/people/damageWithWeapon",
-    "WEAPONS_BY_OWNER": "/tymb/weapons/owner",
-    "PEOPLE_GET_BY_NAME": "/tymb/people/get-by-name",
-    "PEOPLE_GET_ALL": "/tymb/people/get-all"
+    "PEOPLE_DAMAGE_WITH_WEAPON": "/people/damageWithWeapon",
+    "WEAPONS_BY_OWNER": "/weapons/owner",
+    "PEOPLE_GET_BY_NAME": "/people/get-by-name",
+    "PEOPLE_GET_ALL": "/people/get-all"
   },
   "LLM_CONFIG": {
     "MODEL": "gpt-4.1-nano",

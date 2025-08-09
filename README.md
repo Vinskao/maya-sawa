@@ -1,51 +1,15 @@
 # Maya Sawa Multi-AI Agent Q&A System
 
-This is a powerful multi-AI agent Q&A system built with FastAPI, LangChain, and PostgreSQL (using the pgvector extension). It allows you to ask questions about your documents and receive AI-powered answers from different AI personas with distinct personalities and tones.
+## Getting Started
 
-The system supports dynamic AI character switching, where each AI agent has unique personality traits, power levels, and response styles. Users can interact with different AI agents, each maintaining their own character profile and conversation history.
+### Running the Server
 
-## Briefing
+Use the following command to start the development server:
+```bash
+poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
+```
 
-### Project Architecture & Extensibility
-
-**Core Architecture Design:**
-
-1. **Modular Configuration Management**
-   - All rules, prompts, keywords, and constants are centrally managed in JSON files (`rules.json`, `prompts.json`, `keywords.json`, `constants.json`)
-   - `ConfigManager` singleton pattern provides global configuration access
-   - Supports dynamic configuration updates without service restart
-
-2. **Multi-AI Agent Mode**
-   - Supports dynamic switching between different AI character identities
-   - Each AI agent maintains unique personality traits, power levels, and response styles
-   - Automatic chat history clearing for specific users when switching characters, maintaining multi-user session isolation
-
-3. **Intelligent Query Processing**
-   - `NameDetector` automatically identifies character names in queries
-   - `ProfileManager` handles character data caching and summarization
-   - `PersonalityPromptBuilder` dynamically generates prompts based on AI character personality
-   - Supports multi-character comparison and power analysis
-
-4. **Vectorized Search Engine**
-   - Uses PostgreSQL + pgvector for semantic search capabilities
-   - Supports vectorized storage of articles, people, and weapon data
-   - Automatic synchronization with external APIs and embedding generation
-
-5. **External API Integration**
-   - People System API (`/tymb/people/*`)
-   - Article System API (`/paprika/articles`)
-   - Weapon System API (`/tymb/weapons`)
-   - Supports scheduled synchronization and real-time queries
-
-**Extensibility Features:**
-
-- **Add New AI Characters**: Simply add character configurations in JSON files without modifying core code
-- **Custom Rules**: Easily adjust AI behavior rules, tone control, and image output formats through JSON files
-- **Multi-language Support**: Supports Chinese, English, and other languages with easy extension
-- **Data Source Expansion**: Easily integrate new external APIs or data sources
-- **Deployment Flexibility**: Supports Docker, Kubernetes deployment with complete CI/CD pipeline
-
-## Flow Diagrams
+## System Architecture
 
 ### API to Chain Flow
 
@@ -83,41 +47,6 @@ graph TD
     E --> I;
     G --> I;
     H --> I;
-```
-
-### Request Type Decision Flow
-
-This diagram illustrates how the system determines whether to handle a request as page analysis, character questions, or article/document questions.
-
-```mermaid
-graph TD
-    A[收到請求] --> B{analysis_type 以 'page_' 開頭?}
-    B -->|是| C[頁面分析處理]
-    B -->|否| D[QAChain 處理]
-    
-    D --> E{檢測到人物名稱?}
-    E -->|是| F[人物相關回答]
-    E -->|否| G{是身份詢問?}
-    
-    G -->|是| H[身份回答]
-    G -->|否| I{是認識類問題?}
-    
-    I -->|是| J[認識類回答]
-    I -->|否| K{是人員搜索?}
-    
-    K -->|是| L[語義搜索回答]
-    K -->|否| M{有文檔且啟用文章QA?}
-    
-    M -->|是| N[文章/文檔回答]
-    M -->|否| O[找不到相關內容]
-    
-    C --> P[返回頁面分析結果]
-    F --> P
-    H --> P
-    J --> P
-    L --> P
-    N --> P
-    O --> P
 ```
 
 ### System Architecture (External APIs & Data Stores)
@@ -179,153 +108,43 @@ flowchart TD
     PeopleWeaponManager --> PostgresDB
 ```
 
-### Data Synchronization & Vector Pipeline
+## API Examples
 
-This diagram outlines how article, people, and weapon data are synchronized from external APIs, converted into vector embeddings, and stored in PostgreSQL for semantic search.
-
-```mermaid
-flowchart TD
-    %% ---------------- Article sync ----------------
-    subgraph "Article & Embedding Sync"
-        RemoteAPI["Remote Article API<br/>/paprika/articles (JSON + embedding)"]
-        SyncEndpoint["POST /qa/sync-from-api"]
-        VectorStore["PostgresVectorStore.add_articles_from_api"]
-        ArticlesTable["articles table (vector)"]
-        RemoteAPI --> SyncEndpoint --> VectorStore --> ArticlesTable
-    end
-
-    %% ---------------- People & Weapons sync ----------------
-    subgraph "People & Weapons Sync"
-        PeopleAPI["People System API<br/>/tymb/people/get-all"]
-        WeaponsAPI["People System API<br/>/tymb/weapons"]
-        CronJob["k8s CronJob / scripts<br/>sync_people_weapons.py"]
-        PWManager["PeopleWeaponManager.sync_all_data"]
-        EmbeddingGen["OpenAI Embedding\ntext-embedding-ada-002"]
-        PeopleTable["people table (vector)"]
-        WeaponsTable["weapon table (vector)"]
-
-        PeopleAPI --> PWManager
-        WeaponsAPI --> PWManager
-        CronJob --> PWManager
-
-        PWManager --> EmbeddingGen
-        EmbeddingGen --> PeopleTable
-        EmbeddingGen --> WeaponsTable
-        PWManager --> PeopleTable
-        PWManager --> WeaponsTable
-    end
-
-    %% Shared DB
-    ArticlesTable & PeopleTable & WeaponsTable --> DB[(PostgreSQL + pgvector)]
-```
-
-## Getting Started
-
-<details>
-<summary>Click to expand for setup and installation instructions</summary>
-
-### Prerequisites
-
--   Python 3.12+
--   Poetry (Python package manager)
--   PostgreSQL 13+ with the `pgvector` extension installed
--   An OpenAI API Key
-
-### Installation
-
-1.  **Clone the project:**
-    ```bash
-    git clone https://github.com/yourusername/maya-sawa.git
-    cd maya-sawa
-    ```
-
-2.  **Install dependencies with Poetry:**
-    ```bash
-    poetry install
-    ```
-
-3.  **Set up the PostgreSQL database:**
-
-    You need to install the `pgvector` extension and create the necessary tables.
-
-    **Enable `pgvector` extension:**
-    ```sql
-    CREATE EXTENSION IF NOT EXISTS vector;
-    ```
-
-    **Create tables:**
-    Run the SQL scripts in `setup_database.sql` to create the `articles`, `people`, and `weapon` tables.
-
-4.  **Configure environment variables:**
-    Copy the example `.env` file and fill in your details.
-    ```bash
-    cp .env.example .env
-    ```
-    Edit `.env` with your credentials:
-    ```
-    OPENAI_API_KEY=sk-your-api-key-here
-    POSTGRES_CONNECTION_STRING=postgresql://username:password@localhost:5432/your_database_name
-    # ... other variables
-    ```
-
-</details>
-
-## Usage
-
-<details>
-<summary>Click to expand for usage examples</summary>
-
-### Running the Server
-
-Use the following command to start the development server:
-```bash
-poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
-```
-
-### API Examples
-
-**Sync data from the API:**
 ```bash
 curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
 
-**Ask a question:**
 ```bash
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"Who is sorane?","user_id":"dev","language":"english"}'
+  -d '{"text":"Who is Sorane?","user_id":"dev","language":"english","name":"Maya","frontend_source":"/tymultiverse"}'
 
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"誰是sorane?","user_id":"dev","language":"chinese"}'
+  -d '{"text":"誰是Sorane?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
 
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"你認識 sorane嗎?","user_id":"dev","language":"chinese"}'
+  -d '{"text":"你認識 Sorane嗎?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
 
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"你是誰?","user_id":"dev","language":"chinese"}'
+  -d '{"text":"你是誰?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
 ```
 
-**Ask a question with frontend source control:**
 ```bash
-# Enable article QA (from TY Multiverse)
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","frontend_source":"https://peoplesystem.tatdvsonorth.com/tymultiverse"}'
+  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
 
-# Disable article QA (from other domains)
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","frontend_source":"https://other-domain.com"}'
+  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Sorane","frontend_source":"/other-frontend"}'
 ```
 
-**Check chat history:**
 ```bash
 curl -X GET "http://localhost:8000/maya-sawa/qa/chat-history/dev"
 ```
-</details>
 

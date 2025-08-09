@@ -69,7 +69,8 @@ pipeline {
                             string(credentialsId: 'REDIS_CUSTOM_PORT', variable: 'REDIS_CUSTOM_PORT'),
                             string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
                             string(credentialsId: 'REDIS_QUEUE_QA_KM', variable: 'REDIS_QUEUE_QA_KM'),
-                            string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL')
+                            string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
+                            string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL')
                         ]) {
                             sh '''
                                 # 確認 pyproject.toml 存在
@@ -141,7 +142,8 @@ pipeline {
                                 string(credentialsId: 'REDIS_CUSTOM_PORT', variable: 'REDIS_CUSTOM_PORT'),
                                 string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
                                 string(credentialsId: 'REDIS_QUEUE_QA_KM', variable: 'REDIS_QUEUE_QA_KM'),
-                                string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL')
+                                string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
+                                string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL')
                             ]) {
                                 sh '''
                                     # 替換 deployment.yaml 中的環境變數

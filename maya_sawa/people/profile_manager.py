@@ -53,7 +53,9 @@ class ProfileManager:
             Optional[Dict]: 角色個人資料，如果獲取失敗則返回 None
         """
         endpoint = config_manager.get_constant("API_ENDPOINTS")["PEOPLE_GET_BY_NAME"]
-        url = f"{Config.PUBLIC_API_BASE_URL}{endpoint}"
+        # 使用 TYMB URL 而不是通用 API URL
+        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
+        url = f"{base_url}{endpoint}"
         payload = {"name": name}
         
         try:
@@ -211,13 +213,13 @@ class ProfileManager:
             if self._other_character_names_cache is not None:
                 return self._other_character_names_cache
             
-            # 從配置獲取 API 基礎 URL
-            if not Config.PUBLIC_API_BASE_URL:
-                logger.warning("PUBLIC_API_BASE_URL 未設置，返回空列表")
+            # 從配置獲取 TYMB API 基礎 URL
+            if not Config.PUBLIC_TYMB_URL:
+                logger.warning("PUBLIC_TYMB_URL 未設置，返回空列表")
                 return []
             
             # 構建 API URL
-            url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/names"
+            url = f"{Config.PUBLIC_TYMB_URL}/people/names"
             logger.debug(f"正在從 API 獲取角色名字列表: {url}")
             
             # 發送 HTTP 請求

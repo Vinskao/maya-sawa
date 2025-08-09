@@ -13,10 +13,21 @@ from typing import Optional
 from pathlib import Path
 try:
     from dotenv import load_dotenv
-    # Load .env located at project root
-    _env_path = Path(__file__).resolve().parents[2] / ".env"
-    if _env_path.exists():
-        load_dotenv(_env_path, override=False)
+    # Load environment-specific .env file
+    project_root = Path(__file__).resolve().parents[2]
+    env_type = os.getenv("ENV_TYPE", "development")  # Default to development
+    
+    # Try to load environment-specific file first
+    env_file = project_root / f".env.{env_type}"
+    if env_file.exists():
+        load_dotenv(env_file, override=False)
+        print(f"Loaded environment configuration from: {env_file}")
+    else:
+        # Fallback to default .env file
+        default_env = project_root / ".env"
+        if default_env.exists():
+            load_dotenv(default_env, override=False)
+            print(f"Loaded default configuration from: {default_env}")
 except ImportError:
     # dotenv not installed – ignore
     pass
@@ -40,6 +51,7 @@ class Config:
     
     # API Configuration
     PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "")
+    PUBLIC_TYMB_URL = os.getenv("PUBLIC_TYMB_URL", "")
     
     # Vector Search Configuration
     # Default to 3 matches if not set, per product requirement

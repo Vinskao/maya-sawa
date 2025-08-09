@@ -151,7 +151,9 @@ def test_api_connection():
         import httpx
         
         # Test people API
-        people_url = f"{Config.PUBLIC_API_BASE_URL}/tymb/people/get-all"
+        # 使用 TYMB URL 而不是通用 API URL
+        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
+        people_url = f"{base_url}/people/get-all"
         with httpx.Client(timeout=10.0) as client:
             response = client.post(people_url)
             if response.status_code == 200:
@@ -161,7 +163,7 @@ def test_api_connection():
                 print(f"❌ People API error - Status: {response.status_code}")
         
         # Test weapons API
-        weapons_url = f"{Config.PUBLIC_API_BASE_URL}/tymb/weapons"
+        weapons_url = f"{base_url}/weapons"
         with httpx.Client(timeout=10.0) as client:
             response = client.get(weapons_url)
             if response.status_code == 200:

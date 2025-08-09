@@ -81,7 +81,9 @@ class PeopleWeaponManager:
             List[Dict[str, Any]]: List of people data
         """
         endpoint = config_manager.get_constant("API_ENDPOINTS")["PEOPLE_GET_ALL"]
-        url = f"{Config.PUBLIC_API_BASE_URL}{endpoint}"
+        # 使用 TYMB URL 而不是通用 API URL
+        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
+        url = f"{base_url}{endpoint}"
         
         try:
             with httpx.Client(timeout=30.0) as client:
@@ -100,7 +102,9 @@ class PeopleWeaponManager:
         Returns:
             List[Dict[str, Any]]: List of weapons data
         """
-        url = f"{Config.PUBLIC_API_BASE_URL}/tymb/weapons"
+        # 使用 TYMB URL 而不是通用 API URL
+        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
+        url = f"{base_url}/weapons"
         
         try:
             with httpx.Client(timeout=30.0) as client:
@@ -115,7 +119,8 @@ class PeopleWeaponManager:
 
     def fetch_weapons_by_owner(self, owner: str) -> List[Dict[str, Any]]:
         """Fetch weapons owned by a specific character."""
-        base_url = os.getenv("PUBLIC_API_BASE_URL", "")
+        # 使用 TYMB URL 而不是通用 API URL
+        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
         endpoint = config_manager.get_constant("API_ENDPOINTS")["WEAPONS_BY_OWNER"]
         url = f"{base_url}{endpoint}/{owner}"
         try:
@@ -129,7 +134,8 @@ class PeopleWeaponManager:
 
     def fetch_total_damage_with_weapon(self, name: str) -> Optional[int]:
         """Fetch total damage (physic + weapon) calculated by remote API."""
-        base_url = os.getenv("PUBLIC_API_BASE_URL", "")
+        # 使用 TYMB URL 而不是通用 API URL
+        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
         endpoint = config_manager.get_constant("API_ENDPOINTS")["PEOPLE_DAMAGE_WITH_WEAPON"]
         url = f"{base_url}{endpoint}?name={name}"
         try:
@@ -143,8 +149,9 @@ class PeopleWeaponManager:
 
     def _send_weapon_update(self, weapon: Dict[str, Any]):
         """Send updated weapon (with embedding) back to API."""
-        base_url = os.getenv("PUBLIC_API_BASE_URL", "")
-        url = f"{base_url}/tymb/weapons"
+        # 使用 TYMB URL 而不是通用 API URL
+        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
+        url = f"{base_url}/weapons"
         try:
             with httpx.Client(timeout=10.0) as client:
                 client.post(url, json=weapon)
