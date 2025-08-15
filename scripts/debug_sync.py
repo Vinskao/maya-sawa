@@ -31,7 +31,10 @@ def check_environment():
     print("=== Environment Variables Check ===")
     
     required_vars = [
-        "POSTGRES_CONNECTION_STRING",
+        "DB_HOST",
+        "DB_DATABASE", 
+        "DB_USERNAME",
+        "DB_PASSWORD",
         "OPENAI_API_KEY"
     ]
     

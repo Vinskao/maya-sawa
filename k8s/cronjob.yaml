@@ -53,11 +53,33 @@ spec:
                   key: OPENAI_ORGANIZATION
             - name: OPENAI_API_BASE
               value: "https://api.openai.com/v1"
-            - name: POSTGRES_CONNECTION_STRING
+            - name: DB_HOST
               valueFrom:
                 secretKeyRef:
                   name: maya-sawa-secrets
-                  key: POSTGRES_CONNECTION_STRING
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: DB_PORT
+            - name: DB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: DB_DATABASE
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: maya-sawa-secrets
+                  key: DB_PASSWORD
+            - name: DB_SSLMODE
+              value: "require"
             - name: REDIS_HOST
               valueFrom:
                 secretKeyRef:

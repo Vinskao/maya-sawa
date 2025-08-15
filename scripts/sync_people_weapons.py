@@ -9,7 +9,10 @@ Usage:
     python scripts/sync_people_weapons.py
 
 Environment Variables Required:
-    - POSTGRES_CONNECTION_STRING: PostgreSQL connection string
+    - DB_HOST: Database host
+    - DB_DATABASE: Database name  
+    - DB_USERNAME: Database username
+    - DB_PASSWORD: Database password
     - OPENAI_API_KEY: OpenAI API key for generating embeddings
 """
 
@@ -35,7 +38,10 @@ def main():
     
     # Check required environment variables
     required_env_vars = [
-        "POSTGRES_CONNECTION_STRING",
+        "DB_HOST",
+        "DB_DATABASE",
+        "DB_USERNAME", 
+        "DB_PASSWORD",
         "OPENAI_API_KEY"
     ]
     

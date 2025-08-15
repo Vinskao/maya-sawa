@@ -38,7 +38,20 @@ class Config:
     """
     
     # Database Configuration
-    POSTGRES_CONNECTION_STRING = os.getenv("POSTGRES_CONNECTION_STRING")
+    # Build PostgreSQL connection string from individual parameters
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT", "5432")
+    DB_DATABASE = os.getenv("DB_DATABASE")
+    DB_USERNAME = os.getenv("DB_USERNAME")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_SSLMODE = os.getenv("DB_SSLMODE", "require")
+    
+    # Construct connection string
+    if all([DB_HOST, DB_DATABASE, DB_USERNAME, DB_PASSWORD]):
+        DB_CONNECTION_STRING = f"postgresql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_DATABASE}?sslmode={DB_SSLMODE}"
+    else:
+        # If individual parameters are not provided, set to None
+        DB_CONNECTION_STRING = None
     
     # OpenAI Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -83,8 +96,9 @@ class Config:
         """
         missing_vars = []
         
-        if not cls.POSTGRES_CONNECTION_STRING:
-            missing_vars.append("POSTGRES_CONNECTION_STRING")
+        # Check for database configuration
+        if not cls.DB_CONNECTION_STRING:
+            missing_vars.append("Database configuration (DB_HOST, DB_DATABASE, DB_USERNAME, DB_PASSWORD)")
         
         if not cls.OPENAI_API_KEY:
             missing_vars.append("OPENAI_API_KEY")

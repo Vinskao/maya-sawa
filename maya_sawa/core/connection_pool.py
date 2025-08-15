@@ -33,6 +33,9 @@ from dotenv import load_dotenv
 # 載入環境變數
 load_dotenv()
 
+# 本地模組導入
+from .config import Config
+
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
 
@@ -69,8 +72,8 @@ class ConnectionPoolManager:
         優化並發性能
         """
         try:
-            # 從環境變數獲取連接字符串
-            connection_string = os.getenv("POSTGRES_CONNECTION_STRING")
+            # 從 Config 獲取連接字符串
+            connection_string = Config.DB_CONNECTION_STRING
             
             # 創建線程連接池
             self.postgres_pool = pool.ThreadedConnectionPool(

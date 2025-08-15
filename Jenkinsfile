@@ -64,7 +64,11 @@ pipeline {
                         withCredentials([
                             string(credentialsId: 'OPENAI_API_KEY', variable: 'OPENAI_API_KEY'),
                             string(credentialsId: 'OPENAI_ORGANIZATION', variable: 'OPENAI_ORGANIZATION'),
-                            string(credentialsId: 'POSTGRES_CONNECTION_STRING', variable: 'POSTGRES_CONNECTION_STRING'),
+                            string(credentialsId: 'DB_HOST', variable: 'DB_HOST'),
+                            string(credentialsId: 'DB_PORT', variable: 'DB_PORT'),
+                            string(credentialsId: 'DB_DATABASE', variable: 'DB_DATABASE'),
+                            string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                            string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
                             string(credentialsId: 'REDIS_HOST', variable: 'REDIS_HOST'),
                             string(credentialsId: 'REDIS_CUSTOM_PORT', variable: 'REDIS_CUSTOM_PORT'),
                             string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
@@ -72,6 +76,9 @@ pipeline {
                             string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                             string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL')
                         ]) {
+                            environment {
+                                DB_SSLMODE = 'require'
+                            }
                             sh '''
                                 # 確認 pyproject.toml 存在
                                 ls -la
@@ -137,7 +144,11 @@ pipeline {
                             withCredentials([
                                 string(credentialsId: 'OPENAI_API_KEY', variable: 'OPENAI_API_KEY'),
                                 string(credentialsId: 'OPENAI_ORGANIZATION', variable: 'OPENAI_ORGANIZATION'),
-                                string(credentialsId: 'POSTGRES_CONNECTION_STRING', variable: 'POSTGRES_CONNECTION_STRING'),
+                                string(credentialsId: 'DB_HOST', variable: 'DB_HOST'),
+                                string(credentialsId: 'DB_PORT', variable: 'DB_PORT'),
+                                string(credentialsId: 'DB_DATABASE', variable: 'DB_DATABASE'),
+                                string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
+                                string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
                                 string(credentialsId: 'REDIS_HOST', variable: 'REDIS_HOST'),
                                 string(credentialsId: 'REDIS_CUSTOM_PORT', variable: 'REDIS_CUSTOM_PORT'),
                                 string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
@@ -145,6 +156,9 @@ pipeline {
                                 string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                                 string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL')
                             ]) {
+                                environment {
+                                    DB_SSLMODE = 'require'
+                                }
                                 sh '''
                                     # 替換 deployment.yaml 中的環境變數
                                     envsubst < k8s/deployment.yaml > k8s/deployment.yaml.tmp

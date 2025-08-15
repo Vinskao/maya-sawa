@@ -58,8 +58,9 @@ class PostgresVectorStore:
         api_base = os.getenv("OPENAI_API_BASE")
         openai_organization = os.getenv("OPENAI_ORGANIZATION")
         
-        # 從環境變數獲取 PostgreSQL 連接字符串
-        self.connection_string = os.getenv("POSTGRES_CONNECTION_STRING")
+        # 從 Config 獲取 PostgreSQL 連接字符串
+        from .config import Config
+        self.connection_string = Config.DB_CONNECTION_STRING
         
         logger.debug(f"PostgresVectorStore - Using API Base: {api_base}")
         
