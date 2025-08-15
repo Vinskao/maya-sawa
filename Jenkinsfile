@@ -68,7 +68,7 @@ pipeline {
                             string(credentialsId: 'REDIS_HOST', variable: 'REDIS_HOST'),
                             string(credentialsId: 'REDIS_CUSTOM_PORT', variable: 'REDIS_CUSTOM_PORT'),
                             string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
-                            string(credentialsId: 'REDIS_QUEUE_QA_KM', variable: 'REDIS_QUEUE_QA_KM'),
+                            string(credentialsId: 'REDIS_QUEUE_MAYA', variable: 'REDIS_QUEUE_MAYA'),
                             string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                             string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL')
                         ]) {
@@ -104,7 +104,7 @@ pipeline {
                     script {
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                             sh '''
-                                cd /home/jenkins/agent/workspace/SAWAMAYA/maya-deploy
+                                cd "${WORKSPACE}"
                                 echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
                                 # 確認 Dockerfile 存在
                                 ls -la
@@ -141,7 +141,7 @@ pipeline {
                                 string(credentialsId: 'REDIS_HOST', variable: 'REDIS_HOST'),
                                 string(credentialsId: 'REDIS_CUSTOM_PORT', variable: 'REDIS_CUSTOM_PORT'),
                                 string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
-                                string(credentialsId: 'REDIS_QUEUE_QA_KM', variable: 'REDIS_QUEUE_QA_KM'),
+                                string(credentialsId: 'REDIS_QUEUE_MAYA', variable: 'REDIS_QUEUE_MAYA'),
                                 string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                                 string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL')
                             ]) {

@@ -10,7 +10,7 @@ stringData:
   REDIS_HOST: "${REDIS_HOST}"
   REDIS_CUSTOM_PORT: "${REDIS_CUSTOM_PORT}"
   REDIS_PASSWORD: "${REDIS_PASSWORD}"
-  REDIS_QUEUE_QA_KM: "${REDIS_QUEUE_QA_KM}"
+  REDIS_QUEUE_MAYA: "${REDIS_QUEUE_MAYA}"
   PUBLIC_API_BASE_URL: "${PUBLIC_API_BASE_URL}"
 ---
 apiVersion: apps/v1
@@ -67,11 +67,11 @@ spec:
             secretKeyRef:
               name: maya-sawa-secrets
               key: REDIS_PASSWORD
-        - name: REDIS_QUEUE_QA_KM
+        - name: REDIS_QUEUE_MAYA
           valueFrom:
             secretKeyRef:
               name: maya-sawa-secrets
-              key: REDIS_QUEUE_QA_KM
+              key: REDIS_QUEUE_MAYA
         - name: PUBLIC_API_BASE_URL
           valueFrom:
             secretKeyRef:

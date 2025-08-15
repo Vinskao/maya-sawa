@@ -74,8 +74,8 @@ class ConnectionPoolManager:
             
             # 創建線程連接池
             self.postgres_pool = pool.ThreadedConnectionPool(
-                minconn=5,      # 最小連接數
-                maxconn=20,     # 最大連接數
+                minconn=1,      # 最小連接數 (減少以避免連接限制)
+                maxconn=5,      # 最大連接數 (減少以避免連接限制)
                 dsn=connection_string  # 連接字符串
             )
             
@@ -103,7 +103,7 @@ class ConnectionPoolManager:
                 host=redis_host,
                 port=redis_port,
                 password=redis_password,
-                max_connections=20,  # 最大連接數
+                max_connections=5,   # 最大連接數 (減少以避免連接限制)
                 decode_responses=True  # 自動解碼為字符串
             )
             
