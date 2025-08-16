@@ -5,6 +5,7 @@ pipeline {
                 apiVersion: v1
                 kind: Pod
                 spec:
+                  
                   serviceAccountName: jenkins-admin
                   imagePullSecrets:
                   - name: dockerhub-credentials
@@ -23,6 +24,8 @@ pipeline {
                     securityContext:
                       privileged: true
                     env:
+                    - name: DOCKER_HOST
+                      value: tcp://localhost:2375
                     - name: DOCKER_TLS_CERTDIR
                       value: ""
                     - name: DOCKER_BUILDKIT
@@ -34,7 +37,7 @@ pipeline {
                     image: bitnami/kubectl:1.30.7
                     command: ["/bin/sh"]
                     args: ["-c", "while true; do sleep 30; done"]
-                    imagePullPolicy: Always
+                    alwaysPull: true
                     securityContext:
                       runAsUser: 0
                     volumeMounts:
