@@ -40,6 +40,11 @@ spec:
           value: "${DB_PASSWORD}"
         - name: DB_SSLMODE
           value: "require"
+        # === PostgreSQL Connection Pool Configuration ===
+        - name: DB_MINIMUM_IDLE
+          value: "5"
+        - name: DB_MAXIMUM_POOL_SIZE
+          value: "20"
         - name: REDIS_HOST
           value: "${REDIS_HOST}"
         - name: REDIS_CUSTOM_PORT
