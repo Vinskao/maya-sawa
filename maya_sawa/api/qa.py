@@ -489,9 +489,19 @@ async def query_document(request: QueryRequest):
     # 根據前端來源決定是否搜索文件
     if enable_article_qa:
         # 統一流程：始終先搜索文件，由 QAChain 決定是否使用
-        # 使用環境變數設定的檢索數量，預設 3
-        documents = vector_store.similarity_search(request.text, k=Config.ARTICLE_MATCH_COUNT)
-        logger.info(f"啟用文章QA功能，搜索到 {len(documents)} 個相關文檔")
+        # 使用環境變數設定的檢索數量與閾值
+        initial_k = Config.ARTICLE_MATCH_COUNT
+        initial_threshold = Config.SIMILARITY_THRESHOLD
+        documents = vector_store.similarity_search(request.text, k=initial_k, threshold=initial_threshold)
+        logger.info(f"啟用文章QA功能，搜索到 {len(documents)} 個相關文檔 (k={initial_k}, threshold={initial_threshold})")
+
+        # Fallback：若沒有找到文檔，放寬條件再試一次
+        if not documents:
+            fallback_k = max(initial_k * 2, 5)
+            fallback_threshold = 0.0
+            logger.info(f"首次檢索無結果，使用 fallback 條件重試 (k={fallback_k}, threshold={fallback_threshold})")
+            documents = vector_store.similarity_search(request.text, k=fallback_k, threshold=fallback_threshold)
+            logger.info(f"fallback 檢索返回 {len(documents)} 個文檔")
     else:
         # 禁用文章QA功能，不搜索文件
         documents = []
