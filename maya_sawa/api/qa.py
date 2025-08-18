@@ -288,15 +288,43 @@ async def sync_articles_from_api(request: SyncFromAPIRequest):
             return {"message": "沒有找到需要同步的文章", "count": 0}
 
         # 分流：有預計算 embedding 與無 embedding（需本地產生）
-        with_embedding = [a for a in articles if a.get("embedding")]
-        without_embedding = [a for a in articles if not a.get("embedding")]
+        def _is_valid_upstream_embedding(e: Any) -> bool:
+            try:
+                if e is None:
+                    return False
+                # 支援字串 "[...,...]" 或 list[float]
+                if isinstance(e, str):
+                    e = e.strip()
+                    if not (e.startswith("[") and e.endswith("]")):
+                        return False
+                    # 不做完整解析，僅快速長度檢查避免 OOM
+                    return e.count(',') >= 1535  # 1536 維至少 1535 個逗號
+                if isinstance(e, (list, tuple)):
+                    return len(e) == 1536
+                return False
+            except Exception:
+                return False
+
+        force_local = Config.FORCE_LOCAL_EMBEDDING
+        validate_upstream = Config.VALIDATE_UPSTREAM_EMBEDDING
+
+        with_embedding = []
+        without_embedding = []
+        for a in articles:
+            if force_local:
+                without_embedding.append(a)
+            else:
+                if a.get("embedding") and (not validate_upstream or _is_valid_upstream_embedding(a.get("embedding"))):
+                    with_embedding.append(a)
+                else:
+                    without_embedding.append(a)
 
         vector_store = get_vector_store()
 
         synced_precomputed = 0
         synced_local = 0
 
-        # 先寫入有預計算 embedding 的文章
+        # 先寫入有預計算且通過驗證的 embedding 的文章
         if with_embedding:
             vector_store.add_articles_from_api(with_embedding)
             synced_precomputed = len(with_embedding)
@@ -322,7 +350,7 @@ async def sync_articles_from_api(request: SyncFromAPIRequest):
         return {
             "success": True,
             "message": (
-                f"成功同步 {total_synced} 篇文章（embedding: 預計算 {synced_precomputed}，本地 {synced_local}）"
+                f"成功同步 {total_synced} 篇文章（embedding: 預計算 {synced_precomputed}，本地 {synced_local}，force_local={force_local}，validate_upstream={validate_upstream}）"
             ),
             "count": total_synced,
             "articles": [

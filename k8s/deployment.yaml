@@ -65,6 +65,11 @@ spec:
           value: "5"
         - name: SIMILARITY_THRESHOLD
           value: "0.7"
+        # Embedding validation/tuning
+        - name: FORCE_LOCAL_EMBEDDING
+          value: "true"
+        - name: VALIDATE_UPSTREAM_EMBEDDING
+          value: "true"
         # === Auto-sync feature flags (enabled in production) ===
         - name: ENABLE_PEOPLE_WEAPONS_SYNC
           value: "true"

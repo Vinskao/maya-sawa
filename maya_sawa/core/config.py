@@ -71,6 +71,12 @@ class Config:
     ARTICLE_MATCH_COUNT = int(os.getenv("MATCH_COUNT", "3"))
     # Keep threshold configurable as well (optional usage)
     SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.5"))
+
+    # Embedding Source/Validation Configuration
+    # If true, ignore upstream embeddings and always recompute locally
+    FORCE_LOCAL_EMBEDDING = os.getenv("FORCE_LOCAL_EMBEDDING", "false").lower() == "true"
+    # If true, validate upstream embeddings (e.g., dimension=1536); invalid ones will be recomputed locally
+    VALIDATE_UPSTREAM_EMBEDDING = os.getenv("VALIDATE_UPSTREAM_EMBEDDING", "true").lower() == "true"
     
     # Synchronization Configuration
     ENABLE_AUTO_SYNC_ON_STARTUP = os.getenv("ENABLE_AUTO_SYNC_ON_STARTUP", "false").lower() == "true"
