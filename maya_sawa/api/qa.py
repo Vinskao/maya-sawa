@@ -528,8 +528,8 @@ async def query_document(request: QueryRequest):
         # Fallback：若沒有找到文檔，放寬條件再試一次
         if not documents:
             fallback_k = max(initial_k * 2, 5)
-            # Keep fallback still relatively strict
-            fallback_threshold = 0.5
+            # Relax fallback threshold to ensure we get some results
+            fallback_threshold = 0.3
             logger.info(f"首次檢索無結果，使用 fallback 條件重試 (k={fallback_k}, threshold={fallback_threshold})")
             documents = vector_store.similarity_search(request.text, k=fallback_k, threshold=fallback_threshold)
             logger.info(f"fallback 檢索返回 {len(documents)} 個文檔")
