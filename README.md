@@ -2,18 +2,14 @@
 
 ## Getting Started
 
-### Running the Server
 
-Use the following command to start the development server:
 ```bash
 poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
 ```
 
 ## System Architecture
 
-### API to Chain Flow
 
-This diagram illustrates the process from receiving a user's API request to generating a response via the `QAChain`.
 
 ```mermaid
 graph TD
@@ -30,9 +26,7 @@ graph TD
     J --> B;
 ```
 
-### QAChain Internal Logic
 
-This diagram shows the internal decision-making process within the `QAChain` when handling a query.
 
 ```mermaid
 graph TD
@@ -49,9 +43,7 @@ graph TD
     H --> I;
 ```
 
-### System Architecture (External APIs & Data Stores)
 
-This diagram shows how the internal layers interact with each other and with all external services (databases, OpenAI, and public APIs).
 
 ```mermaid
 flowchart TD
@@ -111,12 +103,12 @@ flowchart TD
 ## API Examples
 
 ```bash
-# Sync articles with embedding validation
+# Sync articles
 curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" \
   -H "Content-Type: application/json" \
   -d '{}'
 
-# Force local embedding computation (ignores upstream embeddings)
+# Force local embedding
 curl -X POST "http://localhost:8000/maya-sawa/qa/sync-articles" \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -160,58 +152,32 @@ curl -X GET "http://localhost:8000/maya-sawa/qa/chat-history/dev"
 
 ## Environment Variables
 
-### Core Configuration
 - `OPENAI_API_KEY`: OpenAI API key
 - `OPENAI_ORGANIZATION`: OpenAI organization ID
 - `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`: PostgreSQL connection
 - `REDIS_HOST`, `REDIS_CUSTOM_PORT`, `REDIS_PASSWORD`: Redis connection
-
-### Vector Search Tuning
 - `MATCH_COUNT`: Number of documents to retrieve (default: 3)
 - `SIMILARITY_THRESHOLD`: Similarity threshold for document matching (default: 0.5)
-
-### Embedding Validation & Safety
 - `FORCE_LOCAL_EMBEDDING`: Force local embedding computation, ignore upstream embeddings (default: false)
 - `VALIDATE_UPSTREAM_EMBEDDING`: Validate upstream embeddings before use (default: true)
-
-### Auto-Sync Configuration
 - `ENABLE_AUTO_SYNC_ON_STARTUP`: Auto-sync on application startup (default: false)
 - `ENABLE_PERIODIC_SYNC`: Enable periodic article sync (default: false)
 - `ENABLE_PEOPLE_WEAPONS_SYNC`: Enable people/weapons data sync (default: false)
 
 ## Deployment
 
-### Kubernetes Deployment
-The system is deployed using Jenkins CI/CD pipeline with:
-- **Strategy**: Recreate (clean restart)
-- **Image Pull Policy**: Always (force latest image)
-- **Embedding Safety**: Enabled by default in production
-
-### Docker Build
 ```bash
 docker build -t papakao/maya-sawa:latest .
 ```
 
-### Local Development
 ```bash
-# Install dependencies
 poetry install
-
-# Start development server
 poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
 ```
 
 ## Troubleshooting
 
-### Low Similarity Scores
-If you encounter low similarity scores (0.01-0.03), the system automatically:
-1. Validates upstream embeddings for correct dimensions (1536)
-2. Recomputes embeddings locally if validation fails
-3. Uses `FORCE_LOCAL_EMBEDDING=true` in production to ensure consistency
-
-### Manual Embedding Recompute
 ```bash
-# Force local embedding computation
 curl -X POST "http://localhost:8000/maya-sawa/qa/sync-articles" \
   -H "Content-Type: application/json" \
   -d '{}'
