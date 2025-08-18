@@ -233,7 +233,7 @@ pipeline {
                                         echo "DB_DATABASE=${DB_DATABASE}"
                                         echo "REDIS_HOST=${REDIS_HOST}:${REDIS_CUSTOM_PORT}"
 
-                                        kubectl delete deployment maya-sawa -n default --ignore-not-found
+                                        # Apply deployment with rolling update (no delete needed)
                                         envsubst < k8s/deployment.yaml | kubectl apply -f -
                                         kubectl set image deployment/maya-sawa maya-sawa=${DOCKER_IMAGE}:${DOCKER_TAG} -n default
                                         kubectl rollout status deployment/maya-sawa -n default
