@@ -520,8 +520,8 @@ async def query_document(request: QueryRequest):
         # 統一流程：始終先搜索文件，由 QAChain 決定是否使用
         # 使用環境變數設定的檢索數量與閾值
         initial_k = Config.ARTICLE_MATCH_COUNT
-        # Enforce a stricter default threshold (min 0.7)
-        initial_threshold = max(Config.SIMILARITY_THRESHOLD, 0.7)
+        # Use a more practical threshold for better recall
+        initial_threshold = max(Config.SIMILARITY_THRESHOLD, 0.5)
         documents = vector_store.similarity_search(request.text, k=initial_k, threshold=initial_threshold)
         logger.info(f"啟用文章QA功能，搜索到 {len(documents)} 個相關文檔 (k={initial_k}, threshold={initial_threshold})")
 
