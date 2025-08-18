@@ -286,24 +286,53 @@ async def sync_articles_from_api(request: SyncFromAPIRequest):
         articles = data.get("data", [])
         if not articles:
             return {"message": "沒有找到需要同步的文章", "count": 0}
-        
-        # 使用新的方法添加文章（使用預計算的 embedding）
+
+        # 分流：有預計算 embedding 與無 embedding（需本地產生）
+        with_embedding = [a for a in articles if a.get("embedding")]
+        without_embedding = [a for a in articles if not a.get("embedding")]
+
         vector_store = get_vector_store()
-        vector_store.add_articles_from_api(articles)
-        
-        # 返回同步結果
+
+        synced_precomputed = 0
+        synced_local = 0
+
+        # 先寫入有預計算 embedding 的文章
+        if with_embedding:
+            vector_store.add_articles_from_api(with_embedding)
+            synced_precomputed = len(with_embedding)
+
+        # 對缺少 embedding 的文章，在本地生成 embedding 後寫入
+        if without_embedding:
+            documents = []
+            for article in without_embedding:
+                doc = Document(
+                    page_content=article.get("content", ""),
+                    metadata={
+                        "source": article.get("file_path", "unknown"),
+                        "id": article.get("id"),
+                        "file_date": article.get("file_date")
+                    }
+                )
+                documents.append(doc)
+            if documents:
+                vector_store.add_documents(documents)
+                synced_local = len(documents)
+
+        total_synced = synced_precomputed + synced_local
         return {
             "success": True,
-            "message": f"成功同步 {len(articles)} 篇文章（使用預計算的 embedding）",
-            "count": len(articles),
+            "message": (
+                f"成功同步 {total_synced} 篇文章（embedding: 預計算 {synced_precomputed}，本地 {synced_local}）"
+            ),
+            "count": total_synced,
             "articles": [
                 {
-                    "id": article["id"],
-                    "file_path": article["file_path"],
-                    "content_length": len(article["content"]),
-                    "has_embedding": "embedding" in article
+                    "id": a.get("id"),
+                    "file_path": a.get("file_path"),
+                    "content_length": len(a.get("content", "")),
+                    "has_embedding": bool(a.get("embedding"))
                 }
-                for article in articles
+                for a in articles
             ]
         }
         
@@ -530,8 +559,9 @@ async def query_document(request: QueryRequest):
                 "character_name": char_name
             })
     elif documents:
-        # 如果是文件問答，來源為文件本身
-        for doc in documents:
+        # 如果是文件問答，來源為文件本身（只回傳前3筆最相關，供前端顯示）
+        top_docs = documents[:3]
+        for doc in top_docs:
             content_preview = doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
             formatted_data.append({
                 "id": doc.metadata.get("id"),
