@@ -57,6 +57,11 @@ spec:
           value: "${PUBLIC_API_BASE_URL}"
         - name: PUBLIC_TYMB_URL
           value: "${PUBLIC_TYMB_URL}"
+        # Vector search tuning
+        - name: MATCH_COUNT
+          value: "5"
+        - name: SIMILARITY_THRESHOLD
+          value: "0.2"
         # === Auto-sync feature flags (enabled in production) ===
         - name: ENABLE_PEOPLE_WEAPONS_SYNC
           value: "true"
