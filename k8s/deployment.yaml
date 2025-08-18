@@ -61,7 +61,7 @@ spec:
         - name: MATCH_COUNT
           value: "5"
         - name: SIMILARITY_THRESHOLD
-          value: "0.2"
+          value: "0.7"
         # === Auto-sync feature flags (enabled in production) ===
         - name: ENABLE_PEOPLE_WEAPONS_SYNC
           value: "true"

@@ -520,7 +520,7 @@ async def query_document(request: QueryRequest):
         # 統一流程：始終先搜索文件，由 QAChain 決定是否使用
         # 使用環境變數設定的檢索數量與閾值
         initial_k = Config.ARTICLE_MATCH_COUNT
-        # Enforce a stricter default threshold (at least 0.7)
+        # Enforce a stricter default threshold (min 0.7)
         initial_threshold = max(Config.SIMILARITY_THRESHOLD, 0.7)
         documents = vector_store.similarity_search(request.text, k=initial_k, threshold=initial_threshold)
         logger.info(f"啟用文章QA功能，搜索到 {len(documents)} 個相關文檔 (k={initial_k}, threshold={initial_threshold})")
@@ -561,10 +561,22 @@ async def query_document(request: QueryRequest):
                 "character_name": char_name
             })
     elif documents:
-        # 如果是文件問答，來源為文件本身（只回傳前3筆最相關的檔案名稱）
+        # 如果是文件問答，來源為文件本身（只回傳前3筆最相關，供前端顯示）
         top_docs = documents[:3]
         for doc in top_docs:
-            formatted_data.append(doc.metadata.get("file_path"))
+            content_preview = doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+            formatted_data.append({
+                "id": doc.metadata.get("id"),
+                "file_path": doc.metadata.get("file_path"),
+                "title": doc.metadata.get("title", ""),
+                "description": doc.metadata.get("description", ""),
+                "tags": doc.metadata.get("tags", []),
+                "similarity": round(doc.metadata.get("similarity", 0.0), 4),
+                "content_preview": content_preview,
+                "content_length": len(doc.page_content),
+                "file_date": doc.metadata.get("file_date", ""),
+                "source": doc.metadata.get("source", "")
+            })
     else:
         # 如果沒有找到任何文件或角色，返回適當的消息
         if not final_answer: # 如果 QAChain 也沒有給出答案
