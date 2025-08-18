@@ -20,6 +20,12 @@ pipeline {
                     workingDir: /home/jenkins/agent
                   - name: docker
                     image: docker:23-dind
+                    # Run Docker daemon (DinD) with settings compatible with K8s nodes
+                    args:
+                    - "--host=tcp://0.0.0.0:2375"
+                    - "--host=unix:///var/run/docker.sock"
+                    - "--storage-driver=vfs"
+                    - "--mtu=1440"
                     privileged: true
                     securityContext:
                       privileged: true
@@ -30,9 +36,13 @@ pipeline {
                       value: ""
                     - name: DOCKER_BUILDKIT
                       value: "1"
+                    - name: DOCKER_DRIVER
+                      value: vfs
                     volumeMounts:
                     - mountPath: /home/jenkins/agent
                       name: workspace-volume
+                    - mountPath: /var/lib/docker
+                      name: docker-graph-storage
                   - name: kubectl
                     image: bitnami/kubectl:1.30.7
                     command: ["/bin/sh"]
@@ -45,6 +55,8 @@ pipeline {
                       name: workspace-volume
                   volumes:
                   - name: workspace-volume
+                    emptyDir: {}
+                  - name: docker-graph-storage
                     emptyDir: {}
             '''
             defaultContainer 'python'
