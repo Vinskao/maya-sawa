@@ -139,9 +139,13 @@ curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
   -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
 
+curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Maya"}'
+
 curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
   -H "Content-Type: application/json" \
-  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Sorane","frontend_source":"/other-frontend"}'
+  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Maya"}'
 ```
 
 ```bash
