@@ -40,31 +40,28 @@ graph TD
     A["User Request</br>(/qa/query)"] --> B{FastAPI Router};
     B --> C["qa_chain.get_answer(query)"];
     C --> D{"Detect names in query"};
+    
+    %% 名稱檢測分支
     D -- "Names found" --> E["Fetch character profiles</br>from DB"];
-    E --> F["Create prompt with</br>character profile"];
-    F --> G["Invoke LLM"];
-    D -- "No names found" --> H["Similarity search</br>in Vector Store"];
-    H --> I["Create prompt with</br>document context"];
-    I --> G;
-    G --> J["Return AI answer"];
-    J --> B;
-```
-
-
-
-```mermaid
-graph TD
-    A["get_answer(query)"] --> B{"Detect names"};
-    B -- "Name(s) found" --> C{"Fetch profiles"};
-    C -- "Profile found" --> D["Generate answer from profile"];
-    C -- "Profile not found" --> E["Respond 'not found'"];
-    B -- "No names found" --> F{"Semantic search for people"};
-    F -- "People found" --> G["Generate answer from search results"];
-    F -- "No one found" --> H["RAG from documents"];
-    D --> I["Return final answer"];
-    E --> I;
-    G --> I;
-    H --> I;
+    E --> F{"Profile found?"};
+    F -- "Yes" --> G["Create prompt with</br>character profile"];
+    F -- "No" --> H["Respond 'not found'"];
+    
+    %% 無名稱分支
+    D -- "No names found" --> I{"Semantic search for people"};
+    I -- "People found" --> J["Generate answer from</br>search results"];
+    I -- "No one found" --> K["Similarity search</br>in Vector Store"];
+    K --> L["Create prompt with</br>document context"];
+    
+    %% 統一處理
+    G --> M["Invoke LLM"];
+    J --> M;
+    L --> M;
+    H --> N["Return final answer"];
+    M --> N;
+    N --> O["Save chat history"];
+    O --> P["Return AI answer"];
+    P --> B;
 ```
 
 ```mermaid
