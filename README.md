@@ -52,8 +52,8 @@ flowchart TD
     end
 
     subgraph "Q&A Layer"
-        QAEngine["QAEngine"]
         QAChain["QAChain"]
+        PageAnalyzer["PageAnalyzer"]
     end
 
     subgraph "Support Layer"
@@ -64,6 +64,9 @@ flowchart TD
         NameAdapter["NameAdapter"]
         VectorStore["PostgresVectorStore"]
         ChatHistoryManager["ChatHistoryManager"]
+        ConfigManager["ConfigManager"]
+        ConnectionPoolManager["ConnectionPoolManager"]
+        Scheduler["ArticleSyncScheduler"]
     end
 
     subgraph "External Services"
@@ -71,15 +74,17 @@ flowchart TD
         PeopleAPI["People System API<br/>/tymb/people/*"]
         ArticleAPI["Public Article API<br/>/paprika/articles"]
         PostgresDB["PostgreSQL"]
+        RedisDB["Redis"]
     end
 
     Client["Client / Frontend"] --> APIRouter
-    APIRouter --> QAEngine
-    QAEngine --> QAChain
+    APIRouter --> QAChain
+    APIRouter --> PageAnalyzer
     APIRouter --> VectorStore
     APIRouter --> ChatHistoryManager
+    APIRouter --> Scheduler
 
-    ChatHistoryManager --> PostgresDB
+    ChatHistoryManager --> RedisDB
 
     QAChain --> NameDetector
     QAChain --> ProfileManager
@@ -87,6 +92,8 @@ flowchart TD
     QAChain --> PersonalityPromptBuilder
     QAChain --> NameAdapter
     QAChain --> VectorStore
+
+    PageAnalyzer --> QAChain
 
     NameDetector --> OpenAIAPI
     QAChain --> OpenAIAPI
@@ -98,6 +105,10 @@ flowchart TD
     VectorStore --> ArticleAPI
 
     PeopleWeaponManager --> PostgresDB
+
+    ConfigManager --> PostgresDB
+    ConnectionPoolManager --> PostgresDB
+    Scheduler --> ArticleAPI
 ```
 
 ## API Examples
@@ -181,6 +192,5 @@ poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 
 curl -X POST "http://localhost:8000/maya-sawa/qa/sync-articles" \
   -H "Content-Type: application/json" \
   -d '{}'
-```
 ```
 
