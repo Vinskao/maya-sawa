@@ -32,6 +32,7 @@ from langchain.schema import Document
 import psycopg2
 from psycopg2.extras import execute_values
 from .config import Config
+from .connection_pool import get_pool_manager
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -61,6 +62,9 @@ class PostgresVectorStore:
         # 從 Config 獲取 PostgreSQL 連接字符串
         from .config import Config
         self.connection_string = Config.DB_CONNECTION_STRING
+        
+        # 獲取連接池管理器
+        self.pool_manager = get_pool_manager()
         
         logger.debug(f"PostgresVectorStore - Using API Base: {api_base}")
         
@@ -100,8 +104,12 @@ class PostgresVectorStore:
         確保應用程式啟動時能正常連接到數據庫
         """
         try:
-            with psycopg2.connect(self.connection_string) as conn:
+            conn = self.pool_manager.get_postgres_connection()
+            if conn:
                 logger.info("Successfully connected to PostgreSQL database")
+                self.pool_manager.return_postgres_connection(conn)
+            else:
+                raise Exception("Failed to get connection from pool")
         except Exception as e:
             logger.error(f"Failed to connect to database: {str(e)}")
             raise
@@ -140,7 +148,11 @@ class PostgresVectorStore:
         Args:
             articles_data (List[Dict[str, Any]]): 文章數據列表，包含預計算的 embedding
         """
-        with psycopg2.connect(self.connection_string) as conn:
+        conn = self.pool_manager.get_postgres_connection()
+        if not conn:
+            raise Exception("Failed to get connection from pool")
+        
+        try:
             cur = conn.cursor()
             
             # 準備批量插入數據
@@ -188,6 +200,8 @@ class PostgresVectorStore:
             
             conn.commit()
             logger.info(f"Successfully processed {len(data)} articles")
+        finally:
+            self.pool_manager.return_postgres_connection(conn)
 
     def add_documents(self, documents: List[Document]) -> None:
         """
@@ -199,7 +213,11 @@ class PostgresVectorStore:
         Args:
             documents (List[Document]): LangChain Document 對象列表
         """
-        with psycopg2.connect(self.connection_string) as conn:
+        conn = self.pool_manager.get_postgres_connection()
+        if not conn:
+            raise Exception("Failed to get connection from pool")
+        
+        try:
             cur = conn.cursor()
             
             # 批量生成嵌入向量
@@ -235,6 +253,8 @@ class PostgresVectorStore:
             )
             
             conn.commit()
+        finally:
+            self.pool_manager.return_postgres_connection(conn)
 
     def similarity_search(self, query: str, k: int = None, threshold: float = None) -> List[Document]:
         """
@@ -260,7 +280,11 @@ class PostgresVectorStore:
         # 生成查詢的嵌入向量
         query_embedding = self.embeddings.embed_query(query)
         
-        with psycopg2.connect(self.connection_string) as conn:
+        conn = self.pool_manager.get_postgres_connection()
+        if not conn:
+            raise Exception("Failed to get connection from pool")
+        
+        try:
             cur = conn.cursor()
             
             # 將 Python 列表轉換為 PostgreSQL vector 格式
@@ -302,6 +326,8 @@ class PostgresVectorStore:
                 documents.append(doc)
             
             return documents
+        finally:
+            self.pool_manager.return_postgres_connection(conn)
 
     def get_article_stats(self) -> Dict[str, Any]:
         """
@@ -315,7 +341,11 @@ class PostgresVectorStore:
         Returns:
             Dict[str, Any]: 包含統計信息的字典
         """
-        with psycopg2.connect(self.connection_string) as conn:
+        conn = self.pool_manager.get_postgres_connection()
+        if not conn:
+            raise Exception("Failed to get connection from pool")
+        
+        try:
             cur = conn.cursor()
             
             # 獲取基本統計信息
@@ -337,6 +367,8 @@ class PostgresVectorStore:
                 "earliest_date": stats[2].isoformat() if stats[2] else None,
                 "latest_date": stats[3].isoformat() if stats[3] else None
             }
+        finally:
+            self.pool_manager.return_postgres_connection(conn)
 
     def clear(self) -> None:
         """
@@ -349,9 +381,15 @@ class PostgresVectorStore:
         
         注意：此操作不可逆，請謹慎使用
         """
-        with psycopg2.connect(self.connection_string) as conn:
+        conn = self.pool_manager.get_postgres_connection()
+        if not conn:
+            raise Exception("Failed to get connection from pool")
+        
+        try:
             cur = conn.cursor()
             # 使用 TRUNCATE 快速清空表
             cur.execute("TRUNCATE TABLE articles") 
             conn.commit()
-            logger.info("All articles have been cleared from the database") 
+            logger.info("All articles have been cleared from the database")
+        finally:
+            self.pool_manager.return_postgres_connection(conn) 

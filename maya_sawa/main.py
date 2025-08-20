@@ -23,12 +23,6 @@ import pathlib
 # 第三方庫導入
 from dotenv import load_dotenv
 
-# 本地模組導入
-from .api.qa import router as qa_router
-from .core.scheduler import ArticleSyncScheduler
-from .people import sync_data
-from .core.config import Config
-
 # ==================== 日誌配置 ====================
 # 設置日誌級別為 DEBUG，用於開發環境的詳細調試信息
 logging.basicConfig(level=logging.DEBUG)
@@ -39,6 +33,12 @@ logger = logging.getLogger(__name__)
 env_path = pathlib.Path(__file__).parent.parent / '.env'
 logger.debug(f"Loading .env file from: {env_path}")
 load_dotenv(env_path, override=True)
+
+# 本地模組導入
+from .api.qa import router as qa_router
+from .core.scheduler import ArticleSyncScheduler
+from .people import sync_data
+from .core.config import Config
 
 # 從環境變數獲取 OpenAI API 配置
 api_key = os.getenv("OPENAI_API_KEY")

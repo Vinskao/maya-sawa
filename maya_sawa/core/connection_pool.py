@@ -22,7 +22,7 @@ Markdown Q&A System - 連接池管理模組
 # 標準庫導入
 import logging
 import os
-from typing import Optional
+from typing import Optional, Dict, Any
 
 # 第三方庫導入
 import psycopg2
@@ -44,7 +44,9 @@ class ConnectionPoolManager:
     連接池管理器
     
     負責管理 PostgreSQL 和 Redis 的連接池，提供：
-    - 連接池初始化
+    - 主數據庫連接池（用於 articles 表）
+    - 人員數據庫連接池（用於 people 和 weapon 表）
+    - Redis 連接池
     - 連接獲取和歸還
     - 資源清理
     - 錯誤處理
@@ -54,38 +56,70 @@ class ConnectionPoolManager:
         """
         初始化連接池管理器
         
-        創建 PostgreSQL 和 Redis 連接池，設置連接參數
+        創建主數據庫、人員數據庫和 Redis 連接池，設置連接參數
         """
-        # PostgreSQL 連接池
+        # 主數據庫連接池（用於 articles 表）
         self.postgres_pool = None
-        self._init_postgres_pool()
+        self._init_main_postgres_pool()
+        
+        # 人員數據庫連接池（用於 people 和 weapon 表）
+        self.people_postgres_pool = None
+        self._init_people_postgres_pool()
         
         # Redis 連接池
         self.redis_pool = None
         self._init_redis_pool()
     
-    def _init_postgres_pool(self):
+    def _init_main_postgres_pool(self):
         """
-        初始化 PostgreSQL 連接池
+        初始化主 PostgreSQL 連接池
         
-        創建 PostgreSQL 線程連接池，設置最小和最大連接數，
+        創建主數據庫的線程連接池，設置最小和最大連接數，
         優化並發性能
         """
         try:
-            # 從 Config 獲取連接字符串
+            # 從 Config 獲取主數據庫連接字符串
             connection_string = Config.DB_CONNECTION_STRING
             
-            # 創建線程連接池
-            self.postgres_pool = pool.ThreadedConnectionPool(
-                minconn=1,      # 最小連接數 (減少以避免連接限制)
-                maxconn=5,      # 最大連接數 (減少以避免連接限制)
-                dsn=connection_string  # 連接字符串
-            )
-            
-            logger.info("PostgreSQL connection pool initialized")
-            
+            if connection_string:
+                # 創建線程連接池
+                self.postgres_pool = pool.ThreadedConnectionPool(
+                    minconn=1,      # 最小連接數
+                    maxconn=5,      # 最大連接數 (每個數據庫最多 5 個連接)
+                    dsn=connection_string  # 連接字符串
+                )
+                logger.info("Main PostgreSQL connection pool initialized")
+            else:
+                logger.warning("Main database connection string not available")
+                
         except Exception as e:
-            logger.error(f"Failed to initialize PostgreSQL pool: {str(e)}")
+            logger.error(f"Failed to initialize main PostgreSQL pool: {str(e)}")
+            raise
+    
+    def _init_people_postgres_pool(self):
+        """
+        初始化人員 PostgreSQL 連接池
+        
+        創建人員數據庫的線程連接池，設置最小和最大連接數，
+        優化並發性能
+        """
+        try:
+            # 從 Config 獲取人員數據庫連接字符串
+            connection_string = Config.PEOPLE_DB_CONNECTION_STRING
+            
+            if connection_string:
+                # 創建線程連接池
+                self.people_postgres_pool = pool.ThreadedConnectionPool(
+                    minconn=1,      # 最小連接數
+                    maxconn=5,      # 最大連接數 (每個數據庫最多 5 個連接)
+                    dsn=connection_string  # 連接字符串
+                )
+                logger.info("People PostgreSQL connection pool initialized")
+            else:
+                logger.warning("People database connection string not available")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize people PostgreSQL pool: {str(e)}")
             raise
     
     def _init_redis_pool(self):
@@ -118,9 +152,9 @@ class ConnectionPoolManager:
     
     def get_postgres_connection(self):
         """
-        獲取 PostgreSQL 連接
+        獲取主 PostgreSQL 連接（用於 articles 表）
         
-        從連接池中獲取一個可用的 PostgreSQL 連接
+        從主數據庫連接池中獲取一個可用的 PostgreSQL 連接
         
         Returns:
             psycopg2.extensions.connection: PostgreSQL 連接對象，如果池未初始化則返回 None
@@ -131,9 +165,9 @@ class ConnectionPoolManager:
     
     def return_postgres_connection(self, conn):
         """
-        歸還 PostgreSQL 連接
+        歸還主 PostgreSQL 連接
         
-        將使用完畢的 PostgreSQL 連接歸還到連接池，
+        將使用完畢的主數據庫 PostgreSQL 連接歸還到連接池，
         供其他線程使用
         
         Args:
@@ -141,6 +175,32 @@ class ConnectionPoolManager:
         """
         if self.postgres_pool and conn:
             self.postgres_pool.putconn(conn)
+    
+    def get_people_postgres_connection(self):
+        """
+        獲取人員 PostgreSQL 連接（用於 people 和 weapon 表）
+        
+        從人員數據庫連接池中獲取一個可用的 PostgreSQL 連接
+        
+        Returns:
+            psycopg2.extensions.connection: PostgreSQL 連接對象，如果池未初始化則返回 None
+        """
+        if self.people_postgres_pool:
+            return self.people_postgres_pool.getconn()
+        return None
+    
+    def return_people_postgres_connection(self, conn):
+        """
+        歸還人員 PostgreSQL 連接
+        
+        將使用完畢的人員數據庫 PostgreSQL 連接歸還到連接池，
+        供其他線程使用
+        
+        Args:
+            conn: PostgreSQL 連接對象
+        """
+        if self.people_postgres_pool and conn:
+            self.people_postgres_pool.putconn(conn)
     
     def get_redis_connection(self):
         """
@@ -163,13 +223,64 @@ class ConnectionPoolManager:
         通常在應用程式關閉時調用
         """
         if self.postgres_pool:
-            # 關閉 PostgreSQL 連接池
+            # 關閉主 PostgreSQL 連接池
             self.postgres_pool.closeall()
-            logger.info("PostgreSQL connection pool closed")
+            logger.info("Main PostgreSQL connection pool closed")
+        
+        if self.people_postgres_pool:
+            # 關閉人員 PostgreSQL 連接池
+            self.people_postgres_pool.closeall()
+            logger.info("People PostgreSQL connection pool closed")
         
         if self.redis_pool:
             # Redis 連接池會自動管理，記錄關閉信息
             logger.info("Redis connection pool closed")
+    
+    def get_pool_status(self) -> Dict[str, Any]:
+        """
+        獲取連接池狀態
+        
+        返回當前連接池的使用情況，用於監控和調試
+        
+        Returns:
+            Dict[str, Any]: 包含連接池狀態的字典
+        """
+        status = {
+            "main_postgres": {
+                "pool_initialized": self.postgres_pool is not None,
+                "max_connections": 5,
+                "min_connections": 1,
+                "purpose": "articles table"
+            },
+            "people_postgres": {
+                "pool_initialized": self.people_postgres_pool is not None,
+                "max_connections": 5,
+                "min_connections": 1,
+                "purpose": "people and weapon tables"
+            },
+            "redis": {
+                "pool_initialized": self.redis_pool is not None,
+                "max_connections": 5
+            }
+        }
+        
+        # 如果主 PostgreSQL 連接池已初始化，獲取詳細狀態
+        if self.postgres_pool:
+            try:
+                status["main_postgres"]["pool_type"] = "ThreadedConnectionPool"
+                status["main_postgres"]["status"] = "active"
+            except Exception as e:
+                status["main_postgres"]["status"] = f"error: {str(e)}"
+        
+        # 如果人員 PostgreSQL 連接池已初始化，獲取詳細狀態
+        if self.people_postgres_pool:
+            try:
+                status["people_postgres"]["pool_type"] = "ThreadedConnectionPool"
+                status["people_postgres"]["status"] = "active"
+            except Exception as e:
+                status["people_postgres"]["status"] = f"error: {str(e)}"
+        
+        return status
 
 # ==================== 全局連接池管理器 ====================
 # 全局連接池管理器實例（懶加載模式）

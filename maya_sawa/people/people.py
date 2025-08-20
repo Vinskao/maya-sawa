@@ -321,7 +321,7 @@ class PeopleWeaponManager:
         try:
             logger.info(f"Starting to process {total_records} people records (max time: {max_time_seconds}s)")
             
-            conn = self.pool_manager.get_postgres_connection()
+            conn = self.pool_manager.get_people_postgres_connection()
             cursor = conn.cursor()
             
             for i, person in enumerate(people_data):
@@ -569,7 +569,7 @@ class PeopleWeaponManager:
             if cursor:
                 cursor.close()
             if conn:
-                self.pool_manager.return_postgres_connection(conn)
+                self.pool_manager.return_people_postgres_connection(conn)
         
         return updated_count
         
@@ -597,7 +597,7 @@ class PeopleWeaponManager:
         try:
             logger.info(f"Starting to process {total_records} weapons records (max time: {max_time_seconds}s)")
             
-            conn = self.pool_manager.get_postgres_connection()
+            conn = self.pool_manager.get_people_postgres_connection()
             cursor = conn.cursor()
             
             for i, weapon in enumerate(weapons_data):
@@ -682,7 +682,7 @@ class PeopleWeaponManager:
             if cursor:
                 cursor.close()
             if conn:
-                self.pool_manager.return_postgres_connection(conn)
+                self.pool_manager.return_people_postgres_connection(conn)
         
         return updated_count
     
@@ -753,7 +753,7 @@ class PeopleWeaponManager:
         """
         conn = None
         try:
-            conn = self.pool_manager.get_postgres_connection()
+            conn = self.pool_manager.get_people_postgres_connection()
             cursor = conn.cursor()
             
             # 將 Python 列表轉換為 PostgreSQL vector 格式
@@ -821,7 +821,7 @@ class PeopleWeaponManager:
             if cursor:
                 cursor.close()
             if conn:
-                self.pool_manager.return_postgres_connection(conn)
+                self.pool_manager.return_people_postgres_connection(conn)
 
 # ==================== 全局管理器實例 ====================
 _manager = None

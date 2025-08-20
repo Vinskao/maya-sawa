@@ -7,11 +7,13 @@ metadata:
 spec:
   schedule: "0 3 */3 * *"  # 每3天的凌晨3點執行
   concurrencyPolicy: Forbid  # 防止重複執行
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1  # 只保留最近1個成功的Job
+  failedJobsHistoryLimit: 1      # 只保留最近1個失敗的Job
+  startingDeadlineSeconds: 300   # 5分鐘內必須開始執行
   jobTemplate:
     spec:
-      backoffLimit: 3  # 移動到正確位置
+      ttlSecondsAfterFinished: 3600  # Job完成後1小時自動刪除
+      backoffLimit: 3
       template:
         spec:
           serviceAccountName: jenkins-admin

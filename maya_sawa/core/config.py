@@ -37,7 +37,7 @@ class Config:
     Configuration manager for Maya Sawa system
     """
     
-    # Database Configuration
+    # Main Database Configuration (for articles table)
     # Build PostgreSQL connection string from individual parameters
     DB_HOST = os.getenv("DB_HOST")
     DB_PORT = os.getenv("DB_PORT", "5432")
@@ -46,12 +46,27 @@ class Config:
     DB_PASSWORD = os.getenv("DB_PASSWORD")
     DB_SSLMODE = os.getenv("DB_SSLMODE", "require")
     
-    # Construct connection string
+    # Construct main database connection string
     if all([DB_HOST, DB_DATABASE, DB_USERNAME, DB_PASSWORD]):
         DB_CONNECTION_STRING = f"postgresql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_DATABASE}?sslmode={DB_SSLMODE}"
     else:
         # If individual parameters are not provided, set to None
         DB_CONNECTION_STRING = None
+    
+    # People Database Configuration (for people and weapon tables)
+    PEOPLE_DB_HOST = os.getenv("PEOPLE_DB_HOST")
+    PEOPLE_DB_PORT = os.getenv("PEOPLE_DB_PORT", "5432")
+    PEOPLE_DB_DATABASE = os.getenv("PEOPLE_DB_DATABASE")
+    PEOPLE_DB_USERNAME = os.getenv("PEOPLE_DB_USERNAME")
+    PEOPLE_DB_PASSWORD = os.getenv("PEOPLE_DB_PASSWORD")
+    PEOPLE_DB_SSLMODE = os.getenv("PEOPLE_DB_SSLMODE", "require")
+    
+    # Construct people database connection string
+    if all([PEOPLE_DB_HOST, PEOPLE_DB_DATABASE, PEOPLE_DB_USERNAME, PEOPLE_DB_PASSWORD]):
+        PEOPLE_DB_CONNECTION_STRING = f"postgresql://{PEOPLE_DB_USERNAME}:{PEOPLE_DB_PASSWORD}@{PEOPLE_DB_HOST}:{PEOPLE_DB_PORT}/{PEOPLE_DB_DATABASE}?sslmode={PEOPLE_DB_SSLMODE}"
+    else:
+        # If individual parameters are not provided, set to None
+        PEOPLE_DB_CONNECTION_STRING = None
     
     # OpenAI Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -102,9 +117,13 @@ class Config:
         """
         missing_vars = []
         
-        # Check for database configuration
+        # Check for main database configuration (for articles table)
         if not cls.DB_CONNECTION_STRING:
-            missing_vars.append("Database configuration (DB_HOST, DB_DATABASE, DB_USERNAME, DB_PASSWORD)")
+            missing_vars.append("Main database configuration (DB_HOST, DB_DATABASE, DB_USERNAME, DB_PASSWORD)")
+        
+        # Check for people database configuration (for people and weapon tables)
+        if not cls.PEOPLE_DB_CONNECTION_STRING:
+            missing_vars.append("People database configuration (PEOPLE_DB_HOST, PEOPLE_DB_DATABASE, PEOPLE_DB_USERNAME, PEOPLE_DB_PASSWORD)")
         
         if not cls.OPENAI_API_KEY:
             missing_vars.append("OPENAI_API_KEY")

@@ -28,9 +28,37 @@
 
 ## Getting Started
 
+### 環境要求
+- Python 3.8+
+- PostgreSQL (支援 pgvector 擴展)
+- Redis
+- Aiven Free Tier PostgreSQL (最多 20 個連接)
 
+### 雙數據庫配置
+系統使用雙數據庫架構：
+- **主數據庫**: 用於 articles 表 (向量搜索)
+- **人員數據庫**: 用於 people 和 weapon 表 (角色和武器數據)
+
+### 連接池配置
+系統已配置為每個數據庫最多使用 5 個 PostgreSQL 連接：
+- **主數據庫**: 最多 5 個連接 (articles 表)
+- **人員數據庫**: 最多 5 個連接 (people/weapon 表)
+- 每個數據庫都符合單一數據庫 5 連接限制
+- 所有數據庫操作都通過連接池管理
+
+### 啟動應用
 ```bash
 poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
+```
+
+### 測試連接池
+```bash
+python scripts/test_connection_pool.py
+```
+
+### 監控連接使用情況
+```bash
+python scripts/monitor_connections.py
 ```
 
 ## System Architecture

@@ -92,6 +92,11 @@ pipeline {
                             string(credentialsId: 'DB_DATABASE', variable: 'DB_DATABASE'),
                             string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
                             string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                            string(credentialsId: 'PEOPLE_DB_HOST', variable: 'PEOPLE_DB_HOST'),
+                            string(credentialsId: 'PEOPLE_DB_PORT', variable: 'PEOPLE_DB_PORT'),
+                            string(credentialsId: 'PEOPLE_DB_DATABASE', variable: 'PEOPLE_DB_DATABASE'),
+                            string(credentialsId: 'PEOPLE_DB_USERNAME', variable: 'PEOPLE_DB_USERNAME'),
+                            string(credentialsId: 'PEOPLE_DB_PASSWORD', variable: 'PEOPLE_DB_PASSWORD'),
                             string(credentialsId: 'REDIS_HOST', variable: 'REDIS_HOST'),
                             string(credentialsId: 'REDIS_CUSTOM_PORT', variable: 'REDIS_CUSTOM_PORT'),
                             string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
@@ -109,13 +114,21 @@ pipeline {
                                 OPENAI_ORGANIZATION=${OPENAI_ORGANIZATION}
                                 OPENAI_API_BASE=https://api.openai.com/v1
                                 
-                                # Database Configuration
+                                # Main Database Configuration (articles table)
                                 DB_HOST=${DB_HOST}
                                 DB_PORT=${DB_PORT}
                                 DB_DATABASE=${DB_DATABASE}
                                 DB_USERNAME=${DB_USERNAME}
                                 DB_PASSWORD=${DB_PASSWORD}
                                 DB_SSLMODE=require
+                                
+                                # People Database Configuration (people/weapon tables)
+                                PEOPLE_DB_HOST=${PEOPLE_DB_HOST}
+                                PEOPLE_DB_PORT=${PEOPLE_DB_PORT}
+                                PEOPLE_DB_DATABASE=${PEOPLE_DB_DATABASE}
+                                PEOPLE_DB_USERNAME=${PEOPLE_DB_USERNAME}
+                                PEOPLE_DB_PASSWORD=${PEOPLE_DB_PASSWORD}
+                                PEOPLE_DB_SSLMODE=require
                                 
                                 # Redis Configuration
                                 REDIS_HOST=${REDIS_HOST}
@@ -205,6 +218,11 @@ pipeline {
                         string(credentialsId: 'DB_DATABASE', variable: 'DB_DATABASE'),
                         string(credentialsId: 'DB_USERNAME', variable: 'DB_USERNAME'),
                         string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'PEOPLE_DB_HOST', variable: 'PEOPLE_DB_HOST'),
+                        string(credentialsId: 'PEOPLE_DB_PORT', variable: 'PEOPLE_DB_PORT'),
+                        string(credentialsId: 'PEOPLE_DB_DATABASE', variable: 'PEOPLE_DB_DATABASE'),
+                        string(credentialsId: 'PEOPLE_DB_USERNAME', variable: 'PEOPLE_DB_USERNAME'),
+                        string(credentialsId: 'PEOPLE_DB_PASSWORD', variable: 'PEOPLE_DB_PASSWORD'),
                         string(credentialsId: 'REDIS_HOST', variable: 'REDIS_HOST'),
                         string(credentialsId: 'REDIS_CUSTOM_PORT', variable: 'REDIS_CUSTOM_PORT'),
                         string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),

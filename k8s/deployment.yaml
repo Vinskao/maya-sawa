@@ -43,11 +43,19 @@ spec:
           value: "${DB_PASSWORD}"
         - name: DB_SSLMODE
           value: "require"
-        # === PostgreSQL Connection Pool Configuration ===
-        - name: DB_MINIMUM_IDLE
-          value: "5"
-        - name: DB_MAXIMUM_POOL_SIZE
-          value: "20"
+        # === People Database Configuration ===
+        - name: PEOPLE_DB_HOST
+          value: "${PEOPLE_DB_HOST}"
+        - name: PEOPLE_DB_PORT
+          value: "${PEOPLE_DB_PORT}"
+        - name: PEOPLE_DB_DATABASE
+          value: "${PEOPLE_DB_DATABASE}"
+        - name: PEOPLE_DB_USERNAME
+          value: "${PEOPLE_DB_USERNAME}"
+        - name: PEOPLE_DB_PASSWORD
+          value: "${PEOPLE_DB_PASSWORD}"
+        - name: PEOPLE_DB_SSLMODE
+          value: "require"
         - name: REDIS_HOST
           value: "${REDIS_HOST}"
         - name: REDIS_CUSTOM_PORT
