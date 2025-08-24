@@ -71,7 +71,7 @@ def test_connection_pool():
         # 測試人員數據庫連接
         logger.info("\n=== 測試人員數據庫連接 (people/weapon) ===")
         people_connections = []
-        max_people_connections = 5
+        max_people_connections = 1
         
         for i in range(max_people_connections + 1):
             try:
@@ -134,8 +134,8 @@ def test_connection_pool():
         logger.info("\n=== 測試完成 ===")
         logger.info("雙數據庫連接池配置:")
         logger.info("- 主數據庫: 最多 5 個連接 (articles 表)")
-        logger.info("- 人員數據庫: 最多 5 個連接 (people/weapon 表)")
-        logger.info("- 每個數據庫都符合單一數據庫 5 連接限制")
+        logger.info("- 人員數據庫: 最多 1 個連接 (people/weapon 表)")
+        logger.info("- 每個數據庫都符合單一數據庫連接限制")
         
     except Exception as e:
         logger.error(f"測試過程中發生錯誤: {str(e)}")
