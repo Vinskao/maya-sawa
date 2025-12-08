@@ -19,6 +19,15 @@ psycopg2-binary = "^2.9.9"
 httpx = "^0.27.0"
 redis = "^5.0.1"
 openai = "^1.0.0"
+# Celery for async task processing
+celery = "^5.4.0"
+kombu = "^5.4.0"
+# Multi AI providers
+google-generativeai = "^0.8.3"
+dashscope = "^1.14.0"
+# SQLAlchemy for paprika database connection
+sqlalchemy = "^2.0.0"
+aiosqlite = "^0.20.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

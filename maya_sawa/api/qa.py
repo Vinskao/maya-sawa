@@ -32,10 +32,10 @@ import httpx
 _google_translator_available = False
 
 # LangChain 相關導入
-from maya_sawa.core.langchain_shim import Document
+from ..core.langchain_shim import Document
 
 # 本地模組導入
-from ..core.postgres_store import PostgresVectorStore
+from ..databases.postgres_store import PostgresVectorStore
 from ..core.qa_chain import QAChain
 from ..core.chat_history import ChatHistoryManager
 from ..core.config import Config

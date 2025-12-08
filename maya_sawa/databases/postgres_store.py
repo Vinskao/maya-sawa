@@ -31,8 +31,8 @@ from langchain_openai import OpenAIEmbeddings
 from langchain.schema import Document
 import psycopg2
 from psycopg2.extras import execute_values
-from .config import Config
-from .connection_pool import get_pool_manager
+from ..core.config import Config
+from ..core.connection_pool import get_pool_manager
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ class PostgresVectorStore:
         openai_organization = os.getenv("OPENAI_ORGANIZATION")
         
         # 從 Config 獲取 PostgreSQL 連接字符串
-        from .config import Config
+        from ..core.config import Config
         self.connection_string = Config.DB_CONNECTION_STRING
         
         # 獲取連接池管理器

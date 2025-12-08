@@ -36,9 +36,14 @@ load_dotenv(env_path, override=True)
 
 # 本地模組導入
 from .api.qa import router as qa_router
+from .api.articles import router as articles_router
+from .api.ai_models import router as ai_models_router
+from .api.conversations import router as conversations_router, legacy_router as legacy_chat_router
+from .api.ask import router as ask_router
 from .core.scheduler import ArticleSyncScheduler
 from .people import sync_data
 from .core.config import Config
+from .core.errors import register_exception_handlers
 
 # 從環境變數獲取 OpenAI API 配置
 api_key = os.getenv("OPENAI_API_KEY")
@@ -58,11 +63,23 @@ if not api_base:
 # ==================== FastAPI 應用程式初始化 ====================
 # 創建 FastAPI 應用程式實例
 app = FastAPI(
-    title="Markdown Q&A System",  # API 文檔標題
-    description="A powerful document Q&A system based on FastAPI, LangChain, and ChromaDB",  # API 描述
-    version="0.1.0",  # API 版本
+    title="Maya Sawa Unified API",  # API 文檔標題
+    description="""
+    A unified API system integrating multiple services:
+    
+    - **/qa/** - Document Q&A system (Original maya-sawa-v1)
+    - **/paprika/** - Article management (Migrated from Laravel)
+    - **/maya-v2/** - Conversation & AI model management (Migrated from Django)
+    
+    All APIs maintain backward compatibility with their original endpoints.
+    """,  # API 描述
+    version="0.2.0",  # API 版本
     root_path="/maya-sawa"  # 添加根路徑支持，用於 Kubernetes Ingress 路徑前綴
 )
+
+# ==================== 全域例外處理器註冊 ====================
+# 註冊統一的錯誤處理器，提供一致的錯誤回應格式
+register_exception_handlers(app)
 
 # ==================== CORS 中間件配置 ====================
 # 添加 CORS 中間件，允許跨域請求
@@ -76,8 +93,23 @@ app.add_middleware(
 )
 
 # ==================== 路由註冊 ====================
-# 註冊問答相關的 API 路由
+# 註冊問答相關的 API 路由 (原有功能)
 app.include_router(qa_router)
+
+# 註冊 Paprika 文章 API 路由 (從 Laravel 移植)
+app.include_router(articles_router)
+
+# 註冊 Maya-v2 AI 模型管理 API 路由 (從 Django 移植)
+app.include_router(ai_models_router)
+
+# 註冊 Maya-v2 對話管理 API 路由 (從 Django 移植)
+app.include_router(conversations_router)
+
+# 註冊 Legacy 聊天歷史 API 路由 (向後兼容)
+app.include_router(legacy_chat_router)
+
+# 註冊 Maya-v2 問答 API 路由 (從 Django 移植)
+app.include_router(ask_router)
 
 # ==================== 排程器初始化 ====================
 # 創建文章同步排程器實例
@@ -179,12 +211,18 @@ async def root():
     - 歡迎消息
     - API 版本
     - API 文檔 URL
+    - 可用的 API 端點
     
     Returns:
         dict: 包含 API 基本信息的字典
     """
     return {
-        "message": "Welcome to Markdown Q&A System",
-        "version": "0.1.0",
-        "docs_url": "/docs"  # FastAPI 自動生成的 API 文檔地址
+        "message": "Welcome to Maya Sawa Unified API",
+        "version": "0.2.0",
+        "docs_url": "/docs",
+        "endpoints": {
+            "qa": "/qa/* - Document Q&A system",
+            "paprika": "/paprika/* - Article management",
+            "maya_v2": "/maya-v2/* - Conversation & AI model management"
+        }
     } 
