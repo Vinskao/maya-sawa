@@ -27,9 +27,8 @@ from typing import Optional
 import os
 
 # 本地模組導入
-from ..api.qa import sync_articles_from_api, SyncFromAPIRequest
-from ..people import sync_data
-from .config import Config
+from ...people import sync_data
+from ..config.config import Config
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -59,19 +58,22 @@ class ArticleSyncScheduler:
     async def sync_articles_from_api(self, remote_url: Optional[str] = None) -> dict:
         """
         從遠端 API 同步文章並使用預計算的 embedding
-        
+
         調用 API 模組中的同步功能，處理同步結果的格式轉換
-        
+
         Args:
             remote_url (Optional[str]): 遠端 API URL，可選
-            
+
         Returns:
             dict: 同步結果字典
-            
+
         Raises:
             Exception: 當同步失敗時拋出異常
         """
         try:
+            # 延遲導入以避免循環依賴
+            from ...api.qa import sync_articles_from_api, SyncFromAPIRequest
+
             # 直接使用 qa.py 中的現有邏輯
             request = SyncFromAPIRequest(remote_url=remote_url)
             result = await sync_articles_from_api(request)

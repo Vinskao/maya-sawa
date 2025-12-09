@@ -22,7 +22,7 @@ from typing import List, Dict, Optional
 import logging
 
 # LangChain 相關導入
-from maya_sawa.core.langchain_shim import Document
+from ..processing.langchain_shim import Document
 
 # 本地模組導入
 from .qa_chain import QAChain

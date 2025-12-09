@@ -23,12 +23,15 @@ import uuid
 import logging
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+try:
+    from fastapi import APIRouter, Query
+    from pydantic import BaseModel, Field
+except ImportError as e:
+    raise ImportError(f"FastAPI and Pydantic are required but not installed. Please install with: poetry install") from e
 
-from ..databases.maya_v2_db import get_maya_v2_db, MessageType
-from ..core.chat_history import ChatHistoryManager
-from ..core.errors import (
+from ..databases.conversation_db import get_conversation_db, MessageType
+from ..core.services.chat_history import ChatHistoryManager
+from ..core.errors.errors import (
     ErrorCode,
     AppException,
     raise_not_found,
@@ -100,7 +103,7 @@ def _ensure_db_available():
     Check if Maya-v2 database is available.
     Raises AppException if not available.
     """
-    db = get_maya_v2_db()
+    db = get_conversation_db()
     if not db.is_available():
         raise_db_unavailable("Maya-v2")
     return db

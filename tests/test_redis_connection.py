@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def test_redis_connection():
     """測試 Redis 連接"""
     try:
-        from maya_sawa.core.connection_pool import get_pool_manager
+        from maya_sawa.core.database.connection_pool import get_pool_manager
         
         logger.info("=== Redis 連接測試 ===")
         
@@ -73,7 +73,7 @@ def test_redis_connection():
 def test_chat_history_manager():
     """測試 ChatHistoryManager"""
     try:
-        from maya_sawa.core.chat_history import ChatHistoryManager
+        from maya_sawa.core.services.chat_history import ChatHistoryManager
         
         logger.info("\n=== ChatHistoryManager 測試 ===")
         

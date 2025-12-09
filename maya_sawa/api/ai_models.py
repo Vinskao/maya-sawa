@@ -19,12 +19,15 @@ import os
 import logging
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, Query
-from pydantic import BaseModel
+try:
+    from fastapi import APIRouter, Query
+    from pydantic import BaseModel
+except ImportError as e:
+    raise ImportError(f"FastAPI and Pydantic are required but not installed. Please install with: poetry install") from e
 
-from ..core.config import Config
-from ..databases.maya_v2_db import get_maya_v2_db
-from ..core.errors import (
+from ..core.config.config import Config
+from ..databases.conversation_db import get_conversation_db
+from ..core.errors.errors import (
     ErrorCode,
     AppException,
     raise_not_found,
@@ -136,7 +139,7 @@ async def list_ai_models(
         include_inactive: Whether to include inactive models (default: false)
     """
     try:
-        db = get_maya_v2_db()
+        db = get_conversation_db()
         if not db.is_available():
             # If database not available, return models from config
             return _get_models_from_config(include_inactive)
@@ -162,7 +165,7 @@ async def get_ai_model(model_id: int):
     Returns:
         The AI model data
     """
-    db = get_maya_v2_db()
+    db = get_conversation_db()
     if not db.is_available():
         raise_db_unavailable("Maya-v2")
     
@@ -191,7 +194,7 @@ async def available_models():
     Returns models that are currently active and can be used.
     """
     try:
-        db = get_maya_v2_db()
+        db = get_conversation_db()
         if db.is_available():
             models = db.get_all_ai_models(include_inactive=False)
             return {
@@ -261,7 +264,7 @@ async def add_model():
     - {PROVIDER}_DEFAULT_MODEL: Default model for provider
     """
     try:
-        db = get_maya_v2_db()
+        db = get_conversation_db()
         
         created_count = 0
         updated_count = 0

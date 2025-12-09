@@ -87,7 +87,7 @@ def check_database():
     print("=== Database Connection Check ===")
     
     try:
-        from maya_sawa.core.connection_pool import get_pool_manager
+        from maya_sawa.core.database.connection_pool import get_pool_manager
         
         pool_manager = get_pool_manager()
         conn = pool_manager.get_postgres_connection()

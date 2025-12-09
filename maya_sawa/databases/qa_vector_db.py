@@ -1,22 +1,41 @@
 """
-Markdown Q&A System - PostgreSQL 向量存儲模組
+QA 向量數據庫模組 (QA Vector Database)
 
-這個模組實現了基於 PostgreSQL 的向量存儲功能，負責：
-1. 管理文章數據的存儲和檢索
-2. 處理向量嵌入的生成和存儲
-3. 執行相似度搜索
-4. 提供統計信息查詢
-5. 支持預計算 embedding 的批量導入
+這是系統的核心 AI 功能模組，相當於 Java 的 SearchService + VectorRepository。
 
-主要功能：
-- PostgreSQL 向量數據庫集成
-- OpenAI Embeddings 模型支持
-- 相似度搜索優化
-- 批量數據處理
-- 統計信息收集
+核心功能：
+1. 向量嵌入存儲：將文檔轉換為 AI 可理解的數學向量
+2. 相似度搜索：基於向量距離找到最相關的文檔 (相當於 Elasticsearch)
+3. 批量處理：高效處理大量文檔嵌入
+4. 統計查詢：提供系統使用統計
+
+AI 概念解釋：
+- 嵌入 (Embedding)：將文字轉換為數字向量 (相當於數字指紋)
+- 相似度搜索：比較向量距離，距離越近越相似
+- 餘弦相似度：向量間的角度，決定相關性
+
+數據庫設計：
+- 使用 PostgreSQL + pgvector 擴展 (相當於 Elasticsearch)
+- 支持向量索引和高效搜索
+- 結合傳統 SQL 查詢和向量搜索
+
+Java 開發者對應：
+- QAVectorDatabase 類 ≡ SearchService + VectorDocumentRepository
+- similarity_search() ≡ Elasticsearch 的 search() API
+- add_documents() ≡ 批量索引文檔
+
+關鍵差異 (Python vs Java)：
+- 懶加載嵌入模型：只在需要時初始化 (相當於 Spring @Lazy)
+- 自動向量化：文檔進來自動生成向量 (相當於 AOP 攔截器)
+- 異步處理：支持大批量處理而不阻塞
+
+效能特點：
+- 批量嵌入生成：減少 API 調用次數
+- 向量索引：O(log n) 搜索複雜度
+- 連接池：自動管理數據庫連接
 
 作者: Maya Sawa Team
-版本: 0.1.0
+版本: 0.2.0
 """
 
 # 標準庫導入
@@ -27,30 +46,51 @@ from datetime import datetime
 import json
 
 # 第三方庫導入
-from langchain_openai import OpenAIEmbeddings
-from langchain.schema import Document
-import psycopg2
-from psycopg2.extras import execute_values
-from ..core.config import Config
-from ..core.connection_pool import get_pool_manager
+try:
+    from langchain_openai import OpenAIEmbeddings
+    from langchain.schema import Document
+    import psycopg2
+    from psycopg2.extras import execute_values
+except ImportError as e:
+    raise ImportError(f"Required packages not installed. Please install dependencies with: poetry install") from e
+from ..core.config.config import Config
+from ..core.database.connection_pool import get_pool_manager
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
 
-class PostgresVectorStore:
+
+class QAVectorDatabase:
     """
-    PostgreSQL 向量存儲類
-    
-    負責管理基於 PostgreSQL 的向量數據庫操作，包括：
-    - 文章數據的增刪改查
-    - 向量嵌入的生成和存儲
-    - 相似度搜索
-    - 統計信息收集
+    QA 向量數據庫類 (相當於 Java 的 SearchService)
+
+    這個類整合了傳統數據庫操作和 AI 向量搜索，是系統的 AI 核心。
+
+    架構組件：
+    1. 數據庫連接層：SQLAlchemy session 管理 (相當於 JPA EntityManager)
+    2. 嵌入生成層：OpenAI API 調用 (相當於 AI 服務客戶端)
+    3. 向量搜索層：pgvector 查詢 (相當於 Elasticsearch 客戶端)
+    4. 批量處理層：優化大量數據處理
+
+    關鍵屬性：
+    - _embeddings: 懶加載的 OpenAI 嵌入模型 (相當於 @Lazy 初始化)
+    - connection_string: PostgreSQL 連接字符串
+    - pool_manager: 連接池管理器 (相當於 HikariCP)
+
+    設計模式：
+    - 單例模式：確保資源重用和配置一致性
+    - 模板方法模式：相似度搜索的標準流程
+    - 策略模式：不同的嵌入模型和搜索策略
+
+    資源管理：
+    - 自動連接池：避免連接洩漏 (相當於 Spring @Transactional)
+    - 懶加載模型：節省啟動時間和內存
+    - 異常處理：全面的錯誤恢復機制
     """
     
     def __init__(self):
         """
-        初始化 PostgreSQL 向量存儲
+        初始化 QA 向量數據庫
         
         設置數據庫連接和 OpenAI 配置，並測試連接
         """
@@ -60,13 +100,13 @@ class PostgresVectorStore:
         openai_organization = os.getenv("OPENAI_ORGANIZATION")
         
         # 從 Config 獲取 PostgreSQL 連接字符串
-        from ..core.config import Config
+        from ..core.config.config import Config
         self.connection_string = Config.DB_CONNECTION_STRING
         
         # 獲取連接池管理器
         self.pool_manager = get_pool_manager()
         
-        logger.debug(f"PostgresVectorStore - Using API Base: {api_base}")
+        logger.debug(f"QAVectorDatabase - Using API Base: {api_base}")
         
         # 懶加載 embeddings 模型（只在需要時初始化）
         self._embeddings = None
@@ -80,19 +120,36 @@ class PostgresVectorStore:
     @property
     def embeddings(self):
         """
-        embeddings 模型屬性（懶加載）
-        
-        只在第一次訪問時初始化 OpenAI Embeddings 模型，
-        避免在不需要時浪費資源
-        
-        Returns:
-            OpenAIEmbeddings: 初始化後的 embeddings 模型
+        AI 嵌入模型屬性 (懶加載，相當於 Spring @Lazy)
+
+        為什麼需要懶加載：
+        - OpenAI API 初始化需要網絡調用
+        - 節省應用啟動時間
+        - 只在需要時才消耗資源
+
+        Java 對應：
+        ```java
+        @Lazy
+        @Autowired
+        private OpenAIEmbeddings embeddings;
+        ```
+
+        初始化邏輯：
+        1. 檢查是否已初始化 (相當於 null 檢查)
+        2. 創建 OpenAI 客戶端實例
+        3. 配置 API 密鑰和端點
+        4. 返回可重用的實例
+
+        返回：
+        - OpenAIEmbeddings 實例，用於生成向量嵌入
+        - 相當於 Java 的 OpenAI 客戶端 Bean
         """
         if self._embeddings is None:
+            # 第一次訪問時初始化 (相當於 Spring Bean 的創建)
             self._embeddings = OpenAIEmbeddings(
-                base_url=self.api_base,
-                api_key=self.api_key,
-                openai_organization=self.openai_organization
+                base_url=self.api_base,      # API 端點 URL
+                api_key=self.api_key,        # 認證密鑰
+                openai_organization=self.openai_organization  # 組織 ID (可選)
             )
         return self._embeddings
 
@@ -258,18 +315,40 @@ class PostgresVectorStore:
 
     def similarity_search(self, query: str, k: int = None, threshold: float = None) -> List[Document]:
         """
-        執行相似度搜索
-        
-        使用向量相似度搜索找到與查詢最相關的文檔，
-        支持相似度閾值過濾和結果數量限制
-        
-        Args:
-            query (str): 搜索查詢文本
-            k (int): 返回結果的最大數量（默認取 Config.ARTICLE_MATCH_COUNT）
-            threshold (float): 相似度閾值（默認取 Config.SIMILARITY_THRESHOLD）
-            
-        Returns:
-            List[Document]: 相關文檔列表，按相似度排序
+        向量相似度搜索 (相當於 Elasticsearch 的 search API)
+
+        核心 AI 功能：將用戶問題轉換為向量，找到最相關的文檔。
+
+        工作原理 (Java 開發者理解)：
+        1. 將查詢文字轉換為向量 (相當於生成數字指紋)
+        2. 在向量數據庫中搜索最相似的向量 (相當於 KNN 搜索)
+        3. 返回匹配的文檔，按相似度排序
+
+        參數說明：
+        - query: 用戶的搜索問題 (例如："什麼是機器學習？")
+        - k: 返回的最大結果數 (默認 3，相當於 MySQL LIMIT)
+        - threshold: 相似度閾值 (0.0-1.0，相當於 SQL WHERE 條件)
+
+        處理流程：
+        1. 生成查詢向量：embeddings.embed_query(query)
+        2. 構造向量搜索 SQL：使用 pgvector 的 <=> 運算符
+        3. 執行搜索並過濾：相似度 > threshold
+        4. 排序並限制：ORDER BY 相似度 DESC LIMIT k
+        5. 封裝結果：轉換為 LangChain Document 對象
+
+        SQL 查詢示例：
+        ```sql
+        SELECT content, 1 - (embedding <=> $query_vector) as similarity
+        FROM articles
+        WHERE 1 - (embedding <=> $query_vector) > 0.7
+        ORDER BY embedding <=> $query_vector
+        LIMIT 3
+        ```
+
+        返回：
+        - List[Document]: 相關文檔列表
+        - 每個 Document 包含內容、元數據和相似度分數
+        - 按相似度降序排列 (最相關的在前)
         """
         # 應用預設設定
         if k is None:
@@ -392,4 +471,8 @@ class PostgresVectorStore:
             conn.commit()
             logger.info("All articles have been cleared from the database")
         finally:
-            self.pool_manager.return_postgres_connection(conn) 
+            self.pool_manager.return_postgres_connection(conn)
+
+
+# 向後兼容的別名
+PostgresVectorStore = QAVectorDatabase

@@ -13,8 +13,12 @@ Markdown Q&A System - 主應用程式入口點
 """
 
 # 標準庫導入
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+try:
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+except ImportError as e:
+    raise ImportError(f"FastAPI is required but not installed. Please install with: poetry install") from e
+
 import os
 import logging
 import asyncio
@@ -40,10 +44,10 @@ from .api.articles import router as articles_router
 from .api.ai_models import router as ai_models_router
 from .api.conversations import router as conversations_router, legacy_router as legacy_chat_router
 from .api.ask import router as ask_router
-from .core.scheduler import ArticleSyncScheduler
+from .core.services.scheduler import ArticleSyncScheduler
 from .people import sync_data
 from .core.config import Config
-from .core.errors import register_exception_handlers
+from .core.errors.errors import register_exception_handlers
 
 # 從環境變數獲取 OpenAI API 配置
 api_key = os.getenv("OPENAI_API_KEY")

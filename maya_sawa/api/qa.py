@@ -24,21 +24,24 @@ import asyncio
 from typing import List, Dict, Any, Optional
 
 # 第三方庫導入
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+try:
+    from fastapi import APIRouter, HTTPException
+    from pydantic import BaseModel
+except ImportError as e:
+    raise ImportError(f"FastAPI and Pydantic are required but not installed. Please install with: poetry install") from e
 import httpx
 # 可能可用的翻譯備援
 # 移除 googletrans 依賴，只使用 LLM 翻譯
 _google_translator_available = False
 
 # LangChain 相關導入
-from ..core.langchain_shim import Document
+from ..core.processing.langchain_shim import Document
 
 # 本地模組導入
-from ..databases.postgres_store import PostgresVectorStore
-from ..core.qa_chain import QAChain
-from ..core.chat_history import ChatHistoryManager
-from ..core.config import Config
+from ..databases.qa_vector_db import QAVectorDatabase
+from ..core.qa.qa_chain import QAChain
+from ..core.services.chat_history import ChatHistoryManager
+from ..core.config.config import Config
 from ..people import PeopleWeaponManager
 from ..people import sync_data
 
@@ -137,7 +140,7 @@ async def translate_to_english(text: str) -> str:
 # 從環境變數獲取公共 API 基礎 URL
 def get_public_api_base_url():
     """獲取公共 API 基礎 URL"""
-    from ..core.config import Config
+    from ..core.config.config import Config
     return Config.PUBLIC_API_BASE_URL
 
 # ==================== 日誌配置 ====================
@@ -157,11 +160,11 @@ def get_vector_store():
     使用全局變數實現單例模式，確保整個應用程式使用同一個向量存儲實例
     
     Returns:
-        PostgresVectorStore: 向量存儲實例
+        QAVectorDatabase: 向量存儲實例
     """
     global _vector_store
     if _vector_store is None:
-        _vector_store = PostgresVectorStore()
+        _vector_store = QAVectorDatabase()
     return _vector_store
 
 def get_qa_chain():
@@ -847,7 +850,7 @@ async def stop_sync_tasks():
         dict: 操作結果字典
     """
     try:
-        from ..core.scheduler import scheduler
+        from ..core.services.scheduler import scheduler
         
         # 停止定期同步任務
         await scheduler.stop_periodic_sync()

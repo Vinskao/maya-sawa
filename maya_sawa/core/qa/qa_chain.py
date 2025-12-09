@@ -1,8 +1,8 @@
 import logging
 from typing import Dict, List, Optional
-from maya_sawa.core.langchain_shim import Document, PromptTemplate, ChatOpenAI
+from ..processing.langchain_shim import Document, PromptTemplate, ChatOpenAI
 from maya_sawa.people import NameDetector, ProfileManager, PersonalityPromptBuilder, PeopleWeaponManager, NameAdapter
-from maya_sawa.core.config_manager import config_manager
+from ..config.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +306,7 @@ class QAChain:
             
             # 清除當前用戶的對話紀錄（當 AI 換人時）
             try:
-                from maya_sawa.core.chat_history import ChatHistoryManager
+                from ..services.chat_history import ChatHistoryManager
                 chat_history = ChatHistoryManager()
                 # 只清除當前用戶的對話紀錄
                 success = chat_history.clear_conversation_history(user_id)

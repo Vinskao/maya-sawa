@@ -1,12 +1,45 @@
 """
-Maya-v2 Database Connection Module
+對話數據庫模組 (Conversation Database)
 
-This module provides database connection and models for the maya-v2 (Django) 
-conversations and AI models.
-Uses SQLAlchemy for database operations.
+這個模組管理聊天對話和 AI 模型配置，相當於 Java 的 ChatService + AIModelService。
 
-Author: Maya Sawa Team
-Version: 0.1.0
+核心功能：
+1. 對話會話管理：創建、更新、刪除聊天會話
+2. 消息存儲：保存用戶和 AI 的對話歷史
+3. AI 模型配置：管理不同 AI 提供者的模型
+4. 異步任務處理：追蹤 AI 響應生成任務
+
+數據庫設計：
+- 多表關聯設計 (相當於 JPA @OneToMany)
+- Conversation (會話主表)
+- Message (消息從表，關聯到會話)
+- AIModel (AI 模型配置表)
+- ProcessingTask (異步任務表)
+
+Java 開發者對應：
+- ConversationDatabase ≡ ChatRepository + AIModelRepository + TaskRepository
+- 枚舉類：ConversationStatus, MessageType (相當於 Java enum)
+- 關聯關係：Conversation.messages (相當於 JPA @OneToMany)
+
+架構特點：
+- UUID 主鍵：使用 UUID 而不是自增 ID (更安全)
+- JSON 字段：存儲複雜的模型配置
+- 級聯操作：刪除會話時自動刪除消息
+- 狀態機：任務處理狀態追蹤
+
+業務流程：
+1. 用戶發送消息 → 創建 Conversation + Message
+2. 系統分配 AI 模型 → 創建 ProcessingTask
+3. AI 生成響應 → 更新 Message + 完成 Task
+4. 持續對話 → 在同一 Conversation 下添加新 Message
+
+效能考慮：
+- 索引優化：會話 ID、消息時間戳等關鍵字段
+- 連接池：自動管理數據庫連接
+- 批量操作：支持批量插入消息
+
+作者: Maya Sawa Team
+版本: 0.2.0
 """
 
 import logging
@@ -16,13 +49,15 @@ from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 from enum import Enum
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Float, ForeignKey, JSON
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy.pool import QueuePool
+try:
+    from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Float, ForeignKey, JSON, pool
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import sessionmaker, relationship
+except ImportError as e:
+    raise ImportError(f"SQLAlchemy is required but not installed. Please install it with: poetry install") from e
 from sqlalchemy.dialects.postgresql import UUID
 
-from ..core.config import Config
+from ..core.config.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +92,7 @@ class TaskStatus(str, Enum):
 
 
 class AIModel(Base):
-    """AI Model configuration table"""
+    """AI 模型配置表"""
     __tablename__ = 'maya_sawa_v2_ai_processing_aimodel'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -81,23 +116,70 @@ class AIModel(Base):
 
 
 class Conversation(Base):
-    """Conversation session table"""
+    """
+    對話會話實體 (相當於 JPA @Entity)
+
+    代表一個完整的聊天會話，包含多條消息。
+
+    字段說明：
+    - id: UUID 主鍵 (相當於 @Id, 更安全不會暴露記錄數)
+    - user_id: 用戶 ID，可空 (匿名用戶)
+    - session_id: 會話標識，唯一 (前端用來區分不同聊天)
+    - conversation_type: 對話類型 (一般、客服、查詢等)
+    - status: 會話狀態 (活躍、關閉、暫停)
+    - title: 會話標題
+    - created_at/updated_at: 時間戳
+
+    關聯關係 (相當於 JPA @OneToMany)：
+    - messages: 關聯的所有消息
+    - cascade="all, delete-orphan": 刪除會話時自動刪除所有消息
+
+    業務含義：
+    - 一個 Conversation 相當於微信的一個聊天窗口
+    - 多個 Message 相當於聊天記錄
+    - session_id 相當於聊天室的唯一標識
+    """
     __tablename__ = 'maya_sawa_v2_conversations_conversation'
-    
+
+    # UUID 主鍵 (相當於 Java UUID)
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # 用戶標識 (可空，支援匿名用戶)
     user_id = Column(Integer, nullable=True)  # Can be null for anonymous users
+
+    # 會話唯一標識 (相當於聊天室 ID)
     session_id = Column(String(255), unique=True, nullable=False)
+
+    # 對話類型枚舉
     conversation_type = Column(String(20), default=ConversationType.GENERAL.value)
+
+    # 會話狀態枚舉
     status = Column(String(10), default=ConversationStatus.ACTIVE.value)
+
+    # 會話標題
     title = Column(String(255), default='')
+
+    # 時間戳字段
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
+    # 一對多關聯：一個會話包含多條消息 (相當於 JPA @OneToMany)
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
-    
+
     def to_dict(self, include_messages: bool = False) -> Dict[str, Any]:
+        """
+        序列化為字典 (相當於 Java Bean 的 toString())
+
+        參數：
+        - include_messages: 是否包含完整的消息列表
+          (默認 false，避免大數據量的序列化)
+
+        返回：
+        - 基本信息字典 + 可選的消息列表
+        - 日期轉為 ISO 字符串格式
+        """
         result = {
-            'id': str(self.id),
+            'id': str(self.id),  # UUID 轉字符串
             'user_id': self.user_id,
             'session_id': self.session_id,
             'conversation_type': self.conversation_type,
@@ -106,13 +188,14 @@ class Conversation(Base):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+        # 可選包含消息列表 (相當於懶加載控制)
         if include_messages:
             result['messages'] = [m.to_dict() for m in self.messages]
         return result
 
 
 class Message(Base):
-    """Conversation message table"""
+    """對話消息表"""
     __tablename__ = 'maya_sawa_v2_conversations_message'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -136,7 +219,7 @@ class Message(Base):
 
 
 class ProcessingTask(Base):
-    """AI Processing task table"""
+    """AI 處理任務表"""
     __tablename__ = 'maya_sawa_v2_ai_processing_processingtask'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -171,9 +254,11 @@ class ProcessingTask(Base):
         }
 
 
-class MayaV2Database:
+class ConversationDatabase:
     """
-    Database manager for maya-v2 conversations and AI models
+    對話數據庫管理類
+    
+    提供對話、消息和 AI 模型的管理功能
     """
     _instance = None
     _engine = None
@@ -192,13 +277,13 @@ class MayaV2Database:
         """Initialize the database engine"""
         db_url = Config.get_maya_v2_db_url()
         if not db_url:
-            logger.warning("Maya-v2 database URL not configured")
+            logger.warning("Conversation database URL not configured")
             return
         
         try:
             self._engine = create_engine(
                 db_url,
-                poolclass=QueuePool,
+                poolclass=pool.QueuePool,
                 pool_size=5,
                 max_overflow=10,
                 pool_timeout=30,
@@ -211,9 +296,9 @@ class MayaV2Database:
             # Create tables if they don't exist
             Base.metadata.create_all(self._engine)
             
-            logger.info(f"Maya-v2 database initialized")
+            logger.info("Conversation database initialized")
         except Exception as e:
-            logger.error(f"Failed to initialize maya-v2 database: {str(e)}")
+            logger.error(f"Failed to initialize conversation database: {str(e)}")
             self._engine = None
             self._session_factory = None
     
@@ -221,7 +306,7 @@ class MayaV2Database:
     def get_session(self):
         """Get a database session as context manager"""
         if self._session_factory is None:
-            raise RuntimeError("Maya-v2 database not initialized")
+            raise RuntimeError("Conversation database not initialized")
         
         session = self._session_factory()
         try:
@@ -327,16 +412,42 @@ class MayaV2Database:
     
     def create_conversation(self, session_id: str, user_id: Optional[int] = None,
                            conversation_type: str = 'general', title: str = '') -> Conversation:
-        """Create a new conversation"""
+        """
+        創建新對話會話 (相當於 JPA repository.save())
+
+        參數說明：
+        - session_id: 會話唯一標識 (前端生成，用來區分不同聊天)
+        - user_id: 用戶 ID (可空，支援匿名用戶)
+        - conversation_type: 對話類型 (general, customer_service, knowledge_query)
+        - title: 會話標題 (可空)
+
+        處理流程：
+        1. 創建 Conversation 實例 (相當於 new Conversation())
+        2. session.add() 添加到數據庫會話
+        3. session.flush() 執行 INSERT 並獲取 UUID 主鍵
+        4. _detach_conversation() 分離實例避免懶加載問題
+
+        業務場景：
+        - 用戶打開新聊天窗口時調用
+        - 系統自動生成 session_id
+        - 創建空的會話，等待第一條消息
+
+        返回：
+        - 包含自動生成 UUID 的 Conversation 實例
+        """
         with self.get_session() as session:
+            # 創建實例 (相當於 new Conversation())
             conv = Conversation(
                 session_id=session_id,
                 user_id=user_id,
                 conversation_type=conversation_type,
                 title=title
             )
+            # 保存到數據庫 (相當於 JPA save())
             session.add(conv)
+            # 立即執行 SQL 獲取 UUID
             session.flush()
+            # 分離實例避免連接問題
             return self._detach_conversation(conv)
     
     def update_conversation(self, conversation_id: str, **kwargs) -> Optional[Conversation]:
@@ -375,18 +486,48 @@ class MayaV2Database:
             ).order_by(Message.created_at).all()
             return [self._detach_message(m) for m in messages]
     
-    def create_message(self, conversation_id: str, message_type: str, 
+    def create_message(self, conversation_id: str, message_type: str,
                        content: str, metadata: dict = None) -> Message:
-        """Create a new message"""
+        """
+        創建新消息 (相當於在聊天中發送一條消息)
+
+        參數說明：
+        - conversation_id: 所屬對話的 UUID 字符串
+        - message_type: 消息類型 (user, ai, system)
+        - content: 消息內容 (文字)
+        - metadata: 額外數據 (JSON 格式，可空)
+
+        處理流程：
+        1. 將字符串轉換為 UUID 對象
+        2. 創建 Message 實例並關聯到 Conversation
+        3. 保存到數據庫 (自動生成自增 ID)
+        4. 分離實例返回
+
+        業務場景：
+        - 用戶發送消息：type="user", content="你好"
+        - AI 回復消息：type="ai", content="你好！"
+        - 系統消息：type="system", content="會話開始"
+
+        數據完整性：
+        - conversation_id 必須指向存在的 Conversation
+        - message_type 必須是枚舉值之一
+        - 外鍵約束確保引用完整性
+
+        返回：
+        - 包含自動生成 ID 的 Message 實例
+        """
         with self.get_session() as session:
+            # 字符串轉 UUID (相當於 Java UUID.fromString())
             msg = Message(
-                conversation_id=uuid.UUID(conversation_id),
-                message_type=message_type,
-                content=content,
-                extra_data=metadata or {}
+                conversation_id=uuid.UUID(conversation_id),  # 外鍵關聯
+                message_type=message_type,                   # 枚舉值
+                content=content,                             # 消息內容
+                extra_data=metadata or {}                    # JSON 元數據
             )
+            # 保存到數據庫
             session.add(msg)
             session.flush()
+            # 分離並返回
             return self._detach_message(msg)
     
     # Processing Task Operations
@@ -494,10 +635,12 @@ class MayaV2Database:
         )
 
 
-# Singleton instance
-def get_maya_v2_db() -> MayaV2Database:
-    """Get maya-v2 database instance"""
-    return MayaV2Database()
+# Singleton instance getter
+def get_conversation_db() -> ConversationDatabase:
+    """Get conversation database instance"""
+    return ConversationDatabase()
 
 
-
+# 向後兼容的別名
+MayaV2Database = ConversationDatabase
+get_maya_v2_db = get_conversation_db

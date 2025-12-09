@@ -16,9 +16,27 @@ Version: 0.1.0
 
 from enum import Enum
 from typing import Any, Dict, Optional, List
-from fastapi import HTTPException, Request, status
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
+try:
+    from fastapi import HTTPException, Request, status
+    from fastapi.responses import JSONResponse
+    from fastapi.exceptions import RequestValidationError
+except ImportError:
+    # FastAPI not available, create stubs for error handling
+    class HTTPException(Exception):
+        def __init__(self, status_code: int, detail: str = ""):
+            self.status_code = status_code
+            self.detail = detail
+
+    class Request:
+        pass
+
+    class JSONResponse:
+        def __init__(self, content: dict, status_code: int = 200):
+            self.content = content
+            self.status_code = status_code
+
+    class RequestValidationError(Exception):
+        pass
 from pydantic import BaseModel
 import logging
 
@@ -734,7 +752,7 @@ def register_exception_handlers(app) -> None:
     Register all exception handlers with the FastAPI app.
     
     Usage:
-        from maya_sawa.core.errors import register_exception_handlers
+        from . import register_exception_handlers
         register_exception_handlers(app)
     """
     app.add_exception_handler(AppException, app_exception_handler)

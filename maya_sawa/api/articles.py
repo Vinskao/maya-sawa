@@ -22,11 +22,14 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, status
-from pydantic import BaseModel, Field
+try:
+    from fastapi import APIRouter, status, HTTPException
+    from pydantic import BaseModel, Field
+except ImportError as e:
+    raise ImportError(f"FastAPI and Pydantic are required but not installed. Please install with: poetry install") from e
 
-from ..databases.paprika_db import get_paprika_db
-from ..core.errors import (
+from ..databases.article_db import get_article_db
+from ..core.errors.errors import (
     ErrorCode,
     AppException,
     raise_not_found,
@@ -101,7 +104,7 @@ def _ensure_db_available():
     Check if Paprika database is available.
     Raises AppException if not available.
     """
-    db = get_paprika_db()
+    db = get_article_db()
     if not db.is_available():
         raise_db_unavailable("Paprika")
     return db
@@ -116,7 +119,7 @@ async def health_check():
     
     Returns the service status and current timestamp
     """
-    db = get_paprika_db()
+    db = get_article_db()
     return {
         "status": "ok",
         "timestamp": datetime.utcnow().isoformat(),
@@ -302,63 +305,145 @@ async def create_articles_batch(request: List[ArticleCreate]):
 
     Accepts an array of articles and creates them in batch.
     Skips articles with duplicate file_path.
+    
+    Optimizations:
+    - Input validation for empty arrays and batch size limits
+    - Single query to check all duplicates (instead of N queries)
+    - Bulk insert for all new articles (instead of N inserts)
 
     Args:
-        request: Array of article creation data
+        request: Array of article creation data (max 1000 items)
 
     Returns:
         Batch creation results with statistics
     """
+    # Input validation
+    if not request:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request array cannot be empty"
+        )
+    
+    if len(request) > 1000:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Batch size exceeds maximum limit of 1000"
+        )
+    
     db = _ensure_db_available()
 
     results = {
         "success": True,
         "total_requested": len(request),
         "created": 0,
-        "skipped": 0,
+        "skipped_duplicate": 0,
+        "failed": 0,
         "errors": [],
         "articles": []
     }
 
+    # Track which file_paths we've seen in this request to detect duplicates
+    seen_in_request = set()
+    duplicate_in_request = set()
+
+    # First pass: identify duplicates within the request
+    for article_data in request:
+        file_path = article_data.file_path
+        if file_path in seen_in_request:
+            duplicate_in_request.add(file_path)
+        else:
+            seen_in_request.add(file_path)
+
+    # Get unique file paths to check against database (excluding duplicates within request)
+    unique_file_paths = seen_in_request - duplicate_in_request
+    existing_paths = db.get_existing_file_paths_set(unique_file_paths) if unique_file_paths else set()
+
+    # Debug
+    logger.info(f"DEBUG: unique_file_paths={unique_file_paths}, existing_paths={existing_paths}")
+
+    # Second pass: process each item
+    to_create = []
+
     for i, article_data in enumerate(request):
-        try:
-            # Check if article with same file_path exists
-            existing = db.get_article_by_file_path(article_data.file_path)
-            if existing:
-                results["skipped"] += 1
-                results["errors"].append({
-                    "index": i,
-                    "file_path": article_data.file_path,
-                    "error_code": ErrorCode.ARTICLE_ALREADY_EXISTS.code,
-                    "error": "Article with this file_path already exists"
-                })
-                continue
+        file_path = article_data.file_path
 
-            # Create article
-            article = db.create_article(
-                file_path=article_data.file_path,
-                content=article_data.content,
-                file_date=article_data.file_date
-            )
-
-            results["created"] += 1
-            results["articles"].append({
-                "index": i,
-                "id": article.id,
-                "file_path": article.file_path,
-                "created": True
-            })
-
-        except Exception as e:
-            results["skipped"] += 1
+        # Check if this file_path appears multiple times in the request
+        if file_path in duplicate_in_request:
+            results["skipped_duplicate"] += 1
             results["errors"].append({
                 "index": i,
-                "file_path": article_data.file_path,
-                "error_code": ErrorCode.ARTICLE_CREATE_FAILED.code,
-                "error": str(e)
+                "file_path": file_path,
+                "error_code": ErrorCode.ARTICLE_ALREADY_EXISTS.code,
+                "error": "Article with this file_path appears multiple times in request"
             })
+            continue
 
-    results["message"] = f"Batch creation completed: {results['created']} created, {results['skipped']} skipped"
+        # Check if this file_path already exists in database
+        if file_path in existing_paths:
+            results["skipped_duplicate"] += 1
+            results["errors"].append({
+                "index": i,
+                "file_path": file_path,
+                "error_code": ErrorCode.ARTICLE_ALREADY_EXISTS.code,
+                "error": "Article with this file_path already exists"
+            })
+            continue
+
+        # This file_path is unique within request and doesn't exist in DB
+        to_create.append((i, article_data))
+    
+    # Bulk create all non-duplicate articles
+    if to_create:
+        try:
+            articles_data = [
+                {
+                    "file_path": data.file_path,
+                    "content": data.content,
+                    "file_date": data.file_date
+                }
+                for _, data in to_create
+            ]
+            created_articles = db.bulk_create_articles(articles_data)
+            
+            for (index, _), article in zip(to_create, created_articles):
+                results["created"] += 1
+                results["articles"].append({
+                    "index": index,
+                    "id": article.id,
+                    "file_path": article.file_path,
+                    "created": True
+                })
+        except Exception as e:
+            # If bulk insert fails, fall back to individual inserts
+            logger.warning(f"Bulk insert failed, falling back to individual inserts: {e}")
+            for index, article_data in to_create:
+                try:
+                    article = db.create_article(
+                        file_path=article_data.file_path,
+                        content=article_data.content,
+                        file_date=article_data.file_date
+                    )
+                    results["created"] += 1
+                    results["articles"].append({
+                        "index": index,
+                        "id": article.id,
+                        "file_path": article.file_path,
+                        "created": True
+                    })
+                except Exception as create_error:
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "index": index,
+                        "file_path": article_data.file_path,
+                        "error_code": ErrorCode.ARTICLE_CREATE_FAILED.code,
+                        "error": str(create_error)
+                    })
+
+    results["message"] = (
+        f"Batch creation completed: {results['created']} created, "
+        f"{results['skipped_duplicate']} skipped (duplicate), "
+        f"{results['failed']} failed"
+    )
 
     return results
 

@@ -1,8 +1,6 @@
 import logging
 from typing import Dict
 
-from maya_sawa.core.qa_chain import QAChain
-
 logger = logging.getLogger(__name__)
 
 
@@ -10,6 +8,8 @@ class PageAnalyzer:
     """簡易頁面文字分析器，重用現有 QAChain"""
 
     def __init__(self):
+        # 延遲導入以避免循環依賴
+        from ..qa.qa_chain import QAChain
         self.qa_chain = QAChain()
 
     def analyze_page_content(self, content: str, analysis_type: str = "summary", language: str = "chinese") -> Dict:

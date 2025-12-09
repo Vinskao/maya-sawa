@@ -25,16 +25,20 @@ import os
 from typing import Optional, Dict, Any
 
 # 第三方庫導入
-import psycopg2
-from psycopg2 import pool
-import redis
+try:
+    import psycopg2
+    from psycopg2 import pool
+    import redis
+except ImportError as e:
+    raise ImportError(f"Required database packages not installed. Please install with: poetry install") from e
+
 from dotenv import load_dotenv
 
 # 載入環境變數
 load_dotenv()
 
 # 本地模組導入
-from .config import Config
+from ..config.config import Config
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)

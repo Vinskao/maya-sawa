@@ -17,8 +17,8 @@ except ImportError:  # pragma: no cover
 from typing import Dict, List, Optional
 
 # 本地導入
-from ..core.config import Config
-from ..core.config_manager import config_manager
+from ..core.config.config import Config
+from ..core.config.config_manager import config_manager
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)

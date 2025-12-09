@@ -17,7 +17,7 @@ sys.path.insert(0, str(project_root))
 async def stop_sync():
     """Stop all sync tasks"""
     try:
-        from maya_sawa.core.scheduler import ArticleSyncScheduler
+        from maya_sawa.core.services.scheduler import ArticleSyncScheduler
         
         print("🛑 Stopping all sync tasks...")
         

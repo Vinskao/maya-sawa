@@ -23,9 +23,12 @@ Markdown Q&A System - 文檔載入器模組
 from typing import List
 
 # LangChain 相關導入
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document
-from langchain_community.document_loaders import TextLoader, PyPDFLoader
+try:
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    from langchain.schema import Document
+    from langchain_community.document_loaders import TextLoader, PyPDFLoader
+except ImportError as e:
+    raise ImportError(f"LangChain packages are required but not installed. Please install with: poetry install") from e
 
 class DocumentLoader:
     """

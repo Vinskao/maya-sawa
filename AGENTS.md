@@ -51,7 +51,7 @@ maya-sawa-v1 (FastAPI - 統一入口)
 |------|--------|----------|
 | 原有 QA 系統 | PostgreSQL | `DB_*` |
 | 人員系統 | PostgreSQL | `PEOPLE_DB_*` |
-| Paprika 文章 | SQLite/PostgreSQL | `PAPRIKA_DB_*` |
+| Paprika 文章 | PostgreSQL | `PAPRIKA_DB_*` |
 | Maya-v2 對話 | PostgreSQL | `MAYA_V2_DB_*` |
 
 ### 環境變數範例
@@ -132,13 +132,29 @@ maya_sawa/
 │   ├── conversations.py   對話管理 API (新增)
 │   └── ask.py             多模型問答 API (新增)
 │
-├── core/                   核心模組
-│   ├── config.py          統一配置管理
-│   ├── postgres_store.py  向量存儲
-│   ├── qa_chain.py        問答鏈
-│   ├── chat_history.py    Redis 聊天歷史
-│   ├── paprika_db.py      Paprika 數據庫連接 (新增)
-│   └── maya_v2_db.py      Maya-v2 數據庫連接 (新增)
+├── core/                   核心模組 (重新組織)
+│   ├── config/            配置管理
+│   │   ├── config.py           主要配置
+│   │   └── config_manager.py   配置管理器
+│   ├── database/          數據庫連接
+│   │   └── connection_pool.py  連接池
+│   ├── qa/                問答系統
+│   │   ├── qa_chain.py         QA 鏈
+│   │   └── qa_engine.py        QA 引擎
+│   ├── processing/        文檔處理
+│   │   ├── loader.py           文檔載入
+│   │   ├── page_analyzer.py    頁面分析
+│   │   └── langchain_shim.py   LangChain 適配
+│   ├── services/          服務層
+│   │   ├── chat_history.py     聊天歷史
+│   │   └── scheduler.py        調度器
+│   ├── errors/            錯誤處理
+│   │   └── errors.py           錯誤定義
+│   └── data/              數據文件
+│       ├── constants.json
+│       ├── keywords.json
+│       ├── prompts.json
+│       └── rules.json
 │
 ├── services/               服務層 (新增)
 │   └── ai_providers/      多 AI 提供者
@@ -167,8 +183,8 @@ maya_sawa/
 
 ### 2. 數據庫操作
 
-- 使用 `get_paprika_db()` 操作 Paprika 文章
-- 使用 `get_maya_v2_db()` 操作對話和 AI 模型
+- 使用 `get_article_db()` 操作文章（向後兼容 `get_paprika_db()`）
+- 使用 `get_conversation_db()` 操作對話和 AI 模型（向後兼容 `get_maya_v2_db()`）
 - 避免在 SQLAlchemy 模型中使用 `metadata` 作為欄位名（保留字）
 
 ### 3. AI 提供者
@@ -547,6 +563,69 @@ curl -X PUT "http://localhost:8000/maya-sawa/paprika/articles/1" \
   }' | jq .
 ```
 
+#### 批量創建文章 (優化版)
+```bash
+curl -X POST "http://localhost:8000/maya-sawa/paprika/articles/batch" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "file_path": "batch/article1.md",
+      "content": "# 批量文章1\n這是第一篇批量創建的文章。",
+      "file_date": "2024-01-01T10:00:00Z"
+    },
+    {
+      "file_path": "batch/article2.md",
+      "content": "# 批量文章2\n這是第二篇批量創建的文章。",
+      "file_date": "2024-01-02T11:00:00Z"
+    },
+    {
+      "file_path": "batch/article1.md",
+      "content": "# 重複文章\n這篇文章會被跳過因為 file_path 重複。",
+      "file_date": "2024-01-03T12:00:00Z"
+    }
+  ]' | jq .
+```
+
+**批量創建回應示例：**
+```json
+{
+  "success": true,
+  "total_requested": 3,
+  "created": 2,
+  "skipped_duplicate": 1,
+  "failed": 0,
+  "errors": [
+    {
+      "index": 2,
+      "file_path": "batch/article1.md",
+      "error_code": 1003,
+      "error": "Article with this file_path already exists"
+    }
+  ],
+  "articles": [
+    {
+      "index": 0,
+      "id": 2,
+      "file_path": "batch/article1.md",
+      "created": true
+    },
+    {
+      "index": 1,
+      "id": 3,
+      "file_path": "batch/article2.md",
+      "created": true
+    }
+  ],
+  "message": "Batch creation completed: 2 created, 1 skipped (duplicate), 0 failed"
+}
+```
+
+**效能改善：**
+- ✅ **單次查詢檢查重複**：使用 IN 查詢一次性檢查所有重複項目
+- ✅ **批量插入**：使用 SQLAlchemy 的批量插入提升效能
+- ✅ **輸入驗證**：檢查空陣列和最大批次大小（1000）
+- ✅ **精準統計**：分開統計重複跳過和失敗項目
+
 #### 批量同步文章
 ```bash
 curl -X POST "http://localhost:8000/maya-sawa/paprika/articles/sync" \
@@ -709,6 +788,132 @@ curl -X GET "http://localhost:8000/maya-sawa/qa/sync-config" | jq .
 curl -X POST "http://localhost:8000/maya-sawa/qa/stop-sync" | jq .
 ```
 
+## 完整 API 端點測試表格
+
+### 測試準備
+```bash
+# 啟動服務
+cd maya-sawa-v1
+poetry install
+poetry run uvicorn maya_sawa.main:app --reload --host 0.0.0.0 --port 8000
+
+# 在另一個終端啟動 Celery worker (如果需要異步任務)
+celery -A maya_sawa.tasks.celery_app worker -Q maya_sawa -l info
+```
+
+### API 端點測試矩陣
+
+| 模組 | 端點 | 方法 | 描述 | 測試指令 | 預期結果 |
+|------|------|------|------|----------|----------|
+| **根端點** | `/` | GET | API 信息和健康檢查 | `curl -X GET "http://localhost:8000/maya-sawa/" \| jq .` | `{"message": "Maya Sawa Unified API v0.2.0", "version": "0.2.0", "status": "healthy"}` |
+| **QA 系統** | `/qa/query` | POST | 文檔問答查詢 | `curl -X POST "http://localhost:8000/maya-sawa/qa/query" -H "Content-Type: application/json" -d '{"text": "Maya Sawa 是什麼？", "user_id": "test_user", "language": "chinese", "name": "Maya"}' \| jq .` | `{"success": true, "answer": "...", "sources": [...]}` |
+| | `/qa/stats` | GET | 文章統計 | `curl -X GET "http://localhost:8000/maya-sawa/qa/stats" \| jq .` | `{"success": true, "stats": {"total_articles": 38, "total_chunks": 152, "last_sync": "..."}}` |
+| | `/qa/sync-from-api` | POST | 從 API 同步文章 | `curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" -H "Content-Type: application/json" -d '{"remote_url": "https://peoplesystem.tatdvsonorth.com/paprika/articles"}' \| jq .` | `{"success": true, "message": "Sync completed", "stats": {...}}` |
+| | `/qa/chat-history/{user_id}` | GET | 獲取對話歷史 | `curl -X GET "http://localhost:8000/maya-sawa/qa/chat-history/test_user" \| jq .` | `{"success": true, "history": [...], "total": 5}` |
+| | `/qa/search-people` | POST | 人員語義搜索 | `curl -X POST "http://localhost:8000/maya-sawa/qa/search-people" -H "Content-Type: application/json" -d '{"query": "戰鬥力很強的角色", "limit": 5, "threshold": 0.5, "sort_by_power": true}' \| jq .` | `{"success": true, "results": [...], "total_found": 3}` |
+| | `/qa/sync-config` | GET | 同步配置查詢 | `curl -X GET "http://localhost:8000/maya-sawa/qa/sync-config" \| jq .` | `{"success": true, "config": {...}, "status": "idle"}` |
+| | `/qa/stop-sync` | POST | 停止同步任務 | `curl -X POST "http://localhost:8000/maya-sawa/qa/stop-sync" \| jq .` | `{"success": true, "message": "Sync stopped"}` |
+| **Paprika 文章管理** | `/paprika/up` | GET | 健康檢查 | `curl -X GET "http://localhost:8000/maya-sawa/paprika/up" \| jq .` | `{"status": "ok", "timestamp": "2025-12-09T...", "version": "1.0.0", "database_available": true}` |
+| | `/paprika/articles` | GET | 文章列表 | `curl -X GET "http://localhost:8000/maya-sawa/paprika/articles" \| jq .` | `{"success": true, "data": [...]}` |
+| | `/paprika/articles/{id}` | GET | 單篇文章 | `curl -X GET "http://localhost:8000/maya-sawa/paprika/articles/1" \| jq .` | `{"success": true, "data": {"id": 1, "file_path": "...", "content": "..."}}` |
+| | `/paprika/articles` | POST | 創建文章 | `curl -X POST "http://localhost:8000/maya-sawa/paprika/articles" -H "Content-Type: application/json" -d '{"file_path": "test.md", "content": "# Test", "file_date": "2024-01-01T00:00:00Z"}' \| jq .` | `{"success": true, "message": "Article created successfully", "data": {...}}` |
+| | `/paprika/articles/batch` | POST | 批量創建文章 | `curl -X POST "http://localhost:8000/maya-sawa/paprika/articles/batch" -H "Content-Type: application/json" -d '[{"file_path": "batch1.md", "content": "# Batch 1", "file_date": "2024-01-01T10:00:00Z"}, {"file_path": "batch2.md", "content": "# Batch 2", "file_date": "2024-01-02T11:00:00Z"}]' \| jq .` | `{"success": true, "created": 2, "skipped_duplicate": 0, "failed": 0, "message": "Batch creation completed: 2 created, 0 skipped (duplicate), 0 failed"}` |
+| | `/paprika/articles/sync` | POST | 批量同步文章 | `curl -X POST "http://localhost:8000/maya-sawa/paprika/articles/sync" -H "Content-Type: application/json" -d '{"articles": [{"file_path": "sync1.md", "content": "# Sync 1", "file_date": "2024-01-01T00:00:00Z"}]}' \| jq .` | `{"success": true, "message": "Articles synced successfully", "data": {"created": 1, "updated": 0, "skipped": 0}}` |
+| | `/paprika/articles/{id}` | PUT | 更新文章 | `curl -X PUT "http://localhost:8000/maya-sawa/paprika/articles/1" -H "Content-Type: application/json" -d '{"content": "# Updated", "file_date": "2024-01-01T00:00:00Z"}' \| jq .` | `{"success": true, "message": "Article updated successfully", "data": {...}}` |
+| | `/paprika/articles/{id}` | DELETE | 刪除文章 | `curl -X DELETE "http://localhost:8000/maya-sawa/paprika/articles/1" \| jq .` | `{"success": true, "message": "Article deleted successfully"}` |
+| **Maya-v2 對話管理** | `/maya-v2/conversations/` | GET | 對話列表 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/" \| jq .` | `{"success": true, "data": [...], "count": 2}` |
+| | `/maya-v2/conversations/` | POST | 創建對話 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/conversations/" -H "Content-Type: application/json" -d '{"conversation_type": "general", "title": "測試對話"}' \| jq .` | `{"success": true, "data": {"id": "...", "title": "測試對話", ...}}` |
+| | `/maya-v2/conversations/{id}/` | GET | 單個對話 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" \| jq .` | `{"success": true, "data": {"id": "...", "title": "...", ...}}` |
+| | `/maya-v2/conversations/{id}/` | PUT | 更新對話 | `curl -X PUT "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" -H "Content-Type: application/json" -d '{"title": "更新後的對話", "status": "active"}' \| jq .` | `{"success": true, "data": {...}}` |
+| | `/maya-v2/conversations/{id}/` | DELETE | 刪除對話 | `curl -X DELETE "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" \| jq .` | `{"success": true, "message": "Conversation deleted"}` |
+| | `/maya-v2/conversations/{id}/send_message/` | POST | 發送訊息 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/send_message/" -H "Content-Type: application/json" -d '{"content": "你好"}' \| jq .` | `{"success": true, "data": {...}}` |
+| | `/maya-v2/conversations/{id}/messages/` | GET | 獲取訊息 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/messages/" \| jq .` | `{"success": true, "data": [...], "count": 1}` |
+| **Maya-v2 AI 模型管理** | `/maya-v2/ai-models/` | GET | AI 模型列表 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-models/" \| jq .` | `{"success": true, "data": [...], "count": 3}` |
+| | `/maya-v2/ai-models/{id}` | GET | 單個模型 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-models/1" \| jq .` | `{"success": true, "data": {"id": 1, "name": "...", ...}}` |
+| | `/maya-v2/available-models/` | GET | 可用模型列表 | `curl -X GET "http://localhost:8000/maya-sawa/maya-vawa/maya-v2/available-models/" \| jq .` | `{"success": true, "models": [...], "providers": {...}}` |
+| | `/maya-v2/ai-providers/` | GET | AI 提供者配置 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-providers/" \| jq .` | `{"success": true, "providers": {...}}` |
+| | `/maya-v2/add-model/` | POST | 添加模型 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/add-model/" \| jq .` | `{"success": true, "message": "Model added", "data": {...}}` |
+| **Maya-v2 多模型問答** | `/maya-v2/ask-with-model/` | POST | 同步問答 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/ask-with-model/" -H "Content-Type: application/json" -d '{"question": "請解釋機器學習", "model_name": "gpt-4o-mini", "sync": true}' \| jq .` | `{"success": true, "answer": "...", "model_used": "gpt-4o-mini"}` |
+| | `/maya-v2/ask-with-model/` | POST | 異步問答 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/ask-with-model/" -H "Content-Type: application/json" -d '{"question": "深度學習是什麼", "model_name": "gpt-4o-mini", "sync": false}' \| jq .` | `{"success": true, "task_id": "...", "status": "queued"}` |
+| | `/maya-v2/task-status/{id}` | GET | 任務狀態 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/task-status/task-123" \| jq .` | `{"success": true, "status": "completed", "result": {...}}` |
+| | `/maya-v2/qa/chat-history/{session_id}` | GET | 聊天歷史 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/qa/chat-history/qa-12345678" \| jq .` | `{"success": true, "history": [...], "session_id": "qa-12345678"}` |
+| **Legacy 聊天歷史** | `/maya-sawa/qa/chat-history/{user_id}` | GET | 舊版聊天歷史 | `curl -X GET "http://localhost:8000/maya-sawa/maya-sawa/qa/chat-history/test_user" \| jq .` | `{"success": true, "history": [...], "user_id": "test_user"}` |
+
+### 測試腳本
+
+#### 創建完整的測試腳本
+
+```bash
+#!/bin/bash
+# Maya Sawa v1 完整 API 測試腳本
+
+echo "=== Maya Sawa v1 完整 API 測試 ==="
+
+BASE_URL="http://localhost:8000/maya-sawa"
+
+# 1. 根端點測試
+echo "1. 根端點測試"
+curl -s -X GET "${BASE_URL}/" | jq '.message'
+
+# 2. Paprika 健康檢查
+echo "2. Paprika 健康檢查"
+curl -s -X GET "${BASE_URL}/paprika/up" | jq '.status'
+
+# 3. 創建測試文章
+echo "3. 創建測試文章"
+ARTICLE_RESPONSE=$(curl -s -X POST "${BASE_URL}/paprika/articles" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file_path": "test/api-test.md",
+    "content": "# API 測試文章\n這是一篇用於 API 測試的文章。",
+    "file_date": "'$(date -I)'T00:00:00Z"
+  }')
+
+echo "文章創建結果: $(echo $ARTICLE_RESPONSE | jq '.success')"
+
+# 3.5. 批量創建測試文章
+echo "3.5. 批量創建測試文章"
+BATCH_RESPONSE=$(curl -s -X POST "${BASE_URL}/paprika/articles/batch" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "file_path": "test/batch1.md",
+      "content": "# 批量測試文章1\n這是第一篇批量測試文章。",
+      "file_date": "'$(date -I)'T10:00:00Z"
+    },
+    {
+      "file_path": "test/batch2.md",
+      "content": "# 批量測試文章2\n這是第二篇批量測試文章。",
+      "file_date": "'$(date -I)'T11:00:00Z"
+    },
+    {
+      "file_path": "test/api-test.md",
+      "content": "# 重複測試\n這篇文章會被跳過因為 file_path 重複。",
+      "file_date": "'$(date -I)'T12:00:00Z"
+    }
+  ]')
+
+echo "批量創建結果: $(echo $BATCH_RESPONSE | jq '.message')"
+
+# 4. QA 查詢測試
+echo "4. QA 系統測試"
+QA_RESPONSE=$(curl -s -X POST "${BASE_URL}/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "測試問題",
+    "user_id": "api_test",
+    "language": "chinese"
+  }')
+
+echo "QA 查詢結果: $(echo $QA_RESPONSE | jq '.success')"
+
+# 5. AI 模型測試
+echo "5. AI 模型列表"
+curl -s -X GET "${BASE_URL}/maya-v2/available-models/" | jq '.models | length'
+
+echo "=== 測試完成 ==="
+```
+
 ### 測試腳本
 
 #### 創建完整的測試腳本
@@ -740,6 +945,30 @@ ARTICLE_RESPONSE=$(curl -s -X POST "http://localhost:8000/maya-sawa/paprika/arti
   }')
 
 echo "文章創建結果: $(echo $ARTICLE_RESPONSE | jq '.success')"
+
+# 3.5. 批量創建測試文章
+echo "3.5. 批量創建測試文章"
+BATCH_RESPONSE=$(curl -s -X POST "http://localhost:8000/maya-sawa/paprika/articles/batch" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "file_path": "test/batch1.md",
+      "content": "# 批量測試文章1\n這是第一篇批量測試文章。",
+      "file_date": "'$(date -I)'T10:00:00Z"
+    },
+    {
+      "file_path": "test/batch2.md",
+      "content": "# 批量測試文章2\n這是第二篇批量測試文章。",
+      "file_date": "'$(date -I)'T11:00:00Z"
+    },
+    {
+      "file_path": "test/api-test.md",
+      "content": "# 重複測試\n這篇文章會被跳過因為 file_path 重複。",
+      "file_date": "'$(date -I)'T12:00:00Z"
+    }
+  ]')
+
+echo "批量創建結果: $(echo $BATCH_RESPONSE | jq '.message')"
 
 # 4. QA 查詢測試
 echo "4. QA 系統測試"

@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 def quick_test():
     """快速測試連接池配置"""
     try:
-        from maya_sawa.core.connection_pool import get_pool_manager
+        from maya_sawa.core.database.connection_pool import get_pool_manager
         
         print("=== 快速連接池配置測試 ===")
         

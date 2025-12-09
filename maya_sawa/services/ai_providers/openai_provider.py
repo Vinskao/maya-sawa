@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, List
 from openai import OpenAI
 
 from .base import BaseAIProvider, AIResponse
-from ...core.config import Config
+from ...core.config.config import Config
 
 logger = logging.getLogger(__name__)
 

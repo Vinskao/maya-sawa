@@ -9,10 +9,10 @@ Markdown Q&A System - 名稱格式適配器
 
 import logging
 import re
-from typing import List, Dict, Optional
+from typing import List
 
 # 本地導入
-from maya_sawa.core.config_manager import config_manager
+from maya_sawa.core.config.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 

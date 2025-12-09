@@ -13,7 +13,7 @@ from typing import List, Optional
 import re
 
 # 本地導入
-from maya_sawa.core.config_manager import config_manager
+from maya_sawa.core.config.config_manager import config_manager
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)

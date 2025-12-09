@@ -12,7 +12,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 
-from ...core.config import Config
+from ...core.config.config import Config
 
 logger = logging.getLogger(__name__)
 

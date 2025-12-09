@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 
 # 本地導入
 from maya_sawa.core.config import Config
-from maya_sawa.core.config_manager import config_manager
+from maya_sawa.core.config.config_manager import config_manager
 from .profile_manager import ProfileManager
 
 # ==================== 日誌配置 ====================

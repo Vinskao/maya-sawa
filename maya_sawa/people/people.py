@@ -35,9 +35,9 @@ except ImportError:  # pragma: no cover
     psycopg2 = types.ModuleType("psycopg2")  # type: ignore
 
 # Import connection pool & config from core package
-from maya_sawa.core.connection_pool import get_pool_manager
+from maya_sawa.core.database.connection_pool import get_pool_manager
 from maya_sawa.core.config import Config
-from maya_sawa.core.config_manager import config_manager
+from maya_sawa.core.config.config_manager import config_manager
 
 # Import OpenAI for embeddings
 try:

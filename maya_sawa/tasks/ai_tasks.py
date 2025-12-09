@@ -13,8 +13,8 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 from .celery_app import celery_app
-from ..core.config import Config
-from ..databases.maya_v2_db import get_maya_v2_db, TaskStatus, MessageType
+from ..core.config.config import Config
+from ..databases.conversation_db import get_conversation_db, TaskStatus, MessageType
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def process_ai_response_task(self, task_id: int) -> Dict[str, Any]:
     start_time = time.time()
     
     try:
-        db = get_maya_v2_db()
+        db = get_conversation_db()
         if not db.is_available():
             raise RuntimeError("Database not available")
         
@@ -150,7 +150,7 @@ def process_ai_response_task(self, task_id: int) -> Dict[str, Any]:
         
         # Update task as failed
         try:
-            db = get_maya_v2_db()
+            db = get_conversation_db()
             if db.is_available():
                 db.update_processing_task(
                     task_id,
@@ -193,10 +193,10 @@ def sync_articles_task(self, remote_url: Optional[str] = None) -> Dict[str, Any]
             return {'message': 'No articles to sync', 'count': 0}
         
         # Sync to vector store
-        from ..databases.postgres_store import PostgresVectorStore
-        from ..core.langchain_shim import Document
+        from ..databases.qa_vector_db import QAVectorDatabase
+        from ..core.processing.langchain_shim import Document
         
-        vector_store = PostgresVectorStore()
+        vector_store = QAVectorDatabase()
         
         documents = []
         for article in articles:

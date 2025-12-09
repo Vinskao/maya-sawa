@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def test_connection_pool():
     """測試連接池配置"""
     try:
-        from maya_sawa.core.connection_pool import get_pool_manager
+        from maya_sawa.core.database.connection_pool import get_pool_manager
         
         logger.info("=== 雙數據庫連接池測試 ===")
         

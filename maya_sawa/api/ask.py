@@ -16,15 +16,18 @@ import uuid
 import logging
 from typing import Optional, Dict, Any, List
 
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+try:
+    from fastapi import APIRouter
+    from pydantic import BaseModel, Field
+except ImportError as e:
+    raise ImportError(f"FastAPI and Pydantic are required but not installed. Please install with: poetry install") from e
 
-from ..core.config import Config
-from ..databases.maya_v2_db import get_maya_v2_db, MessageType, TaskStatus
-from ..core.chat_history import ChatHistoryManager
-from ..databases.postgres_store import PostgresVectorStore
+from ..core.config.config import Config
+from ..databases.conversation_db import get_conversation_db, MessageType, TaskStatus
+from ..core.services.chat_history import ChatHistoryManager
+from ..databases.qa_vector_db import QAVectorDatabase
 from ..services.ai_providers import AIProviderFactory
-from ..core.errors import (
+from ..core.errors.errors import (
     ErrorCode,
     AppException,
     raise_not_found,
@@ -102,7 +105,7 @@ def _get_ai_model_info(model_name: str) -> tuple:
     
     Returns tuple of (model_info_dict, provider_name, model_id_str)
     """
-    db = get_maya_v2_db()
+    db = get_conversation_db()
     
     if db.is_available():
         # Try to find model by name
@@ -148,7 +151,7 @@ async def _search_knowledge_base(query: str, k: int = 3) -> tuple:
     knowledge_found = False
     
     try:
-        vector_store = PostgresVectorStore()
+        vector_store = QAVectorDatabase()
         
         # Search for relevant documents
         documents = vector_store.similarity_search(query, k=k, threshold=0.3)
@@ -236,7 +239,7 @@ async def ask_with_model(request: AskWithModelRequest):
         session_id = f"qa-{uuid.uuid4().hex[:8]}"
         
         # Create conversation in database if available
-        db = get_maya_v2_db()
+        db = get_conversation_db()
         conversation_id = str(uuid.uuid4())
         message_id = None
         
@@ -459,7 +462,7 @@ async def get_task_status(task_id: str):
             logger.debug(f"Celery task lookup failed: {str(celery_error)}")
         
         # Fall back to database task lookup
-        db = get_maya_v2_db()
+        db = get_conversation_db()
         if db.is_available():
             try:
                 task = db.get_processing_task(int(task_id))

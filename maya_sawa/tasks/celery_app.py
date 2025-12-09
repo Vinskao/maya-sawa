@@ -11,7 +11,7 @@ import os
 import logging
 from celery import Celery
 
-from ..core.config import Config
+from ..core.config.config import Config
 
 logger = logging.getLogger(__name__)
 
