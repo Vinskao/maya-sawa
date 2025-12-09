@@ -160,34 +160,42 @@ class PeopleWeaponManager:
     
     def generate_embedding(self, text: str) -> Optional[List[float]]:
         """
-        Generate embedding for given text using OpenAI
-        
-        Args:
-            text (str): Text to generate embedding for
-            
-        Returns:
-            Optional[List[float]]: Embedding vector or None if failed
+        生成文本的向量嵌入 (使用統一的嵌入服務)
+
+        這個方法現在使用統一的 EmbeddingService，確保所有模組使用相同的向量生成邏輯。
+
+        參數：
+            text: 要轉換的文本內容
+
+        返回：
+            向量嵌入列表，如果失敗則返回 None
+
+        服務層設計：
+        - 使用 EmbeddingService 而不是直接調用 OpenAI
+        - 與 QA 系統、搜索功能共用相同的服務
+        - 確保向量一致性和配置統一
         """
-        if not self.openai_client or not text:
+        if not text:
             return None
-        
+
         # Limit text length to prevent excessive token usage
-        max_text_length = 8000  # OpenAI text-embedding-ada-002 limit is 8191 tokens
+        max_text_length = 8000  # OpenAI text-embedding limit
         if len(text) > max_text_length:
             text = text[:max_text_length]
             logger.warning(f"Text truncated to {max_text_length} characters for embedding generation")
-        
+
         try:
-            response = self.openai_client.embeddings.create(
-                model="text-embedding-ada-002",
-                input=text
-            )
-            embedding = response.data[0].embedding
+            # 使用統一的嵌入服務
+            from ..services.embedding_service import get_embedding_service
+            embedding_service = get_embedding_service()
             
+            # 生成向量
+            embedding = embedding_service.generate_embedding(text)
+
             # Validate embedding dimensions
             if len(embedding) != 1536:
                 logger.warning(f"Unexpected embedding dimensions: {len(embedding)}, expected 1536")
-            
+
             return embedding
         except Exception as e:
             logger.error(f"Failed to generate embedding: {str(e)}")

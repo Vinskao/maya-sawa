@@ -22,11 +22,8 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-try:
-    from fastapi import APIRouter, status, HTTPException
-    from pydantic import BaseModel, Field
-except ImportError as e:
-    raise ImportError(f"FastAPI and Pydantic are required but not installed. Please install with: poetry install") from e
+from fastapi import APIRouter, status, HTTPException
+from pydantic import BaseModel, Field
 
 from ..databases.article_db import get_article_db
 from ..core.errors.errors import (

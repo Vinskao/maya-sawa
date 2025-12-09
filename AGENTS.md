@@ -20,7 +20,8 @@ maya-sawa-v1 (FastAPI - 統一入口)
 │   ├── GET /stats            文章統計
 │   ├── POST /sync-from-api   從 API 同步文章
 │   ├── GET /chat-history/{user_id}
-│   └── POST /search-people   人員語義搜索
+│   ├── POST /search-people   人員語義搜索
+│   └── POST /convert-to-vector 文本轉向量
 │
 ├── /paprika/*                從 Laravel 移植
 │   ├── GET /articles         文章列表
@@ -807,6 +808,7 @@ celery -A maya_sawa.tasks.celery_app worker -Q maya_sawa -l info
 |------|------|------|------|----------|----------|
 | **根端點** | `/` | GET | API 信息和健康檢查 | `curl -X GET "http://localhost:8000/maya-sawa/" \| jq .` | `{"message": "Maya Sawa Unified API v0.2.0", "version": "0.2.0", "status": "healthy"}` |
 | **QA 系統** | `/qa/query` | POST | 文檔問答查詢 | `curl -X POST "http://localhost:8000/maya-sawa/qa/query" -H "Content-Type: application/json" -d '{"text": "Maya Sawa 是什麼？", "user_id": "test_user", "language": "chinese", "name": "Maya"}' \| jq .` | `{"success": true, "answer": "...", "sources": [...]}` |
+| | `/qa/convert-to-vector` | POST | 文本轉向量 | `curl -X POST "http://localhost:8000/maya-sawa/qa/convert-to-vector" -H "Content-Type: application/json" -d '{"content": "這是測試文本"}' \| jq .` | `{"success": true, "vector": [0.123, ...], "dimensions": 1536, "model": "text-embedding-3-small"}` |
 | | `/qa/stats` | GET | 文章統計 | `curl -X GET "http://localhost:8000/maya-sawa/qa/stats" \| jq .` | `{"success": true, "stats": {"total_articles": 38, "total_chunks": 152, "last_sync": "..."}}` |
 | | `/qa/sync-from-api` | POST | 從 API 同步文章 | `curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" -H "Content-Type: application/json" -d '{"remote_url": "https://peoplesystem.tatdvsonorth.com/paprika/articles"}' \| jq .` | `{"success": true, "message": "Sync completed", "stats": {...}}` |
 | | `/qa/chat-history/{user_id}` | GET | 獲取對話歷史 | `curl -X GET "http://localhost:8000/maya-sawa/qa/chat-history/test_user" \| jq .` | `{"success": true, "history": [...], "total": 5}` |
@@ -1021,8 +1023,44 @@ poetry run uvicorn maya_sawa.main:app --reload --host 0.0.0.0 --port 8000
    - 確認 broker (RabbitMQ/Redis) 是否運行
    - 檢查 worker 是否已啟動
 
+## 新增功能測試
+
+### 文本轉向量 API
+
+#### 基本測試
+```bash
+curl -X POST "http://localhost:8000/maya-sawa/qa/convert-to-vector" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "這是一段測試文本"}' | jq .
+```
+
+**預期結果：**
+```json
+{
+  "success": true,
+  "vector": [0.123, -0.456, 0.789, ...],
+  "dimensions": 1536,
+  "content_length": 8,
+  "model": "text-embedding-3-small",
+  "message": "Successfully converted content to 1536-dimensional vector"
+}
+```
+
+#### 功能特點
+- ✅ **服務層設計**：使用 EmbeddingService 統一管理向量生成
+- ✅ **代碼共用**：與 QA 系統、搜索功能共用相同的向量生成邏輯
+- ✅ **向量一致性**：確保所有模組使用相同的嵌入模型
+- ✅ **輸入驗證**：檢查空內容，返回友好錯誤信息
+
+#### 使用場景
+1. **前端客戶端**：生成向量用於本地向量搜索或緩存
+2. **第三方集成**：外部系統需要與 Maya Sawa 相同格式的向量
+3. **測試調試**：驗證向量生成功能是否正常
+4. **離線處理**：預先生成向量數據用於批量處理
+
 ## 版本歷史
 
+- **v0.3.0** - 添加向量轉換 API 和服務層重構
 - **v0.2.0** - 整合 maya-sawa-v2 (Django) 和 paprika (Laravel)
 - **v0.1.0** - 原始 FastAPI 問答系統
 

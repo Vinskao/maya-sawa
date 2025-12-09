@@ -47,7 +47,6 @@ import json
 
 # 第三方庫導入
 try:
-    from langchain_openai import OpenAIEmbeddings
     from langchain.schema import Document
     import psycopg2
     from psycopg2.extras import execute_values
@@ -55,6 +54,7 @@ except ImportError as e:
     raise ImportError(f"Required packages not installed. Please install dependencies with: poetry install") from e
 from ..core.config.config import Config
 from ..core.database.connection_pool import get_pool_manager
+from ..services.embedding_service import get_embedding_service
 
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
@@ -92,13 +92,8 @@ class QAVectorDatabase:
         """
         初始化 QA 向量數據庫
         
-        設置數據庫連接和 OpenAI 配置，並測試連接
+        設置數據庫連接，並使用嵌入服務進行向量生成。
         """
-        # 從環境變數獲取 OpenAI 配置
-        api_key = os.getenv("OPENAI_API_KEY")
-        api_base = os.getenv("OPENAI_API_BASE")
-        openai_organization = os.getenv("OPENAI_ORGANIZATION")
-        
         # 從 Config 獲取 PostgreSQL 連接字符串
         from ..core.config.config import Config
         self.connection_string = Config.DB_CONNECTION_STRING
@@ -106,13 +101,10 @@ class QAVectorDatabase:
         # 獲取連接池管理器
         self.pool_manager = get_pool_manager()
         
-        logger.debug(f"QAVectorDatabase - Using API Base: {api_base}")
+        # 獲取嵌入服務（服務層，負責向量生成）
+        self.embedding_service = get_embedding_service()
         
-        # 懶加載 embeddings 模型（只在需要時初始化）
-        self._embeddings = None
-        self.api_key = api_key
-        self.api_base = api_base
-        self.openai_organization = openai_organization
+        logger.debug(f"QAVectorDatabase initialized with embedding service")
         
         # 測試數據庫連接
         self._test_connection()
@@ -120,38 +112,15 @@ class QAVectorDatabase:
     @property
     def embeddings(self):
         """
-        AI 嵌入模型屬性 (懶加載，相當於 Spring @Lazy)
+        向後兼容屬性：使用嵌入服務的底層模型
 
-        為什麼需要懶加載：
-        - OpenAI API 初始化需要網絡調用
-        - 節省應用啟動時間
-        - 只在需要時才消耗資源
-
-        Java 對應：
-        ```java
-        @Lazy
-        @Autowired
-        private OpenAIEmbeddings embeddings;
-        ```
-
-        初始化邏輯：
-        1. 檢查是否已初始化 (相當於 null 檢查)
-        2. 創建 OpenAI 客戶端實例
-        3. 配置 API 密鑰和端點
-        4. 返回可重用的實例
+        這是為了向後兼容舊代碼而保留的屬性。
+        新代碼應該直接使用 self.embedding_service。
 
         返回：
-        - OpenAIEmbeddings 實例，用於生成向量嵌入
-        - 相當於 Java 的 OpenAI 客戶端 Bean
+        - OpenAIEmbeddings 實例（通過服務層獲取）
         """
-        if self._embeddings is None:
-            # 第一次訪問時初始化 (相當於 Spring Bean 的創建)
-            self._embeddings = OpenAIEmbeddings(
-                base_url=self.api_base,      # API 端點 URL
-                api_key=self.api_key,        # 認證密鑰
-                openai_organization=self.openai_organization  # 組織 ID (可選)
-            )
-        return self._embeddings
+        return self.embedding_service.embeddings
 
     def _test_connection(self):
         """
@@ -277,9 +246,9 @@ class QAVectorDatabase:
         try:
             cur = conn.cursor()
             
-            # 批量生成嵌入向量
+            # 批量生成嵌入向量（使用服務層）
             texts = [doc.page_content for doc in documents]
-            embeddings = self.embeddings.embed_documents(texts)
+            embeddings = self.embedding_service.embed_documents(texts)
             
             # 準備批量插入數據
             data = [
@@ -356,8 +325,8 @@ class QAVectorDatabase:
         if threshold is None:
             threshold = Config.SIMILARITY_THRESHOLD
 
-        # 生成查詢的嵌入向量
-        query_embedding = self.embeddings.embed_query(query)
+        # 使用嵌入服務生成查詢的向量（服務層）
+        query_embedding = self.embedding_service.embed_query(query)
         
         conn = self.pool_manager.get_postgres_connection()
         if not conn:

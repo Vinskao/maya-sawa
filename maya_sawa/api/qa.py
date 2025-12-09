@@ -252,6 +252,15 @@ class PeopleSearchRequest(BaseModel):
     threshold: float = 0.5  # 相似度閾值
     sort_by_power: bool = False  # 是否按戰鬥力排序
 
+class ConvertToVectorRequest(BaseModel):
+    """
+    文本轉向量請求模型
+    
+    定義將文本內容轉換為向量嵌入的請求格式
+    """
+    content: str  # 要轉換的文本內容
+    batch_mode: bool = False  # 是否為批量模式（未來擴展用）
+
 # ==================== API 端點定義 ====================
 
 @router.post("/sync-from-api")
@@ -914,3 +923,107 @@ async def search_people_by_semantics(request: PeopleSearchRequest):
     except Exception as e:
         logger.error(f"人員語義搜索時發生錯誤: {str(e)}")
         raise HTTPException(status_code=500, detail=f"搜索失敗: {str(e)}")
+
+@router.post("/convert-to-vector")
+async def convert_content_to_vector(request: ConvertToVectorRequest):
+    """
+    將文本內容轉換為向量嵌入 (通用的 content 轉向量 API)
+
+    這是一個通用的服務端點，將任意文本轉換為 AI 向量表示。
+
+    功能說明：
+    - 使用 OpenAI Embeddings 模型生成向量
+    - 支持任意長度的文本（會自動處理截斷）
+    - 返回標準化的向量數組
+
+    使用場景：
+    - 前端客戶端需要生成向量用於本地處理
+    - 第三方系統集成需要向量數據
+    - 測試和調試向量生成功能
+    - 離線向量生成和緩存
+
+    技術架構：
+    - 使用服務層 (EmbeddingService) 統一管理向量生成
+    - 與其他功能（QA、搜索）共用相同的向量生成邏輯
+    - 確保向量一致性和可重用性
+
+    Args:
+        request (ConvertToVectorRequest): 請求對象
+            - content: 要轉換的文本內容
+            - batch_mode: 是否批量模式（未來擴展）
+
+    Returns:
+        dict: 包含向量數據和元信息的字典
+            - success: 是否成功
+            - vector: 向量數組（浮點數列表）
+            - dimensions: 向量維度
+            - content_length: 原文本長度
+            - model: 使用的嵌入模型名稱
+
+    Raises:
+        HTTPException: 當向量生成失敗時拋出 HTTP 異常
+
+    Java 對應：
+    ```java
+    @PostMapping("/convert-to-vector")
+    public VectorResponse convertToVector(@RequestBody ConvertRequest request) {
+        List<Float> vector = embeddingService.generateEmbedding(request.getContent());
+        return new VectorResponse(vector);
+    }
+    ```
+
+    示例請求：
+    ```bash
+    curl -X POST "http://localhost:8000/maya-sawa/qa/convert-to-vector" \\
+      -H "Content-Type: application/json" \\
+      -d '{"content": "這是測試文本"}'
+    ```
+
+    示例響應：
+    ```json
+    {
+      "success": true,
+      "vector": [0.123, -0.456, 0.789, ...],
+      "dimensions": 1536,
+      "content_length": 6,
+      "model": "text-embedding-3-small"
+    }
+    ```
+    """
+    try:
+        # 輸入驗證
+        if not request.content or not request.content.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Content cannot be empty"
+            )
+        
+        # 使用嵌入服務生成向量（服務層，與其他功能共用）
+        from ..services.embedding_service import get_embedding_service
+        embedding_service = get_embedding_service()
+        
+        # 生成向量嵌入
+        vector = embedding_service.generate_embedding(request.content)
+        
+        # 獲取模型信息
+        model_info = embedding_service.get_embedding_info()
+        
+        logger.info(f"Generated vector for content (length: {len(request.content)} chars, vector dim: {len(vector)})")
+        
+        return {
+            "success": True,
+            "vector": vector,
+            "dimensions": len(vector),
+            "content_length": len(request.content),
+            "model": model_info.get("model_name", "unknown"),
+            "message": f"Successfully converted content to {len(vector)}-dimensional vector"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"向量轉換時發生錯誤: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"向量轉換失敗: {str(e)}"
+        )
