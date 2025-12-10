@@ -124,6 +124,8 @@ class EmbeddingService:
 
         返回：
             OpenAIEmbeddings 實例，用於生成向量嵌入
+        
+        提示：首次呼叫會建立實例，後續重用以避免重複初始化。
         """
         if self._embeddings is None:
             # 初始化 OpenAI 嵌入模型

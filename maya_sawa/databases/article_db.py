@@ -50,8 +50,9 @@ Java 開發者對應概念：
 """
 
 import logging
+import json
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Iterable
 from contextlib import contextmanager
 
 try:
@@ -263,6 +264,22 @@ class ArticleDatabase:
                 Article.deleted_at.is_(None)
             ).first()
             return self._detach_article(article) if article else None
+
+    def get_articles_by_file_paths(self, file_paths: Iterable[str]) -> Dict[str, Article]:
+        """
+        批量獲取指定 file_path 的文章，返回映射
+        使用單次查詢避免 N+1，給批次同步對帳用
+        """
+        file_paths = list(file_paths)
+        if not file_paths:
+            return {}
+
+        with self.get_session() as session:
+            articles = session.query(Article).filter(
+                Article.file_path.in_(file_paths),
+                Article.deleted_at.is_(None)
+            ).all()
+            return {a.file_path: self._detach_article(a) for a in articles}
     
     def create_article(self, file_path: str, content: str, file_date: datetime,
                        embedding: Optional[str] = None) -> Article:
@@ -322,6 +339,97 @@ class ArticleDatabase:
                 session.flush()
                 return self._detach_article(article)
             return None
+
+    def update_content_if_changed(
+        self,
+        file_path: str,
+        content: str,
+        file_date: datetime,
+        reset_embedding: bool = True,
+    ) -> bool:
+        """
+        如果內容不同則更新文章內容與日期；可選擇重置 embedding
+        同步批次時用於「同 file_path 但內容變更」的情境
+        """
+        with self.get_session() as session:
+            article = session.query(Article).filter(
+                Article.file_path == file_path,
+                Article.deleted_at.is_(None)
+            ).first()
+
+            if not article:
+                return False
+
+            if article.content == content:
+                return False
+
+            article.content = content
+            article.file_date = file_date
+            if reset_embedding:
+                article.embedding = None
+            article.updated_at = datetime.utcnow()
+            session.flush()
+            return True
+
+    def update_content_and_embedding(
+        self,
+        file_path: str,
+        content: str,
+        embedding: List[float],
+    ) -> bool:
+        """
+        更新內容並寫入新的 embedding（不處理 file_date）
+        向量化階段覆寫內容與向量
+        """
+        with self.get_session() as session:
+            article = session.query(Article).filter(
+                Article.file_path == file_path,
+                Article.deleted_at.is_(None)
+            ).first()
+
+            if not article:
+                return False
+
+            article.content = content
+            article.embedding = json.dumps(embedding)
+            article.updated_at = datetime.utcnow()
+            session.flush()
+            return True
+
+    def update_embedding_by_file_path(
+        self,
+        file_path: str,
+        embedding: List[float],
+        overwrite: bool = True,
+    ) -> bool:
+        """
+        更新指定文件路徑文章的向量嵌入
+
+        Args:
+            file_path: 文章的唯一文件路徑
+            embedding: 浮點數列表，向量值
+            overwrite: 如果已有 embedding，是否允許覆寫
+
+        Returns:
+            bool: 是否成功更新（找不到或被跳過則 False）
+        """
+        with self.get_session() as session:
+            article = session.query(Article).filter(
+                Article.file_path == file_path,
+                Article.deleted_at.is_(None)
+            ).first()
+
+            if not article:
+                return False
+
+            if article.embedding and not overwrite:
+                # 已存在且不允許覆寫
+                return False
+
+            article.embedding = json.dumps(embedding)
+            article.updated_at = datetime.utcnow()
+            session.flush()
+            return True
     
     def delete_article(self, article_id: int, soft_delete: bool = True) -> bool:
         """Delete an article (soft delete by default)"""
@@ -337,6 +445,43 @@ class ArticleDatabase:
                     session.delete(article)
                 return True
             return False
+
+    def soft_delete_articles_not_in(self, file_paths: Iterable[str]) -> int:
+        """
+        將不在給定 file_path 集合中的文章做軟刪除
+        返回刪除的數量
+        以「本次同步清單」為準，移除缺席的舊文
+        """
+        file_paths = set(file_paths)
+        with self.get_session() as session:
+            q = session.query(Article).filter(
+                Article.deleted_at.is_(None)
+            )
+            if file_paths:
+                q = q.filter(~Article.file_path.in_(file_paths))
+
+            to_delete = q.all()
+            count = 0
+            now = datetime.utcnow()
+            for article in to_delete:
+                article.deleted_at = now
+                count += 1
+            if count:
+                session.flush()
+            return count
+
+    def hard_delete_soft_deleted(self) -> int:
+        """
+        永久刪除已軟刪除的文章 (deleted_at is not null)
+        返回刪除的數量
+        清理軟刪除紀錄，配合同步完成後的清掃 API
+        """
+        with self.get_session() as session:
+            q = session.query(Article).filter(Article.deleted_at.isnot(None))
+            deleted = q.delete(synchronize_session=False)
+            if deleted:
+                session.flush()
+            return deleted
     
     def sync_articles(self, articles_data: List[Dict[str, Any]]) -> Dict[str, int]:
         """

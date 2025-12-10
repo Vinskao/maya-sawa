@@ -33,6 +33,7 @@ from ..core.errors.errors import (
     raise_db_unavailable,
     raise_already_exists,
 )
+from ..services.embedding_service import get_embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,25 @@ class ArticleSyncResponse(BaseModel):
     message: str
     data: Dict[str, int]
     timestamp: str
+
+
+class VectorizeArticleItem(BaseModel):
+    """單篇文章向量化請求"""
+    file_path: str = Field(..., max_length=500)
+    content: str
+
+
+class VectorizeArticlesRequest(BaseModel):
+    """批量文章向量化請求"""
+    articles: List[VectorizeArticleItem]
+    overwrite: bool = True
+
+
+class PurgeDeletedResponse(BaseModel):
+    """永久刪除已軟刪除文章的回應"""
+    success: bool
+    deleted: int
+    message: str
 
 
 # ==================== Helper Functions ====================
@@ -333,17 +353,22 @@ async def create_articles_batch(request: List[ArticleCreate]):
         "success": True,
         "total_requested": len(request),
         "created": 0,
+        "updated": 0,
         "skipped_duplicate": 0,
+        "skipped_unchanged": 0,
         "failed": 0,
+        "deleted": 0,
         "errors": [],
         "articles": []
     }
 
     # Track which file_paths we've seen in this request to detect duplicates
+    # 目標：避免單次 payload 內的重複，並後續用來判斷缺席的舊文
     seen_in_request = set()
     duplicate_in_request = set()
 
     # First pass: identify duplicates within the request
+    # 記錄 request 內部的重複 file_path
     for article_data in request:
         file_path = article_data.file_path
         if file_path in seen_in_request:
@@ -352,11 +377,10 @@ async def create_articles_batch(request: List[ArticleCreate]):
             seen_in_request.add(file_path)
 
     # Get unique file paths to check against database (excluding duplicates within request)
+    # 單次查詢抓出 DB 已有的文章，避免 N+1
     unique_file_paths = seen_in_request - duplicate_in_request
-    existing_paths = db.get_existing_file_paths_set(unique_file_paths) if unique_file_paths else set()
-
-    # Debug
-    logger.info(f"DEBUG: unique_file_paths={unique_file_paths}, existing_paths={existing_paths}")
+    existing_articles = db.get_articles_by_file_paths(unique_file_paths) if unique_file_paths else {}
+    existing_paths = set(existing_articles.keys())
 
     # Second pass: process each item
     to_create = []
@@ -365,6 +389,7 @@ async def create_articles_batch(request: List[ArticleCreate]):
         file_path = article_data.file_path
 
         # Check if this file_path appears multiple times in the request
+        # 同一批次內重複，直接記錯誤並跳過
         if file_path in duplicate_in_request:
             results["skipped_duplicate"] += 1
             results["errors"].append({
@@ -376,20 +401,44 @@ async def create_articles_batch(request: List[ArticleCreate]):
             continue
 
         # Check if this file_path already exists in database
+        # 若已存在：比對內容，不同則更新並重置 embedding，否則跳過
         if file_path in existing_paths:
-            results["skipped_duplicate"] += 1
-            results["errors"].append({
-                "index": i,
-                "file_path": file_path,
-                "error_code": ErrorCode.ARTICLE_ALREADY_EXISTS.code,
-                "error": "Article with this file_path already exists"
-            })
+            existing = existing_articles[file_path]
+            if existing.content != article_data.content:
+                try:
+                    updated = db.update_content_if_changed(
+                        file_path=file_path,
+                        content=article_data.content,
+                        file_date=article_data.file_date,
+                        reset_embedding=True,
+                    )
+                    if updated:
+                        results["updated"] += 1
+                        results["articles"].append({
+                            "index": i,
+                            "file_path": file_path,
+                            "updated": True
+                        })
+                    else:
+                        results["skipped_unchanged"] += 1
+                except Exception as update_error:
+                    results["failed"] += 1
+                    results["errors"].append({
+                        "index": i,
+                        "file_path": file_path,
+                        "error_code": ErrorCode.ARTICLE_UPDATE_FAILED.code,
+                        "error": str(update_error)
+                    })
+            else:
+                results["skipped_unchanged"] += 1
             continue
 
         # This file_path is unique within request and doesn't exist in DB
+        # 新檔案：待批次創建
         to_create.append((i, article_data))
     
     # Bulk create all non-duplicate articles
+    # 優先批量寫入，失敗再退回逐筆
     if to_create:
         try:
             articles_data = [
@@ -436,9 +485,24 @@ async def create_articles_batch(request: List[ArticleCreate]):
                         "error": str(create_error)
                     })
 
+    # Prune articles that are no longer present in request (soft delete)
+    # 用本次 payload 清單對帳，未出現者標記軟刪除
+    try:
+        pruned = db.soft_delete_articles_not_in(seen_in_request)
+        results["deleted"] = pruned
+    except Exception as prune_error:
+        results["errors"].append({
+            "file_paths": "ALL_EXCLUDING_REQUEST",
+            "error_code": ErrorCode.ARTICLE_DELETE_FAILED.code,
+            "error": str(prune_error)
+        })
+
     results["message"] = (
-        f"Batch creation completed: {results['created']} created, "
-        f"{results['skipped_duplicate']} skipped (duplicate), "
+        f"Batch completed: {results['created']} created, "
+        f"{results['updated']} updated, "
+        f"{results['skipped_unchanged']} skipped (unchanged), "
+        f"{results['skipped_duplicate']} skipped (duplicate in request), "
+        f"{results['deleted']} deleted, "
         f"{results['failed']} failed"
     )
 
@@ -487,4 +551,109 @@ async def sync_articles(request: ArticleSyncRequest):
         raise AppException(
             ErrorCode.ARTICLE_SYNC_FAILED,
             detail={"error": str(e)}
+        )
+
+
+@router.post("/articles/vectorize", response_model=Dict[str, Any])
+async def vectorize_articles(request: VectorizeArticlesRequest):
+    """
+    將文章內容轉為向量並寫回資料庫（embedding 欄位）
+
+    - 使用共用的 EmbeddingService 生成向量
+    - 只更新已存在的文章，避免誤創建
+    - 默認允許覆寫既有 embedding（可透過 overwrite=false 跳過）
+    """
+    db = _ensure_db_available()
+
+    if not request.articles:
+        raise HTTPException(status_code=400, detail="articles cannot be empty")
+
+    embedding_service = get_embedding_service()
+
+    stats = {
+        "total_requested": len(request.articles),
+        "vectorized": 0,
+        "skipped_empty": 0,
+        "not_found": 0,
+        "skipped_unchanged": 0,
+        "errors": []
+    }
+
+    for item in request.articles:
+        # 內容空白直接跳過
+        if not item.content or not item.content.strip():
+            stats["skipped_empty"] += 1
+            continue
+
+        article = db.get_article_by_file_path(item.file_path)
+        # 找不到既有文章就記錄 not_found
+        if not article:
+            stats["not_found"] += 1
+            continue
+
+        content_changed = article.content != item.content
+
+        try:
+            if content_changed:
+                # 內容變更：重寫內容並重算 embedding
+                vector = embedding_service.generate_embedding(item.content)
+                updated = db.update_content_and_embedding(
+                    file_path=item.file_path,
+                    content=item.content,
+                    embedding=vector,
+                )
+                if updated:
+                    stats["vectorized"] += 1
+                else:
+                    stats["not_found"] += 1
+            else:
+                # 內容相同：已有 embedding 且不覆寫則跳過；否則可重算覆寫
+                if article.embedding and not request.overwrite:
+                    stats["skipped_unchanged"] += 1
+                else:
+                    vector = embedding_service.generate_embedding(item.content)
+                    updated = db.update_embedding_by_file_path(
+                        item.file_path,
+                        vector,
+                        overwrite=True,
+                    )
+                    if updated:
+                        stats["vectorized"] += 1
+                    else:
+                        stats["not_found"] += 1
+
+        except Exception as e:
+            logger.error(f"Failed to vectorize article {item.file_path}: {e}")
+            stats["errors"].append({"file_path": item.file_path, "error": str(e)})
+
+    return {
+        "success": len(stats["errors"]) == 0,
+        "message": (
+            f"Vectorized {stats['vectorized']} articles, "
+            f"skipped {stats['skipped_empty']} empty, "
+            f"{stats['skipped_unchanged']} unchanged, "
+            f"{stats['not_found']} not found"
+        ),
+        "data": stats,
+    }
+
+
+@router.post("/articles/purge-deleted", response_model=PurgeDeletedResponse)
+async def purge_deleted_articles():
+    """
+    永久刪除已軟刪除的文章 (deleted_at is not null)
+    """
+    db = _ensure_db_available()
+    try:
+        deleted = db.hard_delete_soft_deleted()
+        return PurgeDeletedResponse(
+            success=True,
+            deleted=deleted,
+            message=f"Permanently removed {deleted} soft-deleted articles"
+        )
+    except Exception as e:
+        logger.error(f"Failed to purge soft-deleted articles: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to purge soft-deleted articles: {str(e)}"
         )
