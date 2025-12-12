@@ -90,7 +90,14 @@ register_exception_handlers(app)
 # 在生產環境中應該限制 allow_origins 為特定的域名
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允許所有來源（開發環境）
+    allow_origins=[
+        "http://localhost:4321",
+        "https://localhost:4321",
+        "http://127.0.0.1:4321",
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "https://peoplesystem.tatdvsonorth.com",
+    ],
     allow_credentials=True,  # 允許攜帶認證信息
     allow_methods=["*"],  # 允許所有 HTTP 方法
     allow_headers=["*"],  # 允許所有請求頭
