@@ -798,36 +798,68 @@ class PeopleWeaponManager:
                     FROM people
                     WHERE embedding IS NOT NULL 
                     AND 1 - (embedding <=> %s::vector) > %s
-                    ORDER BY embedding <=> %s::vector
+                    ORDER BY 1 - (embedding <=> %s::vector) DESC
                     LIMIT %s
                     """,
                     (embedding_str, embedding_str, threshold, embedding_str, limit)
                 )
             
-            results = cursor.fetchall()
+            results = []
+            if cursor:
+                # Use fetchall and convert to list of dicts manually if RealDictCursor is not used
+                # But here we assume we can handle tuple results if needed
+                rows = cursor.fetchall()
+                
+                for row in rows:
+                    # Depending on cursor type, row might be dict or tuple
+                    if isinstance(row, dict):
+                         results.append(row)
+                    else:
+                        # Assuming tuple order: name, physic_power, magic_power, utility_power, similarity
+                        results.append({
+                            "name": row[0],
+                            "physic_power": row[1],
+                            "magic_power": row[2],
+                            "utility_power": row[3],
+                            "similarity": float(row[4])
+                        })
             
-            # 轉換為字典格式
-            people_results = []
-            for result in results:
-                total_power = result[1] + result[2] + result[3]  # physic + magic + utility
-                people_results.append({
-                    "name": result[0],
-                    "physic_power": result[1],
-                    "magic_power": result[2],
-                    "utility_power": result[3],
-                    "total_power": total_power,
-                    "similarity": round(result[4], 4)  # 四捨五入到4位小數
-                })
-            
-            logger.info(f"Found {len(people_results)} people matching query with threshold {threshold}")
-            return people_results
+            return results
             
         except Exception as e:
             logger.error(f"Failed to search people by embedding: {str(e)}")
-            raise
+            return []
         finally:
-            if cursor:
-                cursor.close()
+            if conn:
+                self.pool_manager.return_people_postgres_connection(conn)
+
+    def get_all_names_from_db(self) -> List[str]:
+        """
+        Get all people names directly from the database
+        
+        Returns:
+            List[str]: List of people names
+        """
+        conn = None
+        try:
+            conn = self.pool_manager.get_people_postgres_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT name FROM people ORDER BY name")
+            rows = cursor.fetchall()
+            
+            names = []
+            for row in rows:
+                if isinstance(row, dict):
+                    names.append(row['name'])
+                else:
+                    names.append(row[0])
+            
+            return names
+        except Exception as e:
+            logger.error(f"Failed to get all names from DB: {str(e)}")
+            return []
+        finally:
             if conn:
                 self.pool_manager.return_people_postgres_connection(conn)
 

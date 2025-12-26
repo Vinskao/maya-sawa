@@ -71,7 +71,7 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     OPENAI_API_BASE = os.getenv("OPENAI_API_BASE")
     OPENAI_MODELS = os.getenv("OPENAI_MODELS", "gpt-4o-mini,gpt-4o,gpt-4.1-nano").split(",")
-    OPENAI_AVAILABLE_MODELS = os.getenv("OPENAI_AVAILABLE_MODELS", "gpt-4o-mini").split(",")
+    OPENAI_AVAILABLE_MODELS = os.getenv("OPENAI_AVAILABLE_MODELS", "gpt-4o-mini,gpt-4.1-nano").split(",")
     OPENAI_DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-4o-mini")
     
     # Gemini Configuration
@@ -167,6 +167,32 @@ class Config:
     
     # Logging Configuration
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+    # Voyeur Configuration
+    # MongoDB settings
+    MONGODB_URI = os.getenv("MONGODB_URI")
+    MONGODB_DB = os.getenv("MONGODB_DB", "palais")
+    MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "tyf_visits")
+    
+    # Redis Queue for Voyeur
+    REDIS_QUEUE_VOYEUR = os.getenv("REDIS_QUEUE_VOYEUR", "voyeur_queue")
+    
+    # WebSocket settings for Voyeur
+    WEBSOCKET_TYMB = os.getenv("WEBSOCKET_TYMB", "ws://localhost:8080/tymb/")
+    WEBSOCKET_HOST = os.getenv("WEBSOCKET_HOST")
+    WEBSOCKET_PORT = os.getenv("WEBSOCKET_PORT")
+    WEBSOCKET_PATH = os.getenv("WEBSOCKET_PATH")
+    
+    @classmethod
+    def get_voyeur_websocket_url(cls) -> str:
+        """Get WebSocket URL for Voyeur metrics"""
+        if cls.WEBSOCKET_TYMB:
+            return cls.WEBSOCKET_TYMB.rstrip('/') + '/metrics'
+        if all([cls.WEBSOCKET_HOST, cls.WEBSOCKET_PATH]):
+            protocol = 'wss' if cls.WEBSOCKET_PORT == '443' else 'ws'
+            port_str = f":{cls.WEBSOCKET_PORT}" if cls.WEBSOCKET_PORT else ""
+            return f"{protocol}://{cls.WEBSOCKET_HOST}{port_str}{cls.WEBSOCKET_PATH}"
+        return ""
     
     @classmethod
     def validate_required_config(cls) -> list:

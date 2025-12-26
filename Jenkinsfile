@@ -102,7 +102,11 @@ pipeline {
                             string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
                             string(credentialsId: 'REDIS_QUEUE_MAYA', variable: 'REDIS_QUEUE_MAYA'),
                             string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
-                            string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL')
+                            string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
+                            string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI'),
+                            string(credentialsId: 'MONGODB_USERNAME', variable: 'MONGODB_USERNAME'),
+                            string(credentialsId: 'MONGODB_PASSWORD', variable: 'MONGODB_PASSWORD'),
+                            string(credentialsId: 'MONGODB_AUTH_SOURCE', variable: 'MONGODB_AUTH_SOURCE')
                         ]) {
                             sh '''
                                 # 創建配置目錄
@@ -139,6 +143,18 @@ pipeline {
                                 # API Configuration
                                 PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
                                 PUBLIC_TYMB_URL=${PUBLIC_TYMB_URL}
+                                
+                                # Voyeur Configuration
+                                MONGODB_URI=${MONGODB_URI}
+                                MONGODB_DB=voyeur
+                                MONGODB_COLLECTION=metrics
+                                MONGODB_USERNAME=${MONGODB_USERNAME}
+                                MONGODB_PASSWORD=${MONGODB_PASSWORD}
+                                MONGODB_AUTH_SOURCE=${MONGODB_AUTH_SOURCE}
+                                REDIS_QUEUE_VOYEUR=voyeur_queue
+                                WEBSOCKET_HOST=peoplesystem.tatdvsonorth.com
+                                WEBSOCKET_PORT=443
+                                WEBSOCKET_PATH=/tymb/metrics
                                 
                                 # Feature Flags
                                 ENABLE_PEOPLE_WEAPONS_SYNC=true
@@ -228,7 +244,11 @@ pipeline {
                         string(credentialsId: 'REDIS_PASSWORD', variable: 'REDIS_PASSWORD'),
                         string(credentialsId: 'REDIS_QUEUE_MAYA', variable: 'REDIS_QUEUE_MAYA'),
                         string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
-                        string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL')
+                        string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
+                        string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI'),
+                        string(credentialsId: 'MONGODB_USERNAME', variable: 'MONGODB_USERNAME'),
+                        string(credentialsId: 'MONGODB_PASSWORD', variable: 'MONGODB_PASSWORD'),
+                        string(credentialsId: 'MONGODB_AUTH_SOURCE', variable: 'MONGODB_AUTH_SOURCE')
                     ]) {
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                             script {

@@ -28,6 +28,8 @@ dashscope = "^1.14.0"
 # SQLAlchemy for paprika database connection
 sqlalchemy = "^2.0.0"
 aiosqlite = "^0.20.0"
+pymongo = "^4.15.5"
+websocket-client = "^1.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

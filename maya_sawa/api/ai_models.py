@@ -270,19 +270,16 @@ async def add_model():
         updated_count = 0
         models_info = []
         
-        enabled_providers = os.getenv('ENABLED_PROVIDERS', 'openai').split(',')
+        providers_config = Config.get_all_providers_config()
         
-        for provider in enabled_providers:
-            provider = provider.strip().upper()
-            
-            models_key = f'{provider}_MODELS'
-            available_models_key = f'{provider}_AVAILABLE_MODELS'
-            
-            all_models = os.getenv(models_key, '').split(',')
-            available_models = os.getenv(available_models_key, '').split(',')
-            
-            if not all_models or all_models == ['']:
+        for provider_name, config in providers_config.items():
+            # Skip disabled providers
+            if not config['enabled']:
                 continue
+
+            provider_upper = provider_name.upper()
+            all_models = config['models']
+            available_models = config['available_models']
             
             for model_id in all_models:
                 model_id = model_id.strip()
@@ -290,11 +287,11 @@ async def add_model():
                     continue
                 
                 is_available = model_id in available_models
-                model_name = _generate_model_name(provider, model_id)
+                model_name = _generate_model_name(provider_upper, model_id)
                 
                 model_data = {
                     'name': model_name,
-                    'provider': provider.lower(),
+                    'provider': provider_name.lower(),
                     'model_id': model_id,
                     'is_active': is_available,
                     'config': {

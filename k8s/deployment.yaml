@@ -64,6 +64,27 @@ spec:
           value: "${REDIS_PASSWORD}"
         - name: REDIS_QUEUE_MAYA
           value: "${REDIS_QUEUE_MAYA}"
+        # === Voyeur Configuration ===
+        - name: MONGODB_URI
+          value: "${MONGODB_URI}"
+        - name: MONGODB_DB
+          value: "voyeur"
+        - name: MONGODB_COLLECTION
+          value: "metrics"
+        - name: MONGODB_USERNAME
+          value: "${MONGODB_USERNAME}"
+        - name: MONGODB_PASSWORD
+          value: "${MONGODB_PASSWORD}"
+        - name: MONGODB_AUTH_SOURCE
+          value: "${MONGODB_AUTH_SOURCE}"
+        - name: REDIS_QUEUE_VOYEUR
+          value: "voyeur_queue"
+        - name: WEBSOCKET_HOST
+          value: "peoplesystem.tatdvsonorth.com"
+        - name: WEBSOCKET_PORT
+          value: "443"
+        - name: WEBSOCKET_PATH
+          value: "/tymb/metrics"
         - name: PUBLIC_API_BASE_URL
           value: "${PUBLIC_API_BASE_URL}"
         - name: PUBLIC_TYMB_URL

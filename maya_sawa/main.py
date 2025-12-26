@@ -12,7 +12,7 @@ Markdown Q&A System - 主應用程式入口點
 版本: 0.1.0
 """
 
-# 標準庫導入
+# 標準庫導
 try:
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +44,9 @@ from .api.articles import router as articles_router
 from .api.ai_models import router as ai_models_router
 from .api.conversations import router as conversations_router, legacy_router as legacy_chat_router
 from .api.ask import router as ask_router
+from .api.people import router as people_router
+from .api.voyeur import router as voyeur_router
+from .services.metrics_consumer import MetricsConsumer
 from .core.services.scheduler import ArticleSyncScheduler
 from .people import sync_data
 from .core.config import Config
@@ -122,9 +125,16 @@ app.include_router(legacy_chat_router)
 # 註冊 Maya-v2 問答 API 路由 (從 Django 移植)
 app.include_router(ask_router)
 
+# 註冊 People API 路由 (新增 - 用於支援前端獲取角色列表)
+app.include_router(people_router)
+
+# 註冊 Voyeur API 路由 (新增 - 移植自 Voyeur 專案)
+app.include_router(voyeur_router)
+
 # ==================== 排程器初始化 ====================
 # 創建文章同步排程器實例
 scheduler = ArticleSyncScheduler()
+metrics_consumer = MetricsConsumer.get_instance()
 
 # ==================== 應用程式生命週期事件 ====================
 
@@ -137,7 +147,8 @@ async def startup_event():
     1. 執行初始文章同步
     2. 執行人員和武器數據同步
     3. 啟動定期同步任務
-    4. 記錄啟動日誌
+    4. 啟動 Voyeur Metrics Consumer
+    5. 記錄啟動日誌
     """
     try:
         # 檢查配置
@@ -149,6 +160,12 @@ async def startup_event():
         sync_config = Config.get_sync_config_summary()
         logger.info(f"同步配置: {sync_config}")
         
+        # 啟動 Voyeur Metrics Consumer (如果配置允許)
+        try:
+            metrics_consumer.start()
+        except Exception as e:
+            logger.error(f"Failed to start MetricsConsumer: {e}")
+
         # 執行初始文章同步（如果啟用）
         if Config.ENABLE_AUTO_SYNC_ON_STARTUP:
             logger.info("應用程式啟動，開始執行初始文章同步...")
@@ -200,13 +217,21 @@ async def shutdown_event():
     
     這個函數在 FastAPI 應用程式關閉時自動執行，負責：
     1. 停止定期同步任務
-    2. 清理資源
-    3. 記錄關閉日誌
+    2. 停止 Metrics Consumer
+    3. 清理資源
+    4. 記錄關閉日誌
     """
     try:
         # 停止定期同步任務，避免資源洩漏
         await scheduler.stop_periodic_sync()
-        logger.info("應用程式關閉，排程任務已停止")
+        
+        # 停止 Metrics Consumer
+        try:
+            metrics_consumer.stop()
+        except Exception as e:
+            logger.error(f"Error stopping MetricsConsumer: {e}")
+            
+        logger.info("應用程式關閉，排程任務與服務已停止")
     except Exception as e:
         # 記錄關閉錯誤
         logger.error(f"關閉時發生錯誤: {str(e)}")
