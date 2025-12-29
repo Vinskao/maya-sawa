@@ -103,10 +103,7 @@ pipeline {
                             string(credentialsId: 'REDIS_QUEUE_MAYA', variable: 'REDIS_QUEUE_MAYA'),
                             string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                             string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
-                            string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI'),
-                            string(credentialsId: 'MONGODB_USERNAME', variable: 'MONGODB_USERNAME'),
-                            string(credentialsId: 'MONGODB_PASSWORD', variable: 'MONGODB_PASSWORD'),
-                            string(credentialsId: 'MONGODB_AUTH_SOURCE', variable: 'MONGODB_AUTH_SOURCE')
+                            string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI')
                         ]) {
                             sh '''
                                 # 創建配置目錄
@@ -144,13 +141,10 @@ pipeline {
                                 PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
                                 PUBLIC_TYMB_URL=${PUBLIC_TYMB_URL}
                                 
-                                # Voyeur Configuration
+                                # Voyeur Configuration (MONGODB_URI includes auth credentials)
                                 MONGODB_URI=${MONGODB_URI}
                                 MONGODB_DB=voyeur
                                 MONGODB_COLLECTION=metrics
-                                MONGODB_USERNAME=${MONGODB_USERNAME}
-                                MONGODB_PASSWORD=${MONGODB_PASSWORD}
-                                MONGODB_AUTH_SOURCE=${MONGODB_AUTH_SOURCE}
                                 REDIS_QUEUE_VOYEUR=voyeur_queue
                                 WEBSOCKET_HOST=peoplesystem.tatdvsonorth.com
                                 WEBSOCKET_PORT=443
@@ -245,10 +239,7 @@ pipeline {
                         string(credentialsId: 'REDIS_QUEUE_MAYA', variable: 'REDIS_QUEUE_MAYA'),
                         string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                         string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
-                        string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI'),
-                        string(credentialsId: 'MONGODB_USERNAME', variable: 'MONGODB_USERNAME'),
-                        string(credentialsId: 'MONGODB_PASSWORD', variable: 'MONGODB_PASSWORD'),
-                        string(credentialsId: 'MONGODB_AUTH_SOURCE', variable: 'MONGODB_AUTH_SOURCE')
+                        string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI')
                     ]) {
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                             script {

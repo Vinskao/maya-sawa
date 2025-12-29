@@ -64,19 +64,13 @@ spec:
           value: "${REDIS_PASSWORD}"
         - name: REDIS_QUEUE_MAYA
           value: "${REDIS_QUEUE_MAYA}"
-        # === Voyeur Configuration ===
+        # === Voyeur Configuration (MONGODB_URI includes auth credentials) ===
         - name: MONGODB_URI
           value: "${MONGODB_URI}"
         - name: MONGODB_DB
           value: "voyeur"
         - name: MONGODB_COLLECTION
           value: "metrics"
-        - name: MONGODB_USERNAME
-          value: "${MONGODB_USERNAME}"
-        - name: MONGODB_PASSWORD
-          value: "${MONGODB_PASSWORD}"
-        - name: MONGODB_AUTH_SOURCE
-          value: "${MONGODB_AUTH_SOURCE}"
         - name: REDIS_QUEUE_VOYEUR
           value: "voyeur_queue"
         - name: WEBSOCKET_HOST
