@@ -12,8 +12,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/proxy", tags=["proxy"])
 
-# HTTP client with timeout configuration
-http_client = httpx.AsyncClient(timeout=30.0)
+# HTTP client with extended timeout configuration for slow APIs
+# Some external APIs (like Heroku) can be slow to respond
+http_client = httpx.AsyncClient(
+    timeout=httpx.Timeout(60.0, connect=10.0),  # 60s total, 10s connect
+    follow_redirects=True
+)
 
 
 @router.get("/leetcode-stats/{username}")
@@ -47,8 +51,19 @@ async def get_leetcode_stats(
         logger.info(f"Proxying LeetCode stats request for user: {username}")
         logger.debug(f"Requesting URL: {full_url}")
         
-        # Make the request to the external API
-        response = await http_client.get(full_url)
+        # Make the request to the external API with retry logic
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                logger.debug(f"Attempt {attempt + 1}/{max_retries + 1} to fetch LeetCode stats")
+                response = await http_client.get(full_url)
+                break  # Success, exit retry loop
+            except httpx.TimeoutException:
+                if attempt < max_retries:
+                    logger.warning(f"Timeout on attempt {attempt + 1}, retrying...")
+                    continue
+                else:
+                    raise  # Re-raise on final attempt
         
         # Check if the request was successful
         if response.status_code == 404:
