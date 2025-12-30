@@ -73,8 +73,10 @@ spec:
           value: "metrics"
         - name: REDIS_QUEUE_VOYEUR
           value: "voyeur_queue"
+        - name: WEBSOCKET_TYMB
+          value: ""  # 禁用 Metrics Consumer
         - name: WEBSOCKET_HOST
-          value: "peoplesystem.tatdvsonorth.com"
+          value: ""  # 禁用 Metrics Consumer
         - name: WEBSOCKET_PORT
           value: "443"
         - name: WEBSOCKET_PATH
