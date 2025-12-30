@@ -46,6 +46,7 @@ from .api.conversations import router as conversations_router, legacy_router as 
 from .api.ask import router as ask_router
 from .api.people import router as people_router
 from .api.voyeur import router as voyeur_router
+from .api.proxy import router as proxy_router
 from .services.metrics_consumer import MetricsConsumer
 from .core.services.scheduler import ArticleSyncScheduler
 from .people import sync_data
@@ -130,6 +131,9 @@ app.include_router(people_router)
 
 # 註冊 Voyeur API 路由 (新增 - 移植自 Voyeur 專案)
 app.include_router(voyeur_router)
+
+# 註冊 Proxy API 路由 (新增 - 用於代理外部 API 請求，解決 CORS 問題)
+app.include_router(proxy_router)
 
 # ==================== 排程器初始化 ====================
 # 創建文章同步排程器實例
