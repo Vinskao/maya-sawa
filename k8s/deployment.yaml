@@ -161,3 +161,24 @@ spec:
             name: maya-sawa
             port:
               number: 80
+      - path: /maya-v2/
+        pathType: Prefix
+        backend:
+          service:
+            name: maya-sawa
+            port:
+              number: 80
+      - path: /voyeur/
+        pathType: Prefix
+        backend:
+          service:
+            name: maya-sawa
+            port:
+              number: 80
+      - path: /paprika/
+        pathType: Prefix
+        backend:
+          service:
+            name: maya-sawa
+            port:
+              number: 80
