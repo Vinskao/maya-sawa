@@ -25,7 +25,10 @@ import asyncio
 import pathlib
 
 # 第三方庫導入
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError as e:
+    raise ImportError(f"python-dotenv is required but not installed. Please install with: poetry install") from e
 
 # ==================== 日誌配置 ====================
 # 設置日誌級別為 DEBUG，用於開發環境的詳細調試信息
