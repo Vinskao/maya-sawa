@@ -18,6 +18,18 @@ spec:
     spec:
       imagePullSecrets:
       - name: dockerhub-credentials
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - jenkins
+              topologyKey: "kubernetes.io/hostname"
       containers:
       - name: maya-sawa
         image: papakao/maya-sawa:latest

@@ -14,6 +14,13 @@ pipeline {
                     image: python:3.12
                     command: ["cat"]
                     tty: true
+                    resources:
+                      requests:
+                        cpu: "25m"
+                        memory: "512Mi"
+                      limits:
+                        cpu: "100m"
+                        memory: "1024Mi"
                     volumeMounts:
                     - mountPath: /home/jenkins/agent
                       name: workspace-volume
@@ -29,6 +36,13 @@ pipeline {
                     privileged: true
                     securityContext:
                       privileged: true
+                    resources:
+                      requests:
+                        cpu: "10m"
+                        memory: "256Mi"
+                      limits:
+                        cpu: "50m"
+                        memory: "512Mi"
                     env:
                     - name: DOCKER_HOST
                       value: tcp://localhost:2375
@@ -50,9 +64,25 @@ pipeline {
                     alwaysPull: true
                     securityContext:
                       runAsUser: 0
+                    resources:
+                      requests:
+                        cpu: "10m"
+                        memory: "128Mi"
+                      limits:
+                        cpu: "50m"
+                        memory: "256Mi"
                     volumeMounts:
                     - mountPath: /home/jenkins/agent
                       name: workspace-volume
+                  - name: jnlp
+                    image: jenkins/inbound-agent:3309.v27b_9314fd1a_4-1
+                    resources:
+                      requests:
+                        cpu: "50m"
+                        memory: "256Mi"
+                      limits:
+                        cpu: "100m"
+                        memory: "512Mi"
                   volumes:
                   - name: workspace-volume
                     emptyDir: {}
