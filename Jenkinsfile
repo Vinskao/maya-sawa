@@ -44,7 +44,7 @@ pipeline {
                     - mountPath: /var/lib/docker
                       name: docker-graph-storage
                   - name: kubectl
-                    image: bitnami/kubectl:1.30.7
+                    image: bitnami/kubectl:latest
                     command: ["/bin/sh"]
                     args: ["-c", "while true; do sleep 30; done"]
                     alwaysPull: true
