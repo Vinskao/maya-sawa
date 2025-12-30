@@ -67,16 +67,49 @@ async def get_leetcode_stats(
         
         # Check if the request was successful
         if response.status_code == 404:
+            logger.warning(f"LeetCode user '{username}' not found")
             raise HTTPException(
                 status_code=404,
-                detail=f"LeetCode user '{username}' not found"
+                detail={
+                    "error": "User not found",
+                    "message": f"LeetCode user '{username}' does not exist",
+                    "username": username
+                }
+            )
+        
+        if response.status_code == 503:
+            logger.error(f"LeetCode API is temporarily unavailable (503)")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "Service unavailable",
+                    "message": "LeetCode Stats API is temporarily unavailable. This is a common issue with Heroku free tier apps. Please try again in a few moments.",
+                    "external_status": 503,
+                    "suggestion": "The external API might be sleeping (Heroku free tier). Try refreshing in 10-30 seconds."
+                }
+            )
+        
+        if response.status_code >= 500:
+            logger.error(f"LeetCode API returned server error: {response.status_code}")
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "error": "External API error",
+                    "message": f"The external LeetCode Stats API returned a server error (status {response.status_code})",
+                    "external_status": response.status_code,
+                    "suggestion": "This is a temporary issue with the external service. Please try again later."
+                }
             )
         
         if response.status_code != 200:
-            logger.error(f"LeetCode API returned status {response.status_code}")
+            logger.error(f"LeetCode API returned unexpected status {response.status_code}")
             raise HTTPException(
-                status_code=response.status_code,
-                detail=f"External API error: {response.status_code}"
+                status_code=502,
+                detail={
+                    "error": "External API error",
+                    "message": f"Unexpected response from LeetCode API (status {response.status_code})",
+                    "external_status": response.status_code
+                }
             )
         
         # Return the JSON response
