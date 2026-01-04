@@ -25,12 +25,20 @@ COPY pyproject.toml poetry.lock ./
 # 安裝 Poetry
 RUN pip install --no-cache-dir poetry
 
-# 使用 Poetry 安裝 Python 依賴項
+# 使用 Poetry 安裝 Python 依賴項並清理緩存
 RUN poetry config virtualenvs.create false \
-    && poetry install --no-root --only main
+    && poetry install --no-root --only main \
+    && pip cache purge \
+    && rm -rf /root/.cache/pypoetry \
+    && find /usr/local/lib/python3.12 -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 
 # 複製其餘的專案文件
 COPY . .
+
+# 清理不必要的文件
+RUN find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
+    && find . -type f -name '*.pyc' -delete \
+    && find . -type f -name '*.pyo' -delete
 
 # 設定環境變數
 ENV OPENAI_API_KEY=${OPENAI_API_KEY}
