@@ -220,15 +220,23 @@ pipeline {
                                     exit 1
                                 fi
                                 
-                                # 構建並推送 Maya Sawa 鏡像
+                                # 構建 Maya Sawa 鏡像
                                 docker build \
                                     --build-arg BUILDKIT_INLINE_CACHE=1 \
                                     --cache-from ${DOCKER_IMAGE}:latest \
                                     -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
                                     -t ${DOCKER_IMAGE}:latest \
                                     .
-                                docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
-                                docker push ${DOCKER_IMAGE}:latest
+                            '''
+                            
+                            // 推送鏡像 (加入重試機制)
+                            retry(3) {
+                                sleep(10)
+                                sh '''
+                                    docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                                    docker push ${DOCKER_IMAGE}:latest
+                                '''
+                            }
                             '''
                         }
                     }

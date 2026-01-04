@@ -1,10 +1,30 @@
-# 使用官方 Python 映像作為基礎映像
-FROM python:3.12-slim
+# Build stage
+FROM python:3.12-slim AS builder
 
-# 設定工作目錄
 WORKDIR /app
 
-# 定義 build arguments
+# Install build dependencies
+RUN pip install --no-cache-dir poetry
+
+# Copy dependency definitions
+COPY pyproject.toml poetry.lock ./
+
+# Install dependencies to system site-packages (since we are in a container)
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-root --only main \
+    && pip cache purge \
+    && rm -rf /root/.cache/pypoetry
+
+# Final stage
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Copy installed dependencies from builder
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Build arguments for env vars
 ARG OPENAI_API_KEY
 ARG OPENAI_ORGANIZATION
 ARG DB_HOST
@@ -19,28 +39,7 @@ ARG REDIS_PASSWORD
 ARG REDIS_QUEUE_MAYA
 ARG PUBLIC_API_BASE_URL
 
-# 複製 pyproject.toml 和 poetry.lock
-COPY pyproject.toml poetry.lock ./
-
-# 安裝 Poetry
-RUN pip install --no-cache-dir poetry
-
-# 使用 Poetry 安裝 Python 依賴項並清理緩存
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-root --only main \
-    && pip cache purge \
-    && rm -rf /root/.cache/pypoetry \
-    && find /usr/local/lib/python3.12 -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
-
-# 複製其餘的專案文件
-COPY . .
-
-# 清理不必要的文件
-RUN find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
-    && find . -type f -name '*.pyc' -delete \
-    && find . -type f -name '*.pyo' -delete
-
-# 設定環境變數
+# Set environment variables
 ENV OPENAI_API_KEY=${OPENAI_API_KEY}
 ENV OPENAI_ORGANIZATION=${OPENAI_ORGANIZATION}
 ENV OPENAI_API_BASE=https://api.openai.com/v1
@@ -56,9 +55,17 @@ ENV REDIS_PASSWORD=${REDIS_PASSWORD}
 ENV REDIS_QUEUE_MAYA=${REDIS_QUEUE_MAYA}
 ENV PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
 
-# 暴露 FastAPI 預設的埠
+# Copy project files
+COPY . .
+
+# Clean up
+RUN find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
+    && find . -type f -name '*.pyc' -delete \
+    && find . -type f -name '*.pyo' -delete
+
+# Expose port
 EXPOSE 8000
 
-# 啟動命令
-CMD ["sh", "-c", "PYTHONPATH=. poetry run uvicorn maya_sawa.main:app --host 0.0.0.0 --port 8000"]
+# Start command
+CMD ["sh", "-c", "uvicorn maya_sawa.main:app --host 0.0.0.0 --port 8000"]
 

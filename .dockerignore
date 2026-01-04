@@ -48,7 +48,6 @@ README.md
 docs/
 
 # Poetry (already installed)
-poetry.lock
 
 # Logs
 *.log
