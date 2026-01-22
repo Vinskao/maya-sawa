@@ -116,14 +116,19 @@ spec:
           value: "true"
         - name: ENABLE_PERIODIC_SYNC
           value: "true"
+        volumes:
+        - name: temp-storage
+          emptyDir: {}
         resources:
-          requests:
-            memory: "128Mi"
-            cpu: "10m"
-          limits:
-            memory: "256Mi"
-            cpu: "100m"
-
+            requests:
+              memory: "1Gi"
+              cpu: "1000m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+            volumeMounts:
+            - name: temp-storage
+              mountPath: /app/temp
 ---
 apiVersion: v1
 kind: Service
