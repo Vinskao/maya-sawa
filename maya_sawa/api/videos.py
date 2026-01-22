@@ -1,3 +1,4 @@
+import os
 import asyncio
 import shutil
 import uuid
@@ -12,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-TEMP_DIR = Path("/app/temp")
+# Use environment variable if set, otherwise fallback to local temp directory
+TEMP_DIR = Path(os.getenv("TEMP_DIR", "./temp_videos"))
 
 # Limit concurrent FFmpeg processes to 2 to avoid OOM
 FFMPEG_SEMAPHORE = asyncio.Semaphore(2)
@@ -85,7 +87,7 @@ async def merge_videos(
             "-i", str(saved_paths[1]),
             "-i", str(saved_paths[2]),
             "-i", str(saved_paths[3]),
-            "-filter_complex", "xstack=inputs=4:layout=0_0|w0_0|w0+w1_0|w0+w1+w2_0",
+            "-filter_complex", "hstack=inputs=4",
             "-y", # Overwrite output if exists
             str(output_path)
         ]
@@ -93,16 +95,28 @@ async def merge_videos(
         logger.info(f"Starting video merge for job {request_id}")
         
         # run ffmpeg with semaphore
-        async with FFMPEG_SEMAPHORE:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+        # Helper function to run ffmpeg synchronously
+        def run_ffmpeg_sync(command):
+            import subprocess
+            return subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False  # We'll check returncode manually
             )
-            stdout, stderr = await process.communicate()
 
-        if process.returncode != 0:
-            error_msg = stderr.decode()
+        # run ffmpeg in thread pool to avoid blocking async loop
+        async with FFMPEG_SEMAPHORE:
+            loop = asyncio.get_running_loop()
+            # Use default executor (ThreadPoolExecutor)
+            completed_process = await loop.run_in_executor(None, run_ffmpeg_sync, cmd)
+            
+            stdout = completed_process.stdout
+            stderr = completed_process.stderr
+            returncode = completed_process.returncode
+            
+        if returncode != 0:
+            error_msg = stderr.decode('utf-8', errors='replace')
             logger.error(f"FFmpeg failed for job {request_id}: {error_msg}")
             raise HTTPException(status_code=500, detail=f"Video processing failed: {error_msg}")
 
