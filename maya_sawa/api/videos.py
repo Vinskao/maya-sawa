@@ -86,16 +86,25 @@ async def merge_videos(
         processed_inputs = []
         
         for i in range(4):
-            filter_complex += f"[{i}:v]format=rgba[v{i}];"
+            # Create boomerang effect: play forward, then reverse
+            # 1. Split input into forward key and reverse source
+            filter_complex += f"[{i}:v]split[fwd{i}][revpre{i}];"
+            # 2. Reverse the second copy
+            filter_complex += f"[revpre{i}]reverse[rev{i}];"
+            # 3. Concatenate forward and reverse
+            filter_complex += f"[fwd{i}][rev{i}]concat=n=2:v=1:a=0[loop{i}];"
+            
+            # Scale the looped video to fit 480x1080 (maintaining aspect ratio) and pad to 480x1080
+            filter_complex += f"[loop{i}]scale=480:1080:force_original_aspect_ratio=decrease,pad=480:1080:(ow-iw)/2:(oh-ih)/2,format=rgba[v{i}];"
             processed_inputs.append(f"[v{i}]")
         
         hstack_inputs = "".join(processed_inputs)
-        # Main output: 1920x1080 padded
-        filter_complex += f"{hstack_inputs}hstack=inputs=4,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black[outv];"
+        # Main output: already 1920x1080 after hstack of 4x 480x1080
+        filter_complex += f"{hstack_inputs}hstack=inputs=4[outv];"
         
-        # Split for GIF: scale down to 480px width for size, generate palette for quality
+        # Split for GIF: scale down to 960px width for better quality, generate palette for quality
         filter_complex += "[outv]split[mv][gv];"
-        filter_complex += "[gv]scale=480:-1,split[g1][g2];"
+        filter_complex += "[gv]scale=960:-1:flags=lanczos,split[g1][g2];"
         filter_complex += "[g1]palettegen[pal];"
         filter_complex += "[g2][pal]paletteuse[gifv]"
 
@@ -124,8 +133,8 @@ async def merge_videos(
             
             completed_process = await loop.run_in_executor(None, run_ffmpeg)
             
-        if returncode != 0:
-            error_msg = stderr.decode('utf-8', errors='replace')
+        if completed_process.returncode != 0:
+            error_msg = completed_process.stderr.decode('utf-8', errors='replace')
             logger.error(f"FFmpeg failed for job {request_id}: {error_msg}")
             raise HTTPException(status_code=500, detail=f"Video processing failed: {error_msg}")
 
