@@ -237,7 +237,6 @@ pipeline {
                                     docker push ${DOCKER_IMAGE}:latest
                                 '''
                             }
-                            '''
                         }
                     }
                 }
