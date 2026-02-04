@@ -116,19 +116,38 @@ spec:
           value: "true"
         - name: ENABLE_PERIODIC_SYNC
           value: "true"
-        volumes:
-        - name: temp-storage
-          emptyDir: {}
         resources:
-            requests:
-              memory: "1Gi"
-              cpu: "1000m"
-            limits:
-              memory: "2Gi"
-              cpu: "2000m"
-            volumeMounts:
-            - name: temp-storage
-              mountPath: /app/temp
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: temp-storage
+          mountPath: /app/temp
+        startupProbe:
+          httpGet:
+            path: /paprika/articles  # 使用一個輕量級的 GET 端點
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /paprika/articles
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /paprika/articles
+            port: 8000
+          initialDelaySeconds: 45
+          periodSeconds: 10
+      volumes:
+      - name: temp-storage
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
