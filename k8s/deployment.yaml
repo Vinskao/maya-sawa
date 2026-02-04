@@ -118,10 +118,10 @@ spec:
           value: "true"
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
+            memory: "512Mi"
+            cpu: "100m"
           limits:
-            memory: "2Gi"
+            memory: "1536Mi"
             cpu: "1000m"
         volumeMounts:
         - name: temp-storage
