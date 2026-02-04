@@ -15,7 +15,6 @@ COPY pyproject.toml poetry.lock ./
 # Configure Poetry for better network reliability
 RUN poetry config virtualenvs.create false \
     && poetry config installer.max-workers 10 \
-    && poetry config experimental.new-installer false \
     && poetry install --no-root --only main --verbose \
     && pip cache purge \
     && rm -rf /root/.cache/pypoetry
