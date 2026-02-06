@@ -89,7 +89,7 @@ class ConnectionPoolManager:
                 # 創建線程連接池
                 self.postgres_pool = pool.ThreadedConnectionPool(
                     minconn=1,      # 最小連接數
-                    maxconn=5,      # 最大連接數 (每個數據庫最多 5 個連接)
+                    maxconn=2,      # 最大連接數 (減少以節省 Aiven 連線數)
                     dsn=connection_string  # 連接字符串
                 )
                 logger.info("Main PostgreSQL connection pool initialized")
@@ -144,7 +144,7 @@ class ConnectionPoolManager:
                 host=redis_host,
                 port=redis_port,
                 password=redis_password,
-                max_connections=5,   # 最大連接數 (減少以避免連接限制)
+                max_connections=2,   # 最大連接數 (進一步減少以節省資源)
                 decode_responses=True  # 自動解碼為字符串
             )
             
@@ -252,7 +252,7 @@ class ConnectionPoolManager:
         status = {
             "main_postgres": {
                 "pool_initialized": self.postgres_pool is not None,
-                "max_connections": 5,
+                "max_connections": 2,
                 "min_connections": 1,
                 "purpose": "articles table"
             },
@@ -264,7 +264,7 @@ class ConnectionPoolManager:
             },
             "redis": {
                 "pool_initialized": self.redis_pool is not None,
-                "max_connections": 5
+                "max_connections": 2
             }
         }
         
