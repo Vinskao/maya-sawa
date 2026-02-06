@@ -94,9 +94,9 @@ spec:
         - name: WEBSOCKET_PATH
           value: "/tymb/metrics"
         - name: PUBLIC_API_BASE_URL
-          value: "${PUBLIC_API_BASE_URL}"
+          value: "http://ty-multiverse-gateway-service:8082"
         - name: PUBLIC_TYMB_URL
-          value: "${PUBLIC_TYMB_URL}"
+          value: "http://ty-multiverse-backend/tymb"
         # Vector search tuning
         - name: MATCH_COUNT
           value: "5"
