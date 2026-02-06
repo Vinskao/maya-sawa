@@ -27,7 +27,8 @@ class ConfigManager:
         """
         初始化配置管理器
         """
-        self.core_dir = os.path.dirname(__file__)
+        self.config_dir = os.path.dirname(__file__)
+        self.data_dir = os.path.join(os.path.dirname(self.config_dir), 'data')
         self._rules = None
         self._keywords = None
         self._prompts = None
@@ -43,14 +44,14 @@ class ConfigManager:
         Returns:
             Dict[str, Any]: 配置數據
         """
-        file_path = os.path.join(self.core_dir, filename)
+        file_path = os.path.join(self.data_dir, filename)
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 logger.debug(f"成功載入配置文件: {filename}")
                 return data
         except Exception as e:
-            logger.error(f"載入配置文件 {filename} 失敗: {e}")
+            logger.error(f"載入配置文件 {filename} 失敗: {e} at {file_path}")
             return {}
     
     @property
