@@ -243,19 +243,33 @@ class ArticleSyncScheduler:
         """
         程式啟動時執行初始同步
         
-        在應用程式啟動時執行一次同步，確保系統有最新的文章數據
+        在應用程式啟動時執行一次同步，確保系統有最新的文章數據。
+        增加重試機制以處理啟動時 Ingress 尚未 Ready 導致的 503 錯誤。
         
         Returns:
             dict: 初始同步結果
             
         Raises:
-            Exception: 當初始同步失敗時拋出異常
+            Exception: 當初始同步重試多次仍失敗時拋出異常
         """
-        try:
-            logger.info("程式啟動，執行初始文章同步...")
-            result = await self.sync_articles_from_api()
-            logger.info(f"初始文章同步完成: {result.get('message', '同步完成')}")
-            return result
-        except Exception as e:
-            logger.error(f"初始文章同步失敗: {str(e)}")
-            raise 
+        max_retries = 3
+        retry_delay = 5  # 秒
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"程式啟動，執行初始文章同步 (第 {attempt + 1}/{max_retries} 次嘗試)...")
+                # 在第一次嘗試前也稍微等待，給 Ingress 一點時間
+                if attempt == 0:
+                    await asyncio.sleep(2)
+                    
+                result = await self.sync_articles_from_api()
+                logger.info(f"初始文章同步完成: {result.get('message', '同步完成')}")
+                return result
+            except Exception as e:
+                logger.warning(f"第 {attempt + 1} 次初始同步失敗: {str(e)}")
+                if attempt < max_retries - 1:
+                    logger.info(f"等待 {retry_delay} 秒後重試...")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error("初始文章同步最終失敗")
+                    raise e
