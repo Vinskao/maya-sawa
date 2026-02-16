@@ -4,7 +4,7 @@ import shutil
 import uuid
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
@@ -43,10 +43,10 @@ async def download_video(job_id: str, ext: str):
 
 @router.post("/merge-videos")
 async def merge_videos(
-    v1: UploadFile = File(...),
-    v2: UploadFile = File(...),
-    v3: UploadFile = File(...),
-    v4: UploadFile = File(...),
+    v1: Optional[UploadFile] = File(None),
+    v2: Optional[UploadFile] = File(None),
+    v3: Optional[UploadFile] = File(None),
+    v4: Optional[UploadFile] = File(None),
     background_tasks: BackgroundTasks = None,
     mode: str = Form("windows"), # Default to windows
     bg_removal_0: str = Form("none"),
@@ -56,6 +56,7 @@ async def merge_videos(
 ):
     """
     Merge 4 videos into a 1x4 horizontal layout and generate MP4 + GIF.
+    Supports variable number of inputs (1-4). Missing slots are filled with black.
     """
     # Ensure temp dir exists
     try:
@@ -67,53 +68,75 @@ async def merge_videos(
     job_dir = TEMP_DIR / request_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    input_files = [v1, v2, v3, v4]
-    saved_paths = []
+    # Map slot index (0-3) to uploaded file (or None)
+    slot_files = [v1, v2, v3, v4]
+    
+    # Check if at least one file is provided
+    if not any(slot_files):
+        raise HTTPException(status_code=400, detail="At least one video file is required")
 
+    input_paths = []
+    # Map slot index to logical ffmpeg input index (e.g., slot 0 -> input 0, slot 2 -> input 1 if slot 1 is empty)
+    slot_to_input_idx = {}
+    
+    current_input_idx = 0
+    
     try:
         # Save uploaded files
-        for i, upload_file in enumerate(input_files):
-            file_path = job_dir / f"input_{i}.mp4"
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(upload_file.file, buffer)
-            saved_paths.append(file_path)
+        valid_inputs = [] # items: (slot_index, file_path)
+        
+        for i, upload_file in enumerate(slot_files):
+            if upload_file:
+                file_path = job_dir / f"input_{i}.mp4"
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(upload_file.file, buffer)
+                valid_inputs.append((i, file_path))
 
         output_mp4 = job_dir / "merged.mp4"
         output_gif = job_dir / "merged.gif"
 
         # Construct filter complex
         filter_complex = ""
-        processed_inputs = []
+        processed_labels = []
         
-        for i in range(4):
+        for idx, (slot_idx, path) in enumerate(valid_inputs):
             # Create boomerang effect: play forward, then reverse
-            # 1. Split input into forward key and reverse source
-            filter_complex += f"[{i}:v]split[fwd{i}][revpre{i}];"
-            # 2. Reverse the second copy
-            filter_complex += f"[revpre{i}]reverse[rev{i}];"
-            # 3. Concatenate forward and reverse
-            filter_complex += f"[fwd{i}][rev{i}]concat=n=2:v=1:a=0[loop{i}];"
+            # Input mapping: idx corresponds to the order in cmd inputs
             
-            # Scale the looped video to fit 480x1080 (maintaining aspect ratio) and pad to 480x1080
-            filter_complex += f"[loop{i}]scale=480:1080:force_original_aspect_ratio=decrease,pad=480:1080:(ow-iw)/2:(oh-ih)/2,format=rgba[v{i}];"
-            processed_inputs.append(f"[v{i}]")
+            # 1. Split input into forward key and reverse source
+            filter_complex += f"[{idx}:v]split[fwd{idx}][revpre{idx}];"
+            # 2. Reverse the second copy
+            filter_complex += f"[revpre{idx}]reverse[rev{idx}];"
+            # 3. Concatenate forward and reverse
+            filter_complex += f"[fwd{idx}][rev{idx}]concat=n=2:v=1:a=0[loop{idx}];"
+            
+            # Scale to height 1080, width dynamic (divisible by 2)
+            # Remove padding to allow dynamic width
+            filter_complex += f"[loop{idx}]scale=-2:1080,format=rgba[v{idx}];"
+            processed_labels.append(f"[v{idx}]")
         
-        hstack_inputs = "".join(processed_inputs)
-        # Main output: already 1920x1080 after hstack of 4x 480x1080
-        filter_complex += f"{hstack_inputs}hstack=inputs=4[outv];"
+        if not processed_labels:
+             raise HTTPException(status_code=400, detail="No video inputs processed")
+
+        if len(valid_inputs) > 1:
+            hstack_inputs = "".join(processed_labels)
+            # Main output: hstack all valid inputs. 
+            filter_complex += f"{hstack_inputs}hstack=inputs={len(valid_inputs)}:shortest=1[outv];"
+        else:
+            # Single input case: just pass it through
+            filter_complex += f"{processed_labels[0]}null[outv];"
         
-        # Split for GIF: scale down to 960px width for better quality, generate palette for quality
+        # Split for GIF: scale height to 480px (maintaining ratio), generate palette
         filter_complex += "[outv]split[mv][gv];"
-        filter_complex += "[gv]scale=960:-1:flags=lanczos,split[g1][g2];"
+        filter_complex += "[gv]scale=-2:480:flags=lanczos,split[g1][g2];"
         filter_complex += "[g1]palettegen[pal];"
         filter_complex += "[g2][pal]paletteuse[gifv]"
 
-        cmd = [
-            "ffmpeg",
-            "-i", str(saved_paths[0]),
-            "-i", str(saved_paths[1]),
-            "-i", str(saved_paths[2]),
-            "-i", str(saved_paths[3]),
+        cmd = ["ffmpeg"]
+        for _, p in valid_inputs:
+            cmd.extend(["-i", str(p)])
+            
+        cmd.extend([
             "-filter_complex", filter_complex,
             "-map", "[mv]",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -121,9 +144,9 @@ async def merge_videos(
             "-map", "[gifv]",
             str(output_gif),
             "-y"
-        ]
+        ])
 
-        logger.info(f"Starting dual video merge for job {request_id}")
+        logger.info(f"Starting video merge for job {request_id} with {len(valid_inputs)} inputs")
         
         async with FFMPEG_SEMAPHORE:
             loop = asyncio.get_running_loop()
