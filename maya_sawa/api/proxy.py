@@ -127,6 +127,9 @@ async def get_leetcode_stats(
             status_code=502,
             detail=f"Failed to connect to LeetCode API: {str(e)}"
         )
+    except HTTPException:
+        # Re-raise HTTPExceptions so they are handled as intended by FastAPI
+        raise
     except Exception as e:
         logger.error(f"Unexpected error in leetcode-stats proxy: {e}")
         raise HTTPException(

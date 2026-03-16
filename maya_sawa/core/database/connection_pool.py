@@ -98,7 +98,8 @@ class ConnectionPoolManager:
                 
         except Exception as e:
             logger.error(f"Failed to initialize main PostgreSQL pool: {str(e)}")
-            raise
+            # Don't raise, allow other pools (like Redis) to initialize
+            self.postgres_pool = None
     
     def _init_people_postgres_pool(self):
         """
@@ -124,7 +125,8 @@ class ConnectionPoolManager:
                 
         except Exception as e:
             logger.error(f"Failed to initialize people PostgreSQL pool: {str(e)}")
-            raise
+            # Don't raise, allow other pools to initialize
+            self.people_postgres_pool = None
     
     def _init_redis_pool(self):
         """

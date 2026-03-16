@@ -32,6 +32,8 @@ async def get_visit_count():
         if count is None:
             count = 0
         return {'count': int(count)}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting visit count: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -50,6 +52,8 @@ async def increment_visit_count():
         count = r.incr('visit_count')
         logger.info(f"Incremented visit count to: {count}")
         return {'count': int(count)}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error incrementing visit count: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

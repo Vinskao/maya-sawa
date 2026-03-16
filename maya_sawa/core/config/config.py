@@ -126,7 +126,7 @@ class Config:
     # Maya-v2 Database Configuration (for conversations from Django app)
     MAYA_V2_DB_HOST = os.getenv("MAYA_V2_DB_HOST") or os.getenv("DB_HOST")
     MAYA_V2_DB_PORT = os.getenv("MAYA_V2_DB_PORT", "5432")
-    MAYA_V2_DB_DATABASE = os.getenv("MAYA_V2_DB_DATABASE")
+    MAYA_V2_DB_DATABASE = os.getenv("MAYA_V2_DB_DATABASE") or os.getenv("DB_DATABASE")
     MAYA_V2_DB_USERNAME = os.getenv("MAYA_V2_DB_USERNAME") or os.getenv("DB_USERNAME")
     MAYA_V2_DB_PASSWORD = os.getenv("MAYA_V2_DB_PASSWORD") or os.getenv("DB_PASSWORD")
     MAYA_V2_DB_SSLMODE = os.getenv("MAYA_V2_DB_SSLMODE", "require")
