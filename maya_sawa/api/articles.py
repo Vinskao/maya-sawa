@@ -381,6 +381,10 @@ async def create_articles_batch(request: List[ArticleCreate]):
     unique_file_paths = seen_in_request - duplicate_in_request
     existing_articles = db.get_articles_by_file_paths(unique_file_paths) if unique_file_paths else {}
     existing_paths = set(existing_articles.keys())
+    
+    logger.debug(f"Batch Sync Debug: seen={len(seen_in_request)}, unique={len(unique_file_paths)}, existing={len(existing_paths)}")
+    if existing_paths:
+        logger.debug(f"Existing paths found: {list(existing_paths)[:5]}...")
 
     # Second pass: process each item
     to_create = []
