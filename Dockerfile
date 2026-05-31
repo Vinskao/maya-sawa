@@ -3,10 +3,9 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Install build dependencies with mirror for better network reliability
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
-    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
-    pip install --no-cache-dir poetry
+# Install Poetry from the default PyPI index (the Tsinghua mirror is not
+# reachable from the CI build network and timed out).
+RUN pip install --no-cache-dir poetry
 
 # Copy dependency definitions
 COPY pyproject.toml poetry.lock ./
