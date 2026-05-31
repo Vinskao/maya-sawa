@@ -25,7 +25,7 @@ from typing import List, Dict, Any, Optional
 
 # 第三方庫導入
 try:
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, HTTPException, Request
     from pydantic import BaseModel
 except ImportError as e:
     raise ImportError(f"FastAPI and Pydantic are required but not installed. Please install with: poetry install") from e
@@ -41,6 +41,7 @@ from ..core.processing.langchain_shim import Document
 from ..databases.qa_vector_db import QAVectorDatabase
 from ..core.qa.qa_chain import QAChain
 from ..core.services.chat_history import ChatHistoryManager
+from ..core.services.qa_rate_limiter import enforce_qa_rate_limit
 from ..core.config.config import Config
 from ..people import PeopleWeaponManager
 from ..people import sync_data
@@ -490,7 +491,7 @@ async def get_article_stats():
         raise HTTPException(status_code=500, detail=f"獲取統計資訊失敗: {str(e)}")
 
 @router.post("/query")
-async def query_document(request: QueryRequest):
+async def query_document(request: QueryRequest, http_request: Request):
     """
     查詢文件內容
     
@@ -511,6 +512,8 @@ async def query_document(request: QueryRequest):
     Raises:
         HTTPException: 當查詢失敗時拋出 HTTP 異常
     """
+    enforce_qa_rate_limit(http_request)
+
     # ==================== 頁面分析請求專用 ====================
     from ..core.processing import PageAnalyzer
     if request.analysis_type and request.analysis_type.startswith("page_"):

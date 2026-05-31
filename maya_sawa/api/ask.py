@@ -17,7 +17,7 @@ import logging
 from typing import Optional, Dict, Any, List
 
 try:
-    from fastapi import APIRouter
+    from fastapi import APIRouter, Request
     from pydantic import BaseModel, Field
 except ImportError as e:
     raise ImportError(f"FastAPI and Pydantic are required but not installed. Please install with: poetry install") from e
@@ -25,6 +25,7 @@ except ImportError as e:
 from ..core.config.config import Config
 from ..databases.conversation_db import get_conversation_db, MessageType, TaskStatus
 from ..core.services.chat_history import ChatHistoryManager
+from ..core.services.qa_rate_limiter import enforce_qa_rate_limit
 from ..databases.qa_vector_db import QAVectorDatabase
 from ..services.ai_providers import AIProviderFactory
 from ..core.errors.errors import (
@@ -200,7 +201,7 @@ async def _search_knowledge_base(query: str, k: int = 3) -> tuple:
 # ==================== API Endpoints ====================
 
 @router.post("/ask-with-model/", response_model=AskWithModelResponse)
-async def ask_with_model(request: AskWithModelRequest):
+async def ask_with_model(request: AskWithModelRequest, http_request: Request):
     """
     Ask a question using a specified AI model
     
@@ -216,6 +217,8 @@ async def ask_with_model(request: AskWithModelRequest):
     Returns:
         The AI response or task ID for async processing
     """
+    enforce_qa_rate_limit(http_request)
+
     try:
         # Get AI model info
         model_info, provider_name, model_id = _get_ai_model_info(request.model_name)
