@@ -137,9 +137,9 @@ class ConnectionPoolManager:
         """
         try:
             # 從環境變數獲取 Redis 配置
-            redis_host = os.getenv("REDIS_HOST", "localhost")
+            redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
             redis_port = int(os.getenv("REDIS_CUSTOM_PORT", 6379))
-            redis_password = os.getenv("REDIS_PASSWORD")
+            redis_password = (os.getenv("REDIS_PASSWORD") or "").strip() or None
             
             # 創建 Redis 連接池
             self.redis_pool = redis.ConnectionPool(

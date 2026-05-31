@@ -13,7 +13,7 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
     # Load environment-specific .env file
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = Path(__file__).resolve().parents[3]
     env_type = os.getenv("ENV_TYPE", "development")  # Default to development
     
     # Try to load environment-specific file first
@@ -92,9 +92,9 @@ class Config:
     ENABLED_PROVIDERS = os.getenv("ENABLED_PROVIDERS", "openai").split(",")
     
     # Redis Configuration
-    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
     REDIS_PORT = int(os.getenv("REDIS_CUSTOM_PORT", 6379))
-    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+    REDIS_PASSWORD = (os.getenv("REDIS_PASSWORD") or "").strip() or None
     
     # Celery Configuration
     CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL") or os.getenv("RABBITMQ_URL") or f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_CUSTOM_PORT', 6379)}/0"

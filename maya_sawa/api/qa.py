@@ -512,7 +512,7 @@ async def query_document(request: QueryRequest):
         HTTPException: 當查詢失敗時拋出 HTTP 異常
     """
     # ==================== 頁面分析請求專用 ====================
-    from ..core.page_analyzer import PageAnalyzer
+    from ..core.processing import PageAnalyzer
     if request.analysis_type and request.analysis_type.startswith("page_"):
         logger.info(f"收到頁面分析請求: {request.analysis_type}")
         page_analyzer = PageAnalyzer()

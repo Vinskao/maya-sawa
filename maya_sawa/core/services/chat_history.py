@@ -52,9 +52,9 @@ class ChatHistoryManager:
         設置 Redis 連接配置並測試連接
         """
         # 從環境變數獲取 Redis 配置
-        self.redis_host = os.getenv("REDIS_HOST", "localhost")
+        self.redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
         self.redis_port = int(os.getenv("REDIS_CUSTOM_PORT", 6379))
-        self.redis_password = os.getenv("REDIS_PASSWORD")
+        self.redis_password = (os.getenv("REDIS_PASSWORD") or "").strip() or None
         self.redis_db = 0  # 使用默認數據庫
         
         # 初始化 Redis 連接
