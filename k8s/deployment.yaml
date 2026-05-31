@@ -55,6 +55,38 @@ spec:
           value: "${DB_PASSWORD}"
         - name: DB_SSLMODE
           value: "require"
+        # === Paprika / Git Commit Knowledge Database Configuration ===
+        - name: PAPRIKA_DB_TYPE
+          value: "postgresql"
+        - name: PAPRIKA_DB_HOST
+          value: "${DB_HOST}"
+        - name: PAPRIKA_DB_PORT
+          value: "${DB_PORT}"
+        - name: PAPRIKA_DB_DATABASE
+          value: "${DB_DATABASE}"
+        - name: PAPRIKA_DB_USERNAME
+          value: "${DB_USERNAME}"
+        - name: PAPRIKA_DB_PASSWORD
+          value: "${DB_PASSWORD}"
+        - name: PAPRIKA_DB_SSLMODE
+          value: "require"
+        # === Keycloak Resource Server Configuration ===
+        - name: KEYCLOAK_AUTH_SERVER_URL
+          value: "${KEYCLOAK_AUTH_SERVER_URL}"
+        - name: KEYCLOAK_REALM
+          value: "${PUBLIC_REALM}"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "peoplesystem"
+        - name: AI_RATE_LIMIT_MANAGER_PER_MINUTE
+          value: "10"
+        - name: AI_RATE_LIMIT_STANDARD_PER_MINUTE
+          value: "1"
+        - name: AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE
+          value: "1"
+        - name: AI_RATE_LIMIT_WINDOW_SECONDS
+          value: "60"
+        - name: GIT_COMMIT_REQUIRED_ROLE
+          value: "manage-users"
         # === People Database Configuration ===
         - name: PEOPLE_DB_HOST
           value: "${PEOPLE_DB_HOST}"

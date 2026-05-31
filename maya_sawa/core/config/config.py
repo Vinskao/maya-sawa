@@ -178,6 +178,26 @@ class Config:
     REDIS_QUEUE_VOYEUR = os.getenv("REDIS_QUEUE_VOYEUR", "voyeur_queue")
     
     # WebSocket settings for Voyeur
+
+    # Keycloak / Git commit ingestion configuration
+    KEYCLOAK_AUTH_SERVER_URL = os.getenv("KEYCLOAK_AUTH_SERVER_URL", "https://peoplesystem.tatdvsonorth.com")
+    KEYCLOAK_REALM = os.getenv("PUBLIC_REALM") or os.getenv("KEYCLOAK_REALM", "PeopleSystem")
+    KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID") or os.getenv("KEYCLOAK_RESOURCE") or os.getenv("KEYCLOAK_CLIENT", "peoplesystem")
+    AI_RATE_LIMIT_MANAGER_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_MANAGER_PER_MINUTE", "10"))
+    AI_RATE_LIMIT_STANDARD_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_STANDARD_PER_MINUTE", "1"))
+    AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE", "1"))
+    AI_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("AI_RATE_LIMIT_WINDOW_SECONDS", "60"))
+    GIT_COMMIT_REQUIRED_ROLE = os.getenv("GIT_COMMIT_REQUIRED_ROLE", "manage-users")
+    GIT_COMMIT_TRIVIAL_MIN_LINES = int(os.getenv("GIT_COMMIT_TRIVIAL_MIN_LINES", "5"))
+    GIT_COMMIT_TRIVIAL_KEYWORDS = [
+        item.strip().lower()
+        for item in os.getenv(
+            "GIT_COMMIT_TRIVIAL_KEYWORDS",
+            "typo,rename,format,lint,chore: rename,whitespace",
+        ).split(",")
+        if item.strip()
+    ]
+    GIT_COMMIT_SUMMARY_MAX_CHARS = int(os.getenv("GIT_COMMIT_SUMMARY_MAX_CHARS", "2000"))
     WEBSOCKET_TYMB = os.getenv("WEBSOCKET_TYMB", "ws://localhost:8080/tymb/")
     WEBSOCKET_HOST = os.getenv("WEBSOCKET_HOST")
     WEBSOCKET_PORT = os.getenv("WEBSOCKET_PORT")

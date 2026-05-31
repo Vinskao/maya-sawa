@@ -57,17 +57,19 @@ class ChatHistoryManager:
         self.redis_password = (os.getenv("REDIS_PASSWORD") or "").strip() or None
         self.redis_db = 0  # 使用默認數據庫
         
-        # 初始化 Redis 連接
         self.redis_client = redis.Redis(
             host=self.redis_host,
             port=self.redis_port,
             password=self.redis_password,
             db=self.redis_db,
-            decode_responses=True  # 自動解碼為字符串
+            decode_responses=True
         )
-        
-        # 測試連接
-        self._test_connection()
+
+        try:
+            self._test_connection()
+        except Exception:
+            logger.warning("Redis chat history is unavailable; chat history will degrade to empty results")
+            self.redis_client = None
 
     def _test_connection(self):
         """
@@ -116,6 +118,9 @@ class ChatHistoryManager:
             bool: 是否成功儲存
         """
         try:
+            if self.redis_client is None:
+                return False
+
             chat_key = self._get_chat_key(user_id)
             timestamp = datetime.utcnow().isoformat() + "Z"
             
@@ -155,6 +160,9 @@ class ChatHistoryManager:
             List[Dict]: 對話記錄列表
         """
         try:
+            if self.redis_client is None:
+                return []
+
             chat_key = self._get_chat_key(user_id)
             
             # 獲取所有記錄（從最早到最新）
@@ -190,6 +198,15 @@ class ChatHistoryManager:
             Dict: 統計資訊
         """
         try:
+            if self.redis_client is None:
+                return {
+                    "user_id": user_id,
+                    "total_conversations": 0,
+                    "ttl_seconds": None,
+                    "chat_key": None,
+                    "error": "Redis unavailable"
+                }
+
             chat_key = self._get_chat_key(user_id)
             
             # 獲取列表長度
@@ -226,6 +243,9 @@ class ChatHistoryManager:
             bool: 是否成功清除
         """
         try:
+            if self.redis_client is None:
+                return False
+
             chat_key = self._get_chat_key(user_id)
             self.redis_client.delete(chat_key)
             logger.info(f"Cleared conversation history for user {user_id}")
@@ -244,6 +264,9 @@ class ChatHistoryManager:
         """
         try:
             # 搜尋所有聊天記錄的 key
+            if self.redis_client is None:
+                return []
+
             pattern = "chat:user:*:ai:qa_system"
             keys = self.redis_client.keys(pattern)
             

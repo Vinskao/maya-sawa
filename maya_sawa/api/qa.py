@@ -42,6 +42,7 @@ from ..databases.qa_vector_db import QAVectorDatabase
 from ..core.qa.qa_chain import QAChain
 from ..core.services.chat_history import ChatHistoryManager
 from ..core.services.qa_rate_limiter import enforce_qa_rate_limit
+from ..core.services.ai_rate_limiter import enforce_ai_rate_limit
 from ..core.config.config import Config
 from ..people import PeopleWeaponManager
 from ..people import sync_data
@@ -265,7 +266,7 @@ class ConvertToVectorRequest(BaseModel):
 # ==================== API 端點定義 ====================
 
 @router.post("/sync-from-api")
-async def sync_articles_from_api(request: SyncFromAPIRequest):
+async def sync_articles_from_api(request: SyncFromAPIRequest, http_request: Request = None):
     """
     從遠端 API 同步文章並使用預計算的 embedding
     
@@ -281,6 +282,9 @@ async def sync_articles_from_api(request: SyncFromAPIRequest):
     Raises:
         HTTPException: 當同步失敗時拋出 HTTP 異常
     """
+    if http_request is not None:
+        enforce_ai_rate_limit(http_request, allow_anonymous=False)
+
     try:
         # 使用預設 URL 如果沒有提供
         remote_url = request.remote_url or f"{get_public_api_base_url()}/paprika/articles"
@@ -387,7 +391,7 @@ async def sync_articles_from_api(request: SyncFromAPIRequest):
         raise HTTPException(status_code=500, detail=f"同步失敗: {str(e)}")
 
 @router.post("/sync-articles")
-async def sync_articles_from_remote(request: SyncRequest):
+async def sync_articles_from_remote(request: SyncRequest, http_request: Request = None):
     """
     從遠端 API 同步文章並生成 embedding（保留原有方法以向後兼容）
     
@@ -403,6 +407,9 @@ async def sync_articles_from_remote(request: SyncRequest):
     Raises:
         HTTPException: 當同步失敗時拋出 HTTP 異常
     """
+    if http_request is not None:
+        enforce_ai_rate_limit(http_request, allow_anonymous=False)
+
     try:
         # 使用預設 URL 如果沒有提供
         remote_url = request.remote_url or f"{get_public_api_base_url()}/paprika/articles"
@@ -782,7 +789,10 @@ async def get_all_chat_users():
         raise HTTPException(status_code=500, detail=f"獲取用戶列表失敗: {str(e)}")
 
 @router.post("/sync-people-weapons")
-async def sync_people_weapons_data(request: PeopleWeaponsSyncRequest = PeopleWeaponsSyncRequest()):
+async def sync_people_weapons_data(
+    request: PeopleWeaponsSyncRequest = PeopleWeaponsSyncRequest(),
+    http_request: Request = None,
+):
     """
     同步人員和武器數據
     
@@ -802,6 +812,9 @@ async def sync_people_weapons_data(request: PeopleWeaponsSyncRequest = PeopleWea
         logger.info(f"開始同步人員和武器數據 (最大時間: {request.max_time_seconds}s)...")
         
         # 執行數據同步
+        if http_request is not None:
+            enforce_ai_rate_limit(http_request, allow_anonymous=False)
+
         result = sync_data(max_time_seconds=request.max_time_seconds)
         
         return {
@@ -877,7 +890,7 @@ async def stop_sync_tasks():
         raise HTTPException(status_code=500, detail=f"停止同步失敗: {str(e)}")
 
 @router.post("/search-people")
-async def search_people_by_semantics(request: PeopleSearchRequest):
+async def search_people_by_semantics(request: PeopleSearchRequest, http_request: Request):
     """
     基於語義搜索人員資料
     
@@ -893,6 +906,8 @@ async def search_people_by_semantics(request: PeopleSearchRequest):
     Raises:
         HTTPException: 當搜索失敗時拋出 HTTP 異常
     """
+    enforce_ai_rate_limit(http_request, allow_anonymous=True)
+
     try:
         # 初始化人員管理器
         manager = PeopleWeaponManager()
@@ -928,7 +943,7 @@ async def search_people_by_semantics(request: PeopleSearchRequest):
         raise HTTPException(status_code=500, detail=f"搜索失敗: {str(e)}")
 
 @router.post("/convert-to-vector")
-async def convert_content_to_vector(request: ConvertToVectorRequest):
+async def convert_content_to_vector(request: ConvertToVectorRequest, http_request: Request):
     """
     將文本內容轉換為向量嵌入 (通用的 content 轉向量 API)
 
@@ -993,6 +1008,8 @@ async def convert_content_to_vector(request: ConvertToVectorRequest):
     }
     ```
     """
+    enforce_ai_rate_limit(http_request, allow_anonymous=False)
+
     try:
         # 輸入驗證
         if not request.content or not request.content.strip():

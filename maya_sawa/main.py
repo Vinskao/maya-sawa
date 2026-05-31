@@ -51,6 +51,7 @@ from .api.people import router as people_router
 from .api.voyeur import router as voyeur_router
 from .api.proxy import router as proxy_router
 from .api.videos import router as videos_router
+from .api.git_commits import router as git_commits_router
 from .services.metrics_consumer import MetricsConsumer
 from .core.services.scheduler import ArticleSyncScheduler
 from .people import sync_data
@@ -141,6 +142,9 @@ app.include_router(proxy_router)
 
 # 註冊 Video Merging API 路由
 app.include_router(videos_router, prefix="/videos", tags=["Videos"])
+
+# Git commit knowledge ingestion API
+app.include_router(git_commits_router)
 
 # ==================== 排程器初始化 ====================
 # 創建文章同步排程器實例

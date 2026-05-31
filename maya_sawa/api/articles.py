@@ -22,7 +22,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..databases.article_db import get_article_db
@@ -34,6 +34,7 @@ from ..core.errors.errors import (
     raise_already_exists,
 )
 from ..services.embedding_service import get_embedding_service
+from ..core.services.ai_rate_limiter import enforce_ai_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -559,7 +560,7 @@ async def sync_articles(request: ArticleSyncRequest):
 
 
 @router.post("/articles/vectorize", response_model=Dict[str, Any])
-async def vectorize_articles(request: VectorizeArticlesRequest):
+async def vectorize_articles(request: VectorizeArticlesRequest, http_request: Request):
     """
     將文章內容轉為向量並寫回資料庫（embedding 欄位）
 
@@ -567,6 +568,8 @@ async def vectorize_articles(request: VectorizeArticlesRequest):
     - 只更新已存在的文章，避免誤創建
     - 默認允許覆寫既有 embedding（可透過 overwrite=false 跳過）
     """
+    enforce_ai_rate_limit(http_request, allow_anonymous=False)
+
     db = _ensure_db_available()
 
     if not request.articles:
