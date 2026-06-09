@@ -111,7 +111,7 @@ class OpenAIProvider(BaseAIProvider):
 
             from ..token_reporter import fire_and_forget
             fire_and_forget(
-                ai_provider=self.provider_name,
+                ai_provider='codex',
                 model_name=model,
                 usage=usage_data,
                 endpoint='/maya-sawa/qa/query',
@@ -121,7 +121,7 @@ class OpenAIProvider(BaseAIProvider):
                 content=content,
                 metadata={
                     'model': model,
-                    'provider': self.provider_name,
+                    'provider': 'codex',
                     'usage': usage_data,
                 }
             )

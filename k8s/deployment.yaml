@@ -129,6 +129,8 @@ spec:
           value: "http://ty-multiverse-gateway-service:8082"
         - name: PUBLIC_TYMB_URL
           value: "http://ty-multiverse-backend/tymb"
+        - name: AI_USAGE_INGEST_TOKEN
+          value: "${AI_USAGE_INGEST_TOKEN}"
         # Vector search tuning
         - name: MATCH_COUNT
           value: "5"

@@ -133,6 +133,7 @@ pipeline {
                             string(credentialsId: 'REDIS_QUEUE_MAYA', variable: 'REDIS_QUEUE_MAYA'),
                             string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                             string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
+                            string(credentialsId: 'AI_USAGE_INGEST_TOKEN', variable: 'AI_USAGE_INGEST_TOKEN'),
                             string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI')
                         ]) {
                             sh '''
@@ -170,6 +171,7 @@ pipeline {
                                 # API Configuration
                                 PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
                                 PUBLIC_TYMB_URL=${PUBLIC_TYMB_URL}
+                                AI_USAGE_INGEST_TOKEN=${AI_USAGE_INGEST_TOKEN}
                                 
                                 # Voyeur Configuration (MONGODB_URI includes auth credentials)
                                 MONGODB_URI=${MONGODB_URI}
@@ -276,6 +278,7 @@ pipeline {
                         string(credentialsId: 'REDIS_QUEUE_MAYA', variable: 'REDIS_QUEUE_MAYA'),
                         string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                         string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
+                        string(credentialsId: 'AI_USAGE_INGEST_TOKEN', variable: 'AI_USAGE_INGEST_TOKEN'),
                         string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI')
                     ]) {
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {

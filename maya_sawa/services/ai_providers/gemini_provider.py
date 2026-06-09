@@ -82,12 +82,26 @@ class GeminiProvider(BaseAIProvider):
             response = model.generate_content(full_prompt)
             
             content = response.text
+            usage_metadata = getattr(response, "usage_metadata", None)
+            usage_data = {
+                "input_tokens": getattr(usage_metadata, "prompt_token_count", 0) if usage_metadata else 0,
+                "output_tokens": getattr(usage_metadata, "candidates_token_count", 0) if usage_metadata else 0,
+            }
+
+            from ..token_reporter import fire_and_forget
+            fire_and_forget(
+                ai_provider=self.provider_name,
+                model_name=self.model_id,
+                usage=usage_data,
+                endpoint='/maya-sawa/qa/query',
+            )
             
             return AIResponse(
                 content=content,
                 metadata={
                     'model': self.model_id,
-                    'provider': self.provider_name
+                    'provider': self.provider_name,
+                    'usage': usage_data,
                 }
             )
             
