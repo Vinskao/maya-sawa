@@ -102,17 +102,27 @@ class OpenAIProvider(BaseAIProvider):
             )
             
             content = response.choices[0].message.content
-            
+
+            usage_data = {
+                'prompt_tokens': response.usage.prompt_tokens,
+                'completion_tokens': response.usage.completion_tokens,
+                'total_tokens': response.usage.total_tokens,
+            }
+
+            from ..token_reporter import fire_and_forget
+            fire_and_forget(
+                ai_provider=self.provider_name,
+                model_name=model,
+                usage=usage_data,
+                endpoint='/maya-sawa/qa/query',
+            )
+
             return AIResponse(
                 content=content,
                 metadata={
                     'model': model,
                     'provider': self.provider_name,
-                    'usage': {
-                        'prompt_tokens': response.usage.prompt_tokens,
-                        'completion_tokens': response.usage.completion_tokens,
-                        'total_tokens': response.usage.total_tokens
-                    }
+                    'usage': usage_data,
                 }
             )
             
