@@ -99,16 +99,26 @@ class QwenProvider(BaseAIProvider):
             
             if response.status_code == 200:
                 content = response.output.choices[0].message.content
-                
+
+                usage_data = {
+                    'input_tokens': response.usage.input_tokens,
+                    'output_tokens': response.usage.output_tokens,
+                }
+
+                from ..token_reporter import fire_and_forget
+                fire_and_forget(
+                    ai_provider=self.provider_name,
+                    model_name=self.model_id,
+                    usage=usage_data,
+                    endpoint='/maya-sawa/qa/query',
+                )
+
                 return AIResponse(
                     content=content,
                     metadata={
                         'model': self.model_id,
                         'provider': self.provider_name,
-                        'usage': {
-                            'input_tokens': response.usage.input_tokens,
-                            'output_tokens': response.usage.output_tokens
-                        }
+                        'usage': usage_data,
                     }
                 )
             else:
