@@ -131,6 +131,20 @@ spec:
           value: "http://ty-multiverse-backend/tymb"
         - name: AI_USAGE_INGEST_TOKEN
           value: "${AI_USAGE_INGEST_TOKEN}"
+        - name: SHIOAJI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: shioaji-market
+              key: SHIOAJI_API_KEY
+        - name: SHIOAJI_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: shioaji-market
+              key: SHIOAJI_SECRET_KEY
+        - name: SHIOAJI_SIMULATION
+          value: "false"
+        - name: SHIOAJI_QUOTE_CACHE_SECONDS
+          value: "600"
         # Vector search tuning
         - name: MATCH_COUNT
           value: "5"
@@ -153,7 +167,7 @@ spec:
         resources:
           requests:
             memory: "512Mi"
-            cpu: "100m"
+            cpu: "10m"
           limits:
             memory: "1536Mi"
             cpu: "1000m"

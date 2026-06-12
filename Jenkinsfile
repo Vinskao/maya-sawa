@@ -134,7 +134,9 @@ pipeline {
                             string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                             string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
                             string(credentialsId: 'AI_USAGE_INGEST_TOKEN', variable: 'AI_USAGE_INGEST_TOKEN'),
-                            string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI')
+                            string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI'),
+                            string(credentialsId: 'SHIOAJI_API_KEY', variable: 'SHIOAJI_API_KEY'),
+                            string(credentialsId: 'SHIOAJI_SECRET_KEY', variable: 'SHIOAJI_SECRET_KEY')
                         ]) {
                             sh '''
                                 # 創建配置目錄
@@ -172,6 +174,10 @@ pipeline {
                                 PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
                                 PUBLIC_TYMB_URL=${PUBLIC_TYMB_URL}
                                 AI_USAGE_INGEST_TOKEN=${AI_USAGE_INGEST_TOKEN}
+                                SHIOAJI_API_KEY=${SHIOAJI_API_KEY}
+                                SHIOAJI_SECRET_KEY=${SHIOAJI_SECRET_KEY}
+                                SHIOAJI_SIMULATION=false
+                                SHIOAJI_QUOTE_CACHE_SECONDS=600
                                 
                                 # Voyeur Configuration (MONGODB_URI includes auth credentials)
                                 MONGODB_URI=${MONGODB_URI}
@@ -279,7 +285,9 @@ pipeline {
                         string(credentialsId: 'PUBLIC_API_BASE_URL', variable: 'PUBLIC_API_BASE_URL'),
                         string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
                         string(credentialsId: 'AI_USAGE_INGEST_TOKEN', variable: 'AI_USAGE_INGEST_TOKEN'),
-                        string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI')
+                        string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI'),
+                        string(credentialsId: 'SHIOAJI_API_KEY', variable: 'SHIOAJI_API_KEY'),
+                        string(credentialsId: 'SHIOAJI_SECRET_KEY', variable: 'SHIOAJI_SECRET_KEY')
                     ]) {
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                             script {
@@ -302,6 +310,13 @@ pipeline {
                                           --docker-username="${DOCKER_USERNAME}" \
                                           --docker-password="${DOCKER_PASSWORD}" \
                                           --docker-email="none" \
+                                          -n default \
+                                          --dry-run=client -o yaml | kubectl apply -f -
+
+                                        # Ensure Shioaji market-data credentials exist as a namespaced Secret
+                                        kubectl create secret generic shioaji-market \
+                                          --from-literal=SHIOAJI_API_KEY="${SHIOAJI_API_KEY}" \
+                                          --from-literal=SHIOAJI_SECRET_KEY="${SHIOAJI_SECRET_KEY}" \
                                           -n default \
                                           --dry-run=client -o yaml | kubectl apply -f -
 

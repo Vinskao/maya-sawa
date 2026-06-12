@@ -53,6 +53,8 @@ from .api.proxy import router as proxy_router
 from .api.videos import router as videos_router
 from .api.git_commits import router as git_commits_router
 from .api.otel_usage import router as otel_usage_router
+from .api.market import router as market_router
+from .services.shioaji_market import shioaji_market_service
 from .services.metrics_consumer import MetricsConsumer
 from .core.services.scheduler import ArticleSyncScheduler
 from .people import sync_data
@@ -150,6 +152,9 @@ app.include_router(git_commits_router)
 # OpenTelemetry usage ingestion for Claude Code and Gemini CLI
 app.include_router(otel_usage_router)
 
+# Read-only market quote endpoints backed by Shioaji.
+app.include_router(market_router)
+
 # ==================== 排程器初始化 ====================
 # 創建文章同步排程器實例
 scheduler = ArticleSyncScheduler()
@@ -184,6 +189,11 @@ async def startup_event():
             metrics_consumer.start()
         except Exception as e:
             logger.error(f"Failed to start MetricsConsumer: {e}")
+
+        try:
+            await shioaji_market_service.start_background_refresh()
+        except Exception as e:
+            logger.error(f"Failed to start Shioaji market cache refresh: {e}")
 
         # 執行初始文章同步（如果啟用）
         if Config.ENABLE_AUTO_SYNC_ON_STARTUP:
@@ -249,6 +259,8 @@ async def shutdown_event():
             metrics_consumer.stop()
         except Exception as e:
             logger.error(f"Error stopping MetricsConsumer: {e}")
+
+        await shioaji_market_service.close()
             
         logger.info("應用程式關閉，排程任務與服務已停止")
     except Exception as e:
