@@ -96,6 +96,10 @@ def _verify_rs256(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not active yet")
     if payload.get("iss") != _issuer():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issuer")
+    audience = payload.get("aud", [])
+    audiences = {audience} if isinstance(audience, str) else set(audience or [])
+    if Config.KEYCLOAK_CLIENT_ID not in audiences and payload.get("azp") != Config.KEYCLOAK_CLIENT_ID:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token audience")
 
     return payload
 
@@ -169,4 +173,23 @@ async def require_manage_users(authorization: Optional[str] = Header(default=Non
     if required_role not in roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Requires {required_role} role")
 
+    return payload
+
+
+async def require_authenticated(request: Request) -> Dict[str, Any]:
+    claims = getattr(request.state, "user", None)
+    if claims:
+        return claims
+
+    token = get_bearer_token(request)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    return verify_bearer_token(token)
+
+
+async def require_manage_users_request(request: Request) -> Dict[str, Any]:
+    payload = await require_authenticated(request)
+    required_role = Config.GIT_COMMIT_REQUIRED_ROLE
+    if required_role not in set(payload.get("_roles", [])):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Requires {required_role} role")
     return payload

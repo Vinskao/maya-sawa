@@ -48,6 +48,7 @@ def test_position_payload_omits_account_identifiers():
         code="QFFF6",
         direction=SimpleNamespace(value="Buy"),
         quantity=2,
+        yd_quantity=1,
         price=1000,
         last_price=1010,
         pnl=2000,
@@ -59,7 +60,38 @@ def test_position_payload_omits_account_identifiers():
     )
 
     assert payload["marketValue"] == 202000
+    assert payload["ydQuantity"] == 1
     assert "account_id" not in payload
+
+
+def test_stock_portfolio_uses_only_successful_stock_apis():
+    balance = SimpleNamespace(acc_balance=100_000, date="2026-06-12")
+    position = SimpleNamespace(
+        code="2330",
+        direction=SimpleNamespace(value="Buy"),
+        quantity=1,
+        yd_quantity=1,
+        price=1000,
+        last_price=1100,
+        pnl=100_000,
+    )
+    api = SimpleNamespace(
+        stock_account=SimpleNamespace(),
+        Contracts=SimpleNamespace(
+            Stocks={"2330": SimpleNamespace(name="台積電")}
+        ),
+        account_balance=lambda account: balance,
+        list_stock_positions=lambda: [position],
+    )
+
+    payload = ShioajiMarketService._fetch_portfolio(api)
+
+    assert payload["totalPositionExposure"] == 101_000
+    assert payload["totalAssetsEstimated"] == 201_000
+    assert payload["totalPnl"] == 100_000
+    assert payload["positionCount"] == 1
+    assert payload["positions"][0]["assetPercentage"] == 50.25
+    assert payload["positions"][0]["name"] == "台積電"
 
 
 def test_public_account_error_omits_request_identity():
@@ -152,7 +184,7 @@ def test_read_only_client_does_not_expose_order_methods():
         cancel_order=lambda trade: "must not be exposed",
     )
 
-    client = ReadOnlyShioajiClient(api)
+    client = ReadOnlyShioajiClient(api, share_unit="Share")
 
     assert not hasattr(client, "place_order")
     assert not hasattr(client, "update_order")

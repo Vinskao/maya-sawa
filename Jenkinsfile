@@ -5,7 +5,7 @@ pipeline {
                 apiVersion: v1
                 kind: Pod
                 spec:
-                  
+                  activeDeadlineSeconds: 7200
                   serviceAccountName: jenkins-admin
                   imagePullSecrets:
                   - name: dockerhub-credentials
@@ -178,6 +178,7 @@ pipeline {
                                 SHIOAJI_SECRET_KEY=${SHIOAJI_SECRET_KEY}
                                 SHIOAJI_SIMULATION=false
                                 SHIOAJI_QUOTE_CACHE_SECONDS=600
+                                SHIOAJI_PORTFOLIO_CACHE_SECONDS=3600
                                 
                                 # Voyeur Configuration (MONGODB_URI includes auth credentials)
                                 MONGODB_URI=${MONGODB_URI}

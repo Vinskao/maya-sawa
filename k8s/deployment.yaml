@@ -77,6 +77,20 @@ spec:
           value: "${PUBLIC_REALM}"
         - name: KEYCLOAK_CLIENT_ID
           value: "peoplesystem"
+        - name: SECURITY_ENABLED
+          value: "true"
+        - name: SECURITY_TRUSTED_PROXY_CIDRS
+          value: "127.0.0.1/32,10.244.1.0/24"
+        - name: SECURITY_IP_ALLOWLIST_CIDRS
+          value: "127.0.0.1/32,10.244.1.0/24"
+        - name: SECURITY_IP_ALLOWLIST_PATHS
+          value: "/git-commits/ingest,/otel/v1/metrics"
+        - name: SECURITY_PUBLIC_RATE_LIMIT_PER_MINUTE
+          value: "60"
+        - name: SECURITY_AUTH_RATE_LIMIT_PER_MINUTE
+          value: "180"
+        - name: SECURITY_MAX_BODY_BYTES
+          value: "2097152"
         - name: AI_RATE_LIMIT_MANAGER_PER_MINUTE
           value: "10"
         - name: AI_RATE_LIMIT_STANDARD_PER_MINUTE
@@ -145,6 +159,8 @@ spec:
           value: "false"
         - name: SHIOAJI_QUOTE_CACHE_SECONDS
           value: "600"
+        - name: SHIOAJI_PORTFOLIO_CACHE_SECONDS
+          value: "3600"
         # Vector search tuning
         - name: MATCH_COUNT
           value: "5"

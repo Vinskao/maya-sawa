@@ -1,6 +1,8 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..core.auth.keycloak import require_manage_users_request
 
 from ..services.shioaji_market import (
     ShioajiCacheUnavailableError,
@@ -10,6 +12,19 @@ from ..services.shioaji_market import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
+
+
+@router.get("/auth-status")
+async def get_market_auth_status(
+    claims: dict = Depends(require_manage_users_request),
+):
+    return {
+        "authenticated": True,
+        "subject": claims.get("preferred_username") or claims.get("sub"),
+        "roles": claims.get("_roles", []),
+        "clientId": claims.get("azp"),
+        "audience": claims.get("aud"),
+    }
 
 
 @router.get("/taiex-futures")
@@ -63,7 +78,7 @@ async def get_mini_tsmc_futures_quote():
 
 
 @router.get("/portfolio")
-async def get_portfolio():
+async def get_portfolio(_claims: dict = Depends(require_manage_users_request)):
     if not shioaji_market_service.portfolio_enabled:
         raise HTTPException(
             status_code=403,
@@ -96,7 +111,7 @@ async def get_portfolio():
 
 
 @router.get("/usage")
-async def get_market_usage():
+async def get_market_usage(_claims: dict = Depends(require_manage_users_request)):
     try:
         return await shioaji_market_service.get_usage()
     except ShioajiNotConfiguredError as exc:

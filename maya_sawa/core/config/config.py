@@ -180,9 +180,29 @@ class Config:
     # WebSocket settings for Voyeur
 
     # Keycloak / Git commit ingestion configuration
-    KEYCLOAK_AUTH_SERVER_URL = os.getenv("KEYCLOAK_AUTH_SERVER_URL", "https://peoplesystem.tatdvsonorth.com")
+    KEYCLOAK_AUTH_SERVER_URL = os.getenv(
+        "KEYCLOAK_AUTH_SERVER_URL",
+        "https://peoplesystem.tatdvsonorth.com/sso",
+    )
     KEYCLOAK_REALM = os.getenv("PUBLIC_REALM") or os.getenv("KEYCLOAK_REALM", "PeopleSystem")
     KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID") or os.getenv("KEYCLOAK_RESOURCE") or os.getenv("KEYCLOAK_CLIENT", "peoplesystem")
+    SECURITY_ENABLED = os.getenv("SECURITY_ENABLED", "true").lower() == "true"
+    SECURITY_TRUSTED_PROXY_CIDRS = os.getenv(
+        "SECURITY_TRUSTED_PROXY_CIDRS",
+        "127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+    )
+    SECURITY_IP_ALLOWLIST_CIDRS = os.getenv("SECURITY_IP_ALLOWLIST_CIDRS", "")
+    SECURITY_IP_ALLOWLIST_PATHS = os.getenv(
+        "SECURITY_IP_ALLOWLIST_PATHS",
+        "/git-commits/ingest,/otel/v1/metrics",
+    )
+    SECURITY_PUBLIC_RATE_LIMIT_PER_MINUTE = int(
+        os.getenv("SECURITY_PUBLIC_RATE_LIMIT_PER_MINUTE", "60")
+    )
+    SECURITY_AUTH_RATE_LIMIT_PER_MINUTE = int(
+        os.getenv("SECURITY_AUTH_RATE_LIMIT_PER_MINUTE", "180")
+    )
+    SECURITY_MAX_BODY_BYTES = int(os.getenv("SECURITY_MAX_BODY_BYTES", str(2 * 1024 * 1024)))
     AI_RATE_LIMIT_MANAGER_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_MANAGER_PER_MINUTE", "10"))
     AI_RATE_LIMIT_STANDARD_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_STANDARD_PER_MINUTE", "1"))
     AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE", "1"))

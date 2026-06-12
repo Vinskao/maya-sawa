@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 from datetime import date, datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -22,8 +23,9 @@ class ShioajiCacheUnavailableError(RuntimeError):
 class ReadOnlyShioajiClient:
     """Expose only the Shioaji capabilities used by the market dashboard."""
 
-    def __init__(self, api: Any) -> None:
+    def __init__(self, api: Any, share_unit: Any = None) -> None:
         self._api = api
+        self._share_unit = share_unit
         self.Contracts = api.Contracts
         self.stock_account = api.stock_account
         self.futopt_account = api.futopt_account
@@ -40,6 +42,12 @@ class ReadOnlyShioajiClient:
     def list_positions(self, account: Any) -> Any:
         return self._api.list_positions(account=account)
 
+    def list_stock_positions(self) -> Any:
+        return self._api.list_positions(
+            account=self.stock_account,
+            unit=self._share_unit,
+        )
+
     def logout(self) -> Any:
         return self._api.logout()
 
@@ -51,6 +59,10 @@ class ShioajiMarketService:
         self._request_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task[None] | None = None
         self._cache_seconds = int(os.getenv("SHIOAJI_QUOTE_CACHE_SECONDS", "600"))
+        self._portfolio_cache_seconds = int(
+            os.getenv("SHIOAJI_PORTFOLIO_CACHE_SECONDS", "3600")
+        )
+        self._last_portfolio_refresh = 0.0
         self._cache_prefix = os.getenv(
             "SHIOAJI_REDIS_CACHE_PREFIX",
             "maya-sawa:market",
@@ -107,8 +119,14 @@ class ShioajiMarketService:
         await self._refresh_payload("TXF", self._fetch_txf_quote)
         await self._refresh_payload("QFFR1", self._fetch_qff_quote)
         await self._refresh_payload("USAGE", self._fetch_usage_payload)
-        if self.portfolio_enabled:
-            await self._refresh_payload("PORTFOLIO", self._fetch_portfolio)
+        portfolio_due = (
+            time.monotonic() - self._last_portfolio_refresh
+            >= self._portfolio_cache_seconds
+        )
+        if self.portfolio_enabled and portfolio_due:
+            refreshed = await self._refresh_payload("PORTFOLIO", self._fetch_portfolio)
+            if refreshed:
+                self._last_portfolio_refresh = time.monotonic()
 
     async def _refresh_loop(self) -> None:
         while True:
@@ -131,15 +149,16 @@ class ShioajiMarketService:
             self._refresh_task = None
         await self._reset_api()
 
-    async def _refresh_payload(self, key: str, fetcher: Any) -> None:
+    async def _refresh_payload(self, key: str, fetcher: Any) -> bool:
         try:
             payload = await self._run_with_relogin(fetcher)
         except Exception:
-            return
+            return False
         try:
             await asyncio.to_thread(self._write_cached_payload, key, payload)
         except redis.RedisError:
-            return
+            return False
+        return True
 
     async def _run_with_relogin(self, operation: Any) -> Any:
         async with self._request_lock:
@@ -190,7 +209,7 @@ class ShioajiMarketService:
             secret_key=os.environ["SHIOAJI_SECRET_KEY"],
             fetch_contract=True,
         )
-        return ReadOnlyShioajiClient(api)
+        return ReadOnlyShioajiClient(api, share_unit=sj.Unit.Share)
 
     @staticmethod
     def _fetch_txf_quote(api: Any) -> dict[str, Any]:
@@ -255,44 +274,39 @@ class ShioajiMarketService:
             if balance is not None
             else None
         )
-        account_errors: dict[str, str] = {}
         try:
-            stock_positions = api.list_positions(account=api.stock_account)
+            stock_positions = api.list_stock_positions()
         except Exception as exc:
             stock_positions = []
-            account_errors["stock"] = ShioajiMarketService._public_account_error(exc)
-        try:
-            futures_positions = api.list_positions(account=api.futopt_account)
-        except Exception as exc:
-            futures_positions = []
-            account_errors["futures"] = ShioajiMarketService._public_account_error(exc)
+            stock_error = ShioajiMarketService._public_account_error(exc)
+        else:
+            stock_error = None
 
         positions: list[dict[str, Any]] = []
         for position in stock_positions:
             quantity = int(getattr(position, "quantity", 0) or 0)
-            last_price = float(getattr(position, "last_price", 0) or 0)
-            market_value = abs(last_price * quantity * 1000)
+            average_price = float(getattr(position, "price", 0) or 0)
+            pnl = float(getattr(position, "pnl", 0) or 0)
+            cost_value = average_price * quantity
+            market_value = max(cost_value + pnl, 0)
+            last_price = market_value / quantity if quantity else 0
+            code = str(getattr(position, "code", ""))
+            try:
+                stock_name = str(getattr(api.Contracts.Stocks[code], "name", "") or "")
+            except Exception:
+                stock_name = ""
             positions.append(
                 ShioajiMarketService._position_payload(
-                    position, "stock", market_value
+                    position,
+                    "stock",
+                    market_value,
+                    last_price=last_price,
+                    name=stock_name,
                 )
             )
 
-        for position in futures_positions:
-            quantity = int(getattr(position, "quantity", 0) or 0)
-            last_price = float(getattr(position, "last_price", 0) or 0)
-            contract = ShioajiMarketService._find_contract_by_code(
-                api, str(getattr(position, "code", ""))
-            )
-            multiplier = float(getattr(contract, "unit", 1) or 1)
-            market_value = abs(last_price * quantity * multiplier)
-            payload = ShioajiMarketService._position_payload(
-                position, "futures", market_value
-            )
-            payload["multiplier"] = multiplier
-            positions.append(payload)
-
         total_position_exposure = sum(item["marketValue"] for item in positions)
+        total_pnl = sum(item["pnl"] for item in positions)
         total_assets = (
             cash + total_position_exposure
             if cash is not None
@@ -310,32 +324,50 @@ class ShioajiMarketService:
             "cashBalance": cash,
             "balanceAvailable": balance is not None,
             "balanceError": balance_error,
-            "accountErrors": account_errors,
+            "accountErrors": {"stock": stock_error} if stock_error else {},
             "balanceDate": str(getattr(balance, "date", "") or "") if balance else "",
             "totalAssetsEstimated": round(total_assets, 2) if total_assets is not None else None,
             "totalPositionExposure": round(total_position_exposure, 2),
+            "totalPnl": round(total_pnl, 2),
+            "positionCount": len(positions),
+            "cashPercentage": (
+                round(cash / total_assets * 100, 2)
+                if cash is not None and total_assets and total_assets > 0
+                else 0
+            ),
             "positions": positions,
             "fetchedAt": datetime.now(timezone.utc).isoformat(),
             "source": "Sinopac Shioaji",
             "valuationNote": (
-                "Cash plus position exposure"
+                "Stock cash plus stock market value"
                 if cash is not None
-                else "Position exposure only; account balance unavailable"
+                else "Stock market value only; cash balance unavailable"
             ),
         }
 
     @staticmethod
     def _position_payload(
-        position: Any, product_type: str, market_value: float
+        position: Any,
+        product_type: str,
+        market_value: float,
+        last_price: float | None = None,
+        name: str = "",
     ) -> dict[str, Any]:
         direction = getattr(position, "direction", "")
         return {
             "code": str(getattr(position, "code", "")),
+            "name": name,
             "productType": product_type,
             "direction": str(getattr(direction, "value", direction)),
             "quantity": int(getattr(position, "quantity", 0) or 0),
+            "ydQuantity": int(getattr(position, "yd_quantity", 0) or 0),
             "averagePrice": float(getattr(position, "price", 0) or 0),
-            "lastPrice": float(getattr(position, "last_price", 0) or 0),
+            "lastPrice": round(
+                last_price
+                if last_price is not None
+                else float(getattr(position, "last_price", 0) or 0),
+                4,
+            ),
             "pnl": float(getattr(position, "pnl", 0) or 0),
             "marketValue": round(market_value, 2),
         }

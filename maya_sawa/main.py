@@ -60,6 +60,7 @@ from .core.services.scheduler import ArticleSyncScheduler
 from .people import sync_data
 from .core.config import Config
 from .core.errors.errors import register_exception_handlers
+from .core.security import SecurityMiddleware
 
 # 從環境變數獲取 OpenAI API 配置
 api_key = os.getenv("OPENAI_API_KEY")
@@ -96,6 +97,8 @@ app = FastAPI(
 # ==================== 全域例外處理器註冊 ====================
 # 註冊統一的錯誤處理器，提供一致的錯誤回應格式
 register_exception_handlers(app)
+
+app.add_middleware(SecurityMiddleware)
 
 # ==================== CORS 中間件配置 ====================
 # 添加 CORS 中間件，允許跨域請求
