@@ -71,12 +71,11 @@ def _subject_from_claims(claims: dict) -> str:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
+    # Prefer the IP resolved by SecurityMiddleware, which correctly walks the
+    # X-Forwarded-For chain against the trusted-proxy CIDRs. Parsing XFF here
+    # would re-introduce the spoofable leftmost-hop behaviour.
+    resolved = getattr(request.state, "client_ip", None)
+    if resolved:
+        return resolved
 
     return request.client.host if request.client else "unknown"

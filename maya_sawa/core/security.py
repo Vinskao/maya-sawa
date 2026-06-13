@@ -119,11 +119,23 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
     def _client_ip(self, request: Request) -> str:
         peer = request.client.host if request.client else "unknown"
+        # Only trust forwarding headers when the direct peer is a known proxy.
         if not _in_networks(peer, self.trusted_proxies):
             return peer
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",", 1)[0].strip()
+            # Walk the chain from right (closest to us) to left and return the
+            # first hop that is NOT one of our trusted proxies. The leftmost
+            # entries are client-supplied and therefore spoofable, so we must
+            # not blindly trust them.
+            hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+            for hop in reversed(hops):
+                if not _in_networks(hop, self.trusted_proxies):
+                    return hop
+            # Every hop is a trusted proxy; fall back to the originally claimed
+            # client (leftmost) for identification purposes.
+            if hops:
+                return hops[0]
         return request.headers.get("x-real-ip", peer).strip()
 
     @staticmethod

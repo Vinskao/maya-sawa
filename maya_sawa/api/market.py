@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..core.auth.keycloak import require_manage_users_request
+from ..core.auth.keycloak import require_authenticated, require_manage_users_request
 
 from ..services.shioaji_market import (
     ShioajiCacheUnavailableError,
@@ -78,7 +78,7 @@ async def get_mini_tsmc_futures_quote():
 
 
 @router.get("/portfolio")
-async def get_portfolio(_claims: dict = Depends(require_manage_users_request)):
+async def get_portfolio(_claims: dict = Depends(require_authenticated)):
     if not shioaji_market_service.portfolio_enabled:
         raise HTTPException(
             status_code=403,

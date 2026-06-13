@@ -1,3 +1,4 @@
+import hmac
 import logging
 import os
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -19,12 +20,23 @@ def _header_token(request: Request) -> Optional[str]:
     auth = request.headers.get("authorization", "")
     if auth.startswith("Bearer "):
         return auth.removeprefix("Bearer ")
-    return request.headers.get("x-ai-usage-token") or request.query_params.get("token")
+    # Only accept the token via headers. Query-string tokens leak into access
+    # logs, browser history and referrers, so they are intentionally rejected.
+    return request.headers.get("x-ai-usage-token")
 
 
 def _require_otel_token(request: Request) -> None:
     expected = os.getenv("OTEL_USAGE_INGEST_TOKEN") or os.getenv("AI_USAGE_INGEST_TOKEN", "")
-    if expected and _header_token(request) != expected:
+    if not expected:
+        # Fail closed: refuse ingestion when no token is configured rather than
+        # silently leaving the endpoint open to the public.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OTel ingest token not configured",
+        )
+
+    provided = _header_token(request) or ""
+    if not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized OTel ingest")
 
 
