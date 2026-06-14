@@ -38,6 +38,7 @@ black = "*"
 
 [tool.poetry.scripts]
 start = "maya_sawa.main:app"
+maya = "maya_sawa.cli:local"
 
 [build-system]
 requires = ["poetry-core"]

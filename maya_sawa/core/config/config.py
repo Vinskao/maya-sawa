@@ -180,11 +180,12 @@ class Config:
     # WebSocket settings for Voyeur
 
     # Keycloak / Git commit ingestion configuration
-    KEYCLOAK_AUTH_SERVER_URL = os.getenv(
-        "KEYCLOAK_AUTH_SERVER_URL",
-        "https://peoplesystem.tatdvsonorth.com/sso",
+    KEYCLOAK_AUTH_SERVER_URL = os.getenv("KEYCLOAK_AUTH_SERVER_URL", "").strip()
+    KEYCLOAK_REALM = (
+        os.getenv("PUBLIC_REALM")
+        or os.getenv("KEYCLOAK_REALM")
+        or ""
     )
-    KEYCLOAK_REALM = os.getenv("PUBLIC_REALM") or os.getenv("KEYCLOAK_REALM", "PeopleSystem")
     KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID") or os.getenv("KEYCLOAK_RESOURCE") or os.getenv("KEYCLOAK_CLIENT", "peoplesystem")
     SECURITY_ENABLED = os.getenv("SECURITY_ENABLED", "true").lower() == "true"
     SECURITY_TRUSTED_PROXY_CIDRS = os.getenv(

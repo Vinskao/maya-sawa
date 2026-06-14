@@ -157,6 +157,8 @@ spec:
               key: SHIOAJI_SECRET_KEY
         - name: SHIOAJI_SIMULATION
           value: "false"
+        - name: SHIOAJI_PORTFOLIO_ENABLED
+          value: "true"
         - name: SHIOAJI_QUOTE_CACHE_SECONDS
           value: "600"
         - name: SHIOAJI_PORTFOLIO_CACHE_SECONDS

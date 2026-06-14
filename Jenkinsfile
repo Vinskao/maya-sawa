@@ -135,6 +135,8 @@ pipeline {
                             string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
                             string(credentialsId: 'AI_USAGE_INGEST_TOKEN', variable: 'AI_USAGE_INGEST_TOKEN'),
                             string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI'),
+                            string(credentialsId: 'KEYCLOAK_AUTH_SERVER_URL', variable: 'KEYCLOAK_AUTH_SERVER_URL'),
+                            string(credentialsId: 'PUBLIC_REALM', variable: 'PUBLIC_REALM'),
                             string(credentialsId: 'SHIOAJI_API_KEY', variable: 'SHIOAJI_API_KEY'),
                             string(credentialsId: 'SHIOAJI_SECRET_KEY', variable: 'SHIOAJI_SECRET_KEY')
                         ]) {
@@ -174,9 +176,12 @@ pipeline {
                                 PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
                                 PUBLIC_TYMB_URL=${PUBLIC_TYMB_URL}
                                 AI_USAGE_INGEST_TOKEN=${AI_USAGE_INGEST_TOKEN}
+                                KEYCLOAK_AUTH_SERVER_URL=${KEYCLOAK_AUTH_SERVER_URL}
+                                PUBLIC_REALM=${PUBLIC_REALM}
                                 SHIOAJI_API_KEY=${SHIOAJI_API_KEY}
                                 SHIOAJI_SECRET_KEY=${SHIOAJI_SECRET_KEY}
                                 SHIOAJI_SIMULATION=false
+                                SHIOAJI_PORTFOLIO_ENABLED=true
                                 SHIOAJI_QUOTE_CACHE_SECONDS=600
                                 SHIOAJI_PORTFOLIO_CACHE_SECONDS=3600
                                 
@@ -287,6 +292,8 @@ pipeline {
                         string(credentialsId: 'PUBLIC_TYMB_URL', variable: 'PUBLIC_TYMB_URL'),
                         string(credentialsId: 'AI_USAGE_INGEST_TOKEN', variable: 'AI_USAGE_INGEST_TOKEN'),
                         string(credentialsId: 'MONGODB_URI', variable: 'MONGODB_URI'),
+                        string(credentialsId: 'KEYCLOAK_AUTH_SERVER_URL', variable: 'KEYCLOAK_AUTH_SERVER_URL'),
+                        string(credentialsId: 'PUBLIC_REALM', variable: 'PUBLIC_REALM'),
                         string(credentialsId: 'SHIOAJI_API_KEY', variable: 'SHIOAJI_API_KEY'),
                         string(credentialsId: 'SHIOAJI_SECRET_KEY', variable: 'SHIOAJI_SECRET_KEY')
                     ]) {

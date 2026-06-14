@@ -67,6 +67,19 @@
 poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
 ```
 
+#### 本地快速啟動
+之後在 `maya-sawa` 目錄下可以直接用：
+
+```bash
+poetry run maya
+```
+
+它等同於：
+
+```bash
+poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
+```
+
 #### 測試連接池
 ```bash
 python scripts/test_connection_pool.py
@@ -274,4 +287,3 @@ poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 
 - `ENABLE_AUTO_SYNC_ON_STARTUP`: Auto-sync on application startup (default: false)
 - `ENABLE_PERIODIC_SYNC`: Enable periodic article sync (default: false)
 - `ENABLE_PEOPLE_WEAPONS_SYNC`: Enable people/weapons data sync (default: false)
-
