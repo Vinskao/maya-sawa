@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..core.auth.keycloak import require_manage_users_request
+from ..core.auth.keycloak import require_authenticated, require_manage_users_request
 
 from ..services.shioaji_market import (
     ShioajiCacheUnavailableError,
