@@ -1,3 +1,11 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: market-internal-secret
+type: Opaque
+stringData:
+  MARKET_INTERNAL_SECRET: "${MARKET_INTERNAL_SECRET}"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -145,6 +153,11 @@ spec:
           value: "http://ty-multiverse-backend/tymb"
         - name: AI_USAGE_INGEST_TOKEN
           value: "${AI_USAGE_INGEST_TOKEN}"
+        - name: MARKET_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: market-internal-secret
+              key: MARKET_INTERNAL_SECRET
         - name: SHIOAJI_API_KEY
           valueFrom:
             secretKeyRef:

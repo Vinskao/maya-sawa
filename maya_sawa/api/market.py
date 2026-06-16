@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..core.auth.keycloak import require_authenticated, require_manage_users_request
+from ..core.auth.internal import require_internal_secret
 
 from ..services.shioaji_market import (
     ShioajiCacheUnavailableError,
@@ -131,5 +132,63 @@ async def get_market_usage(_claims: dict = Depends(require_manage_users_request)
             detail={
                 "code": "usage_unavailable",
                 "message": "Shioaji usage is temporarily unavailable",
+            },
+        ) from exc
+
+
+@router.get("/internal/usage")
+async def get_market_usage_internal(_=Depends(require_internal_secret)):
+    try:
+        return await shioaji_market_service.get_usage()
+    except ShioajiNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "not_configured", "message": str(exc)},
+        ) from exc
+    except ShioajiCacheUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "cache_unavailable", "message": str(exc)},
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to fetch Shioaji usage (internal)")
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "usage_unavailable",
+                "message": "Shioaji usage is temporarily unavailable",
+            },
+        ) from exc
+
+
+@router.get("/internal/portfolio")
+async def get_portfolio_internal(_=Depends(require_internal_secret)):
+    if not shioaji_market_service.portfolio_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "portfolio_disabled",
+                "message": "Portfolio dashboard is disabled",
+            },
+        )
+    try:
+        return await shioaji_market_service.get_portfolio()
+    except ShioajiNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "not_configured", "message": str(exc)},
+        ) from exc
+    except ShioajiCacheUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "cache_unavailable", "message": str(exc)},
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to fetch portfolio (internal)")
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "portfolio_unavailable",
+                "message": "Portfolio data is temporarily unavailable",
             },
         ) from exc
