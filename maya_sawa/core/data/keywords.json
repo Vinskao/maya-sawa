@@ -50,5 +50,23 @@
     "你見過(.+?)$",
     "(.+?)是誰[？?]?",
     "who is (.+?)$"
-  ]
+  ],
+  "OFF_TOPIC_PATTERNS": {
+    "CODE_KEYWORDS": [
+      "def ", "function ", "public static", "import ", "require(",
+      "class ", "return ", "print(", "console.log", "SELECT ", "INSERT ",
+      "<!DOCTYPE", "<html", "#!/", "var ", "const ", "let ",
+      "爬蟲", "爬取", "抓取網頁", "程式碼", "代碼", "演算法",
+      "寫程式", "寫代碼", "debug", "除錯", "重構", "refactor",
+      "寫一個", "幫我寫", "幫我寫程式", "幫我寫代碼"
+    ],
+    "CODE_BLOCK_PATTERN": "```",
+    "GENERIC_AI_TASK_KEYWORDS": [
+      "翻譯這段", "幫我翻譯全文", "翻譯以下文章",
+      "寫一篇文章", "寫一篇小說", "寫一篇報告",
+      "幫我算", "計算以下", "解這道題", "解方程",
+      "summarize this", "translate the following", "write an essay",
+      "write a novel", "solve this", "calculate"
+    ]
+  }
 } 

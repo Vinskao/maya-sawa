@@ -1,10 +1,38 @@
 import logging
+import re
 from typing import Dict, List, Optional
 from ..processing.langchain_shim import Document, PromptTemplate, ChatOpenAI
 from maya_sawa.people import NameDetector, ProfileManager, PersonalityPromptBuilder, PeopleWeaponManager, NameAdapter
 from ..config.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
+
+
+def _is_off_topic(query: str) -> bool:
+    """
+    在送給 LLM 前做輕量級 off-topic 偵測。
+    回傳 True 代表應拒絕，False 代表正常處理。
+    """
+    patterns = config_manager.get_keywords("OFF_TOPIC_PATTERNS")
+    if not patterns:
+        return False
+
+    q = query.strip()
+
+    # 1. 程式碼區塊標記
+    if patterns.get("CODE_BLOCK_PATTERN", "") in q:
+        return True
+
+    # 2. 程式碼 / 通用 AI 任務關鍵字
+    q_lower = q.lower()
+    for kw in patterns.get("CODE_KEYWORDS", []):
+        if kw.lower() in q_lower:
+            return True
+    for kw in patterns.get("GENERIC_AI_TASK_KEYWORDS", []):
+        if kw.lower() in q_lower:
+            return True
+
+    return False
 
 class QAChain:
     """
@@ -300,6 +328,15 @@ class QAChain:
         Returns:
             Dict: 包含答案、來源和找到的角色的字典
         """
+        # ── Off-topic 防禦：在任何 LLM 呼叫前攔截非客服請求 ──
+        if _is_off_topic(query):
+            logger.info(f"Off-topic request blocked: {query[:80]}")
+            return {
+                "answer": "這種事不在我的職責範圍內。有關 TY Multiverse 的問題再來找我。",
+                "sources": [],
+                "found_characters": []
+            }
+
         # 若外部傳入 self_name 與目前不同，更新內部狀態
         if self_name and self_name != self.self_name:
             logger.info(f"更新主角名稱: {self.self_name} -> {self_name}")

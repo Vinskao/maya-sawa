@@ -61,7 +61,25 @@ def test_position_payload_omits_account_identifiers():
 
     assert payload["marketValue"] == 202000
     assert payload["ydQuantity"] == 1
+    assert payload["signedQuantity"] == 2
     assert "account_id" not in payload
+
+
+def test_position_payload_signs_short_futures_quantity():
+    position = SimpleNamespace(
+        code="TXFF6",
+        direction=SimpleNamespace(value="Sell"),
+        quantity=3,
+        yd_quantity=0,
+        price=22000,
+        last_price=21900,
+        pnl=-3000,
+    )
+
+    payload = ShioajiMarketService._position_payload(position, "futures", 65700)
+
+    assert payload["signedQuantity"] == -3
+    assert payload["lastPrice"] == 21900
 
 
 def test_stock_portfolio_uses_only_successful_stock_apis():
@@ -92,6 +110,53 @@ def test_stock_portfolio_uses_only_successful_stock_apis():
     assert payload["positionCount"] == 1
     assert payload["positions"][0]["assetPercentage"] == 50.25
     assert payload["positions"][0]["name"] == "台積電"
+
+
+def test_portfolio_includes_futures_summary_and_positions():
+    balance = SimpleNamespace(acc_balance=100_000, date="2026-06-12")
+    stock_position = SimpleNamespace(
+        code="2330",
+        direction=SimpleNamespace(value="Buy"),
+        quantity=1,
+        yd_quantity=1,
+        price=1000,
+        last_price=1100,
+        pnl=100_000,
+    )
+    futures_position = SimpleNamespace(
+        code="TXFF6",
+        direction=SimpleNamespace(value="Sell"),
+        quantity=2,
+        price=22000,
+        last_price=21950,
+        pnl=5000,
+    )
+    margin = SimpleNamespace(
+        equity=250000,
+        equity_amount=255000,
+        available_margin=180000,
+        future_open_position=5000,
+        maintenance_margin=90000,
+        initial_margin=110000,
+    )
+    api = SimpleNamespace(
+        stock_account=SimpleNamespace(),
+        futopt_account=SimpleNamespace(),
+        Contracts=SimpleNamespace(
+            Stocks={"2330": SimpleNamespace(name="台積電")}
+        ),
+        account_balance=lambda account: balance,
+        list_stock_positions=lambda: [stock_position],
+        list_positions=lambda account: [futures_position],
+        margin=lambda account: margin,
+    )
+
+    payload = ShioajiMarketService._fetch_portfolio(api)
+
+    assert payload["futuresSummary"]["equity"] == 250000
+    assert payload["futuresSummary"]["positionCount"] == 1
+    assert payload["futuresPositions"][0]["signedQuantity"] == -2
+    assert payload["positions"][1]["productType"] == "futures"
 
 
 def test_public_account_error_omits_request_identity():

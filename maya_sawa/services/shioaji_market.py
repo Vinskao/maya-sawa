@@ -39,6 +39,9 @@ class ReadOnlyShioajiClient:
     def account_balance(self, account: Any) -> Any:
         return self._api.account_balance(account=account)
 
+    def margin(self, account: Any) -> Any:
+        return self._api.margin(account=account)
+
     def list_positions(self, account: Any) -> Any:
         return self._api.list_positions(account=account)
 
@@ -282,7 +285,7 @@ class ShioajiMarketService:
         else:
             stock_error = None
 
-        positions: list[dict[str, Any]] = []
+        stock_position_payloads: list[dict[str, Any]] = []
         for position in stock_positions:
             quantity = int(getattr(position, "quantity", 0) or 0)
             average_price = float(getattr(position, "price", 0) or 0)
@@ -295,7 +298,7 @@ class ShioajiMarketService:
                 stock_name = str(getattr(api.Contracts.Stocks[code], "name", "") or "")
             except Exception:
                 stock_name = ""
-            positions.append(
+            stock_position_payloads.append(
                 ShioajiMarketService._position_payload(
                     position,
                     "stock",
@@ -305,7 +308,40 @@ class ShioajiMarketService:
                 )
             )
 
-        total_position_exposure = sum(item["marketValue"] for item in positions)
+        futures_margin = None
+        futures_margin_error = None
+        try:
+            futures_margin = api.margin(api.futopt_account)
+        except Exception as exc:
+            futures_margin_error = ShioajiMarketService._public_account_error(exc)
+
+        try:
+            futures_positions = api.list_positions(api.futopt_account)
+        except Exception as exc:
+            futures_positions = []
+            futures_error = ShioajiMarketService._public_account_error(exc)
+        else:
+            futures_error = None
+
+        futures_position_payloads: list[dict[str, Any]] = []
+        for position in futures_positions:
+            code = str(getattr(position, "code", ""))
+            contract = ShioajiMarketService._find_contract_by_code(api, code)
+            contract_name = str(getattr(contract, "name", "") or "")
+            quantity = int(getattr(position, "quantity", 0) or 0)
+            last_price = float(getattr(position, "last_price", 0) or 0)
+            futures_position_payloads.append(
+                ShioajiMarketService._position_payload(
+                    position,
+                    "futures",
+                    market_value=last_price * quantity,
+                    last_price=last_price,
+                    name=contract_name,
+                )
+            )
+
+        positions = stock_position_payloads + futures_position_payloads
+        total_position_exposure = sum(item["marketValue"] for item in stock_position_payloads)
         total_pnl = sum(item["pnl"] for item in positions)
         total_assets = (
             cash + total_position_exposure
@@ -324,7 +360,13 @@ class ShioajiMarketService:
             "cashBalance": cash,
             "balanceAvailable": balance is not None,
             "balanceError": balance_error,
-            "accountErrors": {"stock": stock_error} if stock_error else {},
+            "accountErrors": {
+                key: value for key, value in {
+                    "stock": stock_error,
+                    "futures": futures_error,
+                    "futuresMargin": futures_margin_error,
+                }.items() if value
+            },
             "balanceDate": str(getattr(balance, "date", "") or "") if balance else "",
             "totalAssetsEstimated": round(total_assets, 2) if total_assets is not None else None,
             "totalPositionExposure": round(total_position_exposure, 2),
@@ -336,6 +378,17 @@ class ShioajiMarketService:
                 else 0
             ),
             "positions": positions,
+            "stockPositions": stock_position_payloads,
+            "futuresPositions": futures_position_payloads,
+            "futuresSummary": {
+                "equity": float(getattr(futures_margin, "equity", 0) or 0),
+                "equityAmount": float(getattr(futures_margin, "equity_amount", 0) or 0),
+                "availableMargin": float(getattr(futures_margin, "available_margin", 0) or 0),
+                "openPositionPnl": float(getattr(futures_margin, "future_open_position", 0) or 0),
+                "maintenanceMargin": float(getattr(futures_margin, "maintenance_margin", 0) or 0),
+                "initialMargin": float(getattr(futures_margin, "initial_margin", 0) or 0),
+                "positionCount": len(futures_position_payloads),
+            },
             "fetchedAt": datetime.now(timezone.utc).isoformat(),
             "source": "Sinopac Shioaji",
             "valuationNote": (
@@ -360,6 +413,7 @@ class ShioajiMarketService:
             "productType": product_type,
             "direction": str(getattr(direction, "value", direction)),
             "quantity": int(getattr(position, "quantity", 0) or 0),
+            "signedQuantity": ShioajiMarketService._signed_quantity(position),
             "ydQuantity": int(getattr(position, "yd_quantity", 0) or 0),
             "averagePrice": float(getattr(position, "price", 0) or 0),
             "lastPrice": round(
@@ -371,6 +425,12 @@ class ShioajiMarketService:
             "pnl": float(getattr(position, "pnl", 0) or 0),
             "marketValue": round(market_value, 2),
         }
+
+    @staticmethod
+    def _signed_quantity(position: Any) -> int:
+        quantity = int(getattr(position, "quantity", 0) or 0)
+        direction = str(getattr(getattr(position, "direction", ""), "value", getattr(position, "direction", "")))
+        return -quantity if direction.lower() == "sell" else quantity
 
     @staticmethod
     def _public_account_error(exc: Exception) -> str:
@@ -464,7 +524,9 @@ class ShioajiMarketService:
 
     @staticmethod
     def _find_contract_by_code(api: Any, code: str) -> Any:
-        futures = api.Contracts.Futures
+        futures = getattr(api.Contracts, "Futures", None)
+        if futures is None:
+            return None
         for group_name in dir(futures):
             if group_name.startswith("_"):
                 continue
