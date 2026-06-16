@@ -161,6 +161,11 @@ spec:
           value: "600"
         - name: SHIOAJI_PORTFOLIO_CACHE_SECONDS
           value: "3600"
+        - name: MARKET_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: market-internal-secret
+              key: MARKET_INTERNAL_SECRET
         # Vector search tuning
         - name: MATCH_COUNT
           value: "5"
