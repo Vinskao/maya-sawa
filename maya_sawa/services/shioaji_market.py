@@ -48,6 +48,12 @@ class ReadOnlyShioajiClient:
             unit=self._share_unit,
         )
 
+    def list_futures_positions(self) -> Any:
+        return self._api.list_positions(account=self.futopt_account)
+
+    def margin(self) -> Any:
+        return self._api.margin(account=self.futopt_account)
+
     def logout(self) -> Any:
         return self._api.logout()
 
@@ -320,11 +326,21 @@ class ShioajiMarketService:
                 else 0
             )
 
+        # === Futures (futopt) positions and equity/margin ===
+        futures_positions, futures_error = ShioajiMarketService._fetch_futures_positions(api)
+        futures_summary = ShioajiMarketService._fetch_futures_summary(api, len(futures_positions))
+
+        account_errors = {
+            key: value
+            for key, value in {"stock": stock_error, "futures": futures_error}.items()
+            if value
+        }
+
         return {
             "cashBalance": cash,
             "balanceAvailable": balance is not None,
             "balanceError": balance_error,
-            "accountErrors": {"stock": stock_error} if stock_error else {},
+            "accountErrors": account_errors,
             "balanceDate": str(getattr(balance, "date", "") or "") if balance else "",
             "totalAssetsEstimated": round(total_assets, 2) if total_assets is not None else None,
             "totalPositionExposure": round(total_position_exposure, 2),
@@ -335,7 +351,12 @@ class ShioajiMarketService:
                 if cash is not None and total_assets and total_assets > 0
                 else 0
             ),
+            # `positions` keeps stock holdings for backward compatibility; the
+            # dashboard reads `stockPositions` / `futuresPositions` explicitly.
             "positions": positions,
+            "stockPositions": positions,
+            "futuresPositions": futures_positions,
+            "futuresSummary": futures_summary,
             "fetchedAt": datetime.now(timezone.utc).isoformat(),
             "source": "Sinopac Shioaji",
             "valuationNote": (
@@ -343,6 +364,58 @@ class ShioajiMarketService:
                 if cash is not None
                 else "Stock market value only; cash balance unavailable"
             ),
+        }
+
+    @staticmethod
+    def _fetch_futures_positions(api: Any) -> tuple[list[dict[str, Any]], str | None]:
+        try:
+            raw_positions = api.list_futures_positions()
+        except Exception as exc:
+            return [], ShioajiMarketService._public_account_error(exc)
+
+        futures_positions: list[dict[str, Any]] = []
+        for position in raw_positions:
+            code = str(getattr(position, "code", ""))
+            # `last_price` is not guaranteed on a futures Position object; fall back
+            # to a contract snapshot so the dashboard can show the current price.
+            last_price = float(getattr(position, "last_price", 0) or 0)
+            contract = None
+            try:
+                contract = api.Contracts.Futures[code]
+            except Exception:
+                contract = None
+            if not last_price and contract is not None:
+                try:
+                    last_price = float(api.snapshots([contract])[0].close or 0)
+                except Exception:
+                    last_price = 0.0
+            futures_name = str(getattr(contract, "name", "") or "") if contract is not None else ""
+            futures_positions.append(
+                ShioajiMarketService._position_payload(
+                    position,
+                    "futures",
+                    market_value=0.0,  # futures are margin instruments, no stock-style market value
+                    last_price=last_price,
+                    name=futures_name,
+                )
+            )
+        return futures_positions, None
+
+    @staticmethod
+    def _fetch_futures_summary(api: Any, position_count: int) -> dict[str, Any] | None:
+        try:
+            margin = api.margin()
+        except Exception:
+            return None
+        return {
+            "equity": float(getattr(margin, "equity", 0) or 0),
+            "equityAmount": float(getattr(margin, "equity_amount", 0) or 0),
+            "availableMargin": float(getattr(margin, "available_margin", 0) or 0),
+            "openPositionPnl": float(getattr(margin, "future_open_position", 0) or 0),
+            "initialMargin": float(getattr(margin, "initial_margin", 0) or 0),
+            "maintenanceMargin": float(getattr(margin, "maintenance_margin", 0) or 0),
+            "riskIndicator": float(getattr(margin, "risk_indicator", 0) or 0),
+            "positionCount": position_count,
         }
 
     @staticmethod
@@ -354,12 +427,18 @@ class ShioajiMarketService:
         name: str = "",
     ) -> dict[str, Any]:
         direction = getattr(position, "direction", "")
+        direction_str = str(getattr(direction, "value", direction))
+        quantity = int(getattr(position, "quantity", 0) or 0)
+        # Shioaji reports `quantity` as an absolute lot count — a short position is
+        # still positive — so the signed net must be derived from the direction.
+        signed_quantity = -quantity if direction_str.lower() == "sell" else quantity
         return {
             "code": str(getattr(position, "code", "")),
             "name": name,
             "productType": product_type,
-            "direction": str(getattr(direction, "value", direction)),
-            "quantity": int(getattr(position, "quantity", 0) or 0),
+            "direction": direction_str,
+            "quantity": quantity,
+            "signedQuantity": signed_quantity,
             "ydQuantity": int(getattr(position, "yd_quantity", 0) or 0),
             "averagePrice": float(getattr(position, "price", 0) or 0),
             "lastPrice": round(
