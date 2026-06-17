@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import platform
 import time
 from datetime import date, datetime, timezone
 from typing import Any
@@ -10,6 +11,37 @@ import redis
 
 
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+
+
+def resolve_shioaji_credentials() -> tuple[str | None, str | None]:
+    """Pick the Shioaji API/secret key pair for the current machine.
+
+    Local development uses a separate key per OS so two machines never share
+    one session (Shioaji invalidates a key when another login reuses it):
+
+    - macOS   -> SHIOAJI_LOCAL1_API_KEY / SHIOAJI_LOCAL1_SECRET_KEY
+    - Windows -> SHIOAJI_LOCAL2_API_KEY / SHIOAJI_LOCAL2_SECRET_KEY
+
+    If the OS-specific pair is not set (e.g. the Linux cloud deployment, where
+    only the generic vars exist), fall back to SHIOAJI_API_KEY /
+    SHIOAJI_SECRET_KEY. This means "local stage" is detected implicitly: the
+    LOCAL* vars only live in local .env files.
+    """
+    system = platform.system()
+    if system == "Darwin":
+        prefix = "SHIOAJI_LOCAL1_"
+    elif system == "Windows":
+        prefix = "SHIOAJI_LOCAL2_"
+    else:
+        prefix = None
+
+    if prefix:
+        api_key = os.getenv(f"{prefix}API_KEY")
+        secret_key = os.getenv(f"{prefix}SECRET_KEY")
+        if api_key and secret_key:
+            return api_key, secret_key
+
+    return os.getenv("SHIOAJI_API_KEY"), os.getenv("SHIOAJI_SECRET_KEY")
 
 
 class ShioajiNotConfiguredError(RuntimeError):
@@ -80,7 +112,8 @@ class ShioajiMarketService:
 
     @property
     def configured(self) -> bool:
-        return bool(os.getenv("SHIOAJI_API_KEY") and os.getenv("SHIOAJI_SECRET_KEY"))
+        api_key, secret_key = resolve_shioaji_credentials()
+        return bool(api_key and secret_key)
 
     @property
     def portfolio_enabled(self) -> bool:
@@ -206,10 +239,15 @@ class ShioajiMarketService:
         except ImportError as exc:
             raise RuntimeError("Shioaji is not installed") from exc
 
+        api_key, secret_key = resolve_shioaji_credentials()
+        if not (api_key and secret_key):
+            raise ShioajiNotConfiguredError(
+                "SHIOAJI_API_KEY and SHIOAJI_SECRET_KEY are required"
+            )
         api = sj.Shioaji(simulation=os.getenv("SHIOAJI_SIMULATION", "false").lower() == "true")
         api.login(
-            api_key=os.environ["SHIOAJI_API_KEY"],
-            secret_key=os.environ["SHIOAJI_SECRET_KEY"],
+            api_key=api_key,
+            secret_key=secret_key,
             fetch_contract=True,
         )
         return ReadOnlyShioajiClient(api, share_unit=sj.Unit.Share)
@@ -303,6 +341,7 @@ class ShioajiMarketService:
                     position,
                     "stock",
                     market_value,
+                    allocation_value=market_value,
                     last_price=last_price,
                     name=stock_name,
                 )
@@ -328,36 +367,64 @@ class ShioajiMarketService:
             code = str(getattr(position, "code", ""))
             contract = ShioajiMarketService._find_contract_by_code(api, code)
             contract_name = str(getattr(contract, "name", "") or "")
-            quantity = int(getattr(position, "quantity", 0) or 0)
             last_price = float(getattr(position, "last_price", 0) or 0)
+            contract_value, contract_size_shares, valuation_formula = (
+                ShioajiMarketService._futures_contract_value_details(
+                position,
+                contract=contract,
+                contract_name=contract_name,
+            )
+            )
             futures_position_payloads.append(
                 ShioajiMarketService._position_payload(
                     position,
                     "futures",
-                    market_value=last_price * quantity,
+                    market_value=contract_value,
+                    allocation_value=contract_value,
                     last_price=last_price,
                     name=contract_name,
+                    contract_size_shares=contract_size_shares,
+                    valuation_formula=valuation_formula,
                 )
             )
 
         positions = stock_position_payloads + futures_position_payloads
-        total_position_exposure = sum(item["marketValue"] for item in stock_position_payloads)
+        stock_market_value = sum(item["allocationValue"] for item in stock_position_payloads)
+        futures_contract_exposure = sum(item["allocationValue"] for item in futures_position_payloads)
+        total_position_exposure = stock_market_value + futures_contract_exposure
         total_pnl = sum(item["pnl"] for item in positions)
-        total_assets = (
-            cash + total_position_exposure
+        futures_equity = float(getattr(futures_margin, "equity", 0) or 0)
+        futures_available_cash = float(getattr(futures_margin, "available_margin", 0) or 0)
+        display_cash = (
+            cash + futures_available_cash
             if cash is not None
+            else None
+        )
+        total_assets = (
+            cash + stock_market_value + futures_equity
+            if cash is not None
+            else None
+        )
+        leverage_ratio = (
+            round(
+                (futures_contract_exposure + stock_market_value + cash) / total_assets,
+                4,
+            )
+            if cash is not None and total_assets and total_assets > 0
             else None
         )
         percentage_base = total_assets or total_position_exposure
         for item in positions:
             item["assetPercentage"] = (
-                round(item["marketValue"] / percentage_base * 100, 2)
+                round(item["allocationValue"] / percentage_base * 100, 2)
                 if percentage_base > 0
                 else 0
             )
 
         return {
-            "cashBalance": cash,
+            "cashBalance": round(display_cash, 2) if display_cash is not None else None,
+            "stockCashBalance": cash,
+            "futuresAvailableCash": round(futures_available_cash, 2),
             "balanceAvailable": balance is not None,
             "balanceError": balance_error,
             "accountErrors": {
@@ -370,20 +437,46 @@ class ShioajiMarketService:
             "balanceDate": str(getattr(balance, "date", "") or "") if balance else "",
             "totalAssetsEstimated": round(total_assets, 2) if total_assets is not None else None,
             "totalPositionExposure": round(total_position_exposure, 2),
+            "stockMarketValue": round(stock_market_value, 2),
+            "futuresContractExposure": round(futures_contract_exposure, 2),
+            "futuresEquity": round(futures_equity, 2),
+            "leverageRatio": leverage_ratio,
             "totalPnl": round(total_pnl, 2),
+            "summaryFormulas": {
+                "cashBalance": (
+                    f"{int(cash):,} + {int(futures_available_cash):,}"
+                    if cash is not None
+                    else None
+                ),
+                "totalAssetsEstimated": (
+                    f"{int(cash):,} + {int(stock_market_value):,} + {int(futures_equity):,}"
+                    if cash is not None
+                    else None
+                ),
+                "totalPnl": " + ".join(
+                    f"{str(item.get('name') or item.get('code') or '?')} {item['pnl']:+,.0f}"
+                    for item in positions
+                ) or "0",
+                "leverageRatio": (
+                    f"({int(futures_contract_exposure):,} + {int(stock_market_value):,} + {int(cash):,}) / "
+                    f"({int(futures_equity):,} + {int(stock_market_value):,} + {int(cash):,})"
+                    if cash is not None and total_assets and total_assets > 0
+                    else None
+                ),
+            },
             "positionCount": len(positions),
             "cashPercentage": (
-                round(cash / total_assets * 100, 2)
-                if cash is not None and total_assets and total_assets > 0
+                round(display_cash / total_assets * 100, 2)
+                if display_cash is not None and total_assets and total_assets > 0
                 else 0
             ),
             "positions": positions,
             "stockPositions": stock_position_payloads,
             "futuresPositions": futures_position_payloads,
             "futuresSummary": {
-                "equity": float(getattr(futures_margin, "equity", 0) or 0),
+                "equity": futures_equity,
                 "equityAmount": float(getattr(futures_margin, "equity_amount", 0) or 0),
-                "availableMargin": float(getattr(futures_margin, "available_margin", 0) or 0),
+                "availableMargin": futures_available_cash,
                 "openPositionPnl": float(getattr(futures_margin, "future_open_position", 0) or 0),
                 "maintenanceMargin": float(getattr(futures_margin, "maintenance_margin", 0) or 0),
                 "initialMargin": float(getattr(futures_margin, "initial_margin", 0) or 0),
@@ -392,9 +485,9 @@ class ShioajiMarketService:
             "fetchedAt": datetime.now(timezone.utc).isoformat(),
             "source": "Sinopac Shioaji",
             "valuationNote": (
-                "Stock cash plus stock market value"
+                "Stock cash plus stock market value plus futures equity"
                 if cash is not None
-                else "Stock market value only; cash balance unavailable"
+                else "Stock and futures exposure only; cash balance unavailable"
             ),
         }
 
@@ -403,11 +496,14 @@ class ShioajiMarketService:
         position: Any,
         product_type: str,
         market_value: float,
+        allocation_value: float | None = None,
         last_price: float | None = None,
         name: str = "",
+        contract_size_shares: int | None = None,
+        valuation_formula: str | None = None,
     ) -> dict[str, Any]:
         direction = getattr(position, "direction", "")
-        return {
+        payload = {
             "code": str(getattr(position, "code", "")),
             "name": name,
             "productType": product_type,
@@ -424,7 +520,68 @@ class ShioajiMarketService:
             ),
             "pnl": float(getattr(position, "pnl", 0) or 0),
             "marketValue": round(market_value, 2),
+            "allocationValue": round(
+                allocation_value if allocation_value is not None else market_value,
+                2,
+            ),
         }
+        if contract_size_shares is not None:
+            payload["contractSizeShares"] = contract_size_shares
+        if valuation_formula:
+            payload["valuationFormula"] = valuation_formula
+        return payload
+
+    @staticmethod
+    def _futures_contract_shares(
+        code: str,
+        contract: Any | None = None,
+        contract_name: str = "",
+    ) -> int | None:
+        resolved_name = contract_name or str(getattr(contract, "name", "") or "")
+        underlying_kind = str(getattr(contract, "underlying_kind", "") or "").upper()
+        underlying_code = str(getattr(contract, "underlying_code", "") or "")
+        if underlying_kind == "S":
+            return 100 if "小型" in resolved_name else 2000
+        if not underlying_kind and underlying_code.isdigit() and len(underlying_code) == 4:
+            return 100 if "小型" in resolved_name else 2000
+        return None
+
+    @staticmethod
+    def _futures_contract_value_details(
+        position: Any,
+        contract: Any | None = None,
+        contract_name: str = "",
+    ) -> tuple[float, int | None, str]:
+        code = str(getattr(position, "code", "") or "")
+        contract_shares = ShioajiMarketService._futures_contract_shares(
+            code,
+            contract=contract,
+            contract_name=contract_name,
+        )
+        quantity = abs(int(getattr(position, "quantity", 0) or 0))
+        last_price = float(getattr(position, "last_price", 0) or 0)
+        if contract_shares and quantity > 0 and last_price > 0:
+            contract_value = contract_shares * quantity * last_price
+            return (
+                float(contract_value),
+                contract_shares,
+                f"{quantity} * {last_price:g} * {contract_shares}",
+            )
+        fallback_value = float(abs(getattr(position, "last_price", 0) or 0) * quantity)
+        return fallback_value, None, f"{quantity} * {last_price:g}"
+
+    @staticmethod
+    def _futures_contract_value(
+        position: Any,
+        contract: Any | None = None,
+        contract_name: str = "",
+    ) -> float:
+        value, _contract_shares, _formula = ShioajiMarketService._futures_contract_value_details(
+            position,
+            contract=contract,
+            contract_name=contract_name,
+        )
+        return value
 
     @staticmethod
     def _signed_quantity(position: Any) -> int:
@@ -527,17 +684,47 @@ class ShioajiMarketService:
         futures = getattr(api.Contracts, "Futures", None)
         if futures is None:
             return None
+        for contract in ShioajiMarketService._iter_futures_contracts(futures):
+            if str(getattr(contract, "code", "")) == code:
+                return contract
+        return None
+
+    @staticmethod
+    def _iter_futures_contracts(futures: Any):
+        seen_ids: set[int] = set()
+
+        def yield_contracts_from_group(group: Any):
+            group_id = id(group)
+            if group_id in seen_ids:
+                return
+            seen_ids.add(group_id)
+
+            values = group.values() if hasattr(group, "values") else group
+            try:
+                for item in values:
+                    if isinstance(item, str):
+                        continue
+                    if getattr(item, "code", None) is not None:
+                        yield item
+                    elif hasattr(item, "values") or not isinstance(item, (str, bytes)):
+                        yield from yield_contracts_from_group(item)
+            except TypeError:
+                return
+
+        try:
+            for group in futures:
+                yield from yield_contracts_from_group(group)
+        except TypeError:
+            pass
+
         for group_name in dir(futures):
             if group_name.startswith("_"):
                 continue
             try:
                 group = getattr(futures, group_name)
-                for contract in group:
-                    if str(getattr(contract, "code", "")) == code:
-                        return contract
+                yield from yield_contracts_from_group(group)
             except (TypeError, AttributeError):
                 continue
-        return None
 
     @staticmethod
     def _parse_date(value: Any) -> date:

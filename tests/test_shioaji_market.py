@@ -60,6 +60,7 @@ def test_position_payload_omits_account_identifiers():
     )
 
     assert payload["marketValue"] == 202000
+    assert payload["allocationValue"] == 202000
     assert payload["ydQuantity"] == 1
     assert payload["signedQuantity"] == 2
     assert "account_id" not in payload
@@ -80,6 +81,106 @@ def test_position_payload_signs_short_futures_quantity():
 
     assert payload["signedQuantity"] == -3
     assert payload["lastPrice"] == 21900
+
+
+def test_futures_contract_value_uses_contract_name_for_mini_future():
+    position = SimpleNamespace(
+        code="QFFR1",
+        quantity=2,
+        last_price=980,
+    )
+    contract = SimpleNamespace(name="小型台積電期貨06", category="QFF", underlying_kind="S", underlying_code="2330")
+
+    value = ShioajiMarketService._futures_contract_value(position, contract=contract)
+
+    assert value == 196000
+
+
+def test_futures_contract_value_uses_contract_kind_for_non_qff_mini_future():
+    position = SimpleNamespace(
+        code="PUFF6",
+        quantity=3,
+        last_price=1320,
+    )
+    contract = SimpleNamespace(
+        code="PUFF6",
+        name="小型聯發科期貨",
+        underlying_kind="S",
+        underlying_code="2454",
+        multiplier=0,
+    )
+
+    value = ShioajiMarketService._futures_contract_value(position, contract=contract)
+
+    assert value == 396000
+
+
+def test_futures_contract_value_uses_contract_name_for_standard_future():
+    position = SimpleNamespace(
+        code="CDF",
+        quantity=1,
+        last_price=995,
+    )
+    contract = SimpleNamespace(name="台積電期貨06", category="CDF", underlying_kind="S", underlying_code="2330")
+
+    value = ShioajiMarketService._futures_contract_value(position, contract=contract)
+
+    assert value == 1_990_000
+
+
+def test_futures_contract_value_does_not_force_stock_multiplier_for_index_future():
+    position = SimpleNamespace(
+        code="TXFF6",
+        quantity=2,
+        last_price=21950,
+    )
+    contract = SimpleNamespace(name="臺股期貨06", category="TXF", underlying_kind="I", underlying_code="")
+
+    value = ShioajiMarketService._futures_contract_value(position, contract=contract)
+
+    assert value == 43_900
+
+
+def test_futures_contract_value_does_not_use_prefix_without_contract_metadata():
+    position = SimpleNamespace(
+        code="QFFR1",
+        quantity=2,
+        last_price=980,
+    )
+
+    value = ShioajiMarketService._futures_contract_value(position)
+
+    assert value == 1960
+
+
+def test_find_contract_by_code_supports_mapping_groups():
+    contract = SimpleNamespace(code="QFFR1", name="小型台積電期貨06")
+    api = SimpleNamespace(
+        Contracts=SimpleNamespace(
+            Futures=SimpleNamespace(QFF={"QFFR1": contract})
+        )
+    )
+
+    found = ShioajiMarketService._find_contract_by_code(api, "QFFR1")
+
+    assert found is contract
+
+
+def test_find_contract_by_code_supports_iterable_futures_tree():
+    puff = SimpleNamespace(code="PUFF6", name="小型聯發科期貨")
+    qff = SimpleNamespace(code="QFFR1", name="小型台積電期貨06")
+
+    class FuturesTree:
+        def __iter__(self):
+            return iter([[qff], [puff]])
+
+    api = SimpleNamespace(
+        Contracts=SimpleNamespace(Futures=FuturesTree())
+    )
+
+    found = ShioajiMarketService._find_contract_by_code(api, "PUFF6")
+
+    assert found is puff
 
 
 def test_stock_portfolio_uses_only_successful_stock_apis():
@@ -106,10 +207,15 @@ def test_stock_portfolio_uses_only_successful_stock_apis():
 
     assert payload["totalPositionExposure"] == 101_000
     assert payload["totalAssetsEstimated"] == 201_000
+    assert payload["cashBalance"] == 100_000
+    assert payload["stockCashBalance"] == 100_000
+    assert payload["futuresAvailableCash"] == 0
+    assert payload["leverageRatio"] == 1.0
     assert payload["totalPnl"] == 100_000
     assert payload["positionCount"] == 1
     assert payload["positions"][0]["assetPercentage"] == 50.25
     assert payload["positions"][0]["name"] == "台積電"
+    assert payload["positions"][0]["allocationValue"] == 101_000
 
 
 def test_portfolio_includes_futures_summary_and_positions():
@@ -124,7 +230,7 @@ def test_portfolio_includes_futures_summary_and_positions():
         pnl=100_000,
     )
     futures_position = SimpleNamespace(
-        code="TXFF6",
+        code="QFFR1",
         direction=SimpleNamespace(value="Sell"),
         quantity=2,
         price=22000,
@@ -143,7 +249,17 @@ def test_portfolio_includes_futures_summary_and_positions():
         stock_account=SimpleNamespace(),
         futopt_account=SimpleNamespace(),
         Contracts=SimpleNamespace(
-            Stocks={"2330": SimpleNamespace(name="台積電")}
+            Stocks={"2330": SimpleNamespace(name="台積電")},
+            Futures=SimpleNamespace(
+                QFF={
+                    "QFFR1": SimpleNamespace(
+                        code="QFFR1",
+                        name="小型台積電期貨06",
+                        underlying_kind="S",
+                        underlying_code="2330",
+                    )
+                }
+            ),
         ),
         account_balance=lambda account: balance,
         list_stock_positions=lambda: [stock_position],
@@ -156,7 +272,72 @@ def test_portfolio_includes_futures_summary_and_positions():
     assert payload["futuresSummary"]["equity"] == 250000
     assert payload["futuresSummary"]["positionCount"] == 1
     assert payload["futuresPositions"][0]["signedQuantity"] == -2
+    assert payload["futuresPositions"][0]["allocationValue"] == 4_390_000
+    assert payload["futuresPositions"][0]["marketValue"] == 4_390_000
+    assert payload["futuresPositions"][0]["contractSizeShares"] == 100
+    assert payload["futuresPositions"][0]["valuationFormula"] == "2 * 21950 * 100"
     assert payload["positions"][1]["productType"] == "futures"
+    assert payload["totalPositionExposure"] == 4_491_000
+    assert payload["stockMarketValue"] == 101_000
+    assert payload["futuresContractExposure"] == 4_390_000
+    assert payload["futuresEquity"] == 250_000
+    assert payload["cashBalance"] == 280_000
+    assert payload["stockCashBalance"] == 100_000
+    assert payload["futuresAvailableCash"] == 180_000
+    assert payload["totalAssetsEstimated"] == 451_000
+    assert payload["leverageRatio"] == 10.1796
+
+
+def test_portfolio_uses_contract_tree_metadata_for_non_qff_mini_future():
+    balance = SimpleNamespace(acc_balance=100_000, date="2026-06-12")
+    futures_position = SimpleNamespace(
+        code="PUFF6",
+        direction=SimpleNamespace(value="Buy"),
+        quantity=3,
+        price=1300,
+        last_price=1320,
+        pnl=6000,
+    )
+    contract = SimpleNamespace(
+        code="PUFF6",
+        name="小型聯發科期貨",
+        underlying_kind="S",
+        underlying_code="2454",
+        multiplier=0,
+    )
+    margin = SimpleNamespace(
+        equity=120000,
+        equity_amount=120000,
+        available_margin=80000,
+        future_open_position=6000,
+        maintenance_margin=50000,
+        initial_margin=65000,
+    )
+
+    class FuturesTree:
+        def __iter__(self):
+            return iter([[contract]])
+
+    api = SimpleNamespace(
+        stock_account=SimpleNamespace(),
+        futopt_account=SimpleNamespace(),
+        Contracts=SimpleNamespace(
+            Stocks={},
+            Futures=FuturesTree(),
+        ),
+        account_balance=lambda account: balance,
+        list_stock_positions=lambda: [],
+        list_positions=lambda account: [futures_position],
+        margin=lambda account: margin,
+    )
+
+    payload = ShioajiMarketService._fetch_portfolio(api)
+
+    assert payload["futuresPositions"][0]["name"] == "小型聯發科期貨"
+    assert payload["futuresPositions"][0]["contractSizeShares"] == 100
+    assert payload["futuresPositions"][0]["valuationFormula"] == "3 * 1320 * 100"
+    assert payload["futuresPositions"][0]["allocationValue"] == 396_000
+    assert payload["futuresContractExposure"] == 396_000
 
 
 def test_public_account_error_omits_request_identity():
