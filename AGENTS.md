@@ -216,6 +216,24 @@ result = process_ai_response_task.delay(task_id)
 status = result.status
 ```
 
+## 7. 這次排查的經驗
+
+### Internal Secret 與 Pod Env
+- `MARKET_INTERNAL_SECRET` 必須確認在**正在執行的 pod process** 裡真的有值，不只看 `kubectl get deploy` 或 `kubectl exec ... env` 的表面輸出。
+- 這次問題的核心是 `require_internal_secret()` 讀到空值，導致 `/market/internal/portfolio` 和 `/market/internal/usage` 回 `503 Internal market access is not configured`。
+- 若遇到 service-to-service 驗證失敗，請優先檢查：
+  - `kubectl exec deploy/maya-sawa -- sh -c 'printf %s "$MARKET_INTERNAL_SECRET" | wc -c'`
+  - `/proc/1/environ` 是否和 shell env 一致
+  - rollout restart 後 pod 是否重新吃到最新 secret
+
+### 快取與回應驗證
+- `shioaji_market_service` 的 portfolio / usage 都是 Redis cache-backed，外部 API 成功不代表前端一定會立即更新。
+- 驗證時要同時看：
+  - 直接打公開 endpoint 是否回 `200`
+  - `fetchedAt` 是否是新時間
+  - `kubectl logs deploy/maya-sawa` 是否還在吐舊的 `503` 或 `401`
+- 如果前端還顯示舊值，問題可能在前端 fallback cache，而不是後端 endpoint 本身。
+
 ## API 端點規格說明
 
 ### 插入文章 API 規格
@@ -1063,4 +1081,3 @@ curl -X POST "http://localhost:8000/maya-sawa/qa/convert-to-vector" \
 - **v0.3.0** - 添加向量轉換 API 和服務層重構
 - **v0.2.0** - 整合 maya-sawa-v2 (Django) 和 paprika (Laravel)
 - **v0.1.0** - 原始 FastAPI 問答系統
-
