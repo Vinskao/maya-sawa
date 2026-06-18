@@ -140,13 +140,11 @@ def _subject(payload: Dict[str, Any], request: Request) -> str:
     if subject:
         return str(subject)
 
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
+    # Fall back to the IP resolved by SecurityMiddleware (trusted-proxy aware)
+    # rather than re-parsing the spoofable X-Forwarded-For header here.
+    resolved = getattr(request.state, "client_ip", None)
+    if resolved:
+        return str(resolved)
 
     return request.client.host if request.client else "unknown"
 

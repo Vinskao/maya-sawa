@@ -92,6 +92,35 @@ python scripts/monitor_connections.py
 
 ## Usage
 
+### Local AI Token Usage Sync
+
+Windows local `ccusage` data is synced into the TY Multiverse database by a
+Task Scheduler job named `TY Multiverse AI Usage Sync`.
+
+- Current Windows schedule: every 3 hours.
+- Script executed by the task:
+  `ty-multiverse-backend/scripts/run_windows_ccusage_sync.ps1`
+- Direct DB sync implementation:
+  `ty-multiverse-backend/scripts/sync_ccusage_direct_db.py`
+- Re-install/update the Windows task with the default 3-hour interval:
+
+```powershell
+cd F:\002-workspace\ty-multiverse\ty-multiverse-backend
+.\scripts\install_windows_ccusage_sync_task.ps1 -IntervalMinutes 180
+```
+
+To check the active schedule on Windows:
+
+```powershell
+schtasks /Query /TN "TY Multiverse AI Usage Sync" /FO LIST /V
+```
+
+Expected schedule line:
+
+```text
+Repeat: Every: 3 Hour(s), 0 Minute(s)
+```
+
 ### API Examples
 
 ```bash

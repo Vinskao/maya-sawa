@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
-from ..core.auth.keycloak import require_git_commit_access
+from ..core.auth.keycloak import require_manage_users
 from ..core.services.ai_rate_limiter import enforce_ai_rate_limit
 from ..core.processing.git_commit_parser import parse_paste
 from ..databases.git_commit_db import get_git_commit_db
@@ -40,6 +40,7 @@ class GitCommitIngestResponse(BaseModel):
 async def ingest_git_commits(
     request: GitCommitIngestRequest,
     http_request: Request,
+    _claims: Dict[str, Any] = Depends(require_manage_users),
 ):
     enforce_ai_rate_limit(http_request, allow_anonymous=False)
 
@@ -105,7 +106,7 @@ async def ingest_git_commits(
 async def list_git_commits(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    _claims: Dict[str, Any] = Depends(require_git_commit_access),
+    _claims: Dict[str, Any] = Depends(require_manage_users),
 ):
     db = get_git_commit_db()
     if not db.is_available():

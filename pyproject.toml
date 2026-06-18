@@ -37,8 +37,8 @@ pytest = "*"
 black = "*"
 
 [tool.poetry.scripts]
-start = "maya_sawa.main:app"
-maya = "maya_sawa.cli:local"
+maya = "maya_sawa.cli:main"
+start = "maya_sawa.cli:main"
 
 [build-system]
 requires = ["poetry-core"]

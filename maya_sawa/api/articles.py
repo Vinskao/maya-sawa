@@ -22,10 +22,11 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, status, HTTPException, Request
+from fastapi import APIRouter, status, HTTPException, Request, Depends
 from pydantic import BaseModel, Field
 
 from ..databases.article_db import get_article_db
+from ..core.auth.keycloak import require_manage_users
 from ..core.errors.errors import (
     ErrorCode,
     AppException,
@@ -205,7 +206,7 @@ async def get_article(article_id: int):
 
 
 @router.post("/articles", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
-async def create_article(request: ArticleCreate):
+async def create_article(request: ArticleCreate, _claims: Dict[str, Any] = Depends(require_manage_users)):
     """
     Create a new article
     
@@ -245,7 +246,7 @@ async def create_article(request: ArticleCreate):
 
 
 @router.put("/articles/{article_id}", response_model=Dict[str, Any])
-async def update_article(article_id: int, request: ArticleUpdate):
+async def update_article(article_id: int, request: ArticleUpdate, _claims: Dict[str, Any] = Depends(require_manage_users)):
     """
     Update an existing article
     
@@ -284,7 +285,7 @@ async def update_article(article_id: int, request: ArticleUpdate):
 
 
 @router.delete("/articles/{article_id}", response_model=Dict[str, Any])
-async def delete_article(article_id: int):
+async def delete_article(article_id: int, _claims: Dict[str, Any] = Depends(require_manage_users)):
     """
     Delete an article (soft delete)
     
@@ -317,7 +318,7 @@ async def delete_article(article_id: int):
 
 
 @router.post("/articles/batch", response_model=Dict[str, Any])
-async def create_articles_batch(request: List[ArticleCreate]):
+async def create_articles_batch(request: List[ArticleCreate], _claims: Dict[str, Any] = Depends(require_manage_users)):
     """
     Batch create multiple articles
 
@@ -515,7 +516,7 @@ async def create_articles_batch(request: List[ArticleCreate]):
 
 
 @router.post("/articles/sync", response_model=ArticleSyncResponse)
-async def sync_articles(request: ArticleSyncRequest):
+async def sync_articles(request: ArticleSyncRequest, _claims: Dict[str, Any] = Depends(require_manage_users)):
     """
     Batch sync articles
     
@@ -560,7 +561,7 @@ async def sync_articles(request: ArticleSyncRequest):
 
 
 @router.post("/articles/vectorize", response_model=Dict[str, Any])
-async def vectorize_articles(request: VectorizeArticlesRequest, http_request: Request):
+async def vectorize_articles(request: VectorizeArticlesRequest, http_request: Request, _claims: Dict[str, Any] = Depends(require_manage_users)):
     """
     將文章內容轉為向量並寫回資料庫（embedding 欄位）
 
@@ -646,7 +647,7 @@ async def vectorize_articles(request: VectorizeArticlesRequest, http_request: Re
 
 
 @router.post("/articles/purge-deleted", response_model=PurgeDeletedResponse)
-async def purge_deleted_articles():
+async def purge_deleted_articles(_claims: Dict[str, Any] = Depends(require_manage_users)):
     """
     永久刪除已軟刪除的文章 (deleted_at is not null)
     """
