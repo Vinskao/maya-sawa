@@ -1081,3 +1081,72 @@ curl -X POST "http://localhost:8000/maya-sawa/qa/convert-to-vector" \
 - **v0.3.0** - 添加向量轉換 API 和服務層重構
 - **v0.2.0** - 整合 maya-sawa-v2 (Django) 和 paprika (Laravel)
 - **v0.1.0** - 原始 FastAPI 問答系統
+
+---
+
+## 本地啟動
+
+```bash
+cd maya-sawa
+poetry install
+poetry run maya            # 預設 port 8000
+poetry run maya --port 8001  # 換 port（若 8000 被佔用）
+```
+
+等同於：
+```bash
+poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
+```
+
+### 連接池測試
+```bash
+python scripts/test_connection_pool.py
+python scripts/monitor_connections.py
+```
+
+## AI Token Usage Sync（Windows）
+
+Windows 本地 `ccusage` 資料透過 Task Scheduler 同步到 TY Multiverse DB，每 3 小時一次。
+
+```powershell
+# 安裝/更新排程工作（3 小時間隔）
+cd F:\002-workspace\ty-multiverse\ty-multiverse-backend
+.\scripts\install_windows_ccusage_sync_task.ps1 -IntervalMinutes 180
+
+# 查看排程狀態
+schtasks /Query /TN "TY Multiverse AI Usage Sync" /FO LIST /V
+```
+
+## API 測試範例
+
+```bash
+# 同步文章
+curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" \
+  -H "Content-Type: application/json" -d '{}'
+
+# 強制本地 Embedding
+curl -X POST "http://localhost:8000/maya-sawa/qa/sync-articles" \
+  -H "Content-Type: application/json" -d '{}'
+
+# QA 查詢（英文）
+curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Who is Sorane?","user_id":"dev","language":"english","name":"Maya","frontend_source":"/tymultiverse"}'
+
+# QA 查詢（中文）
+curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"誰是Sorane?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
+
+# 對話歷史
+curl -X GET "http://localhost:8000/maya-sawa/qa/chat-history/dev"
+
+# 市場數據（需 cache）
+curl http://localhost:8000/maya-sawa/market/internal/usage
+```
+
+## Docker 建置
+
+```bash
+docker build -t papakao/maya-sawa:latest .
+```

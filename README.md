@@ -7,11 +7,8 @@
 ## Table of Contents
 
 - [Background](#background)
-- [Install](#install)
-- [Usage](#usage)
 - [Architecture](#architecture)
 - [Design Patterns](#design-patterns)
-- [Deployment](#deployment)
 - [Other](#other)
 
 ## Background
@@ -40,144 +37,13 @@
 - **Redis 快取**：高效的對話歷史存儲和檢索
 - **上下文感知**：基於歷史對話提供連貫的回應
 
-## Install
-
-### Getting Started
-
-#### 環境要求
+### 環境要求
 - Python 3.8+
-- PostgreSQL (支援 pgvector 擴展)
+- PostgreSQL（支援 pgvector 擴展）
 - Redis
-- Aiven Free Tier PostgreSQL (最多 20 個連接)
+- 雙數據庫架構：主數據庫（articles）+ 人員數據庫（people/weapon）
 
-#### 雙數據庫配置
-系統使用雙數據庫架構：
-- **主數據庫**: 用於 articles 表 (向量搜索)
-- **人員數據庫**: 用於 people 和 weapon 表 (角色和武器數據)
-
-#### 連接池配置
-系統已配置為每個數據庫最多使用 5 個 PostgreSQL 連接：
-- **主數據庫**: 最多 5 個連接 (articles 表)
-- **人員數據庫**: 最多 5 個連接 (people/weapon 表)
-- 每個數據庫都符合單一數據庫 5 連接限制
-- 所有數據庫操作都通過連接池管理
-
-#### 啟動應用
-```bash
-poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
-```
-
-#### 本地快速啟動
-之後在 `maya-sawa` 目錄下可以直接用：
-
-```bash
-poetry run maya
-```
-
-它等同於：
-
-```bash
-poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
-```
-
-#### 測試連接池
-```bash
-python scripts/test_connection_pool.py
-```
-
-#### 監控連接使用情況
-```bash
-python scripts/monitor_connections.py
-```
-
-## Usage
-
-### Local AI Token Usage Sync
-
-Windows local `ccusage` data is synced into the TY Multiverse database by a
-Task Scheduler job named `TY Multiverse AI Usage Sync`.
-
-- Current Windows schedule: every 3 hours.
-- Script executed by the task:
-  `ty-multiverse-backend/scripts/run_windows_ccusage_sync.ps1`
-- Direct DB sync implementation:
-  `ty-multiverse-backend/scripts/sync_ccusage_direct_db.py`
-- Re-install/update the Windows task with the default 3-hour interval:
-
-```powershell
-cd F:\002-workspace\ty-multiverse\ty-multiverse-backend
-.\scripts\install_windows_ccusage_sync_task.ps1 -IntervalMinutes 180
-```
-
-To check the active schedule on Windows:
-
-```powershell
-schtasks /Query /TN "TY Multiverse AI Usage Sync" /FO LIST /V
-```
-
-Expected schedule line:
-
-```text
-Repeat: Every: 3 Hour(s), 0 Minute(s)
-```
-
-### API Examples
-
-```bash
-## Sync articles
-curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-
-## Force local embedding
-curl -X POST "http://localhost:8000/maya-sawa/qa/sync-articles" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-
-```bash
-curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Who is Sorane?","user_id":"dev","language":"english","name":"Maya","frontend_source":"/tymultiverse"}'
-
-curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"誰是Sorane?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
-
-curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"你認識 Sorane嗎?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
-
-curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"你是誰?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
-```
-
-```bash
-curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Maya","frontend_source":"/tymultiverse"}'
-
-curl -X POST "https://peoplesystem.tatdvsonorth.com/maya-sawa/qa/query" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Maya"}'
-
-curl -X POST "http://localhost:8000/maya-sawa/qa/query" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"什麼是Java開發?","user_id":"dev","language":"chinese","name":"Maya"}'
-```
-
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/qa/chat-history/dev"
-```
-
-### Troubleshooting
-
-```bash
-curl -X POST "http://localhost:8000/maya-sawa/qa/sync-articles" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
+> 啟動指令、API 範例、部署流程請見 [AGENTS.md](AGENTS.md)；本地開發注意事項請見 [CLAUDE.md](CLAUDE.md)。
 
 ## Architecture
 
@@ -288,31 +154,25 @@ flowchart TD
 - **策略模式 (Strategy Pattern)**: 根據用戶查詢是否包含特定人名，動態切換不同的資訊檢索與提示生成策略。
 - **工廠模式 (Factory Pattern)**: 動態組裝與生成不同 AI 角色專屬的 Personality Prompt。
 
-## Deployment
-
-### Deployment
-
-```bash
-docker build -t papakao/maya-sawa:latest .
-```
-
-```bash
-poetry install
-poetry run uvicorn maya_sawa.main:app --reload --log-level debug --host 0.0.0.0 --port 8000
-```
-
 ## Other
 
 ### Environment Variables
 
-- `OPENAI_API_KEY`: OpenAI API key
-- `OPENAI_ORGANIZATION`: OpenAI organization ID
-- `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`: PostgreSQL connection
-- `REDIS_HOST`, `REDIS_CUSTOM_PORT`, `REDIS_PASSWORD`: Redis connection
-- `MATCH_COUNT`: Number of documents to retrieve (default: 3)
-- `SIMILARITY_THRESHOLD`: Similarity threshold for document matching (default: 0.5)
-- `FORCE_LOCAL_EMBEDDING`: Force local embedding computation, ignore upstream embeddings (default: false)
-- `VALIDATE_UPSTREAM_EMBEDDING`: Validate upstream embeddings before use (default: true)
-- `ENABLE_AUTO_SYNC_ON_STARTUP`: Auto-sync on application startup (default: false)
-- `ENABLE_PERIODIC_SYNC`: Enable periodic article sync (default: false)
-- `ENABLE_PEOPLE_WEAPONS_SYNC`: Enable people/weapons data sync (default: false)
+| 變數 | 說明 |
+|------|------|
+| `OPENAI_API_KEY` | OpenAI API key |
+| `OPENAI_ORGANIZATION` | OpenAI organization ID |
+| `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` | PostgreSQL 主數據庫 |
+| `REDIS_HOST`, `REDIS_CUSTOM_PORT`, `REDIS_PASSWORD` | Redis 連線 |
+| `MATCH_COUNT` | 檢索文件數（預設 3） |
+| `SIMILARITY_THRESHOLD` | 相似度門檻（預設 0.5） |
+| `FORCE_LOCAL_EMBEDDING` | 強制本地 Embedding（預設 false） |
+| `VALIDATE_UPSTREAM_EMBEDDING` | 驗證上游 Embedding（預設 true） |
+| `ENABLE_AUTO_SYNC_ON_STARTUP` | 啟動時自動同步（預設 false） |
+| `ENABLE_PERIODIC_SYNC` | 啟用定期文章同步（預設 false） |
+| `ENABLE_PEOPLE_WEAPONS_SYNC` | 啟用人員/武器資料同步（預設 false） |
+
+### Documentation
+
+- Local API Docs: `http://localhost:8000/maya-sawa/docs`
+- Production: `https://peoplesystem.tatdvsonorth.com/maya-sawa/docs`
