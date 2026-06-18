@@ -1,11 +1,3 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: market-internal-secret
-type: Opaque
-stringData:
-  MARKET_INTERNAL_SECRET: "${MARKET_INTERNAL_SECRET}"
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:

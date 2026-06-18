@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import platform
 import time
@@ -10,7 +11,9 @@ from zoneinfo import ZoneInfo
 import redis
 
 
+logger = logging.getLogger(__name__)
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+FUTURES_EXPIRY_ROLLOVER_TIME = (13, 45)
 
 
 def resolve_shioaji_credentials() -> tuple[str | None, str | None]:
@@ -189,10 +192,12 @@ class ShioajiMarketService:
         try:
             payload = await self._run_with_relogin(fetcher)
         except Exception:
+            logger.exception("Failed to refresh Shioaji market payload: %s", key)
             return False
         try:
             await asyncio.to_thread(self._write_cached_payload, key, payload)
         except redis.RedisError:
+            logger.exception("Failed to write Shioaji market payload to Redis: %s", key)
             return False
         return True
 
@@ -617,7 +622,7 @@ class ShioajiMarketService:
         )
 
     @staticmethod
-    def _nearest_txf_contract(api: Any) -> Any:
+    def _nearest_txf_contract(api: Any, now: datetime | None = None) -> Any:
         contracts = [
             contract
             for contract in api.Contracts.Futures.TXF
@@ -627,29 +632,20 @@ class ShioajiMarketService:
         if not contracts:
             raise RuntimeError("No active TXF contracts returned by Shioaji")
 
-        today = datetime.now().date()
         active = [
             contract
             for contract in contracts
-            if ShioajiMarketService._parse_date(contract.delivery_date) >= today
+            if ShioajiMarketService._is_active_futures_contract(contract, now)
         ]
         candidates = active or contracts
         return min(
             candidates,
-            key=lambda contract: ShioajiMarketService._parse_date(contract.delivery_date),
+            key=ShioajiMarketService._contract_sort_key,
         )
 
     @staticmethod
-    def _mini_tsmc_contract(api: Any) -> Any:
+    def _mini_tsmc_contract(api: Any, now: datetime | None = None) -> Any:
         qff_contracts = list(getattr(api.Contracts.Futures, "QFF", []) or [])
-        exact = [
-            contract
-            for contract in qff_contracts
-            if str(getattr(contract, "code", "")).upper() == "QFFR1"
-        ]
-        if exact:
-            return exact[0]
-
         candidates = [
             contract
             for contract in qff_contracts
@@ -657,27 +653,40 @@ class ShioajiMarketService:
         ]
         if not candidates:
             raise RuntimeError("QFFR1 mini TSMC futures contract was not returned")
-        return ShioajiMarketService._nearest_contract(candidates)
+        return ShioajiMarketService._nearest_contract(candidates, now)
 
     @staticmethod
-    def _nearest_contract(contracts: list[Any]) -> Any:
+    def _nearest_contract(contracts: list[Any], now: datetime | None = None) -> Any:
         dated = [
             contract for contract in contracts
             if getattr(contract, "delivery_date", None)
         ]
         if not dated:
             return contracts[0]
-        today = datetime.now().date()
         active = [
             contract for contract in dated
-            if ShioajiMarketService._parse_date(contract.delivery_date) >= today
+            if ShioajiMarketService._is_active_futures_contract(contract, now)
         ]
         return min(
             active or dated,
-            key=lambda contract: ShioajiMarketService._parse_date(
-                contract.delivery_date
-            ),
+            key=ShioajiMarketService._contract_sort_key,
         )
+
+    @staticmethod
+    def _is_active_futures_contract(contract: Any, now: datetime | None = None) -> bool:
+        current = now.astimezone(TAIPEI_TZ) if now else datetime.now(TAIPEI_TZ)
+        delivery_date = ShioajiMarketService._parse_date(contract.delivery_date)
+        if delivery_date > current.date():
+            return True
+        if delivery_date < current.date():
+            return False
+        return (current.hour, current.minute) < FUTURES_EXPIRY_ROLLOVER_TIME
+
+    @staticmethod
+    def _contract_sort_key(contract: Any) -> tuple[date, bool]:
+        code = str(getattr(contract, "code", "")).upper()
+        is_continuous = len(code) >= 2 and code[-2] == "R" and code[-1].isdigit()
+        return ShioajiMarketService._parse_date(contract.delivery_date), is_continuous
 
     @staticmethod
     def _find_contract_by_code(api: Any, code: str) -> Any:

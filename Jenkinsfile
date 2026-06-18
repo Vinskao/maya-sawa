@@ -295,7 +295,8 @@ pipeline {
                         string(credentialsId: 'KEYCLOAK_AUTH_SERVER_URL', variable: 'KEYCLOAK_AUTH_SERVER_URL'),
                         string(credentialsId: 'PUBLIC_REALM', variable: 'PUBLIC_REALM'),
                         string(credentialsId: 'SHIOAJI_API_KEY', variable: 'SHIOAJI_API_KEY'),
-                        string(credentialsId: 'SHIOAJI_SECRET_KEY', variable: 'SHIOAJI_SECRET_KEY')
+                        string(credentialsId: 'SHIOAJI_SECRET_KEY', variable: 'SHIOAJI_SECRET_KEY'),
+                        string(credentialsId: 'MARKET_INTERNAL_SECRET', variable: 'MARKET_INTERNAL_SECRET')
                     ]) {
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                             script {
@@ -327,6 +328,15 @@ pipeline {
                                           --from-literal=SHIOAJI_SECRET_KEY="${SHIOAJI_SECRET_KEY}" \
                                           -n default \
                                           --dry-run=client -o yaml | kubectl apply -f -
+
+                                        if [ -n "${MARKET_INTERNAL_SECRET}" ]; then
+                                          kubectl create secret generic market-internal-secret \
+                                            --from-literal=MARKET_INTERNAL_SECRET="${MARKET_INTERNAL_SECRET}" \
+                                            -n default \
+                                            --dry-run=client -o yaml | kubectl apply -f -
+                                        else
+                                          echo "WARNING: MARKET_INTERNAL_SECRET credential is empty; keeping existing market-internal-secret unchanged"
+                                        fi
 
                                         # Inspect manifest directory
                                         ls -la k8s/

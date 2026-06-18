@@ -25,22 +25,49 @@ def test_nearest_txf_contract_ignores_expired_contracts():
     assert selected.code == "TXFNEAR"
 
 
-def test_mini_tsmc_contract_prefers_qffr1():
-    qffr1 = SimpleNamespace(code="QFFR1", underlying_code="2330")
-    dated = SimpleNamespace(
-        code="QFFF6",
-        underlying_code="2330",
-        delivery_date=date.today() + timedelta(days=5),
-    )
+def test_nearest_txf_contract_rolls_today_expiry_after_regular_session():
+    now = datetime(2026, 6, 17, 14, 0, tzinfo=timezone(timedelta(hours=8)))
+    expired_today = SimpleNamespace(code="TXFF6", delivery_date=date(2026, 6, 17))
+    night_session = SimpleNamespace(code="TXFG6", delivery_date=date(2026, 7, 15))
     api = SimpleNamespace(
         Contracts=SimpleNamespace(
-            Futures=SimpleNamespace(QFF=[dated, qffr1])
+            Futures=SimpleNamespace(TXF=[expired_today, night_session])
         )
     )
 
-    selected = ShioajiMarketService._mini_tsmc_contract(api)
+    selected = ShioajiMarketService._nearest_txf_contract(api, now)
 
-    assert selected.code == "QFFR1"
+    assert selected.code == "TXFG6"
+
+
+def test_mini_tsmc_contract_prefers_active_monthly_contract():
+    today_expiry = SimpleNamespace(
+        code="QFFF6",
+        underlying_code="2330",
+        delivery_date=date(2026, 6, 17),
+    )
+    active_month = SimpleNamespace(
+        code="QFFG6",
+        underlying_code="2330",
+        delivery_date=date(2026, 7, 15),
+    )
+    continuous = SimpleNamespace(
+        code="QFFR1",
+        underlying_code="2330",
+        delivery_date=date(2026, 7, 15),
+    )
+    api = SimpleNamespace(
+        Contracts=SimpleNamespace(
+            Futures=SimpleNamespace(QFF=[today_expiry, active_month, continuous])
+        )
+    )
+
+    selected = ShioajiMarketService._mini_tsmc_contract(
+        api,
+        datetime(2026, 6, 17, 23, 0, tzinfo=timezone(timedelta(hours=8))),
+    )
+
+    assert selected.code == "QFFG6"
 
 
 def test_position_payload_omits_account_identifiers():
