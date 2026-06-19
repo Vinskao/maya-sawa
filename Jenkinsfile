@@ -75,7 +75,7 @@ pipeline {
                     - mountPath: /home/jenkins/agent
                       name: workspace-volume
                   - name: jnlp
-                    image: jenkins/inbound-agent:3309.v27b_9314fd1a_4-1
+                    image: jenkins/inbound-agent:3309.v27b_9314fd1a_4-1-jdk21
                     resources:
                       requests:
                         cpu: "50m"
