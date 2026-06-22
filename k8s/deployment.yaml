@@ -54,7 +54,7 @@ spec:
         - name: DB_PASSWORD
           value: "${DB_PASSWORD}"
         - name: DB_SSLMODE
-          value: "require"
+          value: "disable"
         # === Paprika / Git Commit Knowledge Database Configuration ===
         - name: PAPRIKA_DB_TYPE
           value: "postgresql"
@@ -69,7 +69,7 @@ spec:
         - name: PAPRIKA_DB_PASSWORD
           value: "${DB_PASSWORD}"
         - name: PAPRIKA_DB_SSLMODE
-          value: "require"
+          value: "disable"
         # === Keycloak Resource Server Configuration ===
         - name: KEYCLOAK_AUTH_SERVER_URL
           value: "${KEYCLOAK_AUTH_SERVER_URL}"
@@ -113,7 +113,7 @@ spec:
         - name: PEOPLE_DB_PASSWORD
           value: "${PEOPLE_DB_PASSWORD}"
         - name: PEOPLE_DB_SSLMODE
-          value: "require"
+          value: "disable"
         - name: REDIS_HOST
           value: "${REDIS_HOST}"
         - name: REDIS_CUSTOM_PORT
