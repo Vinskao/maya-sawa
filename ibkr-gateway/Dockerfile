@@ -13,7 +13,7 @@ WORKDIR /opt/clientportal.gw
 COPY gateway/ ./
 
 # run.sh resolves the classpath relative to the gateway root.
-RUN chmod +x bin/run.sh
+RUN sed -i 's/\r$//' bin/run.sh && chmod +x bin/run.sh
 
 EXPOSE 5000
 

@@ -1204,3 +1204,26 @@ curl http://localhost:8000/maya-sawa/market/internal/usage
 ```bash
 docker build -t papakao/maya-sawa:latest .
 ```
+
+## IBKR 正確登入紀錄
+
+當你要看 `Market Overview` 裡的 IBKR 資料時，請用這個流程：
+
+```bash
+ssh -L 5000:127.0.0.1:15000 oke-node kubectl port-forward deployment/ibkr-gw 15000:5000 -n default --address 127.0.0.1
+```
+
+然後在本機瀏覽器開：
+
+```text
+https://localhost:5000/
+```
+
+如果瀏覽器跳自簽憑證警告，就輸入 `thisisunsafe`。  
+如果看到 `ERR_CONNECTION_REFUSED`，通常是本機隧道沒有建立成功，不是 IBKR gateway 本身掛掉。
+
+補充：
+
+- OKE 內部實際服務仍是 `https://ibkr-gw:5000`
+- `https://localhost:5000/` 只是在本機做登入用的臨時轉發
+- 登入完成後，session 會留在 pod 記憶體，前端之後只讀 Redis cache
