@@ -100,6 +100,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'papakao/maya-sawa'
         DOCKER_TAG = "${BUILD_NUMBER}"
+        IBKR_GATEWAY_IMAGE = 'papakao/ibkr-gateway'
     }
     stages {
         stage('Clone and Setup') {
@@ -233,7 +234,7 @@ pipeline {
                                     echo "Error: Dockerfile not found!"
                                     exit 1
                                 fi
-                                
+
                                 # 構建 Maya Sawa 鏡像
                                 docker build \
                                     --build-arg BUILDKIT_INLINE_CACHE=1 \
@@ -242,7 +243,7 @@ pipeline {
                                     -t ${DOCKER_IMAGE}:latest \
                                     .
                             '''
-                            
+
                             // 推送鏡像 (加入重試機制)
                             retry(3) {
                                 sleep(10)
@@ -250,6 +251,30 @@ pipeline {
                                     docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
                                     docker push ${DOCKER_IMAGE}:latest
                                 '''
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build & Push IBKR Gateway') {
+            steps {
+                container('docker') {
+                    script {
+                        withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                            sh '''
+                                set -e
+                                cd "${WORKSPACE}"
+                                echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+                                # Build context is the ibkr-gateway/ subdir (vendored CPAPI runtime).
+                                docker build \
+                                    -t ${IBKR_GATEWAY_IMAGE}:latest \
+                                    ibkr-gateway
+                            '''
+                            retry(3) {
+                                sleep(10)
+                                sh 'docker push ${IBKR_GATEWAY_IMAGE}:latest'
                             }
                         }
                     }
@@ -355,6 +380,12 @@ pipeline {
                                         
                                         # 部署 CronJob
                                         envsubst < k8s/cronjob.yaml | kubectl apply -f -
+
+                                        # Deploy IBKR Client Portal Gateway (separate image, no env subst).
+                                        # :latest + imagePullPolicy Always; restart to pull the fresh image.
+                                        kubectl apply -f ibkr-gateway/k8s/deployment.yaml
+                                        kubectl rollout restart deployment/ibkr-gw -n default
+                                        kubectl rollout status deployment/ibkr-gw -n default
                                     '''
 
                                     // 檢查部署狀態

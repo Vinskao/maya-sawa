@@ -65,6 +65,10 @@ Jenkinsfile
 # K8s manifests (not needed in image)
 k8s/
 
+# IBKR gateway is a separate image with its own Dockerfile (built in its own
+# Jenkins stage); exclude its 12MB vendored runtime from the maya-sawa context.
+ibkr-gateway/
+
 # Docker
 Dockerfile
 .dockerignore

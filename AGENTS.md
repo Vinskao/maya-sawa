@@ -239,7 +239,7 @@ status = result.status
 ### 架構與 Shioaji 的差異
 - Shioaji 用 API key 直接登入；IBKR CPAPI v1 需要**有狀態的 Client Portal Gateway**（瀏覽器登入維持 session），maya-sawa 只讀取已驗證的 gateway，不碰帳密。
 - 本地 gateway：`clientportal.gw/`，因 macOS 5000 被 AirPlay 佔用，改 `listenPort: 5050`，`https://localhost:5050`。
-- OKE：`ibkr-gateway/` 元件部署成 `Deployment/Service ibkr-gw`（ClusterIP :5000，內部專用）。`conf.yaml` 的 `ips.allow` **必須包含 `10.*`**（pod CIDR 10.244.0.0/16），否則 maya-sawa 會被 gateway 擋 403。
+- OKE：`maya-sawa/ibkr-gateway/` 子目錄（在 maya-sawa repo 內，共用同一條 Jenkins pipeline）。maya-sawa `Jenkinsfile` 的 `Build & Push IBKR Gateway` stage 以 `ibkr-gateway/` 為 build context 建 image `papakao/ibkr-gateway:latest`，Deploy stage `kubectl apply -f ibkr-gateway/k8s/deployment.yaml` 部署成 `Deployment/Service ibkr-gw`（ClusterIP :5000，內部專用）。maya-sawa `.dockerignore` 排除 `ibkr-gateway/`，避免 12MB vendored runtime 污染 maya-sawa image context。`conf.yaml` 的 `ips.allow` **必須包含 `10.*`**（pod CIDR 10.244.0.0/16），否則 maya-sawa 會被 gateway 擋 403。
 - Session 在記憶體內：每次 pod 重啟或 ~24h 硬過期後，需人工 `kubectl port-forward deployment/ibkr-gw 5000:5000` 再瀏覽器登入 + 2FA（零售帳號無 headless 登入）。
 
 ### 服務與快取（與 Shioaji 同政策）

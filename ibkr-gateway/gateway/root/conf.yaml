@@ -1,0 +1,30 @@
+    ip2loc: "US"
+    proxyRemoteSsl: true
+    proxyRemoteHost: "https://api.ibkr.com"
+    listenPort: 5000
+    listenSsl: true
+    ccp: false
+    svcEnvironment: "v1"
+    sslCert: "vertx.jks"
+    sslPwd: "mywebapi"
+    authDelay: 3000
+    portalBaseURL: ""
+    serverOptions:
+        blockedThreadCheckInterval: 1000000
+        eventLoopPoolSize: 20
+        workerPoolSize: 20
+        maxWorkerExecuteTime: 100
+        internalBlockingPoolSize: 20
+    cors:
+        origin.allowed: "*"
+        allowCredentials: false
+    webApps:
+        - name: "demo"
+          index: "index.html"
+    # In-cluster: allow the OKE pod CIDR (10.244.0.0/16) so maya-sawa pods and the
+    # kubectl port-forward localhost can reach the gateway. Without 10.* the
+    # gateway rejects maya-sawa requests with a 403.
+    ips:
+      allow:
+        - 10.*
+        - 127.0.0.1

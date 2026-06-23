@@ -1,0 +1,6 @@
+gateway/logs/
+gateway/root/conf.test.yaml
+**/*.log
+.git
+README.md
+Jenkinsfile
