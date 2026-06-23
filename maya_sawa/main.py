@@ -55,6 +55,7 @@ from .api.git_commits import router as git_commits_router
 from .api.otel_usage import router as otel_usage_router
 from .api.market import router as market_router
 from .services.shioaji_market import shioaji_market_service
+from .services.ibkr_market import ibkr_market_service
 from .services.metrics_consumer import MetricsConsumer
 from .core.services.scheduler import ArticleSyncScheduler
 from .people import sync_data
@@ -197,6 +198,11 @@ async def startup_event():
             await shioaji_market_service.start_background_refresh()
         except Exception as e:
             logger.error(f"Failed to start Shioaji market cache refresh: {e}")
+
+        try:
+            await ibkr_market_service.start_background_refresh()
+        except Exception as e:
+            logger.error(f"Failed to start IBKR market cache refresh: {e}")
 
         # 執行初始文章同步（如果啟用）
         if Config.ENABLE_AUTO_SYNC_ON_STARTUP:
