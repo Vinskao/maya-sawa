@@ -242,6 +242,29 @@ status = result.status
 - OKE：`maya-sawa/ibkr-gateway/` 子目錄（在 maya-sawa repo 內，共用同一條 Jenkins pipeline）。maya-sawa `Jenkinsfile` 的 `Build & Push IBKR Gateway` stage 以 `ibkr-gateway/` 為 build context 建 image `papakao/ibkr-gateway:latest`，Deploy stage `kubectl apply -f ibkr-gateway/k8s/deployment.yaml` 部署成 `Deployment/Service ibkr-gw`（ClusterIP :5000，內部專用）。maya-sawa `.dockerignore` 排除 `ibkr-gateway/`，避免 12MB vendored runtime 污染 maya-sawa image context。`conf.yaml` 的 `ips.allow` **必須包含 `10.*`**（pod CIDR 10.244.0.0/16），否則 maya-sawa 會被 gateway 擋 403。
 - Session 在記憶體內：每次 pod 重啟或 ~24h 硬過期後，需人工 `kubectl port-forward deployment/ibkr-gw 5000:5000` 再瀏覽器登入 + 2FA（零售帳號無 headless 登入）。
 
+### 登入模型、port-forward 與安全性（重要）
+**「看資料」與「登入 gateway」是兩件分開的事，不要混淆：**
+```
+[瀏覽器] ←─讀 Redis cache─ [maya-sawa] ←─每 240s 抓一次─ [ibkr-gw pod]
+  看資料                                          ↑ session 在記憶體，只有這裡要人工登入
+```
+- **看資料不需要任何人工介入**：前端只讀 Redis；maya-sawa 每 `IBKR_REFRESH_SECONDS`(240s) 從 gateway 抓 snapshot 寫進 Redis，這個 refresh 同時兼作 keepalive。
+- **登入只在 session 失效時才需要**：IBKR 零售帳號 session 硬上限 ~24h，或 pod 重啟（記憶體 session 消失）。所以頻率是「約一天一次 / pod 重啟後一次」，不是每次看都要。
+- **零售帳號無法自動登入**：CPAPI 對零售帳號強制互動式瀏覽器登入 + 帳密 + 2FA（IBKR Mobile/簡訊），2FA 無法代理，因此**無法接到網站 login 自動觸發**（只有機構/advisor 帳號有 OAuth）。
+- **port-forward 不是永久、也不參與正式資料流**：maya-sawa 走叢集內 Service `https://ibkr-gw:5000`(ClusterIP)，一直都在。`kubectl port-forward` 只是登入那一刻讓本機瀏覽器能連到 gateway 的臨時隧道（綁終端機，關掉就斷），登入完即可關閉，session 留在 pod 記憶體繼續服務。
+- **安全性**：
+  - gateway 是 ClusterIP、**無 Ingress**，外網碰不到；`conf.yaml` `ips.allow: 10.*` 限制只接受 pod CIDR + localhost。
+  - gateway **不存帳密**，只存記憶體 session，重啟即自動登出。
+  - ⚠️ 但記憶體裡的 session 是**完整權限**（CPAPI 含下單端點），任何能連到 gateway 的人都能讀 portfolio 甚至下單。**切勿為了省去 port-forward 而把 gateway 開成公開 Ingress** —— 等於把可下單 session 放在公網。維持 ClusterIP + port-forward 登入是目前最安全做法。
+
+### 重新登入步驟（session 失效時）
+```bash
+ssh oke-node
+kubectl port-forward deployment/ibkr-gw 5000:5000 -n default   # 臨時隧道，登入完關掉即可
+# 另開瀏覽器 https://localhost:5000 → 輸入 thisisunsafe 跳過自簽憑證 → IBKR 帳密 + 2FA
+# 等 "Client login succeeds"，~240s 內 Redis 會更新，前端 Account Portfolio 自動帶出海外資料
+```
+
 ### 服務與快取（與 Shioaji 同政策）
 - `services/ibkr_market.py` 的 `IbkrMarketService` 為 Redis cache-backed：背景 loop（`IBKR_REFRESH_SECONDS`，預設 240s，同時兼作 keepalive）抓 gateway snapshot 寫入 Redis key `maya-sawa:market:ibkr`；request 只讀 cache。
 - snapshot 內容：`/portfolio/{acct}/accounts`、`/ledger`（`BASE` key = USD 總額）、`/summary`、`/positions/{page}`（分頁 30、qty=0 略過）。
