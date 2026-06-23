@@ -150,22 +150,32 @@ class IbkrMarketService:
         self._cached_account_id = str(accounts[0]["accountId"])
         return self._cached_account_id
 
-    async def _fx_usd_twd(self, client: httpx.AsyncClient) -> tuple[float, str]:
+    async def _fetch_fx(
+        self, client: httpx.AsyncClient
+    ) -> tuple[dict[str, float], str]:
+        """Return {currency: TWD-per-unit} and the rate source."""
         override = os.getenv("USD_TWD_RATE")
         if override:
             try:
-                return float(override), "manual"
+                return {"USD": float(override)}, "manual"
             except ValueError:
                 logger.warning("Invalid USD_TWD_RATE=%r, ignoring", override)
         fx_url = os.getenv("IBKR_FX_URL", "https://open.er-api.com/v6/latest/USD")
         try:
             resp = await client.get(fx_url)
             resp.raise_for_status()
-            rate = float(resp.json()["rates"]["TWD"])
-            return rate, "live"
+            # rates[CUR] = units of CUR per 1 USD; TWD per 1 CUR = rates[TWD]/rates[CUR].
+            rates = resp.json()["rates"]
+            twd_per_usd = float(rates["TWD"])
+            to_twd = {
+                cur: twd_per_usd / float(value)
+                for cur, value in rates.items()
+                if value
+            }
+            return to_twd, "live"
         except Exception as exc:  # noqa: BLE001 - fall back to a sane default
-            logger.warning("USD/TWD FX fetch failed (%s); using fallback", exc)
-            return _FX_FALLBACK_USD_TWD, "fallback"
+            logger.warning("FX fetch failed (%s); using USD fallback only", exc)
+            return {"USD": _FX_FALLBACK_USD_TWD}, "fallback"
 
     async def _fetch_snapshot_live(self) -> dict[str, Any]:
         if not self.enabled:
@@ -184,6 +194,7 @@ class IbkrMarketService:
                 )
                 summary_resp.raise_for_status()
                 summary = summary_resp.json()
+                positions_raw = await self._fetch_positions(client, account_id)
             except httpx.HTTPError as exc:
                 raise IbkrUnavailableError(
                     "IBKR gateway is unreachable or not authenticated"
@@ -203,12 +214,15 @@ class IbkrMarketService:
             unrealized_usd = float(base.get("unrealizedpnl") or 0.0)
             realized_usd = float(base.get("realizedpnl") or 0.0)
 
-            rate, rate_source = await self._fx_usd_twd(client)
+            to_twd, rate_source = await self._fetch_fx(client)
+            usd_rate = to_twd.get("USD", _FX_FALLBACK_USD_TWD)
+
+            positions = self._build_positions(positions_raw, to_twd)
 
         return {
             "accountId": account_id,
             "baseCurrency": "USD",
-            "usdTwdRate": round(rate, 4),
+            "usdTwdRate": round(usd_rate, 4),
             "rateSource": rate_source,
             "usd": {
                 "cashBalance": round(cash_usd, 2),
@@ -218,14 +232,65 @@ class IbkrMarketService:
                 "realizedPnl": round(realized_usd, 2),
             },
             "twd": {
-                "cashBalance": round(cash_usd * rate, 2),
-                "netLiquidation": round(netliq_usd * rate, 2),
-                "grossPositionValue": round(gross_position_usd * rate, 2),
-                "unrealizedPnl": round(unrealized_usd * rate, 2),
+                "cashBalance": round(cash_usd * usd_rate, 2),
+                "netLiquidation": round(netliq_usd * usd_rate, 2),
+                "grossPositionValue": round(gross_position_usd * usd_rate, 2),
+                "unrealizedPnl": round(unrealized_usd * usd_rate, 2),
             },
+            "positions": positions,
             "fetchedAt": datetime.now(timezone.utc).isoformat(),
             "source": "Interactive Brokers CPAPI",
         }
+
+    async def _fetch_positions(
+        self, client: httpx.AsyncClient, account_id: str
+    ) -> list[dict[str, Any]]:
+        """Page through /positions/{pageId} (30 per page) and return raw rows."""
+        rows: list[dict[str, Any]] = []
+        for page in range(10):  # safety cap; retail accounts have few positions
+            resp = await client.get(
+                f"{self._base}/portfolio/{account_id}/positions/{page}"
+            )
+            resp.raise_for_status()
+            chunk = resp.json()
+            if not chunk:
+                break
+            rows.extend(chunk)
+            if len(chunk) < 30:
+                break
+        return rows
+
+    @staticmethod
+    def _build_positions(
+        rows: list[dict[str, Any]], to_twd: dict[str, float]
+    ) -> list[dict[str, Any]]:
+        """Convert raw IBKR positions to NT$, dropping zero-quantity rows."""
+        positions: list[dict[str, Any]] = []
+        for row in rows:
+            qty = float(row.get("position") or 0)
+            if qty == 0:
+                continue
+            currency = str(row.get("currency") or "USD")
+            rate = to_twd.get(currency, to_twd.get("USD", _FX_FALLBACK_USD_TWD))
+            market_value = float(row.get("mktValue") or 0)
+            pnl = float(row.get("unrealizedPnl") or 0)
+            code = str(row.get("contractDesc") or row.get("conid") or "?")
+            positions.append(
+                {
+                    "code": code,
+                    "name": code,
+                    "assetClass": str(row.get("assetClass") or ""),
+                    "currency": currency,
+                    "quantity": qty,
+                    "averagePrice": float(row.get("avgCost") or 0),
+                    "lastPrice": float(row.get("mktPrice") or 0),
+                    "marketValue": round(market_value, 2),
+                    "marketValueTwd": round(market_value * rate, 2),
+                    "pnl": round(pnl, 2),
+                    "pnlTwd": round(pnl * rate, 2),
+                }
+            )
+        return positions
 
     # ----- redis cache (mirrors shioaji_market) ---------------------------------
 
@@ -257,6 +322,11 @@ def merge_ibkr_into_portfolio(
     """
     twd = ibkr["twd"]
 
+    # Capture Taiwan-only figures BEFORE folding IBKR in, for the region split.
+    tw_cash = portfolio.get("cashBalance")
+    tw_total = portfolio.get("totalAssetsEstimated")
+    tw_pnl = portfolio.get("totalPnl", 0)
+
     if portfolio.get("cashBalance") is not None:
         portfolio["cashBalance"] = round(portfolio["cashBalance"] + twd["cashBalance"], 2)
     if portfolio.get("totalAssetsEstimated") is not None:
@@ -266,6 +336,41 @@ def merge_ibkr_into_portfolio(
     portfolio["totalPnl"] = round(
         portfolio.get("totalPnl", 0) + twd["unrealizedPnl"], 2
     )
+
+    # Overseas leverage = gross exposure / net liquidation (currency-agnostic ratio).
+    os_netliq_usd = ibkr["usd"]["netLiquidation"]
+    os_leverage = (
+        round(ibkr["usd"]["grossPositionValue"] / os_netliq_usd, 4)
+        if os_netliq_usd
+        else None
+    )
+    tw_exposure = portfolio.get("totalPositionExposure", 0)
+    total_assets = portfolio.get("totalAssetsEstimated")
+    total_leverage = (
+        round((tw_exposure + twd["grossPositionValue"]) / total_assets, 4)
+        if total_assets
+        else None
+    )
+    portfolio["regions"] = {
+        "taiwan": {
+            "cash": tw_cash,
+            "totalAssets": tw_total,
+            "totalPnl": round(tw_pnl, 2),
+            "leverage": portfolio.get("leverageRatio"),
+        },
+        "overseas": {
+            "cash": twd["cashBalance"],
+            "totalAssets": twd["netLiquidation"],
+            "totalPnl": twd["unrealizedPnl"],
+            "leverage": os_leverage,
+        },
+        "total": {
+            "cash": portfolio.get("cashBalance"),
+            "totalAssets": total_assets,
+            "totalPnl": portfolio.get("totalPnl"),
+            "leverage": total_leverage,
+        },
+    }
 
     formulas = portfolio.setdefault("summaryFormulas", {})
     ibkr_cash = int(twd["cashBalance"])
@@ -284,6 +389,29 @@ def merge_ibkr_into_portfolio(
         if note
         else f"Includes IBKR @ {ibkr['usdTwdRate']} USD/TWD"
     )
+    return portfolio
+
+
+def attach_taiwan_only_regions(portfolio: dict[str, Any]) -> dict[str, Any]:
+    """Set `regions` with overseas zeroed, for when IBKR is unavailable."""
+    cash = portfolio.get("cashBalance")
+    total = portfolio.get("totalAssetsEstimated")
+    pnl = portfolio.get("totalPnl", 0)
+    portfolio["regions"] = {
+        "taiwan": {
+            "cash": cash,
+            "totalAssets": total,
+            "totalPnl": round(pnl, 2),
+            "leverage": portfolio.get("leverageRatio"),
+        },
+        "overseas": {"cash": 0, "totalAssets": 0, "totalPnl": 0, "leverage": None},
+        "total": {
+            "cash": cash,
+            "totalAssets": total,
+            "totalPnl": round(pnl, 2),
+            "leverage": portfolio.get("leverageRatio"),
+        },
+    }
     return portfolio
 
 

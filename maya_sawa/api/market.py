@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,9 +15,11 @@ from ..services.ibkr_market import (
     IbkrCacheUnavailableError,
     IbkrNotConfiguredError,
     IbkrUnavailableError,
+    attach_taiwan_only_regions,
     ibkr_market_service,
     merge_ibkr_into_portfolio,
 )
+from ..databases.portfolio_history_db import portfolio_history_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -25,21 +28,38 @@ router = APIRouter(prefix="/market", tags=["market"])
 async def _portfolio_with_ibkr() -> dict:
     """Shioaji portfolio with IBKR folded in when enabled and reachable.
 
-    IBKR failures never break the base portfolio — the Shioaji payload is
-    returned unchanged if the gateway is disabled or unauthenticated.
+    Read policy: Redis cache first (via the Shioaji service); if the cache is
+    empty, fall back to the latest Postgres history snapshot. IBKR failures never
+    break the base portfolio. A throttled history snapshot is recorded on the way
+    out so the DB accrues a time series.
     """
-    portfolio = await shioaji_market_service.get_portfolio()
-    if not ibkr_market_service.enabled:
-        return portfolio
     try:
-        snapshot = await ibkr_market_service.get_snapshot()
-        return merge_ibkr_into_portfolio(portfolio, snapshot)
-    except (IbkrNotConfiguredError, IbkrUnavailableError, IbkrCacheUnavailableError) as exc:
-        logger.warning("Skipping IBKR merge: %s", exc)
-        return portfolio
+        portfolio = await shioaji_market_service.get_portfolio()
+    except ShioajiCacheUnavailableError:
+        snapshot = await asyncio.to_thread(portfolio_history_db.latest_snapshot)
+        if snapshot is not None:
+            logger.info("Serving portfolio from Postgres history (Redis cache empty)")
+            return snapshot
+        raise
+
+    if not ibkr_market_service.enabled:
+        merged = attach_taiwan_only_regions(portfolio)
+    else:
+        try:
+            ibkr_snapshot = await ibkr_market_service.get_snapshot()
+            merged = merge_ibkr_into_portfolio(portfolio, ibkr_snapshot)
+        except (IbkrNotConfiguredError, IbkrUnavailableError, IbkrCacheUnavailableError) as exc:
+            logger.warning("Skipping IBKR merge: %s", exc)
+            merged = attach_taiwan_only_regions(portfolio)
+        except Exception:
+            logger.exception("Unexpected error merging IBKR portfolio")
+            merged = attach_taiwan_only_regions(portfolio)
+
+    try:
+        await asyncio.to_thread(portfolio_history_db.record_if_due, merged)
     except Exception:
-        logger.exception("Unexpected error merging IBKR portfolio")
-        return portfolio
+        logger.exception("Failed to record portfolio history (non-fatal)")
+    return merged
 
 
 @router.get("/auth-status")
@@ -175,6 +195,30 @@ async def _ibkr_snapshot_or_503() -> dict:
                 "message": "IBKR data is temporarily unavailable",
             },
         ) from exc
+
+
+@router.get("/portfolio/history")
+async def get_portfolio_history(
+    limit: int = 90, _claims: dict = Depends(require_manage_users_request)
+):
+    return await _portfolio_history(limit)
+
+
+@router.get("/internal/portfolio/history")
+async def get_portfolio_history_internal(limit: int = 90, _=Depends(require_internal_secret)):
+    return await _portfolio_history(limit)
+
+
+async def _portfolio_history(limit: int) -> dict:
+    try:
+        rows = await asyncio.to_thread(portfolio_history_db.history, limit)
+    except Exception as exc:
+        logger.exception("Failed to read portfolio history")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "history_unavailable", "message": "Portfolio history unavailable"},
+        ) from exc
+    return {"count": len(rows), "history": rows}
 
 
 @router.get("/usage")

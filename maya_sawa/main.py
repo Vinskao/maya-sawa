@@ -270,7 +270,8 @@ async def shutdown_event():
             logger.error(f"Error stopping MetricsConsumer: {e}")
 
         await shioaji_market_service.close()
-            
+        await ibkr_market_service.close()
+
         logger.info("應用程式關閉，排程任務與服務已停止")
     except Exception as e:
         # 記錄關閉錯誤

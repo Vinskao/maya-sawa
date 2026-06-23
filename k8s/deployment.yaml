@@ -168,6 +168,14 @@ spec:
           value: "600"
         - name: SHIOAJI_PORTFOLIO_CACHE_SECONDS
           value: "3600"
+        # === IBKR Client Portal API (in-cluster gateway) ===
+        - name: IBKR_ENABLED
+          value: "true"
+        - name: IBKR_GATEWAY_URL
+          value: "https://ibkr-gw:5000"
+        # Refresh every 4 min: also keeps the gateway session alive (idle ~6 min)
+        - name: IBKR_REFRESH_SECONDS
+          value: "240"
         - name: MARKET_INTERNAL_SECRET
           valueFrom:
             secretKeyRef:

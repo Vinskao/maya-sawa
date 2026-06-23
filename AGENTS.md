@@ -234,6 +234,37 @@ status = result.status
   - `kubectl logs deploy/maya-sawa` 是否還在吐舊的 `503` 或 `401`
 - 如果前端還顯示舊值，問題可能在前端 fallback cache，而不是後端 endpoint 本身。
 
+## IBKR Client Portal API 整合（海外資產）
+
+### 架構與 Shioaji 的差異
+- Shioaji 用 API key 直接登入；IBKR CPAPI v1 需要**有狀態的 Client Portal Gateway**（瀏覽器登入維持 session），maya-sawa 只讀取已驗證的 gateway，不碰帳密。
+- 本地 gateway：`clientportal.gw/`，因 macOS 5000 被 AirPlay 佔用，改 `listenPort: 5050`，`https://localhost:5050`。
+- OKE：`ibkr-gateway/` 元件部署成 `Deployment/Service ibkr-gw`（ClusterIP :5000，內部專用）。`conf.yaml` 的 `ips.allow` **必須包含 `10.*`**（pod CIDR 10.244.0.0/16），否則 maya-sawa 會被 gateway 擋 403。
+- Session 在記憶體內：每次 pod 重啟或 ~24h 硬過期後，需人工 `kubectl port-forward deployment/ibkr-gw 5000:5000` 再瀏覽器登入 + 2FA（零售帳號無 headless 登入）。
+
+### 服務與快取（與 Shioaji 同政策）
+- `services/ibkr_market.py` 的 `IbkrMarketService` 為 Redis cache-backed：背景 loop（`IBKR_REFRESH_SECONDS`，預設 240s，同時兼作 keepalive）抓 gateway snapshot 寫入 Redis key `maya-sawa:market:ibkr`；request 只讀 cache。
+- snapshot 內容：`/portfolio/{acct}/accounts`、`/ledger`（`BASE` key = USD 總額）、`/summary`、`/positions/{page}`（分頁 30、qty=0 略過）。
+- 多幣別 FX：`open.er-api.com` USD base，`TWD_per_cur = rates[TWD]/rates[cur]`，處理 USD 股票 + JPY CFD。可用 `USD_TWD_RATE` 覆寫。
+- `merge_ibkr_into_portfolio()` 把 IBKR（轉 NT$）併入 Shioaji portfolio 的 cashBalance / totalAssetsEstimated / totalPnl，並掛上 `ibkr` 與 `regions`（台灣 / 海外 / 總）。
+
+### 端點
+- `GET /market/ibkr`、`GET /market/internal/ibkr`：單獨回 IBKR snapshot。
+- `GET /market/portfolio`、`/market/internal/portfolio`：已併入 IBKR（gateway/cache 不可用時靜默略過，不影響台股 portfolio）。
+
+### 環境變數
+```bash
+IBKR_ENABLED=true
+IBKR_GATEWAY_URL=https://localhost:5050      # 本地；OKE 為 https://ibkr-gw:5000
+IBKR_REFRESH_SECONDS=240
+# IBKR_ACCOUNT_ID=U16739398                  # 選填，預設取第一個帳號
+# USD_TWD_RATE=31.5                          # 選填，覆寫即時匯率
+```
+
+### 排查
+- IBKR 區塊沒資料：先確認 gateway pod 在跑、session 仍驗證（`/portfolio/accounts` 回 JSON 而非 login redirect）、`kubectl logs deploy/maya-sawa` 沒一直印 `Skipping IBKR merge`。
+- 即使 `tickle` 回 `authenticated:false`，`/portfolio/*` 仍會回上次的快取資料（IBKR 後端行為）；要最新值需重新登入。
+
 ## API 端點規格說明
 
 ### 插入文章 API 規格
