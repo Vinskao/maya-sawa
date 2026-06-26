@@ -54,6 +54,7 @@ from .api.videos import router as videos_router
 from .api.git_commits import router as git_commits_router
 from .api.otel_usage import router as otel_usage_router
 from .api.market import router as market_router
+from .api.runpod import router as runpod_router
 from .services.shioaji_market import shioaji_market_service
 from .services.ibkr_market import ibkr_market_service
 from .services.metrics_consumer import MetricsConsumer
@@ -158,6 +159,9 @@ app.include_router(otel_usage_router)
 
 # Read-only market quote endpoints backed by Shioaji.
 app.include_router(market_router)
+
+# RunPod GPU cost & balance observability (GraphQL-backed, read-only).
+app.include_router(runpod_router)
 
 # ==================== 排程器初始化 ====================
 # 創建文章同步排程器實例
