@@ -204,6 +204,15 @@ class Config:
         os.getenv("SECURITY_AUTH_RATE_LIMIT_PER_MINUTE", "180")
     )
     SECURITY_MAX_BODY_BYTES = int(os.getenv("SECURITY_MAX_BODY_BYTES", str(2 * 1024 * 1024)))
+    # 檔案上傳端點（例如 /videos/merge-videos）本質上就會超過一般 JSON 請求的
+    # 2MB 上限，因此使用獨立的較大上限，而不是放寬全域限制。
+    SECURITY_UPLOAD_PATH_PREFIXES = os.getenv(
+        "SECURITY_UPLOAD_PATH_PREFIXES",
+        "/videos/,/maya-sawa/videos/,/maya-v2/videos/",
+    )
+    SECURITY_MAX_UPLOAD_BYTES = int(
+        os.getenv("SECURITY_MAX_UPLOAD_BYTES", str(1024 * 1024 * 1024))
+    )
     AI_RATE_LIMIT_MANAGER_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_MANAGER_PER_MINUTE", "10"))
     AI_RATE_LIMIT_STANDARD_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_STANDARD_PER_MINUTE", "1"))
     AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE", "1"))

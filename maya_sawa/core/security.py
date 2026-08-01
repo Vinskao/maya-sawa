@@ -44,6 +44,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         self.allowlist_paths = tuple(
             path.strip() for path in Config.SECURITY_IP_ALLOWLIST_PATHS.split(",") if path.strip()
         )
+        self.upload_paths = tuple(
+            path.strip()
+            for path in Config.SECURITY_UPLOAD_PATH_PREFIXES.split(",")
+            if path.strip()
+        )
 
     async def dispatch(self, request: Request, call_next):
         started = time.monotonic()
@@ -80,9 +85,22 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     def _validate_request(self, request: Request, client_ip: str) -> JSONResponse | None:
         content_length = request.headers.get("content-length")
         if content_length:
+            # 上傳端點使用獨立的較大上限
+            is_upload = any(
+                request.url.path.startswith(prefix) for prefix in self.upload_paths
+            )
+            max_bytes = (
+                Config.SECURITY_MAX_UPLOAD_BYTES
+                if is_upload
+                else Config.SECURITY_MAX_BODY_BYTES
+            )
             try:
-                if int(content_length) > Config.SECURITY_MAX_BODY_BYTES:
-                    return self._error(413, "request_too_large", "Request body is too large")
+                if int(content_length) > max_bytes:
+                    return self._error(
+                        413,
+                        "request_too_large",
+                        f"Request body is too large (limit {max_bytes // 1048576} MB)",
+                    )
             except ValueError:
                 return self._error(400, "invalid_content_length", "Invalid Content-Length header")
 
