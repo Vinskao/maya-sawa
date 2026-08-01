@@ -255,7 +255,10 @@ metadata:
   name: maya-sawa-ingress
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # Live 影片合成會一次上傳最多 4 支影片，50m 太小會回 413
+    nginx.ingress.kubernetes.io/proxy-body-size: "1024m"
+    # 大檔改用串流轉發，不要在 nginx 先整包緩衝
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
     nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
     nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"

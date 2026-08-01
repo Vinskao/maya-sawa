@@ -19,6 +19,30 @@ TEMP_DIR = Path(os.getenv("TEMP_DIR", "./temp_videos"))
 # Limit concurrent FFmpeg processes to 2 to avoid OOM
 FFMPEG_SEMAPHORE = asyncio.Semaphore(2)
 
+# Upload guard (bytes). Must stay <= nginx ingress proxy-body-size.
+MAX_TOTAL_UPLOAD_BYTES = int(os.getenv("MAX_TOTAL_UPLOAD_BYTES", str(1024 * 1024 * 1024)))
+
+
+def _run(cmd: List[str]):
+    """Run a command synchronously and return the CompletedProcess."""
+    import subprocess
+    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+
+
+def _probe_duration(path: Path) -> float:
+    """Return the duration of a video file in seconds (0.0 if unknown)."""
+    result = _run([
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ])
+    try:
+        return float(result.stdout.decode().strip())
+    except (ValueError, AttributeError):
+        return 0.0
+
 async def delayed_cleanup(dir_path: Path, delay_seconds: int = 600):
     """Background task to remove temporary directory after a delay (default 10 mins)."""
     await asyncio.sleep(delay_seconds)
@@ -85,57 +109,104 @@ async def merge_videos(
         # Save uploaded files
         valid_inputs = [] # items: (slot_index, file_path)
         
+        total_bytes = 0
         for i, upload_file in enumerate(slot_files):
             if upload_file:
                 file_path = job_dir / f"input_{i}.mp4"
                 with open(file_path, "wb") as buffer:
                     shutil.copyfileobj(upload_file.file, buffer)
+                total_bytes += file_path.stat().st_size
                 valid_inputs.append((i, file_path))
+
+        if total_bytes > MAX_TOTAL_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Total upload size {total_bytes / 1048576:.1f} MB exceeds the "
+                    f"limit of {MAX_TOTAL_UPLOAD_BYTES / 1048576:.0f} MB."
+                ),
+            )
 
         output_mp4 = job_dir / "merged.mp4"
         output_gif = job_dir / "merged.gif"
 
-        # Construct filter complex
+        loop = asyncio.get_running_loop()
+
+        # ------------------------------------------------------------------
+        # Pass 1: normalise each clip to height 1080 and apply the boomerang
+        # (forward + reverse) effect, writing an intermediate file.
+        #
+        # Doing this as a separate pass keeps the `reverse` filter's memory
+        # use bounded to one clip, and gives us a concrete file we can loop
+        # with `-stream_loop` in pass 2 at O(1) memory.
+        # ------------------------------------------------------------------
+        boomerang_paths = []
+        async with FFMPEG_SEMAPHORE:
+            for idx, (slot_idx, path) in enumerate(valid_inputs):
+                boom_path = job_dir / f"boom_{idx}.mp4"
+                boom_filter = (
+                    "[0:v]scale=-2:1080,setsar=1,fps=30,split[fwd][revpre];"
+                    "[revpre]reverse[rev];"
+                    "[fwd][rev]concat=n=2:v=1:a=0[out]"
+                )
+                boom_cmd = [
+                    "ffmpeg", "-i", str(path),
+                    "-filter_complex", boom_filter,
+                    "-map", "[out]", "-an",
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+                    "-pix_fmt", "yuv420p",
+                    str(boom_path), "-y",
+                ]
+                result = await loop.run_in_executor(None, _run, boom_cmd)
+                if result.returncode != 0:
+                    error_msg = result.stderr.decode("utf-8", errors="replace")
+                    logger.error(f"FFmpeg boomerang pass failed for job {request_id}: {error_msg}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Video processing failed: {error_msg}",
+                    )
+                boomerang_paths.append(boom_path)
+
+        # Longest clip decides the output duration; every other clip is
+        # replayed (looped) until it reaches the same length.
+        durations = [_probe_duration(p) for p in boomerang_paths]
+        target_duration = max(durations) if durations else 0.0
+        if target_duration <= 0:
+            raise HTTPException(status_code=400, detail="Could not determine video duration")
+
+        logger.info(
+            f"Job {request_id}: clip durations {['%.2f' % d for d in durations]}, "
+            f"looping all to {target_duration:.2f}s"
+        )
+
+        # ------------------------------------------------------------------
+        # Pass 2: loop each clip to the target duration and stack them.
+        # ------------------------------------------------------------------
+        cmd = ["ffmpeg"]
+        for p in boomerang_paths:
+            # -stream_loop -1 repeats the file indefinitely; -t caps the read
+            # at the target duration, so short clips replay to fill the gap.
+            cmd.extend(["-stream_loop", "-1", "-t", f"{target_duration:.3f}", "-i", str(p)])
+
         filter_complex = ""
         processed_labels = []
-        
-        for idx, (slot_idx, path) in enumerate(valid_inputs):
-            # Create boomerang effect: play forward, then reverse
-            # Input mapping: idx corresponds to the order in cmd inputs
-            
-            # 1. Split input into forward key and reverse source
-            filter_complex += f"[{idx}:v]split[fwd{idx}][revpre{idx}];"
-            # 2. Reverse the second copy
-            filter_complex += f"[revpre{idx}]reverse[rev{idx}];"
-            # 3. Concatenate forward and reverse
-            filter_complex += f"[fwd{idx}][rev{idx}]concat=n=2:v=1:a=0[loop{idx}];"
-            
-            # Scale to height 1080, width dynamic (divisible by 2)
-            # Remove padding to allow dynamic width
-            filter_complex += f"[loop{idx}]scale=-2:1080,format=rgba[v{idx}];"
+        for idx in range(len(boomerang_paths)):
+            filter_complex += f"[{idx}:v]setpts=PTS-STARTPTS[v{idx}];"
             processed_labels.append(f"[v{idx}]")
-        
-        if not processed_labels:
-             raise HTTPException(status_code=400, detail="No video inputs processed")
 
-        if len(valid_inputs) > 1:
+        if len(processed_labels) > 1:
             hstack_inputs = "".join(processed_labels)
-            # Main output: hstack all valid inputs. 
-            filter_complex += f"{hstack_inputs}hstack=inputs={len(valid_inputs)}:shortest=1[outv];"
+            filter_complex += f"{hstack_inputs}hstack=inputs={len(processed_labels)}:shortest=1[outv];"
         else:
-            # Single input case: just pass it through
             filter_complex += f"{processed_labels[0]}null[outv];"
-        
-        # Split for GIF: scale height to 480px (maintaining ratio), generate palette
+
+        # Split for GIF: scale height to 480px (maintaining ratio), generate palette.
+        # fps is capped so the GIF stays a reasonable size for long outputs.
         filter_complex += "[outv]split[mv][gv];"
-        filter_complex += "[gv]scale=-2:480:flags=lanczos,split[g1][g2];"
+        filter_complex += "[gv]fps=12,scale=-2:480:flags=lanczos,split[g1][g2];"
         filter_complex += "[g1]palettegen[pal];"
         filter_complex += "[g2][pal]paletteuse[gifv]"
 
-        cmd = ["ffmpeg"]
-        for _, p in valid_inputs:
-            cmd.extend(["-i", str(p)])
-            
         cmd.extend([
             "-filter_complex", filter_complex,
             "-map", "[mv]",
@@ -147,19 +218,20 @@ async def merge_videos(
         ])
 
         logger.info(f"Starting video merge for job {request_id} with {len(valid_inputs)} inputs")
-        
+
         async with FFMPEG_SEMAPHORE:
-            loop = asyncio.get_running_loop()
-            def run_ffmpeg():
-                import subprocess
-                return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-            
-            completed_process = await loop.run_in_executor(None, run_ffmpeg)
-            
+            completed_process = await loop.run_in_executor(None, _run, cmd)
+
         if completed_process.returncode != 0:
             error_msg = completed_process.stderr.decode('utf-8', errors='replace')
             logger.error(f"FFmpeg failed for job {request_id}: {error_msg}")
             raise HTTPException(status_code=500, detail=f"Video processing failed: {error_msg}")
+
+        # Intermediate files are no longer needed
+        for p in boomerang_paths:
+            p.unlink(missing_ok=True)
+        for _, p in valid_inputs:
+            p.unlink(missing_ok=True)
 
         logger.info(f"Video merge successful for job {request_id}")
 
