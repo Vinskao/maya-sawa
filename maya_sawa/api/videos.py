@@ -22,11 +22,25 @@ FFMPEG_SEMAPHORE = asyncio.Semaphore(2)
 # Upload guard (bytes). Must stay <= nginx ingress proxy-body-size.
 MAX_TOTAL_UPLOAD_BYTES = int(os.getenv("MAX_TOTAL_UPLOAD_BYTES", str(1024 * 1024 * 1024)))
 
+# Output height per clip. 4 clips at 1080 produce a 7680x1080 canvas, which
+# costs ~1.6GB of RAM in ffmpeg; lower this to cut memory and CPU.
+OUTPUT_HEIGHT = int(os.getenv("MERGE_OUTPUT_HEIGHT", "1080"))
+OUTPUT_FPS = int(os.getenv("MERGE_OUTPUT_FPS", "30"))
+
 
 def _run(cmd: List[str]):
     """Run a command synchronously and return the CompletedProcess."""
     import subprocess
-    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    try:
+        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"'{cmd[0]}' is not installed in this container. "
+                "The image must be rebuilt with ffmpeg available."
+            ),
+        ) from exc
 
 
 def _probe_duration(path: Path) -> float:
@@ -76,7 +90,8 @@ async def merge_videos(
     bg_removal_0: str = Form("none"),
     bg_removal_1: str = Form("none"),
     bg_removal_2: str = Form("none"),
-    bg_removal_3: str = Form("none")
+    bg_removal_3: str = Form("none"),
+    boomerang: bool = Form(False),
 ):
     """
     Merge 4 videos into a 1x4 horizontal layout and generate MP4 + GIF.
@@ -133,43 +148,52 @@ async def merge_videos(
         loop = asyncio.get_running_loop()
 
         # ------------------------------------------------------------------
-        # Pass 1: normalise each clip to height 1080 and apply the boomerang
-        # (forward + reverse) effect, writing an intermediate file.
+        # Pass 1: normalise each clip to height 1080 / 30fps, writing an
+        # intermediate file we can loop with `-stream_loop` in pass 2 at
+        # O(1) memory.
         #
-        # Doing this as a separate pass keeps the `reverse` filter's memory
-        # use bounded to one clip, and gives us a concrete file we can loop
-        # with `-stream_loop` in pass 2 at O(1) memory.
+        # NOTE: the boomerang effect uses ffmpeg's `reverse` filter, which
+        # buffers every decoded frame in RAM (1080p RGBA is ~8MB/frame, so a
+        # 5s 30fps clip needs ~1.2GB). That will OOM-kill the pod under its
+        # 1.5Gi limit, so it is opt-in and applied at a reduced resolution.
         # ------------------------------------------------------------------
-        boomerang_paths = []
+        normalised_paths = []
         async with FFMPEG_SEMAPHORE:
             for idx, (slot_idx, path) in enumerate(valid_inputs):
-                boom_path = job_dir / f"boom_{idx}.mp4"
-                boom_filter = (
-                    "[0:v]scale=-2:1080,setsar=1,fps=30,split[fwd][revpre];"
-                    "[revpre]reverse[rev];"
-                    "[fwd][rev]concat=n=2:v=1:a=0[out]"
-                )
-                boom_cmd = [
+                out_path = job_dir / f"norm_{idx}.mp4"
+                if boomerang:
+                    # Reverse at 540p to keep the frame buffer manageable,
+                    # then scale the concatenated result back up to 1080.
+                    half = max(2, (OUTPUT_HEIGHT // 2) // 2 * 2)
+                    vf = (
+                        f"[0:v]scale=-2:{half},setsar=1,fps={OUTPUT_FPS},split[fwd][revpre];"
+                        "[revpre]reverse[rev];"
+                        f"[fwd][rev]concat=n=2:v=1:a=0,scale=-2:{OUTPUT_HEIGHT}[out]"
+                    )
+                else:
+                    vf = f"[0:v]scale=-2:{OUTPUT_HEIGHT},setsar=1,fps={OUTPUT_FPS}[out]"
+
+                norm_cmd = [
                     "ffmpeg", "-i", str(path),
-                    "-filter_complex", boom_filter,
+                    "-filter_complex", vf,
                     "-map", "[out]", "-an",
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
                     "-pix_fmt", "yuv420p",
-                    str(boom_path), "-y",
+                    str(out_path), "-y",
                 ]
-                result = await loop.run_in_executor(None, _run, boom_cmd)
+                result = await loop.run_in_executor(None, _run, norm_cmd)
                 if result.returncode != 0:
                     error_msg = result.stderr.decode("utf-8", errors="replace")
-                    logger.error(f"FFmpeg boomerang pass failed for job {request_id}: {error_msg}")
+                    logger.error(f"FFmpeg normalise pass failed for job {request_id}: {error_msg}")
                     raise HTTPException(
                         status_code=500,
                         detail=f"Video processing failed: {error_msg}",
                     )
-                boomerang_paths.append(boom_path)
+                normalised_paths.append(out_path)
 
         # Longest clip decides the output duration; every other clip is
         # replayed (looped) until it reaches the same length.
-        durations = [_probe_duration(p) for p in boomerang_paths]
+        durations = [_probe_duration(p) for p in normalised_paths]
         target_duration = max(durations) if durations else 0.0
         if target_duration <= 0:
             raise HTTPException(status_code=400, detail="Could not determine video duration")
@@ -183,14 +207,14 @@ async def merge_videos(
         # Pass 2: loop each clip to the target duration and stack them.
         # ------------------------------------------------------------------
         cmd = ["ffmpeg"]
-        for p in boomerang_paths:
+        for p in normalised_paths:
             # -stream_loop -1 repeats the file indefinitely; -t caps the read
             # at the target duration, so short clips replay to fill the gap.
             cmd.extend(["-stream_loop", "-1", "-t", f"{target_duration:.3f}", "-i", str(p)])
 
         filter_complex = ""
         processed_labels = []
-        for idx in range(len(boomerang_paths)):
+        for idx in range(len(normalised_paths)):
             filter_complex += f"[{idx}:v]setpts=PTS-STARTPTS[v{idx}];"
             processed_labels.append(f"[v{idx}]")
 
@@ -200,20 +224,14 @@ async def merge_videos(
         else:
             filter_complex += f"{processed_labels[0]}null[outv];"
 
-        # Split for GIF: scale height to 480px (maintaining ratio), generate palette.
-        # fps is capped so the GIF stays a reasonable size for long outputs.
-        filter_complex += "[outv]split[mv][gv];"
-        filter_complex += "[gv]fps=12,scale=-2:480:flags=lanczos,split[g1][g2];"
-        filter_complex += "[g1]palettegen[pal];"
-        filter_complex += "[g2][pal]paletteuse[gifv]"
+        filter_complex = filter_complex.rstrip(";")
 
         cmd.extend([
             "-filter_complex", filter_complex,
-            "-map", "[mv]",
+            "-map", "[outv]",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
+            "-threads", "2",
             str(output_mp4),
-            "-map", "[gifv]",
-            str(output_gif),
             "-y"
         ])
 
@@ -227,8 +245,47 @@ async def merge_videos(
             logger.error(f"FFmpeg failed for job {request_id}: {error_msg}")
             raise HTTPException(status_code=500, detail=f"Video processing failed: {error_msg}")
 
+        # ------------------------------------------------------------------
+        # Pass 3: GIF, generated from the finished MP4 in two steps.
+        #
+        # The single-pass `split -> palettegen -> paletteuse` graph has to
+        # buffer the whole stream in RAM while the palette is computed
+        # (measured ~1.2GB for a 2-up 1080p clip). Writing the palette to a
+        # file first keeps this pass at ~175MB.
+        # ------------------------------------------------------------------
+        palette_path = job_dir / "palette.png"
+        gif_scale = "fps=12,scale=-2:480:flags=lanczos"
+
+        async with FFMPEG_SEMAPHORE:
+            palette_cmd = [
+                "ffmpeg", "-i", str(output_mp4),
+                "-vf", f"{gif_scale},palettegen",
+                str(palette_path), "-y",
+            ]
+            palette_result = await loop.run_in_executor(None, _run, palette_cmd)
+
+            if palette_result.returncode == 0:
+                gif_cmd = [
+                    "ffmpeg", "-i", str(output_mp4), "-i", str(palette_path),
+                    "-lavfi", f"{gif_scale}[x];[x][1:v]paletteuse",
+                    str(output_gif), "-y",
+                ]
+                gif_result = await loop.run_in_executor(None, _run, gif_cmd)
+            else:
+                gif_result = palette_result
+
+        palette_path.unlink(missing_ok=True)
+
+        if gif_result.returncode != 0:
+            # The MP4 is the primary deliverable; a GIF failure should not
+            # sink the whole job.
+            logger.warning(
+                f"GIF generation failed for job {request_id}: "
+                f"{gif_result.stderr.decode('utf-8', errors='replace')}"
+            )
+
         # Intermediate files are no longer needed
-        for p in boomerang_paths:
+        for p in normalised_paths:
             p.unlink(missing_ok=True)
         for _, p in valid_inputs:
             p.unlink(missing_ok=True)
@@ -243,7 +300,10 @@ async def merge_videos(
             "success": True,
             "job_id": request_id,
             "mp4_url": f"/videos/download/{request_id}/mp4",
-            "gif_url": f"/videos/download/{request_id}/gif"
+            "gif_url": (
+                f"/videos/download/{request_id}/gif" if output_gif.exists() else None
+            ),
+            "duration": round(target_duration, 2),
         }
 
     except Exception as e:

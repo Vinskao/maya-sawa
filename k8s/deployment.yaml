@@ -200,12 +200,18 @@ spec:
           value: "true"
         - name: ENABLE_PERIODIC_SYNC
           value: "true"
+        # 影片合成的暫存目錄，必須指向下方掛載的 emptyDir，
+        # 否則會寫進 container 可寫層（不受 volume 管理、也不會被清掉）
+        - name: TEMP_DIR
+          value: "/app/temp"
         resources:
           requests:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "10m"
           limits:
-            memory: "1536Mi"
+            # 實測：4 支 1080p 影片 hstack 成 7680x1080 時 ffmpeg 峰值約 1.6GB，
+            # 原本的 1536Mi 會直接被 OOMKill
+            memory: "3Gi"
             cpu: "1000m"
         volumeMounts:
         - name: temp-storage
