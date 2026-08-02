@@ -31,7 +31,7 @@ pipeline {
                     args:
                     - "--host=tcp://0.0.0.0:2375"
                     - "--host=unix:///var/run/docker.sock"
-                    - "--storage-driver=vfs"
+                    - "--storage-driver=overlay2"
                     - "--mtu=1440"
                     privileged: true
                     securityContext:
@@ -40,9 +40,13 @@ pipeline {
                       requests:
                         cpu: "10m"
                         memory: "256Mi"
+                      # The image build runs entirely inside this daemon, so a
+                      # 50m limit throttled it to 5% of a core (apt alone took
+                      # ~20min). Requests stay small so scheduling is unchanged;
+                      # only the burst ceiling is raised.
                       limits:
-                        cpu: "50m"
-                        memory: "512Mi"
+                        cpu: "800m"
+                        memory: "2Gi"
                     env:
                     - name: DOCKER_HOST
                       value: tcp://localhost:2375
@@ -51,7 +55,7 @@ pipeline {
                     - name: DOCKER_BUILDKIT
                       value: "1"
                     - name: DOCKER_DRIVER
-                      value: vfs
+                      value: overlay2
                     volumeMounts:
                     - mountPath: /home/jenkins/agent
                       name: workspace-volume

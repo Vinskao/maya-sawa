@@ -23,53 +23,22 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# ffmpeg / ffprobe are required by the /videos/merge-videos endpoint
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# ffmpeg / ffprobe are required by the /videos/merge-videos endpoint.
+# The Debian package pulls in the whole SDL2/mesa/GTK/pulseaudio stack (~164MB
+# and ~20min of apt work) that a headless server never uses, so copy the static
+# binaries instead. Multi-arch, so this still resolves correctly on arm64.
+COPY --from=mwader/static-ffmpeg:7.1.1 /ffmpeg /ffprobe /usr/local/bin/
 
 # Copy installed dependencies from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Build arguments for env vars
-ARG OPENAI_API_KEY
-ARG OPENAI_ORGANIZATION
-ARG DB_HOST
-ARG DB_PORT
-ARG DB_DATABASE
-ARG DB_USERNAME
-ARG DB_PASSWORD
-ARG DB_SSLMODE
-ARG REDIS_HOST
-ARG REDIS_CUSTOM_PORT
-ARG REDIS_PASSWORD
-ARG REDIS_QUEUE_MAYA
-ARG PUBLIC_API_BASE_URL
+# Runtime configuration (OpenAI / DB / Redis / ...) is injected by
+# k8s/deployment.yaml through envsubst, and the build passes no secret
+# build-args, so the image deliberately bakes in no ARG/ENV defaults.
 
-# Set environment variables
-ENV OPENAI_API_KEY=${OPENAI_API_KEY}
-ENV OPENAI_ORGANIZATION=${OPENAI_ORGANIZATION}
-ENV OPENAI_API_BASE=https://api.openai.com/v1
-ENV DB_HOST=${DB_HOST}
-ENV DB_PORT=${DB_PORT}
-ENV DB_DATABASE=${DB_DATABASE}
-ENV DB_USERNAME=${DB_USERNAME}
-ENV DB_PASSWORD=${DB_PASSWORD}
-ENV DB_SSLMODE=${DB_SSLMODE}
-ENV REDIS_HOST=${REDIS_HOST}
-ENV REDIS_CUSTOM_PORT=${REDIS_CUSTOM_PORT}
-ENV REDIS_PASSWORD=${REDIS_PASSWORD}
-ENV REDIS_QUEUE_MAYA=${REDIS_QUEUE_MAYA}
-ENV PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
-
-# Copy project files
+# Copy project files (__pycache__ and *.py[cod] are excluded by .dockerignore)
 COPY . .
-
-# Clean up
-RUN find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
-    && find . -type f -name '*.pyc' -delete \
-    && find . -type f -name '*.pyo' -delete
 
 # Expose port
 EXPOSE 8000
