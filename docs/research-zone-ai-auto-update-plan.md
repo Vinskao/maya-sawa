@@ -284,3 +284,79 @@ The MVP is ready when:
 
 AI can propose changes, but deterministic code must decide whether those changes are safe to publish.
 
+
+## 執行環境變數（實作補充）
+
+| 變數 | 用途 | 缺少時的行為 |
+|------|------|--------------|
+| `RESEARCH_PIPELINE_ENABLED` | 是否啟用整條管線 | 預設 `false`：完全不初始化，pipeline API 回 503，既有 QA/market API 不受影響 |
+| `RESEARCH_PIPELINE_CHECKPOINT_DSN` | LangGraph checkpoint 的 PostgreSQL DSN | 退回 `RESEARCH_PIPELINE_DB_DSN` |
+| `RESEARCH_PIPELINE_DB_DSN` | 業務 run 表（`maya_sawa_research_pipeline_runs`）的 DSN | 業務表退回記憶體版；啟用狀態下兩個 DSN 都沒有則**啟動失敗** |
+| `RESEARCH_PIPELINE_LOCAL_MODE` | 設為 `true` 時允許使用 in-memory checkpointer | 啟用且非 local mode 時缺 DSN 直接 fail fast |
+| `RESEARCH_PIPELINE_DB_AUTO_MIGRATE` | 設為 `true` 時啟動自動建立業務表 | 需自行執行 `sql/create_research_pipeline_runs_table.sql` |
+
+checkpointer 與業務表可以共用同一個 PostgreSQL instance：前者使用 LangGraph 自己的
+`checkpoints*` 資料表，後者是 `maya_sawa_research_pipeline_runs`。需要更強的隔離時，
+在 DSN 加上 `options=-csearch_path%3D<schema>`。
+
+本機開發若不想接資料庫，設定 `RESEARCH_PIPELINE_LOCAL_MODE=true`；此時 process
+重啟後等待審核的 run 無法 resume，approve 會得到 409。
+
+
+## CRAG Gate（實作補充）
+
+正式 mapping 的形狀已確認為 `rackParts`（TYMB `/tymb/resources/company-product-mapping`
+原樣代理 OCI 物件，沒有任何轉換），change set 因此改為 rack-part 導向：
+`update_rack_part` / `add_product_entry` / `update_product_entry`。
+`rackParts[].id` 綁定前端 PowerRackDiagram 的 hover region，MVP 不允許新增或刪除 rack part。
+
+CRAG 是 generator 前的**硬性 gate**，不是事後補一個分數：
+
+```
+load_mapping → collect_evidence → evaluate_retrieval
+                                    ├─ correct   → refine_evidence
+                                    └─ 其他      → corrective_retrieve → evaluate_retrieval
+                                 → evidence_gate
+                                    ├─ insufficient → notify_failure
+                                    └─ sufficient   → generate_change_set
+                                 → validate_grounding → validate_change_set → merge → approval → publish
+```
+
+- `evaluate_retrieval` 對每筆 evidence 檢查六項：rack part 對應、company 匹配、
+  product 匹配、是否有可支持變更的敘述、是否為 allowlist primary source、
+  時間/URL/內容是否完整。其中 rack part、company、primary source、欄位完整
+  屬於 critical，未通過就不可能是 `correct`。
+- 判定 `correct` / `ambiguous` / `incorrect`，score 與 reasons 一併保存。
+- `corrective_retrieve` 只能從 `evidence_targets.json` 與 trusted-source registry
+  擴充，永遠不接受 LLM 提供的 URL；最多兩輪，之後 fail closed。
+- `refine_evidence` 只保留 `correct` evidence 中與 company/product 相關的句子並跨來源去重；
+  `ambiguous` evidence 留在 state 供人工查看，但不會進入 refined_evidence，
+  因此無法單獨支持任何 operation。
+- `validate_grounding` 要求每個 operation 引用的 evidence 都存在於精煉結果、
+  CRAG 判定為 `correct`，且 rackPartId 與 operation 一致。
+- run 表保存 `retrieval_evaluation`、`retrieval_verdict`、`correction_attempts`、
+  `refined_evidence`，審核畫面因此可以解釋「為什麼這筆變更通過」。
+
+deterministic evaluator 是安全底線。未來加入 LLM evaluator 時，它只能加強語意判斷，
+不能取代這裡的規則。
+
+
+## Change-set Generator 邊界（實作補充）
+
+LLM client 以 dependency injection 注入（`LlmClient` protocol），
+測試一律使用 `FakeLlmClient`，不消耗任何 token。
+
+模型輸出被視為完全不可信，依序通過三層：
+
+1. `extract_json_object` — 只接受單一 JSON 物件，容忍 markdown code fence。
+2. `parse_change_set` — schema 驗證；delete、`add_rack_part`、未知 op/欄位在這層被拒。
+3. `boundary_errors` — evidenceId 必須來自本次提供的精煉證據，
+   rackPartId 必須存在於目前 mapping。
+
+malformed 輸出最多重試一次（`max_attempts=2`），仍失敗就讓 `generate_change_set`
+節點乾淨失敗，不會退回「猜一個」。prompt 只包含相關 rack part 的現況與精煉證據，
+模型看不到完整 production mapping。
+
+真實模型 smoke test 位於 `tests/test_research_pipeline_llm_smoke.py`，
+預設 skip，需 `RESEARCH_PIPELINE_LLM_SMOKE=true`；只送一份證據、一次呼叫、
+限制 output token，且只驗證 schema 相容性，不驗證文字品質。

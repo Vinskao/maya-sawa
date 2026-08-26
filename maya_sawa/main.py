@@ -23,6 +23,7 @@ import os
 import logging
 import asyncio
 import pathlib
+from contextlib import asynccontextmanager
 
 # 第三方庫導入
 try:
@@ -55,6 +56,8 @@ from .api.git_commits import router as git_commits_router
 from .api.otel_usage import router as otel_usage_router
 from .api.market import router as market_router
 from .api.runpod import router as runpod_router
+from .api.research_pipeline import router as research_pipeline_router
+from .research_pipeline.container import get_container as get_research_pipeline_container
 from .services.shioaji_market import shioaji_market_service
 from .services.ibkr_market import ibkr_market_service
 from .services.metrics_consumer import MetricsConsumer
@@ -79,9 +82,29 @@ if not api_key:
 if not api_base:
     logger.error("OPENAI_API_BASE not found in environment variables!")
 
+# ==================== 應用程式生命週期 ====================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """應用程式生命週期。
+
+    research pipeline 的 checkpointer 與 compiled graph 在這裡建立一次、關閉一次，
+    不在每個 request 開 context manager。設定不完整會直接讓應用啟動失敗，
+    避免 approve/reject 在 runtime 才發現無法 resume。
+    """
+    get_research_pipeline_container().startup()
+    try:
+        await _startup_event()
+        yield
+    finally:
+        await _shutdown_event()
+        get_research_pipeline_container().shutdown()
+
+
 # ==================== FastAPI 應用程式初始化 ====================
 # 創建 FastAPI 應用程式實例
 app = FastAPI(
+    lifespan=lifespan,
     title="Maya Sawa Unified API",  # API 文檔標題
     description="""
     A unified API system integrating multiple services:
@@ -163,6 +186,9 @@ app.include_router(market_router)
 # RunPod GPU cost & balance observability (GraphQL-backed, read-only).
 app.include_router(runpod_router)
 
+# Research Zone AI 更新管線的人工審核 API（目前使用 stub service）
+app.include_router(research_pipeline_router)
+
 # ==================== 排程器初始化 ====================
 # 創建文章同步排程器實例
 scheduler = ArticleSyncScheduler()
@@ -170,8 +196,7 @@ metrics_consumer = MetricsConsumer.get_instance()
 
 # ==================== 應用程式生命週期事件 ====================
 
-@app.on_event("startup")
-async def startup_event():
+async def _startup_event():
     """
     應用程式啟動時執行的事件處理器
     
@@ -252,8 +277,7 @@ async def startup_event():
         # 記錄啟動錯誤，但不讓啟動錯誤阻止應用程式運行
         logger.error(f"啟動時發生錯誤: {str(e)}")
 
-@app.on_event("shutdown")
-async def shutdown_event():
+async def _shutdown_event():
     """
     應用程式關閉時執行的事件處理器
     

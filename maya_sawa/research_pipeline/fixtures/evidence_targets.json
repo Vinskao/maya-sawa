@@ -1,0 +1,23 @@
+[
+  {
+    "source_id": "delta-official",
+    "url": "https://www.deltaww.com/en-US/products/dc-dc-power-module",
+    "company": "Delta Electronics",
+    "product": "800V→48V DC-DC power module",
+    "rack_part_id": "dc-pdu"
+  },
+  {
+    "source_id": "vicor-official",
+    "url": "https://www.vicorpower.com/api/products/fpa.json",
+    "company": "Vicor",
+    "product": "Factorized Power (FPA) modules",
+    "rack_part_id": "dc-pdu"
+  },
+  {
+    "source_id": "infineon-official",
+    "url": "https://www.infineon.com/products/high-voltage-power-stages",
+    "company": "Infineon",
+    "product": "High-voltage power stages",
+    "rack_part_id": "dc-pdu"
+  }
+]

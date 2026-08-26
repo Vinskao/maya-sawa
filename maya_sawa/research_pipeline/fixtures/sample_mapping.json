@@ -1,0 +1,67 @@
+{
+  "version": "1",
+  "updatedAt": "2026-06-18",
+  "note": "Local source of truth for ResearchZone. rackParts[].id must match the hover regions in PowerRackDiagram.tsx. Publish this same JSON to OCI Object Storage as company-product-mapping.json for production backend consumption.",
+  "rackParts": [
+    {
+      "id": "dc-pdu",
+      "name": { "en": "DC PDU / DC-DC Converter", "zh": "直流配電單元 / DC-DC 轉換器" },
+      "summary": { "en": "Steps the facility 800VDC feed down toward the 48VDC rail at the rack top.", "zh": "在機櫃頂層將機房 800V 高壓向下轉換至 48V 匯流。" },
+      "products": [
+        { "company": "Delta Electronics", "product": "800V→48V DC-DC power module", "note": "" },
+        { "company": "Vicor", "product": "Factorized Power (FPA) modules", "note": "" },
+        { "company": "Infineon", "product": "High-voltage power stages", "note": "" }
+      ]
+    },
+    {
+      "id": "power-shelf",
+      "name": { "en": "Power Shelf", "zh": "電源架 (Power Shelf)" },
+      "summary": { "en": "Houses redundant rectifier/converter units feeding the busbar.", "zh": "容納冗餘的整流／轉換單元，供電給匯流排。" },
+      "products": [
+        { "company": "Delta Electronics", "product": "ORv3 power shelf", "note": "" },
+        { "company": "Flex (Flextronics)", "product": "Rack power shelf", "note": "" },
+        { "company": "Lite-On", "product": "Power shelf rectifiers", "note": "" }
+      ]
+    },
+    {
+      "id": "busbar-48v",
+      "name": { "en": "48VDC Busbar", "zh": "48V 銅線匯流排 (Busbar)" },
+      "summary": { "en": "Vertical copper busbar carrying 48VDC down the rack to every server.", "zh": "垂直銅排沿機櫃向下將 48V 直流送至每台伺服器。" },
+      "products": [
+        { "company": "Amphenol", "product": "Busbar power connectors", "note": "" },
+        { "company": "TE Connectivity", "product": "Busbar / power blade connectors", "note": "" },
+        { "company": "Methode Electronics", "product": "Laminated busbars", "note": "" }
+      ]
+    },
+    {
+      "id": "gpu-server",
+      "name": { "en": "GPU Server", "zh": "GPU 伺服器" },
+      "summary": { "en": "High-density GPU compute nodes drawing 48VDC from the busbar.", "zh": "高密度 GPU 運算節點，自匯流排取用 48V 直流。" },
+      "products": [
+        { "company": "NVIDIA", "product": "HGX / DGX GPU baseboards", "note": "" },
+        { "company": "Supermicro", "product": "GPU server systems", "note": "" },
+        { "company": "Dell / HPE", "product": "OEM GPU nodes", "note": "" }
+      ]
+    },
+    {
+      "id": "cpu-server",
+      "name": { "en": "CPU Server", "zh": "CPU 伺服器" },
+      "summary": { "en": "General compute nodes powered from the same 48VDC busbar.", "zh": "一般運算節點，由同一條 48V 匯流排供電。" },
+      "products": [
+        { "company": "Intel", "product": "Xeon platforms", "note": "" },
+        { "company": "AMD", "product": "EPYC platforms", "note": "" },
+        { "company": "Supermicro / Quanta", "product": "CPU server systems", "note": "" }
+      ]
+    },
+    {
+      "id": "psu-48v",
+      "name": { "en": "In-server 48VDC PSU", "zh": "伺服器內部 48V PSU" },
+      "summary": { "en": "Final on-board conversion from 48VDC to board-level voltages.", "zh": "板上最終轉換，將 48V 降至各板級電壓。" },
+      "products": [
+        { "company": "Delta Electronics", "product": "48V intermediate bus converters", "note": "" },
+        { "company": "Vicor", "product": "48V→PoL conversion", "note": "" },
+        { "company": "Monolithic Power (MPS)", "product": "Point-of-load regulators", "note": "" }
+      ]
+    }
+  ]
+}

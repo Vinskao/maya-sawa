@@ -1,0 +1,24 @@
+[
+  {
+    "evidenceId": "delta-official:https://www.deltaww.com/en-US/products/dc-dc-power-module",
+    "sourceId": "delta-official",
+    "sourceUrl": "https://www.deltaww.com/en-US/products/dc-dc-power-module",
+    "fetchedAt": "2026-06-25T00:00:00Z",
+    "rackPartId": "dc-pdu",
+    "company": "Delta Electronics",
+    "product": "800V→48V DC-DC power module",
+    "evidenceText": "Delta Electronics 800V to 48V DC-DC power module converts the facility 800VDC feed to the 48VDC rack busbar. Status: in production.",
+    "confidence": "high"
+  },
+  {
+    "evidenceId": "vicor-official:https://www.vicorpower.com/api/products/fpa.json",
+    "sourceId": "vicor-official",
+    "sourceUrl": "https://www.vicorpower.com/api/products/fpa.json",
+    "fetchedAt": "2026-06-25T00:00:00Z",
+    "rackPartId": "dc-pdu",
+    "company": "Vicor",
+    "product": "Factorized Power (FPA) modules",
+    "evidenceText": "Vicor Factorized Power Architecture (FPA) modules support 800V to 48V conversion in high density AI racks.",
+    "confidence": "high"
+  }
+]

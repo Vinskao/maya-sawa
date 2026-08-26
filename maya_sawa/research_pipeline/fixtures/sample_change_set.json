@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-06-25T00:00:00Z",
+  "operations": [
+    {
+      "op": "add_product_entry",
+      "rackPartId": "dc-pdu",
+      "company": "Delta Electronics",
+      "product": "800V→48V DC-DC power module (ORv3)",
+      "data": { "note": "Confirmed in production on the Delta official product page." },
+      "evidence": ["delta-official:https://www.deltaww.com/en-US/products/dc-dc-power-module"],
+      "confidence": "high"
+    },
+    {
+      "op": "update_product_entry",
+      "rackPartId": "dc-pdu",
+      "company": "Vicor",
+      "product": "Factorized Power (FPA) modules",
+      "data": { "note": "Supports 800V to 48V conversion in high density AI racks." },
+      "evidence": ["vicor-official:https://www.vicorpower.com/api/products/fpa.json"],
+      "confidence": "high"
+    }
+  ]
+}
