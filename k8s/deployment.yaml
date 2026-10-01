@@ -206,7 +206,7 @@ spec:
           value: "/app/temp"
         resources:
           requests:
-            memory: "1Gi"
+            memory: "768Mi"
             cpu: "10m"
           limits:
             # 實測：4 支 1080p 影片 hstack 成 7680x1080 時 ffmpeg 峰值約 1.6GB，
