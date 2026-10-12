@@ -24,11 +24,14 @@ from sqlalchemy import (
     DateTime,
     Numeric,
     Text,
+    UniqueConstraint,
     create_engine,
     pool,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.dialects.postgresql import insert
+from decimal import Decimal, InvalidOperation
 
 from ..core.config.config import Config
 
@@ -58,6 +61,48 @@ class PortfolioHistory(Base):
 
     snapshot = Column(Text, nullable=False)  # full merged portfolio (JSON)
     created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class TaiwanPortfolioHistory(Base):
+    """One point per successful Shioaji valuation, in TWD."""
+    __tablename__ = "maya_sawa_taiwan_portfolio_history"
+    __table_args__ = (UniqueConstraint("source", "valued_at", name="uq_tw_portfolio_source_time"),)
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    valued_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    total_assets = Column(Numeric, nullable=False)
+    cash_balance = Column(Numeric, nullable=True)
+    stock_market_value = Column(Numeric, nullable=True)
+    futures_equity = Column(Numeric, nullable=True)
+    total_pnl = Column(Numeric, nullable=True)
+    source = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+def taiwan_history_values(portfolio: dict[str, Any]) -> Optional[dict[str, Any]]:
+    # Only accept complete, unmerged source valuations. Never turn failed API
+    # responses or replayed cache reads into apparent market movements.
+    if portfolio.get("ibkr") or portfolio.get("accountErrors") or not portfolio.get("balanceAvailable"):
+        return None
+    try:
+        valued_at = datetime.fromisoformat(portfolio["fetchedAt"].replace("Z", "+00:00"))
+        if valued_at.tzinfo is None:
+            return None
+        total = Decimal(str(portfolio["totalAssetsEstimated"]))
+        if not total.is_finite():
+            return None
+        values = {}
+        for column, key in (("cash_balance", "cashBalance"), ("stock_market_value", "stockMarketValue"),
+                            ("futures_equity", "futuresEquity"), ("total_pnl", "totalPnl")):
+            value = portfolio.get(key)
+            values[column] = Decimal(str(value)) if value is not None else None
+            if values[column] is not None and not values[column].is_finite():
+                return None
+    except (KeyError, TypeError, ValueError, InvalidOperation):
+        return None
+    return dict(values, valued_at=valued_at, total_assets=total,
+                source=portfolio.get("source") or "Sinopac Shioaji",
+                created_at=datetime.now(timezone.utc))
 
 
 class PortfolioHistoryDatabase:
@@ -116,6 +161,15 @@ class PortfolioHistoryDatabase:
             raise
         finally:
             session.close()
+
+    def record_taiwan(self, portfolio: dict[str, Any]) -> bool:
+        values = taiwan_history_values(portfolio)
+        if values is None or not self.is_available():
+            return False
+        with self.get_session() as session:
+            result = session.execute(insert(TaiwanPortfolioHistory).values(**values)
+                .on_conflict_do_nothing(constraint="uq_tw_portfolio_source_time"))
+            return result.rowcount == 1
 
     def record(self, portfolio: dict[str, Any]) -> bool:
         """Insert one snapshot row. Returns False if the DB is unavailable."""

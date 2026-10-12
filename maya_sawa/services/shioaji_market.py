@@ -194,6 +194,12 @@ class ShioajiMarketService:
         except Exception:
             logger.exception("Failed to refresh Shioaji market payload: %s", key)
             return False
+        if key == "PORTFOLIO":
+            try:
+                from ..databases.portfolio_history_db import portfolio_history_db
+                await asyncio.to_thread(portfolio_history_db.record_taiwan, payload)
+            except Exception:
+                logger.exception("Failed to record Taiwan portfolio history (non-fatal)")
         try:
             await asyncio.to_thread(self._write_cached_payload, key, payload)
         except redis.RedisError:
