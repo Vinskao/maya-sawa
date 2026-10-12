@@ -64,12 +64,29 @@ class PortfolioHistory(Base):
 
 
 class TaiwanPortfolioHistory(Base):
-    """One point per successful Shioaji valuation, in TWD."""
+    """Every successful Shioaji valuation, in TWD."""
     __tablename__ = "maya_sawa_taiwan_portfolio_history"
     __table_args__ = (UniqueConstraint("source", "valued_at", name="uq_tw_portfolio_source_time"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     valued_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    total_assets = Column(Numeric, nullable=False)
+    cash_balance = Column(Numeric, nullable=True)
+    stock_market_value = Column(Numeric, nullable=True)
+    futures_equity = Column(Numeric, nullable=True)
+    total_pnl = Column(Numeric, nullable=True)
+    source = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class TaiwanPortfolioDailyHistory(Base):
+    """Latest successful Taiwan valuation for each Taiwan-local calendar day."""
+    __tablename__ = "maya_sawa_taiwan_portfolio_daily_history"
+    __table_args__ = (UniqueConstraint("source", "valuation_date", name="uq_tw_portfolio_daily_source_date"),)
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    valuation_date = Column(Text, nullable=False, index=True)
+    valued_at = Column(DateTime(timezone=True), nullable=False)
     total_assets = Column(Numeric, nullable=False)
     cash_balance = Column(Numeric, nullable=True)
     stock_market_value = Column(Numeric, nullable=True)
@@ -100,7 +117,11 @@ def taiwan_history_values(portfolio: dict[str, Any]) -> Optional[dict[str, Any]]
                 return None
     except (KeyError, TypeError, ValueError, InvalidOperation):
         return None
-    return dict(values, valued_at=valued_at, total_assets=total,
+    # Store one point per Taiwan-local day in a separate rollup table, retaining
+    # every original intraday valuation in TaiwanPortfolioHistory.
+    from zoneinfo import ZoneInfo
+    valuation_date = valued_at.astimezone(ZoneInfo("Asia/Taipei")).date().isoformat()
+    return dict(values, valued_at=valued_at, valuation_date=valuation_date, total_assets=total,
                 source=portfolio.get("source") or "Sinopac Shioaji",
                 created_at=datetime.now(timezone.utc))
 
@@ -141,9 +162,34 @@ class PortfolioHistoryDatabase:
         self._session_factory = sessionmaker(bind=self._engine)
         try:
             Base.metadata.create_all(self._engine)
+            self._backfill_taiwan_daily_history()
         except Exception:
             logger.exception("Failed to ensure portfolio_history table")
         logger.info("Portfolio history database initialized")
+
+    def _backfill_taiwan_daily_history(self) -> None:
+        """Seed the daily rollup from existing intraday rows without deleting them."""
+        with self._engine.begin() as connection:
+            connection.exec_driver_sql("""
+                INSERT INTO public.maya_sawa_taiwan_portfolio_daily_history
+                    (valuation_date, valued_at, total_assets, cash_balance, stock_market_value,
+                     futures_equity, total_pnl, source, created_at)
+                SELECT DISTINCT ON (source, (valued_at AT TIME ZONE 'Asia/Taipei')::date)
+                    (valued_at AT TIME ZONE 'Asia/Taipei')::date::text,
+                    valued_at, total_assets, cash_balance, stock_market_value,
+                    futures_equity, total_pnl, source, created_at
+                FROM public.maya_sawa_taiwan_portfolio_history
+                ORDER BY source, (valued_at AT TIME ZONE 'Asia/Taipei')::date, valued_at DESC, id DESC
+                ON CONFLICT (source, valuation_date) DO UPDATE SET
+                    valued_at = EXCLUDED.valued_at,
+                    total_assets = EXCLUDED.total_assets,
+                    cash_balance = EXCLUDED.cash_balance,
+                    stock_market_value = EXCLUDED.stock_market_value,
+                    futures_equity = EXCLUDED.futures_equity,
+                    total_pnl = EXCLUDED.total_pnl,
+                    created_at = EXCLUDED.created_at
+                WHERE EXCLUDED.valued_at > maya_sawa_taiwan_portfolio_daily_history.valued_at
+            """)
 
     def is_available(self) -> bool:
         return self._engine is not None
@@ -167,8 +213,15 @@ class PortfolioHistoryDatabase:
         if values is None or not self.is_available():
             return False
         with self.get_session() as session:
-            result = session.execute(insert(TaiwanPortfolioHistory).values(**values)
+            history_values = {key: value for key, value in values.items() if key != "valuation_date"}
+            session.execute(insert(TaiwanPortfolioHistory).values(**history_values)
                 .on_conflict_do_nothing(constraint="uq_tw_portfolio_source_time"))
+            result = session.execute(insert(TaiwanPortfolioDailyHistory).values(**values)
+                .on_conflict_do_update(
+                    constraint="uq_tw_portfolio_daily_source_date",
+                    set_={key: value for key, value in values.items() if key not in {"source", "valuation_date"}},
+                    where=TaiwanPortfolioDailyHistory.valued_at < values["valued_at"],
+                ))
             return result.rowcount == 1
 
     def record(self, portfolio: dict[str, Any]) -> bool:
@@ -234,37 +287,26 @@ class PortfolioHistoryDatabase:
             return json.loads(row.snapshot)
 
     def history(self, limit: int = 90) -> list[dict[str, Any]]:
-        """Return recent scalar history rows (newest first) for charting."""
+        """Return one Taiwan portfolio total per calendar day, oldest first."""
         limit = min(max(limit, 1), 1000)
         with self.get_session() as session:
             rows = (
-                session.query(PortfolioHistory)
-                .order_by(PortfolioHistory.captured_at.desc())
+                session.query(TaiwanPortfolioDailyHistory)
+                .order_by(TaiwanPortfolioDailyHistory.valuation_date.desc())
                 .limit(limit)
                 .all()
             )
             return [
                 {
-                    "capturedAt": r.captured_at.isoformat() if r.captured_at else None,
-                    "usdTwdRate": float(r.usd_twd_rate) if r.usd_twd_rate is not None else None,
-                    "total": {
-                        "cash": float(r.total_cash) if r.total_cash is not None else None,
-                        "totalAssets": float(r.total_assets) if r.total_assets is not None else None,
-                        "totalPnl": float(r.total_pnl) if r.total_pnl is not None else None,
-                        "leverage": float(r.total_leverage) if r.total_leverage is not None else None,
-                    },
-                    "taiwan": {
-                        "cash": float(r.tw_cash) if r.tw_cash is not None else None,
-                        "totalAssets": float(r.tw_assets) if r.tw_assets is not None else None,
-                        "totalPnl": float(r.tw_pnl) if r.tw_pnl is not None else None,
-                    },
-                    "overseas": {
-                        "cash": float(r.os_cash) if r.os_cash is not None else None,
-                        "totalAssets": float(r.os_assets) if r.os_assets is not None else None,
-                        "totalPnl": float(r.os_pnl) if r.os_pnl is not None else None,
-                    },
+                    "date": r.valuation_date,
+                    "valuedAt": r.valued_at.isoformat() if r.valued_at else None,
+                    "totalAssets": float(r.total_assets),
+                    "cashBalance": float(r.cash_balance) if r.cash_balance is not None else None,
+                    "stockMarketValue": float(r.stock_market_value) if r.stock_market_value is not None else None,
+                    "futuresEquity": float(r.futures_equity) if r.futures_equity is not None else None,
+                    "totalPnl": float(r.total_pnl) if r.total_pnl is not None else None,
                 }
-                for r in rows
+                for r in reversed(rows)
             ]
 
 
