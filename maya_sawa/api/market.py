@@ -56,6 +56,14 @@ async def _portfolio_with_ibkr() -> dict:
             merged = attach_taiwan_only_regions(portfolio)
 
     try:
+        # A dashboard read can be the first successful access after the market
+        # close. Persist the valid Taiwan source snapshot before returning it,
+        # so the following history request can include today's daily point.
+        await asyncio.to_thread(portfolio_history_db.record_taiwan, portfolio)
+    except Exception:
+        logger.exception("Failed to record Taiwan portfolio daily point (non-fatal)")
+
+    try:
         await asyncio.to_thread(portfolio_history_db.record_if_due, merged)
     except Exception:
         logger.exception("Failed to record portfolio history (non-fatal)")
