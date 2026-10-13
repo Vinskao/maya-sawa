@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -20,9 +21,106 @@ from ..services.ibkr_market import (
     merge_ibkr_into_portfolio,
 )
 from ..databases.portfolio_history_db import portfolio_history_db
+from ..databases.market_dashboard_db import market_dashboard_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
+
+
+class DashboardCustomSelection(BaseModel):
+    symbols: list[dict[str, str]] = Field(max_length=5)
+
+
+@router.get("/dashboard")
+async def get_market_dashboard():
+    """Public, privacy-safe selection and live quotes; never returns account values."""
+    auto = market_dashboard_db.latest_auto()
+    custom = market_dashboard_db.custom_symbols()
+    seen: set[tuple[str, str]] = set()
+    auto_rows = []
+    for item in auto["positions"]:
+        key = (item["productType"], item["code"].upper())
+        if key not in seen:
+            seen.add(key)
+            auto_rows.append(item)
+    custom_rows = []
+    for item in custom:
+        key = (item["productType"], item["code"].upper())
+        if key not in seen:
+            seen.add(key)
+            custom_rows.append(item)
+    quotes: dict[tuple[str, str], dict] = {}
+    try:
+        rows = await shioaji_market_service.get_dashboard_quotes(auto_rows + custom_rows)
+        quotes = {(item["productType"], item["symbol"].upper()): item for item in rows}
+    except Exception as exc:
+        logger.info("Market selection quotes unavailable: %s", exc)
+    try:
+        txf = await shioaji_market_service.get_taiex_futures_quote()
+    except Exception:
+        txf = None
+    def expose(item: dict) -> dict:
+        return {**item, "quote": quotes.get((item["productType"], item["code"].upper()))}
+    return {
+        "fixed": {"code": "TXF", "name": "TAIEX Futures · front month", "productType": "futures", "quote": txf},
+        "automatic": {"snapshotAt": auto["snapshotAt"], "positions": [expose(item) for item in auto_rows]},
+        "custom": [expose(item) for item in custom_rows],
+        "customLimit": 5,
+    }
+
+
+@router.get("/dashboard/search")
+async def search_market_contracts(q: str, productType: str | None = None,
+                                 _claims: dict = Depends(require_manage_users_request)):
+    if productType not in (None, "stock", "futures"):
+        raise HTTPException(status_code=422, detail="productType must be stock or futures")
+    try:
+        return {"results": await shioaji_market_service.search_contracts(q[:40], productType)}
+    except ShioajiNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail={"code": "not_configured", "message": str(exc)}) from exc
+    except Exception as exc:
+        logger.exception("Market contract search failed")
+        raise HTTPException(status_code=502, detail="Market contract search unavailable") from exc
+
+
+@router.get("/dashboard/custom")
+async def get_market_dashboard_custom(_claims: dict = Depends(require_manage_users_request)):
+    return {"symbols": market_dashboard_db.custom_symbols(), "limit": 5}
+
+
+@router.put("/dashboard/custom")
+async def put_market_dashboard_custom(body: DashboardCustomSelection,
+                                      _claims: dict = Depends(require_manage_users_request)):
+    seen: set[tuple[str, str]] = set()
+    normalized = []
+    automatic = {(item["productType"], item["code"].upper()) for item in market_dashboard_db.latest_auto()["positions"]}
+    for item in body.symbols:
+        code, name, kind = (str(item.get(key, "")).strip() for key in ("code", "name", "productType"))
+        key = (kind, code.upper())
+        if kind not in ("stock", "futures") or not code or not name:
+            raise HTTPException(status_code=422, detail="Each selection requires a valid code, name and productType")
+        if key not in seen:
+            if key in automatic or (kind == "futures" and code.upper() == "TXF"):
+                raise HTTPException(status_code=422, detail=f"{code} is already in the fixed or automatic selection")
+            try:
+                matches = await shioaji_market_service.search_contracts(code, kind)
+            except Exception as exc:
+                logger.exception("Unable to validate dashboard custom instrument")
+                raise HTTPException(status_code=503, detail="Instrument validation is temporarily unavailable") from exc
+            match = next((result for result in matches if result["code"].upper() == code.upper()), None)
+            if not match:
+                raise HTTPException(status_code=422, detail=f"Unknown {kind} contract: {code}")
+            seen.add(key)
+            normalized.append({"code": code.upper(), "name": match["name"], "productType": kind,
+                               **({"deliveryMonth": match["deliveryMonth"]} if match.get("deliveryMonth") else {})})
+    if len(normalized) > 5:
+        raise HTTPException(status_code=422, detail="At most five custom instruments are allowed")
+    try:
+        market_dashboard_db.save_custom_symbols(normalized)
+    except Exception as exc:
+        logger.exception("Failed to save market dashboard settings")
+        raise HTTPException(status_code=503, detail="Market dashboard settings unavailable") from exc
+    return {"symbols": market_dashboard_db.custom_symbols(), "limit": 5}
 
 
 async def _portfolio_with_ibkr() -> dict:
@@ -41,6 +139,17 @@ async def _portfolio_with_ibkr() -> dict:
             logger.info("Serving portfolio from Postgres history (Redis cache empty)")
             return snapshot
         raise
+
+    try:
+        fixed_quote = await shioaji_market_service.get_taiex_futures_quote()
+    except Exception:
+        fixed_quote = None
+        logger.info("Fixed TXF quote unavailable while refreshing public automatic selection")
+    try:
+        await asyncio.to_thread(market_dashboard_db.record_portfolio, portfolio,
+                                 fixed_quote.get("symbol") if fixed_quote else None)
+    except Exception:
+        logger.exception("Failed to update public automatic market selection")
 
     if not ibkr_market_service.enabled:
         merged = attach_taiwan_only_regions(portfolio)

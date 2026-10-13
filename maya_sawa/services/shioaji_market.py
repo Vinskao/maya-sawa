@@ -1,5 +1,6 @@
 import asyncio
 import json
+import hashlib
 import logging
 import os
 import platform
@@ -126,6 +127,26 @@ class ShioajiMarketService:
     async def get_taiex_futures_quote(self) -> dict[str, Any]:
         return await self._get_cached_payload("TXF")
 
+    async def get_dashboard_quotes(self, instruments: list[dict[str, str]]) -> list[dict[str, Any]]:
+        """Fetch current quotes for the public, label-only dashboard selection."""
+        cache_id = hashlib.sha256(json.dumps(instruments, sort_keys=True).encode()).hexdigest()[:20]
+        cache_key = f"DASHBOARD_QUOTES_{cache_id}"
+        try:
+            cached = await asyncio.to_thread(self._read_cached_payload, cache_key)
+            if cached is not None:
+                return cached
+        except redis.RedisError:
+            logger.warning("Market quote cache unavailable; fetching selected quotes")
+        result = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, instruments))
+        try:
+            await asyncio.to_thread(self._write_cached_payload, cache_key, result, 300)
+        except redis.RedisError:
+            logger.warning("Failed to cache selected market quotes")
+        return result
+
+    async def search_contracts(self, query: str, product_type: str | None = None) -> list[dict[str, str]]:
+        return await self._run_with_relogin(lambda api: self._search_contracts(api, query, product_type))
+
     async def get_mini_tsmc_futures_quote(self) -> dict[str, Any]:
         return await self._get_cached_payload("QFFR1")
 
@@ -197,9 +218,12 @@ class ShioajiMarketService:
         if key == "PORTFOLIO":
             try:
                 from ..databases.portfolio_history_db import portfolio_history_db
+                from ..databases.market_dashboard_db import market_dashboard_db
                 await asyncio.to_thread(portfolio_history_db.record_taiwan, payload)
+                fixed_quote = await asyncio.to_thread(self._read_cached_payload, "TXF")
+                await asyncio.to_thread(market_dashboard_db.record_portfolio, payload, fixed_quote.get("symbol"))
             except Exception:
-                logger.exception("Failed to record Taiwan portfolio history (non-fatal)")
+                logger.exception("Failed to record Taiwan portfolio/dashboard history (non-fatal)")
         try:
             await asyncio.to_thread(self._write_cached_payload, key, payload)
         except redis.RedisError:
@@ -295,6 +319,71 @@ class ShioajiMarketService:
             "timestamp": ShioajiMarketService._format_timestamp(snapshot.ts),
             "fetchedAt": datetime.now(timezone.utc).isoformat(),
             "source": "Sinopac Shioaji",
+        }
+
+    @staticmethod
+    def _fetch_dashboard_quotes(api: Any, instruments: list[dict[str, str]]) -> list[dict[str, Any]]:
+        found: list[tuple[dict[str, str], Any]] = []
+        futures = None
+        for instrument in instruments:
+            code, kind = instrument["code"], instrument["productType"]
+            if kind == "stock":
+                try:
+                    contract = api.Contracts.Stocks[code]
+                except Exception:
+                    continue
+            else:
+                if futures is None:
+                    futures = list(ShioajiMarketService._iter_futures_contracts(api.Contracts.Futures))
+                contract = next((item for item in futures if str(getattr(item, "code", "")).upper() == code.upper()), None)
+                if contract is None:
+                    continue
+            found.append((instrument, contract))
+        if not found:
+            return []
+        snapshots = api.snapshots([contract for _, contract in found])
+        results = []
+        for (instrument, contract), snapshot in zip(found, snapshots):
+            result = ShioajiMarketService._snapshot_payload_from_snapshot(contract, snapshot)
+            result["productType"] = instrument["productType"]
+            results.append(result)
+        return results
+
+    @staticmethod
+    def _search_contracts(api: Any, query: str, product_type: str | None) -> list[dict[str, str]]:
+        term = query.strip().casefold()
+        if not term:
+            return []
+        results: list[dict[str, str]] = []
+        if product_type in (None, "stock"):
+            stocks = getattr(api.Contracts, "Stocks", None)
+            candidates = ShioajiMarketService._iter_contracts(stocks) if stocks is not None else []
+            for contract in candidates:
+                code, name = str(getattr(contract, "code", "")), str(getattr(contract, "name", ""))
+                if term in code.casefold() or term in name.casefold():
+                    results.append({"code": code, "name": name, "productType": "stock"})
+        if product_type in (None, "futures"):
+            seen: set[str] = set()
+            for contract in ShioajiMarketService._iter_futures_contracts(api.Contracts.Futures):
+                code, name = str(getattr(contract, "code", "")), str(getattr(contract, "name", ""))
+                if code and code not in seen and (term in code.casefold() or term in name.casefold()):
+                    seen.add(code)
+                    results.append({"code": code, "name": name, "productType": "futures",
+                                    "deliveryMonth": str(getattr(contract, "delivery_month", "") or "")})
+        return sorted(results, key=lambda row: (row["code"], row["productType"]))[:20]
+
+    @staticmethod
+    def _snapshot_payload_from_snapshot(contract: Any, snapshot: Any) -> dict[str, Any]:
+        return {
+            "symbol": str(contract.code), "name": str(getattr(contract, "name", "") or ""),
+            "deliveryMonth": getattr(contract, "delivery_month", None),
+            "close": float(snapshot.close or 0), "open": float(snapshot.open or 0),
+            "high": float(snapshot.high or 0), "low": float(snapshot.low or 0),
+            "change": float(getattr(snapshot, "change_price", 0) or 0),
+            "changePercent": float(getattr(snapshot, "change_rate", 0) or 0),
+            "volume": int(snapshot.total_volume or snapshot.volume or 0),
+            "timestamp": ShioajiMarketService._format_timestamp(snapshot.ts),
+            "fetchedAt": datetime.now(timezone.utc).isoformat(), "source": "Sinopac Shioaji",
         }
 
     @staticmethod
@@ -617,15 +706,16 @@ class ShioajiMarketService:
         envelope = json.loads(raw)
         return envelope["payload"]
 
-    def _write_cached_payload(self, key: str, payload: dict[str, Any]) -> None:
+    def _write_cached_payload(self, key: str, payload: dict[str, Any], ttl_seconds: int | None = None) -> None:
         envelope = {
             "cachedAt": datetime.now(timezone.utc).isoformat(),
             "payload": payload,
         }
-        self._redis.set(
-            self._redis_key(key),
-            json.dumps(envelope, ensure_ascii=True),
-        )
+        serialized = json.dumps(envelope, ensure_ascii=True)
+        if ttl_seconds:
+            self._redis.set(self._redis_key(key), serialized, ex=ttl_seconds)
+        else:
+            self._redis.set(self._redis_key(key), serialized)
 
     @staticmethod
     def _nearest_txf_contract(api: Any, now: datetime | None = None) -> Any:
@@ -740,6 +830,8 @@ class ShioajiMarketService:
                 yield from yield_contracts_from_group(group)
             except (TypeError, AttributeError):
                 continue
+
+    _iter_contracts = _iter_futures_contracts
 
     @staticmethod
     def _parse_date(value: Any) -> date:
