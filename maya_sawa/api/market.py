@@ -75,7 +75,11 @@ async def search_market_contracts(q: str, productType: str | None = None,
     if productType not in (None, "stock", "futures"):
         raise HTTPException(status_code=422, detail="productType must be stock or futures")
     try:
-        return {"results": await shioaji_market_service.search_contracts(q[:40], productType)}
+        results = await shioaji_market_service.search_contracts(q[:40], productType)
+        # Searchable Shioaji contracts form the candidate universe until
+        # external source-list ingestion is configured and verified.
+        market_dashboard_db.record_candidates("shioaji-search", results)
+        return {"results": results}
     except ShioajiNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail={"code": "not_configured", "message": str(exc)}) from exc
     except Exception as exc:
@@ -86,6 +90,12 @@ async def search_market_contracts(q: str, productType: str | None = None,
 @router.get("/dashboard/custom")
 async def get_market_dashboard_custom(_claims: dict = Depends(require_manage_users_request)):
     return {"symbols": market_dashboard_db.custom_symbols(), "limit": 5}
+
+
+@router.get("/dashboard/candidates")
+async def get_market_dashboard_candidates(q: str = "", limit: int = 100,
+                                         _claims: dict = Depends(require_manage_users_request)):
+    return {"results": market_dashboard_db.list_candidates(q[:40], min(max(limit, 1), 200))}
 
 
 @router.put("/dashboard/custom")

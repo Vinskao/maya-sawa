@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import BigInteger, Column, DateTime, Integer, Text, UniqueConstraint, create_engine, pool
@@ -66,6 +66,34 @@ class MarketDashboardSetting(Base):
     id = Column(Integer, primary_key=True)
     custom_symbols = Column(Text, nullable=False, default="[]")
     updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class MarketCandidate(Base):
+    """Historical universe of instruments seen in configured source lists."""
+    __tablename__ = "maya_sawa_market_candidate"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    product_type = Column(Text, nullable=False)
+    code = Column(Text, nullable=False)
+    delivery_month = Column(Text, nullable=False, default="")
+    name = Column(Text, nullable=False)
+    first_seen_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (UniqueConstraint("product_type", "code", "delivery_month", name="uq_market_candidate_identity"),)
+
+
+class MarketCandidateSource(Base):
+    """Membership history, one row per source and canonical instrument."""
+    __tablename__ = "maya_sawa_market_candidate_source"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    source_key = Column(Text, nullable=False)
+    product_type = Column(Text, nullable=False)
+    code = Column(Text, nullable=False)
+    delivery_month = Column(Text, nullable=False, default="")
+    first_seen_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (UniqueConstraint("source_key", "product_type", "code", "delivery_month", name="uq_market_candidate_source_identity"),)
 
 
 class MarketDashboardDatabase:
@@ -135,6 +163,59 @@ class MarketDashboardDatabase:
                 session.add(row)
             row.custom_symbols = json.dumps(symbols, ensure_ascii=False)
             row.updated_at = datetime.now(timezone.utc)
+
+    def record_candidates(self, source_key: str, symbols: list[dict[str, str]]) -> int:
+        """Upsert a source-list observation, retaining absent history for 90 days."""
+        if not self.sessions:
+            return 0
+        now = datetime.now(timezone.utc)
+        count = 0
+        with self.sessions.begin() as session:
+            for item in symbols:
+                kind = str(item.get("productType") or "").strip()
+                code = str(item.get("code") or "").strip().upper()
+                month = str(item.get("deliveryMonth") or "").strip()
+                name = str(item.get("name") or "").strip()
+                if kind not in {"stock", "futures"} or not code or not name:
+                    continue
+                identity = (kind, code, month if kind == "futures" else "")
+                candidate = session.query(MarketCandidate).filter_by(
+                    product_type=identity[0], code=identity[1], delivery_month=identity[2]
+                ).one_or_none()
+                if candidate is None:
+                    session.add(MarketCandidate(product_type=identity[0], code=identity[1],
+                        delivery_month=identity[2], name=name, first_seen_at=now, last_seen_at=now,
+                        expires_at=now + timedelta(days=90)))
+                else:
+                    candidate.name = name
+                    candidate.last_seen_at = now
+                    candidate.expires_at = now + timedelta(days=90)
+                membership = session.query(MarketCandidateSource).filter_by(
+                    source_key=source_key, product_type=identity[0], code=identity[1], delivery_month=identity[2]
+                ).one_or_none()
+                if membership is None:
+                    session.add(MarketCandidateSource(source_key=source_key,
+                        product_type=identity[0], code=identity[1], delivery_month=identity[2],
+                        first_seen_at=now, last_seen_at=now,
+                        expires_at=now + timedelta(days=90)))
+                else:
+                    membership.last_seen_at = now
+                    membership.expires_at = now + timedelta(days=90)
+                count += 1
+        return count
+
+    def list_candidates(self, query: str = "", limit: int = 100) -> list[dict[str, str]]:
+        if not self.sessions:
+            return []
+        now = datetime.now(timezone.utc)
+        with self.sessions() as session:
+            rows = session.query(MarketCandidate).filter(
+                (MarketCandidate.expires_at.is_(None)) | (MarketCandidate.expires_at > now)
+            ).order_by(MarketCandidate.product_type, MarketCandidate.code, MarketCandidate.delivery_month).all()
+            term = query.strip().casefold()
+            return [{"code": row.code, "name": row.name, "productType": row.product_type,
+                     **({"deliveryMonth": row.delivery_month} if row.delivery_month else {})}
+                    for row in rows if not term or term in row.code.casefold() or term in row.name.casefold()][:limit]
 
 
 market_dashboard_db = MarketDashboardDatabase()

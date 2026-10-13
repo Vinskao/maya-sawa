@@ -355,22 +355,38 @@ class ShioajiMarketService:
         if not term:
             return []
         results: list[dict[str, str]] = []
+        # Split mixed searches into separate buckets so stock/ warrant volume
+        # cannot consume all result slots before futures are considered.
+        stock_results: list[dict[str, str]] = []
+        futures_results: list[dict[str, str]] = []
         if product_type in (None, "stock"):
             stocks = getattr(api.Contracts, "Stocks", None)
             candidates = ShioajiMarketService._iter_contracts(stocks) if stocks is not None else []
             for contract in candidates:
                 code, name = str(getattr(contract, "code", "")), str(getattr(contract, "name", ""))
+                category = str(getattr(contract, "category", "") or "").casefold()
+                # Shioaji stock warrants use category W; also reject explicit
+                # warrant markers if a provider object lacks category metadata.
+                if category == "w" or "權證" in name or "認購" in name or "認售" in name:
+                    continue
                 if term in code.casefold() or term in name.casefold():
-                    results.append({"code": code, "name": name, "productType": "stock"})
+                    stock_results.append({"code": code, "name": name, "productType": "stock"})
         if product_type in (None, "futures"):
             seen: set[str] = set()
             for contract in ShioajiMarketService._iter_futures_contracts(api.Contracts.Futures):
                 code, name = str(getattr(contract, "code", "")), str(getattr(contract, "name", ""))
                 if code and code not in seen and (term in code.casefold() or term in name.casefold()):
                     seen.add(code)
-                    results.append({"code": code, "name": name, "productType": "futures",
+                    futures_results.append({"code": code, "name": name, "productType": "futures",
                                     "deliveryMonth": str(getattr(contract, "delivery_month", "") or "")})
-        return sorted(results, key=lambda row: (row["code"], row["productType"]))[:20]
+        key = lambda row: (row["code"], row["productType"])
+        if product_type == "stock":
+            return sorted(stock_results, key=key)[:20]
+        if product_type == "futures":
+            return sorted(futures_results, key=key)[:20]
+        # Keep useful coverage of both product classes for an unfiltered
+        # search. Futures keep their own 10 slots even with many stock matches.
+        return sorted(stock_results, key=key)[:10] + sorted(futures_results, key=key)[:10]
 
     @staticmethod
     def _snapshot_payload_from_snapshot(contract: Any, snapshot: Any) -> dict[str, Any]:
