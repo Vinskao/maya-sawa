@@ -16,7 +16,8 @@ from zoneinfo import ZoneInfo
 from ..databases.market_dashboard_db import market_dashboard_db
 from ..databases.market_fundamentals_db import market_fundamentals_db
 from ..databases.market_history_db import market_history_db
-from .market_fundamentals import MarketFundamentalsService, build_fundamental_metrics
+from .market_fundamentals import MarketFundamentalsService, build_fundamental_metrics, market_fundamentals_service
+from .market_selection import current_selection, stock_code
 
 TZ = ZoneInfo("Asia/Taipei")
 PRICE = ("twse:daily-price", "tpex:daily-price")
@@ -136,29 +137,7 @@ def _signals(s: dict) -> list[str]:
     return out
 
 
-def _spot_code(item: dict) -> str | None:
-    code = str(item.get("underlyingCode") or (item.get("code") if item.get("productType") == "stock" else "") or "").upper()
-    return code if code.isdigit() and len(code) == 4 else None
-
-
-def current_selection() -> tuple[dict[str, Any], list[dict]]:
-    """The dashboard's live list (latest holdings snapshot + custom picks); cheap enough to read per request."""
-    auto = market_dashboard_db.latest_auto()
-    instruments, seen = [], set()
-    for group, rows in (("automatic", auto.get("positions", [])), ("custom", market_dashboard_db.custom_symbols())):
-        for item in rows:
-            key = (item.get("productType"), str(item.get("code", "")).upper())
-            if key not in seen:
-                seen.add(key)
-                instruments.append({**item, "group": group})
-    # Positions do not store the futures' underlying stock; the persisted dashboard quotes do.
-    quotes = {(q.get("productType"), str(q.get("symbol", "")).upper()): q
-              for q in market_fundamentals_db.quote_snapshots(instruments)}
-    for item in instruments:
-        quote = quotes.get((item.get("productType"), str(item.get("code", "")).upper())) or {}
-        if not item.get("underlyingCode") and quote.get("underlyingCode"):
-            item["underlyingCode"] = quote["underlyingCode"]
-    return auto, instruments
+_spot_code = stock_code
 
 
 def selection_fingerprint(instruments: list[dict]) -> tuple:
@@ -169,6 +148,7 @@ def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None) -> d
     auto, instruments = selection or current_selection()
     today = datetime.now(TZ).date()
     stocks: dict[str, dict] = {}
+    missing_history, missing_fundamentals = [], []
     for item in instruments:
         code = _spot_code(item)
         if not code or code in stocks:
@@ -177,8 +157,16 @@ def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None) -> d
                                           sources=[*PRICE, *INSTITUTIONAL, *MARGIN])["points"]
         ownership = market_history_db.history(code, today - timedelta(days=60), today,
                                               sources=[*HOLDING, TDCC])["points"]
-        metrics = build_fundamental_metrics([], [], MarketFundamentalsService._finmind_history(code))
+        history = MarketFundamentalsService._finmind_history(code)
+        # FinMind history may not be collected yet for a newly held stock; the official TWSE feeds already in
+        # memory still give the latest month's YoY/MoM and the latest quarter's margins.
+        monthly, income = market_fundamentals_service.cached_official(code)
+        metrics = build_fundamental_metrics(monthly, income, history)
         stocks[code] = summarize_stock(code, daily, ownership, metrics)
+        if not daily:
+            missing_history.append(code)
+        if not history.get("TaiwanStockFinancialStatements") or not history.get("TaiwanStockMonthRevenue"):
+            missing_fundamentals.append(code)
     for item in instruments:
         code = _spot_code(item)
         if code in stocks:
@@ -189,6 +177,7 @@ def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None) -> d
         "instruments": [{"code": item.get("code"), "name": item.get("name"), "productType": item.get("productType"),
                          "group": item["group"], "spotCode": _spot_code(item)} for item in instruments],
         "stocks": stocks,
+        "collecting": {"history": missing_history, "fundamentals": missing_fundamentals},
         "notes": ["Holdings list only; no quantities, cost, P/L or account values.",
                   "Lots = 1,000 shares. pp = percentage points. TDCC large holders = 400 lots and above; retail = 10 lots and below.",
                   "Futures are summarised through their underlying stock."],
@@ -250,6 +239,10 @@ def brief_markdown(brief: dict) -> str:
             for key, label in (("grossMargin", "毛利率"), ("operatingMargin", "營益率"), ("netMargin", "淨利率")):
                 lines.append(f"| {quarter['period']} {label} · 季 / 年變化 | {_fmt(quarter.get(key), '%')} · {_fmt(quarter.get(key + 'QoQ'), ' pp', True)} / {_fmt(quarter.get(key + 'YoY'), ' pp', True)} |")
             lines.append(f"| {quarter['period']} EPS 年增 | {_fmt(quarter.get('epsYoY'), '%', True)} |")
+    collecting = brief.get("collecting") or {}
+    pending = sorted(set(collecting.get("history", [])) | set(collecting.get("fundamentals", [])))
+    if pending:
+        lines += ["", "註：" + "、".join(pending) + " 的部分歷史資料仍在背景蒐集中，數值為「—」者稍後會自動補上。"]
     lines += ["", "## 定義", ""] + [f"- {note}" for note in brief["notes"]]
     lines += ["- 此摘要僅陳述公開市場資料，非投資建議。", "- JSON 版本：/tymultiverse/brief.json"]
     return "\n".join(lines) + "\n"
@@ -280,7 +273,17 @@ class MarketBriefService:
                 return self._cached[2]
             brief = await asyncio.to_thread(build_brief, selection)
             self._cached = (time.monotonic(), fingerprint, brief)
+            await self._request_missing(brief.get("collecting", {}))
             return brief
+
+    @staticmethod
+    async def _request_missing(collecting: dict) -> None:
+        """Queue background collection for stocks whose data is not stored yet, so gaps fill themselves."""
+        if collecting.get("fundamentals"):
+            market_fundamentals_service.request_history(collecting["fundamentals"])
+        if collecting.get("history"):
+            from .market_history_collector import market_history_collector
+            await market_history_collector.enqueue_codes(collecting["history"])
 
 
 market_brief_service = MarketBriefService()

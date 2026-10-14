@@ -1,4 +1,5 @@
 import asyncio
+import time
 import logging
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -26,6 +27,7 @@ from ..services.ibkr_market import (
 from ..databases.portfolio_history_db import portfolio_history_db
 from ..databases.market_dashboard_db import market_dashboard_db
 from ..databases.market_history_db import market_history_db
+from ..services.market_selection import attach_underlying
 from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
 from ..services.market_brief import brief_markdown, market_brief_service
@@ -66,6 +68,10 @@ async def get_market_dashboard():
         txf = await shioaji_market_service.get_taiex_futures_quote()
     except Exception:
         txf = None
+    # Stock futures must always resolve to their underlying stock (charts, chips, fundamentals all use it).
+    # A live quote carries underlyingCode; when Shioaji is unavailable fall back to the persisted snapshots.
+    await asyncio.to_thread(attach_underlying, auto_rows + custom_rows, list(quotes.values()))
+
     def expose(item: dict) -> dict:
         return {**item, "quote": quotes.get((item["productType"], item["code"].upper()))}
     return {
@@ -129,7 +135,20 @@ async def get_market_dashboard_history(code: str, start: date | None = None, end
     if view not in {"daily", "ownership"}:
         raise HTTPException(status_code=422, detail="view must be daily or ownership")
     result = market_history_db.history(normalized, start_date, end_date, sources=sources)
-    return {"code": normalized, "view": view, "start": start_date.isoformat(), "end": end_date.isoformat(), **result}
+    # A stock nobody selected before has no stored rows; start its backfill instead of leaving the charts empty.
+    collecting = False
+    if not result["points"] and normalized.isdigit() and len(normalized) == 4:
+        collecting = True
+        last = _history_backfill_requested.get(normalized, 0.0)
+        if time.monotonic() - last > HISTORY_BACKFILL_COOLDOWN_SECONDS:
+            _history_backfill_requested[normalized] = time.monotonic()
+            await market_history_collector.enqueue_codes([normalized])
+    return {"code": normalized, "view": view, "start": start_date.isoformat(), "end": end_date.isoformat(),
+            "collecting": collecting, **result}
+
+
+HISTORY_BACKFILL_COOLDOWN_SECONDS = 600
+_history_backfill_requested: dict[str, float] = {}
 
 
 @router.get("/dashboard/fundamentals/{code}")

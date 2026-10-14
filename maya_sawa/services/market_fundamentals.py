@@ -173,6 +173,21 @@ class MarketFundamentalsService:
                 "source": "TWSE OpenAPI / MOPS OTC CSV / FinMind", "checkedAt": datetime.now(TZ).isoformat(),
                 "staleSources": sorted(self._stale_sources), "errors": errors}
 
+    def cached_official(self, code: str) -> tuple[list[dict], list[dict]]:
+        """Official monthly/income rows for one stock from the in-memory feeds only; never blocks on TWSE."""
+        def cached(key: str) -> Any:
+            entry = self._cache.get(key)
+            return entry[1] if entry else None
+        monthly = self._monthly_rows(cached("monthly:listed"), code) if cached("monthly:listed") else []
+        if not monthly and cached("monthly:otc"):
+            monthly = self._monthly_rows(cached("monthly:otc"), code)
+        income = self._statement_rows(cached("income"), code, "income") if cached("income") else []
+        return monthly, income
+
+    def request_history(self, codes: list[str]) -> None:
+        for code in codes:
+            self._enqueue(code, urgent=True)
+
     @staticmethod
     def _finmind_history(code: str) -> dict[str, list[dict]]:
         result = {}
@@ -255,15 +270,12 @@ class MarketFundamentalsService:
     def _watch_symbols() -> list[str]:
         if not market_fundamentals_db.sessions:
             return []
-        symbols = set()
         try:
-            for item in market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols():
-                code = str(item.get("underlyingCode") or item.get("code") or "").upper()
-                if code.isdigit() and len(code) == 4:
-                    symbols.add(code)
+            from .market_selection import selected_stock_codes  # futures resolve to their underlying stock
+            return selected_stock_codes()
         except Exception:
             logger.exception("Fundamentals watch-symbol lookup failed")
-        return sorted(symbols)
+            return []
 
     def _collect_code(self, code: str) -> None:
         """Refresh one stock's FinMind history. Anonymous access works (lower quota); a token raises the limit."""

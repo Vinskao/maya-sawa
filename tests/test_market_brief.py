@@ -40,13 +40,13 @@ def test_summary_reports_streaks_holder_shifts_and_no_account_values():
 
 
 def test_brief_follows_the_live_selection_and_maps_futures_to_their_stock(monkeypatch):
-    from maya_sawa.services import market_brief
+    from maya_sawa.services import market_brief, market_selection
 
     selection = {"custom": [{"code": "2337", "name": "旺宏", "productType": "stock"}]}
-    monkeypatch.setattr(market_brief.market_dashboard_db, "latest_auto", lambda: {
+    monkeypatch.setattr(market_selection.market_dashboard_db, "latest_auto", lambda: {
         "snapshotAt": "2026-10-14", "positions": [{"code": "QFFJ6", "name": "小型台積電期貨", "productType": "futures"}]})
-    monkeypatch.setattr(market_brief.market_dashboard_db, "custom_symbols", lambda: selection["custom"])
-    monkeypatch.setattr(market_brief.market_fundamentals_db, "quote_snapshots", lambda instruments: [
+    monkeypatch.setattr(market_selection.market_dashboard_db, "custom_symbols", lambda: selection["custom"])
+    monkeypatch.setattr(market_selection.market_fundamentals_db, "quote_snapshots", lambda instruments: [
         {"productType": "futures", "symbol": "QFFJ6", "underlyingCode": "2330"}])
     monkeypatch.setattr(market_brief.market_history_db, "history", lambda *a, **k: {"points": []})
     monkeypatch.setattr(market_brief.MarketFundamentalsService, "_finmind_history", staticmethod(lambda code: {}))
@@ -60,3 +60,26 @@ def test_brief_follows_the_live_selection_and_maps_futures_to_their_stock(monkey
     after = market_brief.selection_fingerprint(market_brief.current_selection()[1])
     assert before != after
     assert set(market_brief.build_brief()["stocks"]) == {"2330"}
+
+
+def test_futures_holding_gets_fundamentals_from_official_cache_and_queues_finmind(monkeypatch):
+    from maya_sawa.services import market_brief, market_selection
+
+    monkeypatch.setattr(market_selection.market_dashboard_db, "latest_auto", lambda: {
+        "snapshotAt": "2026-10-15", "positions": [{"code": "UHFJ6", "name": "小型奇鋐期貨10", "productType": "futures"}]})
+    monkeypatch.setattr(market_selection.market_dashboard_db, "custom_symbols", lambda: [])
+    monkeypatch.setattr(market_selection.market_fundamentals_db, "quote_snapshots", lambda instruments: [
+        {"productType": "futures", "symbol": "UHFJ6", "underlyingCode": "3017"}])
+    monkeypatch.setattr(market_brief.market_history_db, "history", lambda *a, **k: {"points": []})
+    monkeypatch.setattr(market_brief.MarketFundamentalsService, "_finmind_history", staticmethod(lambda code: {}))
+    monkeypatch.setattr(market_brief.market_fundamentals_service, "cached_official", lambda code: (
+        [{"period": "2026-09", "revenue": 100, "yoyPercent": 42.5, "momPercent": 3.1}],
+        [{"period": "2026Q2", "singleQuarter": {"revenue": 200, "grossProfit": 50, "operatingIncome": 30, "netIncome": 20},
+          "epsReported": None}]))
+
+    brief = market_brief.build_brief()
+    fundamentals = brief["stocks"]["3017"]["fundamentals"]
+    assert fundamentals["latestMonth"]["yoyPercent"] == 42.5
+    assert fundamentals["latestQuarter"]["grossMargin"] == 25.0
+    assert brief["collecting"] == {"history": ["3017"], "fundamentals": ["3017"]}
+    assert "3017 的部分歷史資料仍在背景蒐集中" in market_brief.brief_markdown(brief)

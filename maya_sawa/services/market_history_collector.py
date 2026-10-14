@@ -443,18 +443,18 @@ class MarketHistoryCollector:
         # Seed current selections at startup; subsequent passes keep the latest trading day current.
         while True:
             try:
-                selections = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols()
-                codes = {item.get("code", "").upper() for item in selections
-                         if item.get("productType") == "stock" and item.get("code")}
-                futures = [item for item in selections if item.get("productType") == "futures"]
+                # Persisted quote snapshots map futures to their underlying stock even when Shioaji is down;
+                # a live quote, when available, can add a contract the snapshots have not seen yet.
+                from .market_selection import attach_underlying, current_selection, stock_code
+                _, selections = await asyncio.to_thread(current_selection)
+                futures = [item for item in selections if item.get("productType") == "futures" and not item.get("underlyingCode")]
                 if futures:
                     try:
-                        quotes = await shioaji_market_service.get_dashboard_quotes(futures)
-                        codes.update(str(item.get("underlyingCode", "")).upper() for item in quotes
-                                     if str(item.get("underlyingCode", "")).isdigit()
-                                     and len(str(item.get("underlyingCode", ""))) == 4)
+                        live = await shioaji_market_service.get_dashboard_quotes(futures)
+                        await asyncio.to_thread(attach_underlying, futures, live)
                     except Exception as exc:
                         logger.info("Could not resolve futures underlying stocks for history: %s", exc)
+                codes = {code for item in selections if (code := stock_code(item))}
                 await self.collect_codes(sorted(code for code in codes if code), self._backfill_days)
                 now = datetime.now(TAIPEI_TZ)
                 next_run = now.replace(hour=18, minute=20, second=0, microsecond=0)
