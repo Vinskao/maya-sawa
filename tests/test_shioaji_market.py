@@ -211,16 +211,19 @@ def test_find_contract_by_code_supports_iterable_futures_tree():
 
 
 def test_contract_search_excludes_warrants_and_reserves_futures_results():
-    stocks = [SimpleNamespace(code=f"2330{index:02d}", name="台積電權證", category="W") for index in range(15)]
-    stocks.append(SimpleNamespace(code="2330", name="台積電", category="01"))
-    futures = [SimpleNamespace(code="QFFR1", name="小型台積電期貨06", delivery_month="202606")]
+    stocks = [SimpleNamespace(code=f"2330{index:02d}", name="台積電", security_type="WRT") for index in range(15)]
+    stocks.append(SimpleNamespace(code="2330", name="台積電", security_type="STK"))
+    monthly = SimpleNamespace(code="QFFJ6", name="小型台積電期貨 202610", delivery_month="202610")
+    alias = SimpleNamespace(code="QFFR1", name="小型台積電期貨 近月", target_code="QFFJ6")
+    futures = [alias, monthly]
     api = SimpleNamespace(Contracts=SimpleNamespace(
         Stocks=SimpleNamespace(TSE=stocks), Futures=SimpleNamespace(QFF=futures)))
 
     results = ShioajiMarketService._search_contracts(api, "台積電", None)
 
-    assert [item["code"] for item in results] == ["2330", "QFFR1"]
-    assert ShioajiMarketService._search_contracts(api, "台積電", "futures")[0]["code"] == "QFFR1"
+    assert [item["code"] for item in results] == ["2330", "QFFJ6"]
+    assert results[1]["deliveryMonth"] == "202610"
+    assert ShioajiMarketService._search_contracts(api, "台積電", "futures")[0]["code"] == "QFFJ6"
 
 
 def test_stock_portfolio_uses_only_successful_stock_apis():

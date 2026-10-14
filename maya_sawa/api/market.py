@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +24,8 @@ from ..services.ibkr_market import (
 )
 from ..databases.portfolio_history_db import portfolio_history_db
 from ..databases.market_dashboard_db import market_dashboard_db
+from ..databases.market_history_db import market_history_db
+from ..services.market_history_collector import market_history_collector
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -36,10 +40,10 @@ async def get_market_dashboard():
     """Public, privacy-safe selection and live quotes; never returns account values."""
     auto = market_dashboard_db.latest_auto()
     custom = market_dashboard_db.custom_symbols()
-    seen: set[tuple[str, str]] = set()
+    seen: set[str] = set()
     auto_rows = []
     for item in auto["positions"]:
-        key = (item["productType"], item["code"].upper())
+        key = item["code"].upper()
         if key not in seen:
             seen.add(key)
             auto_rows.append(item)
@@ -98,27 +102,58 @@ async def get_market_dashboard_candidates(q: str = "", limit: int = 100,
     return {"results": market_dashboard_db.list_candidates(q[:40], min(max(limit, 1), 200))}
 
 
+@router.get("/dashboard/history/{code}")
+async def get_market_dashboard_history(code: str, start: date | None = None, end: date | None = None,
+                                      view: str = "daily"):
+    """Public daily price and chip history; no account or portfolio fields are exposed."""
+    normalized = code.strip().upper()
+    if not normalized or len(normalized) > 24 or not normalized.replace("-", "").isalnum():
+        raise HTTPException(status_code=422, detail="Invalid instrument code")
+    end_date = end or datetime.now(ZoneInfo("Asia/Taipei")).date()
+    start_date = start or (end_date - timedelta(days=92))
+    if start_date > end_date or (end_date - start_date).days > 366:
+        raise HTTPException(status_code=422, detail="History range must be within 366 days")
+    sources = ["tdcc:distribution-history", "twse:foreign-holding", "tpex:foreign-holding"] if view == "ownership" else None
+    if view not in {"daily", "ownership"}:
+        raise HTTPException(status_code=422, detail="view must be daily or ownership")
+    result = market_history_db.history(normalized, start_date, end_date, sources=sources)
+    return {"code": normalized, "view": view, "start": start_date.isoformat(), "end": end_date.isoformat(), **result}
+
+
 @router.put("/dashboard/custom")
 async def put_market_dashboard_custom(body: DashboardCustomSelection,
                                       _claims: dict = Depends(require_manage_users_request)):
-    seen: set[tuple[str, str]] = set()
+    seen: set[str] = set()
     normalized = []
-    automatic = {(item["productType"], item["code"].upper()) for item in market_dashboard_db.latest_auto()["positions"]}
+    automatic = {item["code"].upper() for item in market_dashboard_db.latest_auto()["positions"]}
     for item in body.symbols:
         code, name, kind = (str(item.get(key, "")).strip() for key in ("code", "name", "productType"))
-        key = (kind, code.upper())
+        key = code.upper()
         if kind not in ("stock", "futures") or not code or not name:
             raise HTTPException(status_code=422, detail="Each selection requires a valid code, name and productType")
         if key not in seen:
             if key in automatic or (kind == "futures" and code.upper() == "TXF"):
                 raise HTTPException(status_code=422, detail=f"{code} is already in the fixed or automatic selection")
+            search_error = None
             try:
                 matches = await shioaji_market_service.search_contracts(code, kind)
             except Exception as exc:
                 logger.exception("Unable to validate dashboard custom instrument")
-                raise HTTPException(status_code=503, detail="Instrument validation is temporarily unavailable") from exc
+                matches = []
+                search_error = exc
             match = next((result for result in matches if result["code"].upper() == code.upper()), None)
+            if (not match and kind == "futures" and code.upper().endswith(("R1", "R2"))
+                    and matches):
+                # Resolve legacy/custom rolling aliases to the current listed
+                # month returned by the contract directory.
+                match = matches[0]
             if not match:
+                # Historical candidates remain selectable after a contract
+                # leaves the current directory; live quotes may be absent.
+                match = market_dashboard_db.find_candidate(kind, code)
+            if not match:
+                if search_error:
+                    raise HTTPException(status_code=503, detail="Instrument validation is temporarily unavailable") from search_error
                 raise HTTPException(status_code=422, detail=f"Unknown {kind} contract: {code}")
             seen.add(key)
             normalized.append({"code": code.upper(), "name": match["name"], "productType": kind,
@@ -127,6 +162,12 @@ async def put_market_dashboard_custom(body: DashboardCustomSelection,
         raise HTTPException(status_code=422, detail="At most five custom instruments are allowed")
     try:
         market_dashboard_db.save_custom_symbols(normalized)
+        await market_history_collector.enqueue_codes(
+            [item["code"] for item in normalized if item["productType"] == "stock"]
+        )
+        await market_history_collector.enqueue_futures(
+            [item for item in normalized if item["productType"] == "futures"]
+        )
     except Exception as exc:
         logger.exception("Failed to save market dashboard settings")
         raise HTTPException(status_code=503, detail="Market dashboard settings unavailable") from exc

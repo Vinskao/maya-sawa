@@ -364,21 +364,33 @@ class ShioajiMarketService:
             candidates = ShioajiMarketService._iter_contracts(stocks) if stocks is not None else []
             for contract in candidates:
                 code, name = str(getattr(contract, "code", "")), str(getattr(contract, "name", ""))
-                category = str(getattr(contract, "category", "") or "").casefold()
-                # Shioaji stock warrants use category W; also reject explicit
-                # warrant markers if a provider object lacks category metadata.
-                if category == "w" or "權證" in name or "認購" in name or "認售" in name:
+                security_type = getattr(contract, "security_type", "")
+                security_type = str(getattr(security_type, "value", security_type) or "").upper()
+                # Shioaji identifies warrants by the documented security_type.
+                if security_type == "WRT":
                     continue
                 if term in code.casefold() or term in name.casefold():
                     stock_results.append({"code": code, "name": name, "productType": "stock"})
         if product_type in (None, "futures"):
             seen: set[str] = set()
-            for contract in ShioajiMarketService._iter_futures_contracts(api.Contracts.Futures):
+            futures = list(ShioajiMarketService._iter_futures_contracts(api.Contracts.Futures))
+            contracts_by_code = {str(getattr(item, "code", "")).upper(): item for item in futures}
+            for contract in futures:
                 code, name = str(getattr(contract, "code", "")), str(getattr(contract, "name", ""))
-                if code and code not in seen and (term in code.casefold() or term in name.casefold()):
-                    seen.add(code)
-                    futures_results.append({"code": code, "name": name, "productType": "futures",
-                                    "deliveryMonth": str(getattr(contract, "delivery_month", "") or "")})
+                if not code or (term not in code.casefold() and term not in name.casefold()):
+                    continue
+                # R1/R2 are rolling aliases, not stable historical identities.
+                target_code = str(getattr(contract, "target_code", "") or "").strip()
+                is_rolling_alias = len(code) >= 2 and code[-2].upper() == "R" and code[-1] in "12"
+                canonical_code = target_code if is_rolling_alias and target_code else code
+                canonical_contract = contracts_by_code.get(canonical_code.upper(), contract)
+                if canonical_code.upper() in seen:
+                    continue
+                seen.add(canonical_code.upper())
+                futures_results.append({"code": canonical_code,
+                    "name": str(getattr(canonical_contract, "name", "") or name),
+                    "productType": "futures",
+                    "deliveryMonth": str(getattr(canonical_contract, "delivery_month", "") or "")})
         key = lambda row: (row["code"], row["productType"])
         if product_type == "stock":
             return sorted(stock_results, key=key)[:20]

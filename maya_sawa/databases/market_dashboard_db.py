@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import BigInteger, Column, DateTime, Integer, Text, UniqueConstraint, create_engine, pool
@@ -79,7 +79,7 @@ class MarketCandidate(Base):
     first_seen_at = Column(DateTime(timezone=True), nullable=False)
     last_seen_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
-    __table_args__ = (UniqueConstraint("product_type", "code", "delivery_month", name="uq_market_candidate_identity"),)
+    __table_args__ = (UniqueConstraint("code", name="uq_market_candidate_identity"),)
 
 
 class MarketCandidateSource(Base):
@@ -93,7 +93,7 @@ class MarketCandidateSource(Base):
     first_seen_at = Column(DateTime(timezone=True), nullable=False)
     last_seen_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
-    __table_args__ = (UniqueConstraint("source_key", "product_type", "code", "delivery_month", name="uq_market_candidate_source_identity"),)
+    __table_args__ = (UniqueConstraint("source_key", "code", name="uq_market_candidate_source_identity"),)
 
 
 class MarketDashboardDatabase:
@@ -153,6 +153,23 @@ class MarketDashboardDatabase:
             row = session.get(MarketDashboardSetting, 1)
             return json.loads(row.custom_symbols) if row else []
 
+    def latest_futures_selections(self) -> list[dict[str, str]]:
+        """Return fixed TXF and selected futures with stable month metadata."""
+        items = [{"code": "TXF", "name": "TAIEX Futures", "productType": "futures", "deliveryMonth": ""}]
+        items.extend(item for item in self.latest_auto().get("positions", [])
+                     if item.get("productType") == "futures")
+        items.extend(item for item in self.custom_symbols() if item.get("productType") == "futures")
+        if self.sessions:
+            codes = {item["code"].upper() for item in items}
+            with self.sessions() as session:
+                candidates = session.query(MarketCandidate.code, MarketCandidate.delivery_month).filter(
+                    MarketCandidate.code.in_(codes)
+                ).all()
+            months = {code: month for code, month in candidates}
+            for item in items:
+                item.setdefault("deliveryMonth", months.get(item["code"].upper(), ""))
+        return list({(item["code"].upper(), item.get("deliveryMonth", "")): item for item in items}.values())
+
     def save_custom_symbols(self, symbols: list[dict[str, str]]) -> None:
         if not self.sessions:
             raise RuntimeError("Market dashboard database is unavailable")
@@ -164,8 +181,25 @@ class MarketDashboardDatabase:
             row.custom_symbols = json.dumps(symbols, ensure_ascii=False)
             row.updated_at = datetime.now(timezone.utc)
 
+    def latest_futures_selections(self) -> list[dict[str, str]]:
+        """Return TXF plus currently selected futures, preserving contract months."""
+        items = [{"code": "TXF", "name": "TAIEX Futures", "productType": "futures", "deliveryMonth": ""}]
+        items.extend(item for item in self.latest_auto().get("positions", [])
+                     if item.get("productType") == "futures")
+        items.extend(item for item in self.custom_symbols() if item.get("productType") == "futures")
+        if self.sessions:
+            codes = {item["code"].upper() for item in items}
+            with self.sessions() as session:
+                candidates = session.query(MarketCandidate.code, MarketCandidate.delivery_month).filter(
+                    MarketCandidate.code.in_(codes)
+                ).all()
+            months = {code: month for code, month in candidates}
+            for item in items:
+                item.setdefault("deliveryMonth", months.get(item["code"].upper(), ""))
+        return list({(item["code"].upper(), item.get("deliveryMonth", "")): item for item in items}.values())
+
     def record_candidates(self, source_key: str, symbols: list[dict[str, str]]) -> int:
-        """Upsert a source-list observation, retaining absent history for 90 days."""
+        """Upsert candidates while retaining first/last membership history indefinitely."""
         if not self.sessions:
             return 0
         now = datetime.now(timezone.utc)
@@ -178,44 +212,59 @@ class MarketDashboardDatabase:
                 name = str(item.get("name") or "").strip()
                 if kind not in {"stock", "futures"} or not code or not name:
                     continue
-                identity = (kind, code, month if kind == "futures" else "")
+                # The official contract code already encodes a futures month.
+                # Keep delivery_month as display metadata, not identity.
+                identity = code
                 candidate = session.query(MarketCandidate).filter_by(
-                    product_type=identity[0], code=identity[1], delivery_month=identity[2]
+                    code=identity
                 ).one_or_none()
                 if candidate is None:
-                    session.add(MarketCandidate(product_type=identity[0], code=identity[1],
-                        delivery_month=identity[2], name=name, first_seen_at=now, last_seen_at=now,
-                        expires_at=now + timedelta(days=90)))
+                    session.add(MarketCandidate(product_type=kind, code=identity,
+                        delivery_month=month if kind == "futures" else "", name=name,
+                        first_seen_at=now, last_seen_at=now, expires_at=None))
                 else:
                     candidate.name = name
+                    candidate.delivery_month = month if kind == "futures" else ""
                     candidate.last_seen_at = now
-                    candidate.expires_at = now + timedelta(days=90)
+                    candidate.expires_at = None
                 membership = session.query(MarketCandidateSource).filter_by(
-                    source_key=source_key, product_type=identity[0], code=identity[1], delivery_month=identity[2]
+                    source_key=source_key, code=identity
                 ).one_or_none()
                 if membership is None:
                     session.add(MarketCandidateSource(source_key=source_key,
-                        product_type=identity[0], code=identity[1], delivery_month=identity[2],
-                        first_seen_at=now, last_seen_at=now,
-                        expires_at=now + timedelta(days=90)))
+                        product_type=kind, code=identity,
+                        delivery_month=month if kind == "futures" else "",
+                        first_seen_at=now, last_seen_at=now, expires_at=None))
                 else:
+                    membership.delivery_month = month if kind == "futures" else ""
                     membership.last_seen_at = now
-                    membership.expires_at = now + timedelta(days=90)
+                    membership.expires_at = None
                 count += 1
         return count
 
     def list_candidates(self, query: str = "", limit: int = 100) -> list[dict[str, str]]:
         if not self.sessions:
             return []
-        now = datetime.now(timezone.utc)
         with self.sessions() as session:
-            rows = session.query(MarketCandidate).filter(
-                (MarketCandidate.expires_at.is_(None)) | (MarketCandidate.expires_at > now)
-            ).order_by(MarketCandidate.product_type, MarketCandidate.code, MarketCandidate.delivery_month).all()
+            rows = session.query(MarketCandidate).order_by(
+                MarketCandidate.product_type, MarketCandidate.code
+            ).all()
             term = query.strip().casefold()
             return [{"code": row.code, "name": row.name, "productType": row.product_type,
                      **({"deliveryMonth": row.delivery_month} if row.delivery_month else {})}
                     for row in rows if not term or term in row.code.casefold() or term in row.name.casefold()][:limit]
+
+    def find_candidate(self, product_type: str, code: str) -> dict[str, str] | None:
+        if not self.sessions:
+            return None
+        with self.sessions() as session:
+            row = session.query(MarketCandidate).filter_by(
+                product_type=product_type, code=code.strip().upper()
+            ).one_or_none()
+            if row is None:
+                return None
+            return {"code": row.code, "name": row.name, "productType": row.product_type,
+                    **({"deliveryMonth": row.delivery_month} if row.delivery_month else {})}
 
 
 market_dashboard_db = MarketDashboardDatabase()
