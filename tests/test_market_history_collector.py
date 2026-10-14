@@ -281,7 +281,7 @@ def test_taifex_institutional_history_downloads_one_date_range_per_category(monk
         return BytesIO((institutional_header + "\n" + "\n".join(rows)).encode("cp950"))
 
     monkeypatch.setattr(module.urllib.request, "urlopen", fake_urlopen)
-    module.market_history_collector.collect_futures_codes([
+    had_errors = module.market_history_collector.collect_futures_codes([
         {"code": "TXF", "name": "TAIEX Futures"},
         {"code": "QFFJ6", "name": "Mini TSMC Futures", "deliveryMonth": "202610"},
     ], days=5)
@@ -292,6 +292,7 @@ def test_taifex_institutional_history_downloads_one_date_range_per_category(monk
     institutional_writes = [item for item in fake_db.writes if item[0] == "taifex:futures-institutional"]
     assert institutional_writes
     assert all(item[3] == "ok" and item[4] == len(item[2]) for item in institutional_writes)
+    assert had_errors is False
 
 
 def test_tdcc_history_refreshes_token_for_each_stock_post(monkeypatch):

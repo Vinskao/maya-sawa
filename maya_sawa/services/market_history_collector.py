@@ -483,6 +483,9 @@ class MarketHistoryCollector:
                         logger.info("Could not resolve selected futures delivery months from Shioaji quotes: %s", exc)
                 collected = await asyncio.to_thread(self._collect_futures_codes_sync, instruments, self._backfill_days)
                 if not collected:
+                    # TAIFEX may temporarily throttle a range request or an
+                    # individual daily price request. Retry those uncovered
+                    # dates in this process instead of sleeping until tomorrow.
                     await asyncio.sleep(300)
                     continue
                 now = datetime.now(TAIPEI_TZ)
@@ -504,8 +507,7 @@ class MarketHistoryCollector:
         for attempt in range(6):
             with market_history_db.collection_lock() as acquired:
                 if acquired:
-                    self.collect_futures_codes(instruments, days)
-                    return True
+                    return not self.collect_futures_codes(instruments, days)
             if attempt < 5:
                 time.sleep(10)
         logger.info("Market history lock stayed busy; futures collection will retry")
@@ -549,7 +551,7 @@ class MarketHistoryCollector:
         tdcc_covered = market_history_db.covered_codes(["tdcc:distribution-history"], codes, dates)
         self._collect_tdcc_history_range(codes, dates, tdcc_covered)
 
-    def collect_futures_codes(self, instruments: list[dict[str, str]], days: int | None = None) -> None:
+    def collect_futures_codes(self, instruments: list[dict[str, str]], days: int | None = None) -> bool:
         """Backfill regular-session daily TAIFEX prices for selected listed contracts."""
         selected = {}
         for item in instruments:
@@ -568,7 +570,8 @@ class MarketHistoryCollector:
             if code and root and (re.fullmatch(r"\d{6}", month) or code == "TXF"):
                 selected[code] = {"root": root, "month": month, "name": item.get("name", code)}
         if not selected or not market_history_db.sessions:
-            return
+            return False
+        had_errors = False
         now = datetime.now(TAIPEI_TZ)
         latest = now.date() if (now.hour, now.minute) >= (18, 20) else now.date() - timedelta(days=1)
         period = max(1, min(days or self._backfill_days, 366))
@@ -606,6 +609,7 @@ class MarketHistoryCollector:
                         source_url=price_url, unit="points / contracts")
                 except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError,
                         UnicodeError, ValueError) as exc:
+                    had_errors = True
                     logger.warning("TAIFEX history source failed: %s %s: %s", root, trading_date, exc)
                     market_history_db.write_source_day(source, trading_date, "futures", [], target_codes,
                         status="error", detail=str(exc)[:300], source_url=price_url, unit="points / contracts")
@@ -654,6 +658,7 @@ class MarketHistoryCollector:
                         unit="contracts / TWD thousands")
             except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError,
                     UnicodeError, ValueError) as exc:
+                had_errors = True
                 logger.warning("TAIFEX futures institutional history failed: %s %s–%s: %s", commodity,
                                min(commodity_dates), max(commodity_dates), exc)
                 for trading_date in commodity_dates:
@@ -664,6 +669,7 @@ class MarketHistoryCollector:
                         unit="contracts / TWD thousands")
             if self._request_delay:
                 time.sleep(self._request_delay)
+        return had_errors
 
     def _collect_source_day(self, source_key: str, trading_date: date, codes: list[str]) -> None:
         product_type, template, unit = self.SOURCE_CONFIG[source_key]
