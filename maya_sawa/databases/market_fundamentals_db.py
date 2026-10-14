@@ -88,7 +88,7 @@ class MarketFundamentalsDatabase:
             session.execute(statement.on_conflict_do_update(constraint="uq_market_fundamental_identity", set_={key: getattr(statement.excluded, key) for key in ("value", "unit", "source_url", "fetched_at")}))
         return len(values)
 
-    def claim_finmind_slot(self, dataset: str, code: str, hourly_limit: int = 120) -> int | None:
+    def claim_finmind_slot(self, dataset: str, code: str, hourly_limit: int = 120, min_gap_seconds: int = 30) -> int | None:
         """DB serialized account-wide throttle; retain 480 of the free 600 calls."""
         if not self.sessions:
             return None
@@ -102,7 +102,7 @@ class MarketFundamentalsDatabase:
             if count >= hourly_limit:
                 return None
             last_request = session.query(FinMindUsage.requested_at).order_by(FinMindUsage.requested_at.desc()).first()
-            if last_request and (now - last_request[0]).total_seconds() < 30:
+            if last_request and (now - last_request[0]).total_seconds() < min_gap_seconds:
                 return None
             reservation = FinMindUsage(requested_at=now, dataset=dataset, code=code.upper(), status="reserved", detail="")
             session.add(reservation)

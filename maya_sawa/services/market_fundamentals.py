@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -31,73 +31,127 @@ def _get_json(url: str) -> Any:
 
 
 class MarketFundamentalsService:
+    # Official TWSE feeds cover every listed company in one document; keep the last good copy and refresh it in the
+    # background so a request never waits on TWSE once the cache is warm.
+    OFFICIAL_FEEDS = {
+        "monthly:listed": f"{TWSE}/t187ap05_L",
+        "income": f"{TWSE}/t187ap06_L_ci",
+        "balance": f"{TWSE}/t187ap07_L_ci",
+        "monthly:otc": TPEx_OTC_MONTHLY,
+    }
+    FINMIND_DATASETS = ("TaiwanStockMonthRevenue", "TaiwanStockFinancialStatements",
+                        "TaiwanStockBalanceSheet", "TaiwanStockCashFlowsStatement")
+
     def __init__(self) -> None:
         self._cache: dict[str, tuple[float, Any]] = {}
         self._lock = asyncio.Lock()
+        self._refreshing: dict[str, asyncio.Task] = {}
         self._stale_sources: set[str] = set()
-        self._finmind_task: asyncio.Task | None = None
         self._collector_task: asyncio.Task | None = None
+        self._worker_task: asyncio.Task | None = None
+        self._queue: list[str] = []
+        self._queue_event = asyncio.Event()
 
     async def start(self) -> None:
         if self._collector_task is None or self._collector_task.done():
             self._collector_task = asyncio.create_task(self._collector_loop())
+        if self._worker_task is None or self._worker_task.done():
+            self._worker_task = asyncio.create_task(self._finmind_worker())
 
     async def close(self) -> None:
-        if self._collector_task:
-            self._collector_task.cancel()
-            try:
-                await self._collector_task
-            except asyncio.CancelledError:
-                pass
-            self._collector_task = None
+        for task in (self._collector_task, self._worker_task, *self._refreshing.values()):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+        self._collector_task = self._worker_task = None
+        self._refreshing.clear()
 
     async def _collector_loop(self) -> None:
         while True:
             try:
-                await asyncio.to_thread(self._collect_low_frequency)
-                await asyncio.sleep(24 * 60 * 60)
+                for key in self.OFFICIAL_FEEDS:
+                    try:
+                        await self._official(key)
+                    except Exception as exc:
+                        logger.warning("Official fundamentals warm-up failed for %s: %s", key, exc)
+                for code in await asyncio.to_thread(self._watch_symbols):
+                    self._enqueue(code)
+                await asyncio.sleep(60 * 60)
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception("FinMind background fundamentals collection failed")
+                logger.exception("Fundamentals collector loop failed")
                 await asyncio.sleep(60 * 60)
 
-    async def _official(self, key: str, url: str, ttl: int = 900) -> Any:
+    def _enqueue(self, code: str, urgent: bool = False) -> None:
+        if code in self._queue:
+            if not urgent:
+                return
+            self._queue.remove(code)
+        if urgent:
+            self._queue.insert(0, code)
+        else:
+            self._queue.append(code)
+        self._queue_event.set()
+
+    async def _finmind_worker(self) -> None:
+        while True:
+            try:
+                while not self._queue:
+                    self._queue_event.clear()
+                    await self._queue_event.wait()
+                code = self._queue.pop(0)
+                await asyncio.to_thread(self._collect_code, code)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("FinMind fundamentals worker failed")
+                await asyncio.sleep(60)
+
+    async def _official(self, key: str, ttl: int = 900) -> Any:
+        url = self.OFFICIAL_FEEDS[key]
         cached = self._cache.get(key)
-        if cached and time.monotonic() - cached[0] < ttl:
+        if cached:
+            if time.monotonic() - cached[0] >= ttl and key not in self._refreshing:
+                task = asyncio.create_task(self._refresh_official(key, url))
+                self._refreshing[key] = task
+                task.add_done_callback(lambda _t, k=key: self._refreshing.pop(k, None))
             return cached[1]
         async with self._lock:
             cached = self._cache.get(key)
-            if cached and time.monotonic() - cached[0] < ttl:
+            if cached:
                 return cached[1]
-            try:
-                if url.endswith(".csv"):
-                    request = urllib.request.Request(url, headers={"User-Agent": "TY-Multiverse-MarketDashboard/1.0"})
-                    with await asyncio.to_thread(urllib.request.urlopen, request, timeout=25) as response:
-                        result = response.read().decode("utf-8-sig")
-                else:
-                    result = await asyncio.to_thread(_get_json, url)
-                if not isinstance(result, (list, str)):
-                    raise ValueError("Official fundamentals endpoint returned an unexpected document")
-                self._cache[key] = (time.monotonic(), result)
-                self._stale_sources.discard(key)
-                return result
-            except Exception:
-                if cached:
-                    self._stale_sources.add(key)
-                    logger.warning("Serving stale in-process official fundamentals cache: %s", key)
-                    return cached[1]
-                raise
+            return await self._refresh_official(key, url)
+
+    async def _refresh_official(self, key: str, url: str) -> Any:
+        try:
+            if url.endswith(".csv"):
+                request = urllib.request.Request(url, headers={"User-Agent": "TY-Multiverse-MarketDashboard/1.0"})
+                with await asyncio.to_thread(urllib.request.urlopen, request, timeout=25) as response:
+                    result = response.read().decode("utf-8-sig")
+            else:
+                result = await asyncio.to_thread(_get_json, url)
+            if not isinstance(result, (list, str)):
+                raise ValueError("Official fundamentals endpoint returned an unexpected document")
+            self._cache[key] = (time.monotonic(), result)
+            self._stale_sources.discard(key)
+            return result
+        except Exception:
+            if key in self._cache:
+                self._stale_sources.add(key)
+                logger.warning("Official fundamentals refresh failed; serving cached copy: %s", key)
+                return self._cache[key][1]
+            raise
 
     async def get(self, code: str) -> dict[str, Any]:
         code = code.strip().upper()
         if not code.isdigit() or len(code) != 4:
             raise ValueError("Fundamentals require a four-digit Taiwan stock code")
-        monthly_url = f"{TWSE}/t187ap05_L"
         statements = await asyncio.gather(
-            self._official("monthly:listed", monthly_url),
-            self._official("income", f"{TWSE}/t187ap06_L_ci"),
-            self._official("balance", f"{TWSE}/t187ap07_L_ci"),
+            self._official("monthly:listed"), self._official("income"), self._official("balance"),
             return_exceptions=True,
         )
         monthly_raw, income_raw, balance_raw = statements
@@ -105,31 +159,32 @@ class MarketFundamentalsService:
         monthly = self._monthly_rows(monthly_raw, code) if not isinstance(monthly_raw, Exception) else []
         if not monthly:
             try:
-                otc_text = await self._official("monthly:otc", TPEx_OTC_MONTHLY)
-                monthly = self._monthly_rows(otc_text, code)
+                monthly = self._monthly_rows(await self._official("monthly:otc"), code)
             except Exception as exc:
                 errors.append(f"OTC monthly revenue: {exc}")
         income = self._statement_rows(income_raw, code, "income") if not isinstance(income_raw, Exception) else []
         balance = self._statement_rows(balance_raw, code, "balance") if not isinstance(balance_raw, Exception) else []
-        finmind = await asyncio.to_thread(market_fundamentals_db.rows, code, "TaiwanStockCashFlowsStatement")
-        for item in finmind:
-            try:
-                item["value"] = json.loads(item["value"])
-            except (TypeError, json.JSONDecodeError):
-                pass
-        finmind_income = await asyncio.to_thread(market_fundamentals_db.rows, code, "TaiwanStockFinancialStatements")
-        finmind_balance = await asyncio.to_thread(market_fundamentals_db.rows, code, "TaiwanStockBalanceSheet")
-        for item in finmind_income + finmind_balance:
-            try:
-                item["value"] = json.loads(item["value"])
-            except (TypeError, json.JSONDecodeError):
-                pass
-        return {"code": code, "monthlyRevenue": monthly, "incomeStatements": income,
-                "balanceSheets": balance, "cashFlows": finmind,
-                "finmindIncomeStatements": finmind_income, "finmindBalanceSheets": finmind_balance,
-                "source": "TWSE OpenAPI / MOPS OTC CSV", "checkedAt": datetime.now(TZ).isoformat(),
-                "staleSources": sorted(self._stale_sources),
-                "errors": errors}
+        history = await asyncio.to_thread(self._finmind_history, code)
+        # Any stock someone opens joins the refresh queue; the 24h per-dataset checkpoint stops repeat downloads.
+        self._enqueue(code, urgent=True)
+        return {"code": code, "monthlyRevenue": monthly, "incomeStatements": income, "balanceSheets": balance,
+                "metrics": build_fundamental_metrics(monthly, income, history),
+                "historyPending": not history.get("TaiwanStockFinancialStatements"),
+                "source": "TWSE OpenAPI / MOPS OTC CSV / FinMind", "checkedAt": datetime.now(TZ).isoformat(),
+                "staleSources": sorted(self._stale_sources), "errors": errors}
+
+    @staticmethod
+    def _finmind_history(code: str) -> dict[str, list[dict]]:
+        result = {}
+        for dataset in MarketFundamentalsService.FINMIND_DATASETS:
+            rows = market_fundamentals_db.rows(code, dataset)
+            for item in rows:
+                try:
+                    item["value"] = json.loads(item["value"])
+                except (TypeError, json.JSONDecodeError):
+                    pass
+            result[dataset] = rows
+        return result
 
     @staticmethod
     def _monthly_rows(payload: Any, code: str) -> list[dict]:
@@ -190,52 +245,217 @@ class MarketFundamentalsService:
             eps = _first_number(row, ("基本每股盈餘（元）", "基本每股盈餘")) if statement == "income" else None
             result.append({"period": f"{gregorian_year}Q{quarter}", "publishedAt": row.get("出表日期"),
                            "scope": "consolidated", "statement": statement,
-                           "unit": "新台幣元；每股項目為元", "reportedCumulative": reported,
+                           "unit": "新台幣千元；每股項目為元", "reportedCumulative": reported,
                            "singleQuarter": single if statement == "income" else None, "epsReported": eps,
                            "basis": ("TWSE quarterly income values are cumulative year-to-date; single-quarter amounts subtract the preceding reported quarter. EPS stays as reported because share-count basis can change." if statement == "income" else "Quarter-end balance sheet amounts; not cumulative."),
                            "source": "TWSE OpenAPI", "raw": row})
         return sorted(result, key=lambda item: item["period"])[-12:]
 
-    def _collect_low_frequency(self) -> None:
-        token = os.getenv("FINMIND_TOKEN", "").strip()
-        if not token or not market_fundamentals_db.sessions:
-            return
+    @staticmethod
+    def _watch_symbols() -> list[str]:
+        if not market_fundamentals_db.sessions:
+            return []
         symbols = set()
         try:
             for item in market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols():
                 code = str(item.get("underlyingCode") or item.get("code") or "").upper()
                 if code.isdigit() and len(code) == 4:
                     symbols.add(code)
-            for code in sorted(symbols):
-                for dataset in ("TaiwanStockCashFlowsStatement", "TaiwanStockFinancialStatements", "TaiwanStockBalanceSheet"):
-                    if market_fundamentals_db.rows(code, dataset):
-                        continue
-                    reservation_id = market_fundamentals_db.claim_finmind_slot(dataset, code)
-                    if reservation_id is None:
-                        logger.info("FinMind collection paused at the reserved hourly quota or daily checkpoint")
-                        return
-                    query = urllib.parse.urlencode({"dataset": dataset, "data_id": code, "start_date": "2024-01-01"})
-                    request = urllib.request.Request(f"https://api.finmindtrade.com/api/v4/data?{query}", headers={"Authorization": f"Bearer {token}", "User-Agent": "TY-Multiverse-MarketDashboard/1.0"})
-                    try:
-                        with urllib.request.urlopen(request, timeout=30) as response:
-                            payload = json.loads(response.read().decode("utf-8"))
-                        if payload.get("status") != 200:
-                            raise RuntimeError(f"FinMind status {payload.get('status')}")
-                        raw_rows = payload.get("data") or []
-                        records = [{"period": str(row.get("date", "")), "item": str(row.get("type", "")), "value": row.get("value"), "unit": str(row.get("unit", "來源項目單位未提供"))} for row in raw_rows if row.get("date") and row.get("type")]
-                        market_fundamentals_db.replace_dataset(dataset, code, records, "https://api.finmindtrade.com/api/v4/data")
-                        market_fundamentals_db.record_finmind_result(reservation_id, "success", f"rows={len(records)}")
-                    except urllib.error.HTTPError as exc:
-                        market_fundamentals_db.record_finmind_result(reservation_id, "error", f"HTTP {exc.code}")
-                        if exc.code in (402, 429):
-                            logger.warning("FinMind quota or permission limit returned HTTP %s", exc.code)
-                            return
-                    except Exception as exc:
-                        market_fundamentals_db.record_finmind_result(reservation_id, "error", str(exc))
-                        logger.warning("FinMind low-frequency collection failed for %s/%s: %s", code, dataset, exc)
-                    time.sleep(30)
         except Exception:
-            logger.exception("FinMind low-frequency collector failed")
+            logger.exception("Fundamentals watch-symbol lookup failed")
+        return sorted(symbols)
+
+    def _collect_code(self, code: str) -> None:
+        """Refresh one stock's FinMind history. Anonymous access works (lower quota); a token raises the limit."""
+        if not market_fundamentals_db.sessions:
+            return
+        token = os.getenv("FINMIND_TOKEN", "").strip()
+        headers = {"User-Agent": "TY-Multiverse-MarketDashboard/1.0"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        # Three years back so the oldest displayed month/quarter still has a year-ago comparison.
+        start_date = (datetime.now(TZ).date() - timedelta(days=3 * 366)).isoformat()
+        for dataset in self.FINMIND_DATASETS:
+            reservation_id = market_fundamentals_db.claim_finmind_slot(dataset, code, min_gap_seconds=FINMIND_GAP_SECONDS)
+            if reservation_id is None:
+                continue  # refreshed within 24h, or the account-wide hourly budget is spent
+            query = urllib.parse.urlencode({"dataset": dataset, "data_id": code, "start_date": start_date})
+            request = urllib.request.Request(f"https://api.finmindtrade.com/api/v4/data?{query}", headers=headers)
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                if payload.get("status") != 200:
+                    raise RuntimeError(f"FinMind status {payload.get('status')}")
+                records = _finmind_records(dataset, payload.get("data") or [])
+                market_fundamentals_db.replace_dataset(dataset, code, records, "https://api.finmindtrade.com/api/v4/data")
+                market_fundamentals_db.record_finmind_result(reservation_id, "success", f"rows={len(records)}")
+            except urllib.error.HTTPError as exc:
+                market_fundamentals_db.record_finmind_result(reservation_id, "error", f"HTTP {exc.code}")
+                if exc.code in (402, 429):
+                    logger.warning("FinMind quota or permission limit returned HTTP %s; pausing collection", exc.code)
+                    time.sleep(15 * 60)
+                    return
+            except Exception as exc:
+                market_fundamentals_db.record_finmind_result(reservation_id, "error", str(exc))
+                logger.warning("FinMind collection failed for %s/%s: %s", code, dataset, exc)
+            time.sleep(FINMIND_GAP_SECONDS + 1)
+
+
+FINMIND_GAP_SECONDS = 12  # anonymous FinMind allows ~300 calls/hour
+
+
+def _finmind_records(dataset: str, raw_rows: list[dict]) -> list[dict]:
+    if dataset == "TaiwanStockMonthRevenue":
+        # `date` is the publication month; revenue_year/revenue_month name the month the revenue belongs to.
+        return [{"period": f"{int(row['revenue_year']):04d}-{int(row['revenue_month']):02d}", "item": "revenue",
+                 "value": row.get("revenue"), "unit": "新台幣元"}
+                for row in raw_rows if row.get("revenue_year") and row.get("revenue_month")]
+    return [{"period": str(row.get("date", "")), "item": str(row.get("type", "")), "value": row.get("value"),
+             "unit": str(row.get("unit", "新台幣元"))} for row in raw_rows if row.get("date") and row.get("type")]
+
+
+def _quarter_label(date_text: str) -> str:
+    if len(date_text) >= 7 and date_text[4] == "-":
+        return f"{date_text[:4]}Q{(int(date_text[5:7]) - 1) // 3 + 1}"
+    return date_text
+
+
+def _shift_quarter(label: str, quarters: int) -> str:
+    index = int(label[:4]) * 4 + int(label[5]) - 1 - quarters
+    return f"{index // 4}Q{index % 4 + 1}"
+
+
+def _shift_month(label: str, months: int) -> str:
+    index = int(label[:4]) * 12 + int(label[5:7]) - 1 - months
+    return f"{index // 12:04d}-{index % 12 + 1:02d}"
+
+
+def _num(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None
+
+
+def _pick(values: dict[str, float], keys: tuple[str, ...]) -> float | None:
+    for key in keys:
+        if values.get(key) is not None:
+            return values[key]
+    return None
+
+
+def _ratio(numerator: float | None, denominator: float | None) -> float | None:
+    return None if numerator is None or not denominator else round(numerator / denominator * 100, 2)
+
+
+def _growth(current: float | None, previous: float | None) -> float | None:
+    # Growth off a non-positive base has no meaningful sign, so leave it blank.
+    return None if current is None or previous is None or previous <= 0 else round((current / previous - 1) * 100, 2)
+
+
+def _diff(current: float | None, previous: float | None) -> float | None:
+    return None if current is None or previous is None else round(current - previous, 2)
+
+
+def _pivot(rows: list[dict], label=_quarter_label) -> dict[str, dict[str, float]]:
+    result: dict[str, dict[str, float]] = {}
+    for row in rows:
+        value = _num(row.get("value"))
+        if value is not None:
+            result.setdefault(label(str(row.get("period", ""))), {})[str(row.get("item"))] = value
+    return result
+
+
+def build_fundamental_metrics(monthly_official: list[dict], income_official: list[dict],
+                             history: dict[str, list[dict]]) -> dict[str, list[dict]]:
+    """Growth rates and ratios only; absolute amounts never leave this function."""
+    revenue = {period: values["revenue"] for period, values in
+               _pivot(history.get("TaiwanStockMonthRevenue", []), label=str).items() if "revenue" in values}
+    official_month = {row["period"]: row for row in monthly_official}
+    for period, row in official_month.items():
+        if row.get("revenue") is not None:
+            revenue.setdefault(period, row["revenue"] * 1000)  # official feed is NT$ thousands
+    monthly = []
+    for period in sorted(revenue)[-24:]:
+        official = official_month.get(period, {})
+        year, month = period[:4], int(period[5:7])
+        ytd = [revenue.get(f"{year}-{m:02d}") for m in range(1, month + 1)]
+        ytd_prior = [revenue.get(f"{int(year) - 1:04d}-{m:02d}") for m in range(1, month + 1)]
+        monthly.append({
+            "period": period,
+            "yoyPercent": official["yoyPercent"] if official.get("yoyPercent") is not None else _growth(revenue[period], revenue.get(_shift_month(period, 12))),
+            "momPercent": official["momPercent"] if official.get("momPercent") is not None else _growth(revenue[period], revenue.get(_shift_month(period, 1))),
+            "ytdYoyPercent": _growth(sum(ytd), sum(ytd_prior)) if None not in ytd and None not in ytd_prior else None,
+        })
+
+    income = _pivot(history.get("TaiwanStockFinancialStatements", []))
+    for row in income_official:
+        single = row.get("singleQuarter") or {}
+        if row["period"] not in income and single.get("revenue") is not None:
+            income[row["period"]] = {key: single[src] * 1000 for key, src in (
+                ("Revenue", "revenue"), ("GrossProfit", "grossProfit"), ("OperatingIncome", "operatingIncome"),
+                ("IncomeAfterTaxes", "netIncome")) if single.get(src) is not None}
+            if row["period"].endswith("Q1") and row.get("epsReported") is not None:
+                income[row["period"]]["EPS"] = row["epsReported"]
+
+    def income_ratios(period: str) -> dict[str, float | None]:
+        values = income.get(period, {})
+        revenue_value = values.get("Revenue")
+        return {"revenue": revenue_value, "eps": values.get("EPS"),
+                "grossMargin": _ratio(values.get("GrossProfit"), revenue_value),
+                "operatingMargin": _ratio(values.get("OperatingIncome"), revenue_value),
+                "netMargin": _ratio(_pick(values, ("IncomeAfterTaxes", "IncomeFromContinuingOperations")), revenue_value)}
+
+    quarterly = []
+    for period in sorted(income)[-8:]:
+        now, prev, year_ago = income_ratios(period), income_ratios(_shift_quarter(period, 1)), income_ratios(_shift_quarter(period, 4))
+        entry: dict[str, Any] = {"period": period,
+                                 "revenueQoQ": _growth(now["revenue"], prev["revenue"]),
+                                 "revenueYoY": _growth(now["revenue"], year_ago["revenue"]),
+                                 "epsQoQ": _growth(now["eps"], prev["eps"]),
+                                 "epsYoY": _growth(now["eps"], year_ago["eps"])}
+        for key in ("grossMargin", "operatingMargin", "netMargin"):
+            entry[key] = now[key]
+            entry[f"{key}QoQ"] = _diff(now[key], prev[key])
+            entry[f"{key}YoY"] = _diff(now[key], year_ago[key])
+        quarterly.append(entry)
+
+    balance_values = _pivot(history.get("TaiwanStockBalanceSheet", []))
+
+    def balance_ratios(period: str) -> dict[str, float | None]:
+        values = balance_values.get(period, {})
+        return {"debtRatio": _ratio(values.get("Liabilities"), values.get("TotalAssets")),
+                "currentRatio": _ratio(values.get("CurrentAssets"), values.get("CurrentLiabilities")),
+                "equity": _pick(values, ("Equity", "TotalEquity", "EquityAttributableToOwnersOfParent"))}
+
+    balance = []
+    for period in sorted(balance_values)[-8:]:
+        now, prev, year_ago = balance_ratios(period), balance_ratios(_shift_quarter(period, 1)), balance_ratios(_shift_quarter(period, 4))
+        balance.append({"period": period,
+                        "debtRatio": now["debtRatio"], "debtRatioQoQ": _diff(now["debtRatio"], prev["debtRatio"]),
+                        "debtRatioYoY": _diff(now["debtRatio"], year_ago["debtRatio"]),
+                        "currentRatio": now["currentRatio"], "currentRatioYoY": _diff(now["currentRatio"], year_ago["currentRatio"]),
+                        "equityYoY": _growth(now["equity"], year_ago["equity"])})
+
+    # Cash flow statements are year-to-date, so only same-period-last-year comparisons are like for like.
+    cash_values = _pivot(history.get("TaiwanStockCashFlowsStatement", []))
+
+    def cash_ratios(period: str) -> dict[str, float | None]:
+        values = cash_values.get(period, {})
+        ocf = _pick(values, ("CashFlowsFromOperatingActivities", "NetCashInflowFromOperatingActivities"))
+        capex = values.get("PropertyAndPlantAndEquipment")
+        return {"ocf": ocf,
+                "cashConversion": _ratio(ocf, _pick(values, ("NetIncomeBeforeTax", "IncomeBeforeIncomeTaxFromContinuingOperations"))),
+                "capexToOcf": _ratio(-capex if capex is not None else None, ocf) if ocf and ocf > 0 else None}
+
+    cash_flow = []
+    for period in sorted(cash_values)[-8:]:
+        now, year_ago = cash_ratios(period), cash_ratios(_shift_quarter(period, 4))
+        cash_flow.append({"period": period, "ocfYoY": _growth(now["ocf"], year_ago["ocf"]),
+                          "cashConversion": now["cashConversion"], "cashConversionYoY": _diff(now["cashConversion"], year_ago["cashConversion"]),
+                          "capexToOcf": now["capexToOcf"], "capexToOcfYoY": _diff(now["capexToOcf"], year_ago["capexToOcf"])})
+    return {"monthly": monthly, "quarterly": quarterly, "balance": balance, "cashFlow": cash_flow}
 
 
 def _first_number(row: dict, keys: tuple[str, ...]):
