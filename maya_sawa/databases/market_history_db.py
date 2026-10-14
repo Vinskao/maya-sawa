@@ -135,8 +135,9 @@ class MarketHistoryDatabase:
                 query = query.filter(MarketDailyHistory.source_key.in_(sources))
                 coverage_query = coverage_query.filter(MarketHistoryCoverage.source_key.in_(sources))
             elif code in {"TXF", "QFF"} or code.startswith(("TXF", "QFF")):
-                query = query.filter(MarketDailyHistory.source_key == "taifex:daily-futures-price")
-                coverage_query = coverage_query.filter(MarketHistoryCoverage.source_key == "taifex:daily-futures-price")
+                futures_sources = ["taifex:daily-futures-price", "taifex:futures-institutional"]
+                query = query.filter(MarketDailyHistory.source_key.in_(futures_sources))
+                coverage_query = coverage_query.filter(MarketHistoryCoverage.source_key.in_(futures_sources))
             records = query.order_by(MarketDailyHistory.trading_date, MarketDailyHistory.source_key).all()
             coverage = coverage_query.order_by(MarketHistoryCoverage.trading_date, MarketHistoryCoverage.source_key).all()
         points_by_date: dict[str, dict[str, Any]] = {}
