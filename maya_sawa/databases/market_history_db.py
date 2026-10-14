@@ -151,19 +151,31 @@ class MarketHistoryDatabase:
                           "status": row.status, "detail": row.detail} for row in coverage],
         }
 
-    def covered_codes(self, source_keys: list[str], codes: list[str], trading_dates: list[date]) -> set[tuple[str, str, date]]:
+    def covered_codes(self, source_keys: list[str], codes: list[str], trading_dates: list[date],
+                      *, retry_no_data: bool = True) -> set[tuple[str, str, date]]:
         if not self.sessions or not source_keys or not codes or not trading_dates:
             return set()
         with self.sessions() as session:
-            rows = session.query(MarketHistoryCoverage.source_key, MarketHistoryCoverage.code,
-                                 MarketHistoryCoverage.trading_date).filter(
+            query = session.query(MarketHistoryCoverage.source_key, MarketHistoryCoverage.code,
+                                  MarketHistoryCoverage.trading_date).filter(
                 MarketHistoryCoverage.source_key.in_(source_keys),
                 MarketHistoryCoverage.code.in_([code.upper() for code in codes]),
                 MarketHistoryCoverage.trading_date.in_(trading_dates),
-                # A prior no_data is not proof of permanent absence. Public
-                # sources can publish later or a parser can be corrected.
-                MarketHistoryCoverage.status == "ok",
-            ).all()
+            )
+            if retry_no_data:
+                # Used for TDCC, where an earlier no_data can mean a transient
+                # form/token response or a parser issue on an old week.
+                query = query.filter(MarketHistoryCoverage.status == "ok")
+            elif trading_dates:
+                # Do not re-request old exchange holidays or symbols from the
+                # other board on every pass. Recent no_data is retried to cover
+                # delayed publication; errors remain retryable.
+                retry_after = max(trading_dates).toordinal() - 3
+                query = query.filter((MarketHistoryCoverage.status == "ok") | (
+                    (MarketHistoryCoverage.status == "no_data") &
+                    (MarketHistoryCoverage.trading_date < date.fromordinal(retry_after))
+                ))
+            rows = query.all()
         return {(row[0], row[1], row[2]) for row in rows}
 
     @contextmanager

@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 
 from ..databases.market_dashboard_db import market_dashboard_db
 from ..databases.market_history_db import market_history_db
+from ..services.shioaji_market import shioaji_market_service
 
 logger = logging.getLogger(__name__)
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
@@ -428,7 +429,20 @@ class MarketHistoryCollector:
         while True:
             try:
                 instruments = await asyncio.to_thread(market_dashboard_db.latest_futures_selections)
-                await asyncio.to_thread(self._collect_futures_codes_sync, instruments, self._backfill_days)
+                quote_targets = [item for item in instruments if item.get("code", "").upper() != "TXF"]
+                if quote_targets:
+                    try:
+                        quotes = await shioaji_market_service.get_dashboard_quotes(quote_targets)
+                        delivery_months = {item["symbol"].upper(): item.get("deliveryMonth", "") for item in quotes}
+                        instruments = [{**item,
+                                        "deliveryMonth": item.get("deliveryMonth") or delivery_months.get(item["code"].upper(), "")}
+                                       for item in instruments]
+                    except Exception as exc:
+                        logger.info("Could not resolve selected futures delivery months from Shioaji quotes: %s", exc)
+                collected = await asyncio.to_thread(self._collect_futures_codes_sync, instruments, self._backfill_days)
+                if not collected:
+                    await asyncio.sleep(300)
+                    continue
                 now = datetime.now(TAIPEI_TZ)
                 next_run = now.replace(hour=18, minute=30, second=0, microsecond=0)
                 if next_run <= now:
@@ -440,12 +454,20 @@ class MarketHistoryCollector:
                 logger.exception("TAIFEX daily history collection failed")
                 await asyncio.sleep(900)
 
-    def _collect_futures_codes_sync(self, instruments: list[dict[str, str]], days: int) -> None:
+    def _collect_futures_codes_sync(self, instruments: list[dict[str, str]], days: int) -> bool:
         if not market_history_db.sessions:
-            return
-        with market_history_db.collection_lock() as acquired:
-            if acquired:
-                self.collect_futures_codes(instruments, days)
+            return False
+        # Stock and futures backfills share an advisory lock. Do not skip this
+        # startup pass when the stock backfill currently owns the lock.
+        for attempt in range(6):
+            with market_history_db.collection_lock() as acquired:
+                if acquired:
+                    self.collect_futures_codes(instruments, days)
+                    return True
+            if attempt < 5:
+                time.sleep(10)
+        logger.info("Market history lock stayed busy; futures collection will retry")
+        return False
 
     def _collect_codes_sync(self, codes: list[str], days: int) -> None:
         if not market_history_db.sessions:
@@ -462,7 +484,7 @@ class MarketHistoryCollector:
         today = now.date() if (now.hour, now.minute) >= (18, 20) else now.date() - timedelta(days=1)
         dates = [today - timedelta(days=offset) for offset in range(days)
                  if (today - timedelta(days=offset)).weekday() < 5]
-        covered = market_history_db.covered_codes(list(self.SOURCES), codes, dates)
+        covered = market_history_db.covered_codes(list(self.SOURCES), codes, dates, retry_no_data=False)
         ordered_dates = sorted(dates)
         sources = [source for source in self.SOURCES if source != "tdcc:distribution-history"]
         # Finish one source across the selected dates before moving to the next.
@@ -476,7 +498,8 @@ class MarketHistoryCollector:
                 self._collect_source_day(source_key, trading_date, codes)
                 if self._request_delay:
                     time.sleep(self._request_delay)
-        self._collect_tdcc_history_range(codes, dates, covered)
+        tdcc_covered = market_history_db.covered_codes(["tdcc:distribution-history"], codes, dates)
+        self._collect_tdcc_history_range(codes, dates, tdcc_covered)
 
     def collect_futures_codes(self, instruments: list[dict[str, str]], days: int | None = None) -> None:
         """Backfill regular-session daily TAIFEX prices for selected listed contracts."""

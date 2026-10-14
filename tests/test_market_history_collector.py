@@ -242,12 +242,18 @@ def test_tdcc_history_refreshes_token_for_each_stock_post(monkeypatch):
 
 def test_daily_futures_loop_reads_sync_selection_without_awaiting_result(monkeypatch):
     import asyncio
+    import importlib
 
+    module = importlib.import_module("maya_sawa.services.market_history_collector")
     collector = MarketHistoryCollector()
     called = []
-    monkeypatch.setattr("maya_sawa.services.market_history_collector.market_dashboard_db.latest_futures_selections",
+    monkeypatch.setattr(module.market_dashboard_db, "latest_futures_selections",
                         lambda: [{"code": "TXF", "name": "TAIEX Futures", "productType": "futures"}])
-    monkeypatch.setattr(collector, "_collect_futures_codes_sync", lambda instruments, days: called.extend(instruments))
+    async def empty_quotes(_instruments):
+        return []
+    monkeypatch.setattr(module.shioaji_market_service, "get_dashboard_quotes", empty_quotes)
+    monkeypatch.setattr(collector, "_collect_futures_codes_sync",
+                        lambda instruments, days: (called.extend(instruments), True)[1])
 
     async def stop_after_first_pass(_):
         raise asyncio.CancelledError
@@ -271,7 +277,7 @@ def test_stock_backfill_finishes_each_source_across_date_range(monkeypatch):
         "now": staticmethod(lambda tz=None: __import__("datetime").datetime(2026, 10, 13, 20, 0, tzinfo=tz)),
     }))
     monkeypatch.setattr(module, "timedelta", __import__("datetime").timedelta)
-    monkeypatch.setattr(module.market_history_db, "covered_codes", lambda *args: set())
+    monkeypatch.setattr(module.market_history_db, "covered_codes", lambda *args, **kwargs: set())
     monkeypatch.setattr(collector, "_collect_source_day", lambda source, day, codes: calls.append((source, day)))
     monkeypatch.setattr(collector, "_collect_tdcc_history_range", lambda *args: None)
     calls = []
