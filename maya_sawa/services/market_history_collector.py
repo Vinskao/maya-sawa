@@ -6,6 +6,7 @@ import asyncio
 import csv
 import io
 import calendar
+import http.client
 import json
 import logging
 import os
@@ -422,7 +423,7 @@ class MarketHistoryCollector:
     async def _daily_futures_loop(self) -> None:
         while True:
             try:
-                instruments = await market_dashboard_db.latest_futures_selections()
+                instruments = await asyncio.to_thread(market_dashboard_db.latest_futures_selections)
                 await asyncio.to_thread(self._collect_futures_codes_sync, instruments, self._backfill_days)
                 now = datetime.now(TAIPEI_TZ)
                 next_run = now.replace(hour=18, minute=30, second=0, microsecond=0)
@@ -525,7 +526,8 @@ class MarketHistoryCollector:
                     market_history_db.write_source_day(source, trading_date, "futures", rows, target_codes,
                         status="ok" if rows else "no_data", detail="regular session; one row per listed contract month",
                         source_url=price_url, unit="points / contracts")
-                except (urllib.error.URLError, TimeoutError, UnicodeError, ValueError) as exc:
+                except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError,
+                        UnicodeError, ValueError) as exc:
                     logger.warning("TAIFEX history source failed: %s %s: %s", root, trading_date, exc)
                     market_history_db.write_source_day(source, trading_date, "futures", [], target_codes,
                         status="error", detail=str(exc)[:300], source_url=price_url, unit="points / contracts")
@@ -553,7 +555,8 @@ class MarketHistoryCollector:
                     market_history_db.write_source_day(institutional_source, trading_date, "futures", rows, target_codes,
                         status="ok" if rows else "no_data", detail=f"{category}; not specific-contract positions",
                         source_url=institutional_url, unit="contracts / TWD thousands")
-                except (urllib.error.URLError, TimeoutError, UnicodeError, ValueError) as exc:
+                except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError,
+                        UnicodeError, ValueError) as exc:
                     logger.warning("TAIFEX futures institutional history failed: %s %s: %s", commodity, trading_date, exc)
                     market_history_db.write_source_day(institutional_source, trading_date, "futures", [], target_codes,
                         status="error", detail=str(exc)[:300], source_url=institutional_url,
@@ -583,7 +586,8 @@ class MarketHistoryCollector:
             detail = str(payload.get("stat") or "").strip()
             market_history_db.write_source_day(source_key, trading_date, product_type, rows, codes,
                                                status=status, detail=detail, source_url=url, unit=unit)
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError,
+                json.JSONDecodeError, ValueError) as exc:
             logger.warning("Market history source failed: %s %s: %s", source_key, trading_date, exc)
             try:
                 market_history_db.write_source_day(source_key, trading_date, product_type, [], codes,
@@ -615,13 +619,13 @@ class MarketHistoryCollector:
                                                            status="ok" if row else "no_data",
                                                            detail="historical weekly snapshot" if row else "no matching TDCC row",
                                                            source_url=url, unit=unit)
-                    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+                    except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError, ValueError) as exc:
                         logger.warning("TDCC history source failed: %s %s: %s", raw_date, code, exc)
                         market_history_db.write_source_day(source_key, week_date, product_type, [], [code],
                                                            status="error", detail=str(exc)[:300], source_url=url, unit=unit)
                     if self._request_delay:
                         time.sleep(self._request_delay)
-        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError, ValueError) as exc:
             logger.warning("TDCC history date list unavailable: %s", exc)
 
     @staticmethod

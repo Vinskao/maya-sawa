@@ -207,3 +207,36 @@ def test_taifex_futures_institutional_csv_maps_category_totals_and_participants(
     assert result[0]["values"]["foreign_net_open_interest"] == -82806
     assert result[0]["values"]["trust_net_trade_contracts"] == 509
     assert result[0]["values"]["dealer_net_trade_contracts"] == 667
+
+
+def test_daily_futures_loop_reads_sync_selection_without_awaiting_result(monkeypatch):
+    import asyncio
+
+    collector = MarketHistoryCollector()
+    called = []
+    monkeypatch.setattr("maya_sawa.services.market_history_collector.market_dashboard_db.latest_futures_selections",
+                        lambda: [{"code": "TXF", "name": "TAIEX Futures", "productType": "futures"}])
+    monkeypatch.setattr(collector, "_collect_futures_codes_sync", lambda instruments, days: called.extend(instruments))
+
+    async def stop_after_first_pass(_):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr("maya_sawa.services.market_history_collector.asyncio.sleep", stop_after_first_pass)
+    try:
+        asyncio.run(collector._daily_futures_loop())
+    except asyncio.CancelledError:
+        pass
+    assert called == [{"code": "TXF", "name": "TAIEX Futures", "productType": "futures"}]
+
+
+def test_source_collection_records_incomplete_http_response_for_retry(monkeypatch):
+    import http.client
+
+    writes = []
+    monkeypatch.setattr("maya_sawa.services.market_history_collector.urllib.request.urlopen",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(http.client.IncompleteRead(b"")))
+    monkeypatch.setattr("maya_sawa.services.market_history_collector.market_history_db.write_source_day",
+                        lambda *args, **kwargs: writes.append(kwargs))
+    MarketHistoryCollector()._collect_source_day("twse:daily-price", date(2026, 10, 12), ["2330"])
+    assert writes[-1]["status"] == "error"
+    assert "IncompleteRead" in writes[-1]["detail"]
