@@ -61,6 +61,7 @@ from .research_pipeline.container import get_container as get_research_pipeline_
 from .services.shioaji_market import shioaji_market_service
 from .services.ibkr_market import ibkr_market_service
 from .services.market_history_collector import market_history_collector
+from .services.market_fundamentals import market_fundamentals_service
 from .services.metrics_consumer import MetricsConsumer
 from .core.services.scheduler import ArticleSyncScheduler
 from .people import sync_data
@@ -239,6 +240,11 @@ async def _startup_event():
         except Exception as e:
             logger.error(f"Failed to start market history collection: {e}")
 
+        try:
+            await market_fundamentals_service.start()
+        except Exception as e:
+            logger.error(f"Failed to start low-frequency fundamentals collection: {e}")
+
         # 執行初始文章同步（如果啟用）
         if Config.ENABLE_AUTO_SYNC_ON_STARTUP:
             logger.info("應用程式啟動，開始執行初始文章同步...")
@@ -306,6 +312,7 @@ async def _shutdown_event():
         await shioaji_market_service.close()
         await ibkr_market_service.close()
         await market_history_collector.close()
+        await market_fundamentals_service.close()
 
         logger.info("應用程式關閉，排程任務與服務已停止")
     except Exception as e:

@@ -26,6 +26,7 @@ from ..databases.portfolio_history_db import portfolio_history_db
 from ..databases.market_dashboard_db import market_dashboard_db
 from ..databases.market_history_db import market_history_db
 from ..services.market_history_collector import market_history_collector
+from ..services.market_fundamentals import market_fundamentals_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -118,6 +119,18 @@ async def get_market_dashboard_history(code: str, start: date | None = None, end
         raise HTTPException(status_code=422, detail="view must be daily or ownership")
     result = market_history_db.history(normalized, start_date, end_date, sources=sources)
     return {"code": normalized, "view": view, "start": start_date.isoformat(), "end": end_date.isoformat(), **result}
+
+
+@router.get("/dashboard/fundamentals/{code}")
+async def get_market_fundamentals(code: str):
+    """On-demand official TWSE/MOPS current revenue and quarterly statements."""
+    try:
+        return await market_fundamentals_service.get(code)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Market fundamentals request failed")
+        raise HTTPException(status_code=502, detail="Official fundamentals are temporarily unavailable") from exc
 
 
 @router.put("/dashboard/custom")

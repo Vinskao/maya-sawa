@@ -168,6 +168,12 @@ spec:
           value: "600"
         - name: SHIOAJI_PORTFOLIO_CACHE_SECONDS
           value: "3600"
+        - name: FINMIND_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: finmind-market
+              key: FINMIND_TOKEN
+              optional: true
         # === IBKR Client Portal API (in-cluster gateway) ===
         - name: IBKR_ENABLED
           value: "true"

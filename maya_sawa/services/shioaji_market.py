@@ -128,7 +128,7 @@ class ShioajiMarketService:
         return await self._get_cached_payload("TXF")
 
     async def get_dashboard_quotes(self, instruments: list[dict[str, str]]) -> list[dict[str, Any]]:
-        """Fetch current quotes for the public, label-only dashboard selection."""
+        """Serve persisted/cache quotes only; the background refresh owns broker calls."""
         cache_id = hashlib.sha256(json.dumps(instruments, sort_keys=True).encode()).hexdigest()[:20]
         cache_key = f"DASHBOARD_QUOTES_V2_{cache_id}"
         try:
@@ -136,13 +136,9 @@ class ShioajiMarketService:
             if cached is not None:
                 return cached
         except redis.RedisError:
-            logger.warning("Market quote cache unavailable; fetching selected quotes")
-        result = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, instruments))
-        try:
-            await asyncio.to_thread(self._write_cached_payload, cache_key, result, 300)
-        except redis.RedisError:
-            logger.warning("Failed to cache selected market quotes")
-        return result
+            logger.warning("Market quote cache unavailable; serving last PostgreSQL snapshot")
+        from ..databases.market_fundamentals_db import market_fundamentals_db
+        return await asyncio.to_thread(market_fundamentals_db.quote_snapshots, instruments)
 
     async def search_contracts(self, query: str, product_type: str | None = None) -> list[dict[str, str]]:
         return await self._run_with_relogin(lambda api: self._search_contracts(api, query, product_type))
@@ -166,14 +162,17 @@ class ShioajiMarketService:
     async def _get_cached_payload(self, key: str) -> dict[str, Any]:
         try:
             cached = await asyncio.to_thread(self._read_cached_payload, key)
-        except redis.RedisError as exc:
-            raise ShioajiCacheUnavailableError(
-                "Redis market cache is unavailable"
-            ) from exc
+        except redis.RedisError:
+            cached = None
         if cached is not None:
             return cached
+        from ..databases.market_fundamentals_db import market_fundamentals_db
+        persisted = await asyncio.to_thread(market_fundamentals_db.quote_snapshots,
+                                            [{"productType": "futures", "code": key}])
+        if persisted:
+            return persisted[0]
         raise ShioajiCacheUnavailableError(
-            f"No cached market data available for {key}"
+            f"No persisted market snapshot available for {key}"
         )
 
     async def start_background_refresh(self) -> None:
@@ -186,6 +185,18 @@ class ShioajiMarketService:
         await self._refresh_payload("TXF", self._fetch_txf_quote)
         await self._refresh_payload("QFFR1", self._fetch_qff_quote)
         await self._refresh_payload("USAGE", self._fetch_usage_payload)
+        try:
+            from ..databases.market_dashboard_db import market_dashboard_db
+            from ..databases.market_fundamentals_db import market_fundamentals_db
+            selected = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols()
+            selected = list({(item.get("productType"), item.get("code", "").upper()): item for item in selected}.values())
+            if selected:
+                rows = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, selected))
+                await asyncio.to_thread(market_fundamentals_db.save_quote_snapshots, rows)
+                cache_id = hashlib.sha256(json.dumps(selected, sort_keys=True).encode()).hexdigest()[:20]
+                await asyncio.to_thread(self._write_cached_payload, f"DASHBOARD_QUOTES_V2_{cache_id}", rows, 300)
+        except Exception:
+            logger.exception("Failed to refresh dashboard quote snapshot (non-fatal)")
         portfolio_due = (
             time.monotonic() - self._last_portfolio_refresh
             >= self._portfolio_cache_seconds
@@ -231,6 +242,13 @@ class ShioajiMarketService:
                 await asyncio.to_thread(market_dashboard_db.record_portfolio, payload, fixed_quote.get("symbol"))
             except Exception:
                 logger.exception("Failed to record Taiwan portfolio/dashboard history (non-fatal)")
+        elif key in {"TXF", "QFFR1"}:
+            try:
+                from ..databases.market_fundamentals_db import market_fundamentals_db
+                await asyncio.to_thread(market_fundamentals_db.save_quote_snapshots,
+                    [{**payload, "productType": "futures", "symbol": key}])
+            except Exception:
+                logger.exception("Failed to persist fixed futures quote snapshot: %s", key)
         try:
             await asyncio.to_thread(self._write_cached_payload, key, payload)
         except redis.RedisError:
