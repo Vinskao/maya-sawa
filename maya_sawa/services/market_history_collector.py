@@ -528,7 +528,10 @@ class MarketHistoryCollector:
             code = str(item.get("code") or "").strip().upper()
             month = str(item.get("deliveryMonth") or "").replace("/", "").strip()
             suffix = re.search(r"([FGHJKMNQUVXZ])(\d)$", code)
-            root = code[:-2] if suffix else re.match(r"^([A-Z]+)", code).group(1) if re.match(r"^([A-Z]+)", code) else ""
+            # Shioaji's continuous TAIEX future is TXF; TAIFEX's daily CSV
+            # identifies the same contract root as TX.
+            root = ("TX" if code == "TXF" else code[:-2] if suffix else
+                    re.match(r"^([A-Z]+)", code).group(1) if re.match(r"^([A-Z]+)", code) else "")
             if not month and suffix:
                 month_number = {"F": "01", "G": "02", "H": "03", "J": "04", "K": "05", "M": "06",
                                 "N": "07", "Q": "08", "U": "09", "V": "10", "X": "11", "Z": "12"}[suffix.group(1)]
@@ -583,7 +586,7 @@ class MarketHistoryCollector:
             groups: dict[str, list[str]] = {}
             for code in institutional_targets:
                 root = selected[code]["root"]
-                commodity = "STF" if root in {"QFF", "STF"} else root
+                commodity = "STF" if root in {"QFF", "STF"} else "TXF" if code == "TXF" else root
                 groups.setdefault(commodity, []).append(code)
             for commodity, target_codes in groups.items():
                 form = urllib.parse.urlencode({"queryStartDate": trading_date.strftime("%Y/%m/%d"),
