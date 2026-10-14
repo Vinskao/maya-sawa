@@ -88,7 +88,7 @@ class MarketHistoryDatabase:
                 })
                 coverage_status, count = "ok", 1
             else:
-                coverage_status, count = status, 0
+                coverage_status, count = ("no_data" if status == "ok" else status), 0
             coverages.append({
                 "source_key": source_key, "code": code, "trading_date": trading_date,
                 "status": coverage_status, "record_count": count, "detail": detail,

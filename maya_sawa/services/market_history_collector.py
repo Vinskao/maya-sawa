@@ -106,7 +106,11 @@ def parse_twse_margin(payload: dict[str, Any]) -> list[dict[str, Any]]:
 def parse_twse_borrow_short(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """TWSE TWT93U publishes short-sale and borrowed-stock-sale balances in shares."""
     table = next((item for item in payload.get("tables") or []
-                  if {"代號", "名稱", "今日餘額"}.issubset(item.get("fields") or [])), None)
+                  if {"代號", "名稱", "今日餘額", "當日餘額"}.issubset(item.get("fields") or [])), None)
+    # TWT93U returns its fields/data at the JSON root, unlike MI_MARGN's
+    # nested tables. Accept the published shape so valid rows are not lost.
+    if table is None and {"代號", "名稱", "今日餘額", "當日餘額"}.issubset(payload.get("fields") or []):
+        table = payload
     if not table:
         return []
     fields = table.get("fields") or []
@@ -501,9 +505,15 @@ class MarketHistoryCollector:
         # This keeps a long backfill from repeatedly serving recent dates while
         # older history (and weekly ownership) never reaches the front of queue.
         for source_key in sources:
+            source_covered = covered
+            if source_key == "twse:borrow-short":
+                # Recheck prior no_data rows after parser/source corrections;
+                # TWT93U's root-level JSON payload used to be misparsed.
+                source_covered = market_history_db.covered_codes(
+                    [source_key], codes, dates, retry_no_data=True)
             for trading_date in ordered_dates:
                 refresh_recent = (today - trading_date).days <= 3
-                if not refresh_recent and all((source_key, code, trading_date) in covered for code in codes):
+                if not refresh_recent and all((source_key, code, trading_date) in source_covered for code in codes):
                     continue
                 self._collect_source_day(source_key, trading_date, codes)
                 if self._request_delay:
