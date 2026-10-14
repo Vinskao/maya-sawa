@@ -4,6 +4,7 @@ import hashlib
 import logging
 import os
 import platform
+import re
 import time
 from datetime import date, datetime, timezone
 from typing import Any
@@ -89,6 +90,22 @@ class ReadOnlyShioajiClient:
 
     def logout(self) -> Any:
         return self._api.logout()
+
+
+_WARRANT_CODE = re.compile(r"(0[3-9]|7[0-3])\d{3}[0-9A-Z]")
+_WARRANT_NAME = re.compile(r"[購售]\d")
+
+
+def _is_warrant(code: str, name: str) -> bool:
+    # ETFs also use six-character codes but start with "00", so they never match the ranges above.
+    return bool(_WARRANT_CODE.fullmatch(code.upper())) or bool(_WARRANT_NAME.search(name))
+
+
+def _stock_search_rank(row: dict[str, str], term: str) -> tuple:
+    """Exact code/name first, then common stocks (4-digit codes), then names starting with the term, then ETFs."""
+    code, name = row["code"].casefold(), row["name"].casefold()
+    return (code != term and name != term, not (len(code) == 4 and code.isdigit()),
+            not name.startswith(term), len(name), code)
 
 
 class ShioajiMarketService:
@@ -391,8 +408,9 @@ class ShioajiMarketService:
                 code, name = str(getattr(contract, "code", "")), str(getattr(contract, "name", ""))
                 security_type = getattr(contract, "security_type", "")
                 security_type = str(getattr(security_type, "value", security_type) or "").upper()
-                # Shioaji identifies warrants by the documented security_type.
-                if security_type == "WRT":
+                # Shioaji lists warrants under Stocks with security_type STK, so also match the TWSE/TPEx
+                # warrant code ranges (listed 03xxxx–09xxxx, OTC 70xxxx–73xxxx) and 購/售 names.
+                if security_type == "WRT" or _is_warrant(code, name):
                     continue
                 if term in code.casefold() or term in name.casefold():
                     stock_results.append({"code": code, "name": name, "productType": "stock"})
@@ -420,13 +438,14 @@ class ShioajiMarketService:
                     **({"underlyingCode": underlying_code}
                        if underlying_code else {})})
         key = lambda row: (row["code"], row["productType"])
+        stock_results.sort(key=lambda row: _stock_search_rank(row, term))
         if product_type == "stock":
-            return sorted(stock_results, key=key)[:20]
+            return stock_results[:20]
         if product_type == "futures":
             return sorted(futures_results, key=key)[:20]
         # Keep useful coverage of both product classes for an unfiltered
         # search. Futures keep their own 10 slots even with many stock matches.
-        return sorted(stock_results, key=key)[:10] + sorted(futures_results, key=key)[:10]
+        return stock_results[:10] + sorted(futures_results, key=key)[:10]
 
     @staticmethod
     def _snapshot_payload_from_snapshot(contract: Any, snapshot: Any) -> dict[str, Any]:

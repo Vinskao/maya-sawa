@@ -37,3 +37,26 @@ def test_summary_reports_streaks_holder_shifts_and_no_account_values():
     assert "外資買賣超" in markdown and "毛利率" in markdown
     assert "成本" in markdown  # only in the privacy disclaimer line
     assert "quantity" not in markdown.lower()
+
+
+def test_brief_follows_the_live_selection_and_maps_futures_to_their_stock(monkeypatch):
+    from maya_sawa.services import market_brief
+
+    selection = {"custom": [{"code": "2337", "name": "旺宏", "productType": "stock"}]}
+    monkeypatch.setattr(market_brief.market_dashboard_db, "latest_auto", lambda: {
+        "snapshotAt": "2026-10-14", "positions": [{"code": "QFFJ6", "name": "小型台積電期貨", "productType": "futures"}]})
+    monkeypatch.setattr(market_brief.market_dashboard_db, "custom_symbols", lambda: selection["custom"])
+    monkeypatch.setattr(market_brief.market_fundamentals_db, "quote_snapshots", lambda instruments: [
+        {"productType": "futures", "symbol": "QFFJ6", "underlyingCode": "2330"}])
+    monkeypatch.setattr(market_brief.market_history_db, "history", lambda *a, **k: {"points": []})
+    monkeypatch.setattr(market_brief.MarketFundamentalsService, "_finmind_history", staticmethod(lambda code: {}))
+
+    brief = market_brief.build_brief()
+    assert set(brief["stocks"]) == {"2330", "2337"}
+    assert brief["stocks"]["2330"]["via"] == [{"code": "QFFJ6", "productType": "futures", "group": "automatic"}]
+
+    before = market_brief.selection_fingerprint(market_brief.current_selection()[1])
+    selection["custom"] = []  # user removes 旺宏
+    after = market_brief.selection_fingerprint(market_brief.current_selection()[1])
+    assert before != after
+    assert set(market_brief.build_brief()["stocks"]) == {"2330"}

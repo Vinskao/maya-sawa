@@ -14,6 +14,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ..databases.market_dashboard_db import market_dashboard_db
+from ..databases.market_fundamentals_db import market_fundamentals_db
 from ..databases.market_history_db import market_history_db
 from .market_fundamentals import MarketFundamentalsService, build_fundamental_metrics
 
@@ -140,7 +141,8 @@ def _spot_code(item: dict) -> str | None:
     return code if code.isdigit() and len(code) == 4 else None
 
 
-def build_brief() -> dict[str, Any]:
+def current_selection() -> tuple[dict[str, Any], list[dict]]:
+    """The dashboard's live list (latest holdings snapshot + custom picks); cheap enough to read per request."""
     auto = market_dashboard_db.latest_auto()
     instruments, seen = [], set()
     for group, rows in (("automatic", auto.get("positions", [])), ("custom", market_dashboard_db.custom_symbols())):
@@ -149,6 +151,22 @@ def build_brief() -> dict[str, Any]:
             if key not in seen:
                 seen.add(key)
                 instruments.append({**item, "group": group})
+    # Positions do not store the futures' underlying stock; the persisted dashboard quotes do.
+    quotes = {(q.get("productType"), str(q.get("symbol", "")).upper()): q
+              for q in market_fundamentals_db.quote_snapshots(instruments)}
+    for item in instruments:
+        quote = quotes.get((item.get("productType"), str(item.get("code", "")).upper())) or {}
+        if not item.get("underlyingCode") and quote.get("underlyingCode"):
+            item["underlyingCode"] = quote["underlyingCode"]
+    return auto, instruments
+
+
+def selection_fingerprint(instruments: list[dict]) -> tuple:
+    return tuple(sorted((i["group"], i.get("productType"), str(i.get("code", "")).upper(), _spot_code(i) or "") for i in instruments))
+
+
+def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None) -> dict[str, Any]:
+    auto, instruments = selection or current_selection()
     today = datetime.now(TZ).date()
     stocks: dict[str, dict] = {}
     for item in instruments:
@@ -161,6 +179,10 @@ def build_brief() -> dict[str, Any]:
                                               sources=[*HOLDING, TDCC])["points"]
         metrics = build_fundamental_metrics([], [], MarketFundamentalsService._finmind_history(code))
         stocks[code] = summarize_stock(code, daily, ownership, metrics)
+    for item in instruments:
+        code = _spot_code(item)
+        if code in stocks:
+            stocks[code].setdefault("via", []).append({"code": item.get("code"), "productType": item.get("productType"), "group": item["group"]})
     return {
         "generatedAt": datetime.now(TZ).isoformat(timespec="seconds"),
         "holdingsSnapshotAt": auto.get("snapshotAt"),
@@ -191,7 +213,8 @@ def brief_markdown(brief: dict) -> str:
         lines.append(f"- {item['code']} {item.get('name') or ''} · {item['productType']} · {'自動前五大' if item['group'] == 'automatic' else '自選'}{spot}")
     for code, s in brief["stocks"].items():
         name = names.get(code, {}).get("name") or ""
-        lines += ["", f"## {code} {name}".rstrip(), "", f"資料日：{s.get('asOf') or '—'}", ""]
+        via = "、".join(f"{'持有' if v['group'] == 'automatic' else '自選'}{' ' + str(v['code']) + ' 期貨' if v['productType'] == 'futures' else ''}" for v in s.get("via", []))
+        lines += ["", f"## {code} {name}".rstrip(), "", f"來源：{via or '—'} · 資料日：{s.get('asOf') or '—'}", ""]
         if s.get("signals"):
             lines += ["重點：" + "；".join(s["signals"]), ""]
         lines += ["| 指標 | 數值 |", "|---|---|"]
@@ -201,7 +224,13 @@ def brief_markdown(brief: dict) -> str:
         for key, label in (("foreign", "外資"), ("trust", "投信"), ("dealer", "自營商")):
             flow = (s.get("institutional") or {}).get(key)
             if flow:
-                streak = f"連{'買' if flow['streakDays'] > 0 else '賣'} {abs(flow['streakDays'])} 日" if flow["streakDays"] else "—"
+                days = flow["streakDays"]
+                if abs(days) >= 2:
+                    streak = f"最新連續{'買' if days > 0 else '賣'}超 {abs(days)} 日"
+                elif days:
+                    streak = f"最新一日{'買' if days > 0 else '賣'}超（前一日方向相反）"
+                else:
+                    streak = "最新一日持平"
                 lines.append(f"| {label}買賣超 1日 / 5日 / 20日（張） | {flow['net1dLots']:+,} / {flow['net5dLots']:+,} / {flow['net20dLots']:+,} · {streak} |")
         margin = s.get("margin") or {}
         if margin:
@@ -230,17 +259,27 @@ class MarketBriefService:
     TTL_SECONDS = 300
 
     def __init__(self) -> None:
-        self._cached: tuple[float, dict] | None = None
+        self._cached: tuple[float, tuple, dict] | None = None
         self._lock = asyncio.Lock()
 
+    def invalidate(self) -> None:
+        self._cached = None
+
     async def get(self) -> dict:
-        if self._cached and time.monotonic() - self._cached[0] < self.TTL_SECONDS:
-            return self._cached[1]
+        # Rebuild immediately when the holdings/custom list changes, otherwise reuse for TTL_SECONDS.
+        selection = await asyncio.to_thread(current_selection)
+        fingerprint = selection_fingerprint(selection[1])
+
+        def fresh() -> bool:
+            return bool(self._cached and self._cached[1] == fingerprint
+                        and time.monotonic() - self._cached[0] < self.TTL_SECONDS)
+        if fresh():
+            return self._cached[2]
         async with self._lock:
-            if self._cached and time.monotonic() - self._cached[0] < self.TTL_SECONDS:
-                return self._cached[1]
-            brief = await asyncio.to_thread(build_brief)
-            self._cached = (time.monotonic(), brief)
+            if fresh():
+                return self._cached[2]
+            brief = await asyncio.to_thread(build_brief, selection)
+            self._cached = (time.monotonic(), fingerprint, brief)
             return brief
 
 
