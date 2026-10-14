@@ -26,8 +26,9 @@ def test_summary_reports_streaks_holder_shifts_and_no_account_values():
     assert s["institutional"]["foreign"]["net5dLots"] == 15
     assert s["tdcc"]["largeHolderChange1wPp"] == 0.5
     assert s["tdcc"]["retailChange1wPp"] == -0.1
-    assert "外資連續 5 日買超" in s["signals"]
-    assert "400 張以上大戶持股週增 0.50 pp" in s["signals"]
+    assert "外資連續 5 日買超" in [signal["zh"] for signal in s["signals"]]
+    assert "Foreign investors net bought 5 days in a row" in [signal["en"] for signal in s["signals"]]
+    assert "400 張以上大戶持股週增 0.50 pp" in [signal["zh"] for signal in s["signals"]]
 
     markdown = brief_markdown({"generatedAt": "2026-10-14T08:00:00+08:00", "holdingsSnapshotAt": None,
                                "instruments": [{"code": "2330", "name": "台積電", "productType": "stock",
@@ -54,6 +55,7 @@ def test_brief_follows_the_live_selection_and_maps_futures_to_their_stock(monkey
     brief = market_brief.build_brief()
     assert set(brief["stocks"]) == {"2330", "2337"}
     assert brief["stocks"]["2330"]["via"] == [{"code": "QFFJ6", "productType": "futures", "group": "automatic"}]
+    assert brief["stocks"]["2337"]["name"] == "旺宏"
 
     before = market_brief.selection_fingerprint(market_brief.current_selection()[1])
     selection["custom"] = []  # user removes 旺宏
@@ -83,3 +85,54 @@ def test_futures_holding_gets_fundamentals_from_official_cache_and_queues_finmin
     assert fundamentals["latestQuarter"]["grossMargin"] == 25.0
     assert brief["collecting"] == {"history": ["3017"], "fundamentals": ["3017"]}
     assert "3017 的部分歷史資料仍在背景蒐集中" in market_brief.brief_markdown(brief)
+
+
+def test_release_window_looks_back_to_the_previous_weekday():
+    from datetime import datetime
+    from maya_sawa.services.market_brief import TZ, release_window_start
+    assert release_window_start(datetime(2026, 10, 15, 8, tzinfo=TZ)).isoformat() == "2026-10-14"  # Thu -> Wed
+    assert release_window_start(datetime(2026, 10, 19, 8, tzinfo=TZ)).isoformat() == "2026-10-16"  # Mon -> Fri
+
+
+def test_recent_releases_flag_new_revenue_statements_and_tdcc_week(monkeypatch):
+    from datetime import date
+    from maya_sawa.services import market_brief
+    monkeypatch.setattr(market_brief.market_fundamentals_db, "releases_seen_since", lambda code, since: [
+        {"dataset": "TaiwanStockFinancialStatements", "period": "2026-09-30", "firstSeenAt": "2026-10-14T03:00:00+00:00"}])
+    metrics = {"monthly": [{"period": "2026-08", "publishedAt": "2026-09-10"}, {"period": "2026-09", "publishedAt": "2026-10-14"}]}
+    ownership = [_week("2026-10-09", 80.0, 3.0)]
+    releases = market_brief.recent_releases("2330", metrics, ownership, date(2026, 10, 14), date(2026, 10, 15))
+    labels = [(r["label"]["zh"], r["period"], r["basis"]) for r in releases]
+    assert ("月營收", "2026-09", "published") in labels
+    assert ("季財報（損益表）", "2026Q3", "firstSeen") in labels
+    assert not any(r["dataset"] == "tdcc" for r in releases)            # 10-09 week is older than the window
+    assert all(r["period"] != "2026-08" for r in releases)
+
+
+def test_finmind_month_revenue_keeps_publication_date():
+    from maya_sawa.services.market_fundamentals import _finmind_records, build_fundamental_metrics
+    records = _finmind_records("TaiwanStockMonthRevenue", [
+        {"revenue_year": 2026, "revenue_month": 9, "revenue": 500, "create_time": "2026-10-08"}])
+    assert {"period": "2026-09", "item": "publishedAt", "value": "2026-10-08", "unit": ""} in records
+    month = build_fundamental_metrics([], [], {"TaiwanStockMonthRevenue": records})["monthly"][-1]
+    assert month["publishedAt"] == "2026-10-08"
+
+
+def test_markdown_is_available_in_english():
+    from maya_sawa.services.market_brief import brief_markdown
+    brief = {"generatedAt": "2026-10-15T08:00:00+08:00", "holdingsSnapshotAt": None,
+             "instruments": [{"code": "QFFJ6", "name": "小型台積電期貨", "productType": "futures", "group": "automatic", "spotCode": "2330"}],
+             "stocks": {"2330": {"code": "2330", "name": "台積電", "asOf": "2026-10-14", "via": [{"code": "QFFJ6", "productType": "futures", "group": "automatic"}],
+                                 "signals": [{"zh": "外資連續 3 日買超", "en": "Foreign investors net bought 3 days in a row"}],
+                                 "recentReleases": [{"dataset": "TaiwanStockMonthRevenue", "label": {"zh": "月營收", "en": "Monthly revenue"},
+                                                     "period": "2026-09", "date": "2026-10-14", "basis": "published"}]}},
+             "notes": []}
+    english = brief_markdown(brief, "en")
+    assert "Holdings chip summary" in english and "Monthly revenue 2026-09 (10-14 published)" in english
+    assert "Foreign investors net bought 3 days in a row" in english
+    assert "## 2330 台積電" in english  # the stock's own name, not the futures contract's
+    # Only names and the link to the Chinese version stay Chinese.
+    lines = [line for line in english.splitlines() if "中文版" not in line]
+    body = " ".join(lines).replace("小型台積電期貨", "").replace("台積電", "")
+    assert not any(0x4E00 <= ord(ch) <= 0x9FFF for ch in body)
+    assert "月營收 2026-09（10-14 公布）" in brief_markdown(brief)

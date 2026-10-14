@@ -83,11 +83,11 @@ async def get_market_dashboard():
 
 
 @router.get("/dashboard/brief")
-async def get_market_brief(format: str = "json"):
+async def get_market_brief(format: str = "json", lang: str = "zh"):
     """Public agent-readable chip summary of the selected holdings; codes only, never account values."""
     brief = await market_brief_service.get()
     if format == "md":
-        return PlainTextResponse(brief_markdown(brief), media_type="text/markdown; charset=utf-8")
+        return PlainTextResponse(brief_markdown(brief, "en" if lang == "en" else "zh"), media_type="text/markdown; charset=utf-8")
     return brief
 
 

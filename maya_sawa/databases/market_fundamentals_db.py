@@ -59,6 +59,21 @@ class FinMindCheckpoint(Base):
     status = Column(Text, nullable=False)
 
 
+class FundamentalReleaseSeen(Base):
+    """When this site first saw each reported period; stands in for a publication date the sources lack.
+
+    The first collection of a (code, dataset) is a baseline (baseline=1) so existing history is not flagged as new.
+    """
+    __tablename__ = "maya_sawa_fundamental_release_seen"
+    __table_args__ = (UniqueConstraint("dataset", "code", "period", name="uq_fundamental_release_seen"),)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    dataset = Column(Text, nullable=False)
+    code = Column(Text, nullable=False)
+    period = Column(Text, nullable=False)
+    first_seen_at = Column(DateTime(timezone=True), nullable=False)
+    baseline = Column(BigInteger, nullable=False, default=0)
+
+
 class MarketFundamentalsDatabase:
     def __init__(self) -> None:
         self.engine = None
@@ -87,6 +102,25 @@ class MarketFundamentalsDatabase:
             statement = insert(FinMindFundamental).values(values)
             session.execute(statement.on_conflict_do_update(constraint="uq_market_fundamental_identity", set_={key: getattr(statement.excluded, key) for key in ("value", "unit", "source_url", "fetched_at")}))
         return len(values)
+
+    def record_periods_seen(self, dataset: str, code: str, periods: list[str]) -> None:
+        if not self.sessions or not periods:
+            return
+        now = datetime.now(timezone.utc)
+        with self.sessions.begin() as session:
+            baseline = session.query(FundamentalReleaseSeen.id).filter_by(dataset=dataset, code=code.upper()).first() is None
+            values = [{"dataset": dataset, "code": code.upper(), "period": period, "first_seen_at": now,
+                       "baseline": 1 if baseline else 0} for period in sorted(set(periods))]
+            session.execute(insert(FundamentalReleaseSeen).values(values).on_conflict_do_nothing(constraint="uq_fundamental_release_seen"))
+
+    def releases_seen_since(self, code: str, since: datetime) -> list[dict]:
+        if not self.sessions:
+            return []
+        with self.sessions() as session:
+            rows = session.query(FundamentalReleaseSeen).filter(
+                FundamentalReleaseSeen.code == code.upper(), FundamentalReleaseSeen.baseline == 0,
+                FundamentalReleaseSeen.first_seen_at >= since).all()
+        return [{"dataset": row.dataset, "period": row.period, "firstSeenAt": row.first_seen_at.isoformat()} for row in rows]
 
     def claim_finmind_slot(self, dataset: str, code: str, hourly_limit: int = 120, min_gap_seconds: int = 30) -> int | None:
         """DB serialized account-wide throttle; retain 480 of the free 600 calls."""

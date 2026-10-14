@@ -300,6 +300,7 @@ class MarketFundamentalsService:
                     raise RuntimeError(f"FinMind status {payload.get('status')}")
                 records = _finmind_records(dataset, payload.get("data") or [])
                 market_fundamentals_db.replace_dataset(dataset, code, records, "https://api.finmindtrade.com/api/v4/data")
+                market_fundamentals_db.record_periods_seen(dataset, code, [row["period"] for row in records])
                 market_fundamentals_db.record_finmind_result(reservation_id, "success", f"rows={len(records)}")
             except urllib.error.HTTPError as exc:
                 market_fundamentals_db.record_finmind_result(reservation_id, "error", f"HTTP {exc.code}")
@@ -319,9 +320,16 @@ FINMIND_GAP_SECONDS = 12  # anonymous FinMind allows ~300 calls/hour
 def _finmind_records(dataset: str, raw_rows: list[dict]) -> list[dict]:
     if dataset == "TaiwanStockMonthRevenue":
         # `date` is the publication month; revenue_year/revenue_month name the month the revenue belongs to.
-        return [{"period": f"{int(row['revenue_year']):04d}-{int(row['revenue_month']):02d}", "item": "revenue",
-                 "value": row.get("revenue"), "unit": "新台幣元"}
-                for row in raw_rows if row.get("revenue_year") and row.get("revenue_month")]
+        # create_time is the day the company published that month's revenue (kept as a non-numeric item).
+        records = []
+        for row in raw_rows:
+            if not (row.get("revenue_year") and row.get("revenue_month")):
+                continue
+            period = f"{int(row['revenue_year']):04d}-{int(row['revenue_month']):02d}"
+            records.append({"period": period, "item": "revenue", "value": row.get("revenue"), "unit": "新台幣元"})
+            if row.get("create_time"):
+                records.append({"period": period, "item": "publishedAt", "value": str(row["create_time"])[:10], "unit": ""})
+        return records
     return [{"period": str(row.get("date", "")), "item": str(row.get("type", "")), "value": row.get("value"),
              "unit": str(row.get("unit", "新台幣元"))} for row in raw_rows if row.get("date") and row.get("type")]
 
@@ -388,6 +396,8 @@ def build_fundamental_metrics(monthly_official: list[dict], income_official: lis
     for period, row in official_month.items():
         if row.get("revenue") is not None:
             revenue.setdefault(period, row["revenue"] * 1000)  # official feed is NT$ thousands
+    published = {str(row.get("period")): str(row.get("value")) for row in history.get("TaiwanStockMonthRevenue", [])
+                 if row.get("item") == "publishedAt" and row.get("value")}
     monthly = []
     for period in sorted(revenue)[-24:]:
         official = official_month.get(period, {})
@@ -399,6 +409,7 @@ def build_fundamental_metrics(monthly_official: list[dict], income_official: lis
             "yoyPercent": official["yoyPercent"] if official.get("yoyPercent") is not None else _growth(revenue[period], revenue.get(_shift_month(period, 12))),
             "momPercent": official["momPercent"] if official.get("momPercent") is not None else _growth(revenue[period], revenue.get(_shift_month(period, 1))),
             "ytdYoyPercent": _growth(sum(ytd), sum(ytd_prior)) if None not in ytd and None not in ytd_prior else None,
+            "publishedAt": published.get(period),
         })
 
     income = _pivot(history.get("TaiwanStockFinancialStatements", []))
