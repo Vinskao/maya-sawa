@@ -55,6 +55,27 @@ def _dict_rows(payload: dict[str, Any], fields_alias: dict[str, str]) -> list[di
     return result
 
 
+def _download_taifex_csv(request: urllib.request.Request, *, required_fields: set[str],
+                         timeout: float = 45, attempts: int = 3) -> str:
+    """Download a TAIFEX CSV, retry transient throttling/timeouts, and reject alert HTML."""
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                document = response.read().decode("cp950", errors="replace")
+            headers = set(next(csv.reader(io.StringIO(document)), []))
+            if not required_fields.issubset(headers):
+                raise ValueError("TAIFEX endpoint returned a non-CSV response")
+            return document
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError,
+                UnicodeError, ValueError) as exc:
+            last_error = exc
+            if attempt + 1 >= attempts:
+                raise
+            time.sleep(min(2 ** attempt, 8))
+    raise last_error or ValueError("TAIFEX CSV download failed")
+
+
 def parse_twse_daily_price(payload: dict[str, Any]) -> list[dict[str, Any]]:
     for table in payload.get("tables") or []:
         fields = table.get("fields") or []
@@ -196,8 +217,12 @@ def parse_tpex_foreign_holding(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def parse_taifex_futures_institutional_csv(document: str, trading_date: date) -> list[dict[str, Any]]:
     """Parse TAIFEX product-category futures institutional positions CSV."""
+    reader = csv.DictReader(io.StringIO(document))
+    required = {"日期", "身份別", "多方交易口數"}
+    if not reader.fieldnames or not required.issubset(reader.fieldnames):
+        raise ValueError("TAIFEX institutional endpoint returned a non-CSV response")
     rows = []
-    for raw in csv.DictReader(io.StringIO(document)):
+    for raw in reader:
         if _normalize_date(raw.get("日期")) != trading_date:
             continue
         participant = str(raw.get("身份別") or "").strip()
@@ -229,6 +254,9 @@ def parse_taifex_daily_futures_csv(document: str, selected_contracts: dict[str, 
                                   trading_date: date) -> list[dict[str, Any]]:
     """Parse TAIFEX Big5 daily CSV, keeping regular-session rows only."""
     reader = csv.DictReader(io.StringIO(document))
+    required = {"交易日期", "契約", "到期月份(週別)", "交易時段"}
+    if not reader.fieldnames or not required.issubset(reader.fieldnames):
+        raise ValueError("TAIFEX daily endpoint returned a non-CSV response")
     rows = []
     for raw in reader:
         raw_date = _normalize_date(raw.get("交易日期"))
@@ -569,8 +597,8 @@ class MarketHistoryCollector:
                 request = urllib.request.Request(price_url, data=form, headers={"Content-Type": "application/x-www-form-urlencoded",
                     "User-Agent": "TY-Multiverse-MarketDashboard/1.0"})
                 try:
-                    with urllib.request.urlopen(request, timeout=25) as response:
-                        document = response.read().decode("cp950", errors="replace")
+                    document = _download_taifex_csv(request, required_fields={
+                        "交易日期", "契約", "到期月份(週別)", "交易時段"}, timeout=25)
                     rows = parse_taifex_daily_futures_csv(document,
                         {code: date_contracts[code] for code in target_codes}, trading_date)
                     market_history_db.write_source_day(source, trading_date, "futures", rows, target_codes,
@@ -581,38 +609,61 @@ class MarketHistoryCollector:
                     logger.warning("TAIFEX history source failed: %s %s: %s", root, trading_date, exc)
                     market_history_db.write_source_day(source, trading_date, "futures", [], target_codes,
                         status="error", detail=str(exc)[:300], source_url=price_url, unit="points / contracts")
-                if self._request_delay:
-                    time.sleep(self._request_delay)
-            groups: dict[str, list[str]] = {}
-            for code in institutional_targets:
+                time.sleep(max(self._request_delay, 0.5))
+        # The official endpoint accepts a date range and returns all daily
+        # category rows. Fetch once per commodity instead of once per day; this
+        # avoids TAIFEX rate limits during a 92-day startup backfill.
+        institutional_by_date: dict[date, list[str]] = {}
+        commodity_by_code: dict[str, str] = {}
+        for trading_date in sorted(dates):
+            refresh_recent = (latest - trading_date).days <= 3
+            for code in selected:
+                if not refresh_recent and (institutional_source, code, trading_date) in covered:
+                    continue
                 root = selected[code]["root"]
                 commodity = "STF" if root in {"QFF", "STF"} else "TXF" if code == "TXF" else root
-                groups.setdefault(commodity, []).append(code)
-            for commodity, target_codes in groups.items():
-                form = urllib.parse.urlencode({"queryStartDate": trading_date.strftime("%Y/%m/%d"),
-                                               "queryEndDate": trading_date.strftime("%Y/%m/%d"),
-                                               "commodityId": commodity}).encode()
-                request = urllib.request.Request(institutional_url, data=form, headers={
-                    "Content-Type": "application/x-www-form-urlencoded", "Referer": "https://www.taifex.com.tw/cht/3/futContractsDateView",
-                    "User-Agent": "TY-Multiverse-MarketDashboard/1.0"})
-                try:
-                    with urllib.request.urlopen(request, timeout=25) as response:
-                        document = response.read().decode("cp950", errors="replace")
+                commodity_by_code[code] = commodity
+                institutional_by_date.setdefault(trading_date, []).append(code)
+        for commodity in sorted(set(commodity_by_code.values())):
+            commodity_codes = [code for code, value in commodity_by_code.items() if value == commodity]
+            commodity_dates = [trading_date for trading_date, codes in institutional_by_date.items()
+                               if any(code in commodity_codes for code in codes)]
+            if not commodity_dates:
+                continue
+            form = urllib.parse.urlencode({
+                "queryStartDate": min(commodity_dates).strftime("%Y/%m/%d"),
+                "queryEndDate": max(commodity_dates).strftime("%Y/%m/%d"),
+                "commodityId": commodity,
+            }).encode()
+            request = urllib.request.Request(institutional_url, data=form, headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": "https://www.taifex.com.tw/cht/3/futContractsDateView",
+                "User-Agent": "TY-Multiverse-MarketDashboard/1.0"})
+            try:
+                document = _download_taifex_csv(request, required_fields={"日期", "身份別", "多方交易口數"})
+                for trading_date in sorted(commodity_dates):
+                    target_codes = [code for code in institutional_by_date[trading_date]
+                                    if commodity_by_code.get(code) == commodity]
                     aggregate = parse_taifex_futures_institutional_csv(document, trading_date)
                     rows = [{"code": code, "name": selected[code]["name"], "values": aggregate[0]["values"]}
                             for code in target_codes] if aggregate else []
                     category = "股票期貨商品彙總" if commodity == "STF" else f"{commodity}商品彙總"
-                    market_history_db.write_source_day(institutional_source, trading_date, "futures", rows, target_codes,
-                        status="ok" if rows else "no_data", detail=f"{category}; not specific-contract positions",
-                        source_url=institutional_url, unit="contracts / TWD thousands")
-                except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError,
-                        UnicodeError, ValueError) as exc:
-                    logger.warning("TAIFEX futures institutional history failed: %s %s: %s", commodity, trading_date, exc)
-                    market_history_db.write_source_day(institutional_source, trading_date, "futures", [], target_codes,
-                        status="error", detail=str(exc)[:300], source_url=institutional_url,
+                    market_history_db.write_source_day(institutional_source, trading_date, "futures", rows,
+                        target_codes, status="ok" if rows else "no_data",
+                        detail=f"{category}; not specific-contract positions", source_url=institutional_url,
                         unit="contracts / TWD thousands")
-                if self._request_delay:
-                    time.sleep(self._request_delay)
+            except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError,
+                    UnicodeError, ValueError) as exc:
+                logger.warning("TAIFEX futures institutional history failed: %s %s–%s: %s", commodity,
+                               min(commodity_dates), max(commodity_dates), exc)
+                for trading_date in commodity_dates:
+                    target_codes = [code for code in institutional_by_date[trading_date]
+                                    if commodity_by_code.get(code) == commodity]
+                    market_history_db.write_source_day(institutional_source, trading_date, "futures", [],
+                        target_codes, status="error", detail=str(exc)[:300], source_url=institutional_url,
+                        unit="contracts / TWD thousands")
+            if self._request_delay:
+                time.sleep(self._request_delay)
 
     def _collect_source_day(self, source_key: str, trading_date: date, codes: list[str]) -> None:
         product_type, template, unit = self.SOURCE_CONFIG[source_key]

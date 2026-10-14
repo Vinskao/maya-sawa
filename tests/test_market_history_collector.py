@@ -1,4 +1,9 @@
 from datetime import date
+from io import BytesIO
+import csv
+import urllib.parse
+
+import pytest
 
 from maya_sawa.services.market_history_collector import (
     MarketHistoryCollector,
@@ -217,6 +222,76 @@ def test_taifex_futures_institutional_csv_maps_category_totals_and_participants(
     assert result[0]["values"]["foreign_net_open_interest"] == -82806
     assert result[0]["values"]["trust_net_trade_contracts"] == 509
     assert result[0]["values"]["dealer_net_trade_contracts"] == 667
+
+
+def test_taifex_parsers_reject_html_error_pages():
+    from maya_sawa.services.market_history_collector import (
+        parse_taifex_daily_futures_csv,
+        parse_taifex_futures_institutional_csv,
+    )
+
+    with pytest.raises(ValueError, match="non-CSV"):
+        parse_taifex_daily_futures_csv("<html>rate limited</html>", {}, date(2026, 10, 12))
+    with pytest.raises(ValueError, match="non-CSV"):
+        parse_taifex_futures_institutional_csv("<html>rate limited</html>", date(2026, 10, 12))
+
+
+def test_taifex_institutional_history_downloads_one_date_range_per_category(monkeypatch):
+    from maya_sawa.services import market_history_collector as module
+
+    class FakeHistoryDB:
+        sessions = True
+
+        def __init__(self):
+            self.writes = []
+
+        def covered_codes(self, *args, **kwargs):
+            return set()
+
+        def write_source_day(self, source, trading_date, product_type, rows, codes, **kwargs):
+            self.writes.append((source, trading_date, tuple(codes), kwargs["status"], len(rows)))
+
+    fake_db = FakeHistoryDB()
+    monkeypatch.setattr(module, "market_history_db", fake_db)
+    monkeypatch.setattr(module.market_history_collector, "_request_delay", 0)
+    institutional_requests = []
+    daily_header = "交易日期,契約,到期月份(週別),開盤價,最高價,最低價,收盤價,漲跌價,漲跌%,成交量,結算價,未沖銷契約數,交易時段"
+    institutional_header = "日期,商品名稱,身份別,多方交易口數,多方交易契約金額(千元),空方交易口數,空方交易契約金額(千元),多空交易口數淨額,多空交易契約金額淨額(千元),多方未平倉口數,多方未平倉契約金額(千元),空方未平倉口數,空方未平倉契約金額(千元),多空未平倉口數淨額,多空未平倉契約金額淨額(千元)"
+
+    def fake_urlopen(request, timeout):
+        data = urllib.parse.parse_qs(request.data.decode())
+        if request.full_url.endswith("futDataDown"):
+            trading_date = date.fromisoformat(data["queryStartDate"][0].replace("/", "-"))
+            root = data["commodity_id2"][0]
+            month = module._taifex_front_month(trading_date) if root == "TX" else "202610"
+            content = f"{daily_header}\n{trading_date:%Y/%m/%d},{root},{month},1,2,1,2,1,1%,10,2,100,一般"
+            return BytesIO(content.encode("cp950"))
+
+        commodity = data["commodityId"][0]
+        start = date.fromisoformat(data["queryStartDate"][0].replace("/", "-"))
+        end = date.fromisoformat(data["queryEndDate"][0].replace("/", "-"))
+        institutional_requests.append((commodity, start, end))
+        rows = []
+        day = start
+        while day <= end:
+            if day.weekday() < 5:
+                for role in ("自營商", "投信", "外資及陸資"):
+                    rows.append(f"{day:%Y/%m/%d},商品,{role},1,2,1,2,0,0,1,2,1,2,0,0")
+            day += module.timedelta(days=1)
+        return BytesIO((institutional_header + "\n" + "\n".join(rows)).encode("cp950"))
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", fake_urlopen)
+    module.market_history_collector.collect_futures_codes([
+        {"code": "TXF", "name": "TAIEX Futures"},
+        {"code": "QFFJ6", "name": "Mini TSMC Futures", "deliveryMonth": "202610"},
+    ], days=5)
+
+    assert {item[0] for item in institutional_requests} == {"TXF", "STF"}
+    assert len(institutional_requests) == 2
+    assert all(item[2] - item[1] <= module.timedelta(days=4) for item in institutional_requests)
+    institutional_writes = [item for item in fake_db.writes if item[0] == "taifex:futures-institutional"]
+    assert institutional_writes
+    assert all(item[3] == "ok" and item[4] == len(item[2]) for item in institutional_writes)
 
 
 def test_tdcc_history_refreshes_token_for_each_stock_post(monkeypatch):
