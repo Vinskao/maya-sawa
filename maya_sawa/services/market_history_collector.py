@@ -613,6 +613,8 @@ class MarketHistoryCollector:
             weeks = sorted(value for value in available_dates if lower <= value <= upper)
             for raw_date in weeks:
                 week_date = datetime.strptime(raw_date, "%Y%m%d").date()
+                # Retry no_data/error coverage as well: it can reflect a
+                # transient source response or a parser fix, not a final result.
                 missing_codes = [code for code in codes
                                  if (source_key, code, week_date) not in covered]
                 if not missing_codes:

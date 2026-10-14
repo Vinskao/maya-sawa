@@ -160,6 +160,9 @@ class MarketHistoryDatabase:
                 MarketHistoryCoverage.source_key.in_(source_keys),
                 MarketHistoryCoverage.code.in_([code.upper() for code in codes]),
                 MarketHistoryCoverage.trading_date.in_(trading_dates),
+                # A prior no_data is not proof of permanent absence. Public
+                # sources can publish later or a parser can be corrected.
+                MarketHistoryCoverage.status == "ok",
             ).all()
         return {(row[0], row[1], row[2]) for row in rows}
 
