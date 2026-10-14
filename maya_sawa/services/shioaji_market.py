@@ -130,7 +130,7 @@ class ShioajiMarketService:
     async def get_dashboard_quotes(self, instruments: list[dict[str, str]]) -> list[dict[str, Any]]:
         """Fetch current quotes for the public, label-only dashboard selection."""
         cache_id = hashlib.sha256(json.dumps(instruments, sort_keys=True).encode()).hexdigest()[:20]
-        cache_key = f"DASHBOARD_QUOTES_{cache_id}"
+        cache_key = f"DASHBOARD_QUOTES_V2_{cache_id}"
         try:
             cached = await asyncio.to_thread(self._read_cached_payload, cache_key)
             if cached is not None:
