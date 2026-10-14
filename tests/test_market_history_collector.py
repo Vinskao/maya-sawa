@@ -145,6 +145,16 @@ def test_tdcc_official_history_page_html_parser_extracts_named_stock_tiers():
     assert parse_tdcc_distribution_html(html, "2317") is None
 
 
+def test_tdcc_parser_handles_real_nested_overview_divs():
+    # The official page nests wrapper divs between .securities-overview and
+    # its table. Keep this shape covered so production history parsing cannot
+    # silently return no rows after a successful POST.
+    html = '''<div>證券代號：2330 證券名稱：台積電 資料日期：115年07月09日<div class="table-frame securities-overview"><div class="table-scroll"><table><tr><th>序</th><th>持股級距</th><th>人數</th><th>股數</th><th>比例</th></tr><tr><td>1</td><td>1-999</td><td>10</td><td>500</td><td>0.01</td></tr></table></div></div></div>'''
+    result = parse_tdcc_distribution_html(html, "2330")
+    assert result is not None
+    assert result["values"]["tiers"] == [{"tier": "1-999", "holders": 10, "shares": 500, "percent": 0.01}]
+
+
 def test_tdcc_history_fetch_uses_published_date_and_real_form_response(monkeypatch):
     landing = '''<input name="SYNCHRONIZER_TOKEN" value="token"><input name="firDate" value="20261008">
     <option value="20261008">20261008</option><option value="20260709">20260709</option>'''
@@ -227,6 +237,29 @@ def test_daily_futures_loop_reads_sync_selection_without_awaiting_result(monkeyp
     except asyncio.CancelledError:
         pass
     assert called == [{"code": "TXF", "name": "TAIEX Futures", "productType": "futures"}]
+
+
+
+def test_stock_backfill_finishes_each_source_across_date_range(monkeypatch):
+    from maya_sawa.services import market_history_collector as module
+
+    dates = [date(2026, 10, 9), date(2026, 10, 12)]
+    collector = MarketHistoryCollector()
+    collector._request_delay = 0
+    monkeypatch.setattr(module, "datetime", type("FixedDateTime", (), {
+        "now": staticmethod(lambda tz=None: __import__("datetime").datetime(2026, 10, 13, 20, 0, tzinfo=tz)),
+    }))
+    monkeypatch.setattr(module, "timedelta", __import__("datetime").timedelta)
+    monkeypatch.setattr(module.market_history_db, "covered_codes", lambda *args: set())
+    monkeypatch.setattr(collector, "_collect_source_day", lambda source, day, codes: calls.append((source, day)))
+    monkeypatch.setattr(collector, "_collect_tdcc_history_range", lambda *args: None)
+    calls = []
+    collector._collect_codes_locked(["2330"], 4)
+    assert calls[:3] == [
+        ("twse:daily-price", date(2026, 10, 12)),
+        ("twse:daily-price", date(2026, 10, 13)),
+        ("twse:institutional", date(2026, 10, 12)),
+    ]
 
 
 def test_source_collection_records_incomplete_http_response_for_retry(monkeypatch):

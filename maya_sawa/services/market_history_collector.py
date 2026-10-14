@@ -283,6 +283,8 @@ class _TdccDistributionHtml(HTMLParser):
         attrs_dict = dict(attrs)
         if tag == "div" and "securities-overview" in attrs_dict.get("class", ""):
             self.in_table = True
+        elif self.in_table and tag == "div":
+            self.table_depth += 1
         elif self.in_table and tag == "table":
             self.table_depth += 1
         elif self.in_table and tag == "tr":
@@ -309,8 +311,10 @@ class _TdccDistributionHtml(HTMLParser):
             self.in_row = False
         elif self.in_table and tag == "table":
             self.table_depth -= 1
-        elif self.in_table and tag == "div" and self.table_depth == 0:
-            self.in_table = False
+        elif self.in_table and tag == "div":
+            self.table_depth -= 1
+            if self.table_depth == 0:
+                self.in_table = False
 
 
 def parse_tdcc_distribution_html(document: str, expected_code: str) -> dict[str, Any] | None:
@@ -459,15 +463,15 @@ class MarketHistoryCollector:
         dates = [today - timedelta(days=offset) for offset in range(days)
                  if (today - timedelta(days=offset)).weekday() < 5]
         covered = market_history_db.covered_codes(list(self.SOURCES), codes, dates)
-        for trading_date in sorted(dates):
-            # Re-fetch the most recent few days so official corrections are applied.
-            refresh_recent = (today - trading_date).days <= 3
-            missing = [source for source in self.SOURCES
-                       if source != "tdcc:distribution-history"
-                       and (refresh_recent or any((source, code, trading_date) not in covered for code in codes))]
-            for source_key in missing:
-                if source_key == "tdcc:distribution-history":
-                    self._collect_tdcc_week(trading_date, codes)
+        ordered_dates = sorted(dates)
+        sources = [source for source in self.SOURCES if source != "tdcc:distribution-history"]
+        # Finish one source across the selected dates before moving to the next.
+        # This keeps a long backfill from repeatedly serving recent dates while
+        # older history (and weekly ownership) never reaches the front of queue.
+        for source_key in sources:
+            for trading_date in ordered_dates:
+                refresh_recent = (today - trading_date).days <= 3
+                if not refresh_recent and all((source_key, code, trading_date) in covered for code in codes):
                     continue
                 self._collect_source_day(source_key, trading_date, codes)
                 if self._request_delay:
