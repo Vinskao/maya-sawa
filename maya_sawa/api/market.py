@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 
 from ..core.auth.keycloak import require_authenticated, require_manage_users_request
 from ..core.auth.internal import require_internal_secret
@@ -27,6 +28,7 @@ from ..databases.market_dashboard_db import market_dashboard_db
 from ..databases.market_history_db import market_history_db
 from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
+from ..services.market_brief import brief_markdown, market_brief_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -72,6 +74,15 @@ async def get_market_dashboard():
         "custom": [expose(item) for item in custom_rows],
         "customLimit": 5,
     }
+
+
+@router.get("/dashboard/brief")
+async def get_market_brief(format: str = "json"):
+    """Public agent-readable chip summary of the selected holdings; codes only, never account values."""
+    brief = await market_brief_service.get()
+    if format == "md":
+        return PlainTextResponse(brief_markdown(brief), media_type="text/markdown; charset=utf-8")
+    return brief
 
 
 @router.get("/dashboard/search")
