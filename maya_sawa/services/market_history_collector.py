@@ -412,8 +412,18 @@ class MarketHistoryCollector:
         while True:
             try:
                 selections = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols()
-                await self.collect_codes([item.get("code", "") for item in selections
-                                          if item.get("productType") == "stock"], self._backfill_days)
+                codes = {item.get("code", "").upper() for item in selections
+                         if item.get("productType") == "stock" and item.get("code")}
+                futures = [item for item in selections if item.get("productType") == "futures"]
+                if futures:
+                    try:
+                        quotes = await shioaji_market_service.get_dashboard_quotes(futures)
+                        codes.update(str(item.get("underlyingCode", "")).upper() for item in quotes
+                                     if str(item.get("underlyingCode", "")).isdigit()
+                                     and len(str(item.get("underlyingCode", ""))) == 4)
+                    except Exception as exc:
+                        logger.info("Could not resolve futures underlying stocks for history: %s", exc)
+                await self.collect_codes(sorted(code for code in codes if code), self._backfill_days)
                 now = datetime.now(TAIPEI_TZ)
                 next_run = now.replace(hour=18, minute=20, second=0, microsecond=0)
                 if next_run <= now:

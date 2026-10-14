@@ -156,6 +156,13 @@ class ShioajiMarketService:
     async def get_usage(self) -> dict[str, Any]:
         return await self._get_cached_payload("USAGE")
 
+    @staticmethod
+    def _stock_underlying_code(contract: Any) -> str:
+        kind = getattr(contract, "underlying_kind", "")
+        kind = str(getattr(kind, "value", kind) or "").upper()
+        code = str(getattr(contract, "underlying_code", "") or "").strip()
+        return code if kind == "S" and code.isdigit() and len(code) == 4 else ""
+
     async def _get_cached_payload(self, key: str) -> dict[str, Any]:
         try:
             cached = await asyncio.to_thread(self._read_cached_payload, key)
@@ -387,10 +394,13 @@ class ShioajiMarketService:
                 if canonical_code.upper() in seen:
                     continue
                 seen.add(canonical_code.upper())
+                underlying_code = ShioajiMarketService._stock_underlying_code(canonical_contract)
                 futures_results.append({"code": canonical_code,
                     "name": str(getattr(canonical_contract, "name", "") or name),
                     "productType": "futures",
-                    "deliveryMonth": str(getattr(canonical_contract, "delivery_month", "") or "")})
+                    "deliveryMonth": str(getattr(canonical_contract, "delivery_month", "") or ""),
+                    **({"underlyingCode": underlying_code}
+                       if underlying_code else {})})
         key = lambda row: (row["code"], row["productType"])
         if product_type == "stock":
             return sorted(stock_results, key=key)[:20]
@@ -402,7 +412,7 @@ class ShioajiMarketService:
 
     @staticmethod
     def _snapshot_payload_from_snapshot(contract: Any, snapshot: Any) -> dict[str, Any]:
-        return {
+        payload = {
             "symbol": str(contract.code), "name": str(getattr(contract, "name", "") or ""),
             "deliveryMonth": getattr(contract, "delivery_month", None),
             "close": float(snapshot.close or 0), "open": float(snapshot.open or 0),
@@ -413,6 +423,10 @@ class ShioajiMarketService:
             "timestamp": ShioajiMarketService._format_timestamp(snapshot.ts),
             "fetchedAt": datetime.now(timezone.utc).isoformat(), "source": "Sinopac Shioaji",
         }
+        underlying_code = ShioajiMarketService._stock_underlying_code(contract)
+        if underlying_code:
+            payload["underlyingCode"] = underlying_code
+        return payload
 
     @staticmethod
     def _fetch_usage_payload(api: Any) -> dict[str, Any]:
