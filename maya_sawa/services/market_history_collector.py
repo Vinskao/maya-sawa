@@ -606,7 +606,9 @@ class MarketHistoryCollector:
         if not dates:
             return
         try:
-            opener, token, first_date, available_dates = self._open_tdcc_history(url)
+            # The synchronizer token is bound to a short-lived landing-page
+            # cookie. Refresh the form session for each date/code POST.
+            _, _, _, available_dates = self._open_tdcc_history(url)
             lower, upper = min(dates).strftime("%Y%m%d"), max(dates).strftime("%Y%m%d")
             weeks = sorted(value for value in available_dates if lower <= value <= upper)
             for raw_date in weeks:
@@ -617,6 +619,9 @@ class MarketHistoryCollector:
                     continue
                 for code in missing_codes:
                     try:
+                        opener, token, first_date, current_dates = self._open_tdcc_history(url)
+                        if raw_date not in current_dates:
+                            raise ValueError(f"TDCC date {raw_date} is no longer available")
                         row = self._fetch_tdcc_stock(opener, url, token, first_date, raw_date, code)
                         market_history_db.write_source_day(source_key, week_date, product_type,
                                                            [row] if row else [], [code],

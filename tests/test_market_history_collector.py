@@ -219,6 +219,27 @@ def test_taifex_futures_institutional_csv_maps_category_totals_and_participants(
     assert result[0]["values"]["dealer_net_trade_contracts"] == 667
 
 
+def test_tdcc_history_refreshes_token_for_each_stock_post(monkeypatch):
+    from maya_sawa.services import market_history_collector as module
+
+    sessions = []
+    rows = []
+    def open_history(url):
+        sessions.append(url)
+        return object(), f"token-{len(sessions)}", "20261008", {"20261008"}
+    def fetch_stock(opener, url, token, first_date, selected_date, code):
+        rows.append((token, code))
+        return {"code": code, "name": code, "trading_date": date(2026, 10, 8), "values": {"tiers": []}}
+    monkeypatch.setattr(MarketHistoryCollector, "_open_tdcc_history", staticmethod(open_history))
+    monkeypatch.setattr(MarketHistoryCollector, "_fetch_tdcc_stock", staticmethod(fetch_stock))
+    monkeypatch.setattr(module.market_history_db, "write_source_day", lambda *args, **kwargs: 1)
+    collector = MarketHistoryCollector()
+    collector._request_delay = 0
+    collector._collect_tdcc_history_range(["2330", "2317"], [date(2026, 10, 8)], set())
+    assert len(sessions) == 3  # one date-list request plus a fresh form token per code
+    assert rows == [("token-2", "2330"), ("token-3", "2317")]
+
+
 def test_daily_futures_loop_reads_sync_selection_without_awaiting_result(monkeypatch):
     import asyncio
 
