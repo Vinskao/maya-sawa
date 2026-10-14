@@ -132,6 +132,7 @@ class MarketDashboardDatabase:
                     source="shioaji", snapshot_at=snapshot_at,
                     positions=json.dumps(selected, ensure_ascii=False), created_at=datetime.now(timezone.utc),
                 ).on_conflict_do_nothing(constraint="uq_market_dashboard_snapshot"))
+            self.record_candidates("portfolio-auto", selected)
             return True
         except Exception:
             logger.exception("Failed to persist market dashboard selection")

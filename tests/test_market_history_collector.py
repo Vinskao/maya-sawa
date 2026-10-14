@@ -286,12 +286,13 @@ def test_taifex_institutional_history_downloads_one_date_range_per_category(monk
         {"code": "QFFJ6", "name": "Mini TSMC Futures", "deliveryMonth": "202610"},
     ], days=5)
 
-    assert {item[0] for item in institutional_requests} == {"TXF", "STF"}
-    assert len(institutional_requests) == 2
+    assert {item[0] for item in institutional_requests} == {"TXF"}
+    assert len(institutional_requests) == 1
     assert all(item[2] - item[1] <= module.timedelta(days=4) for item in institutional_requests)
     institutional_writes = [item for item in fake_db.writes if item[0] == "taifex:futures-institutional"]
     assert institutional_writes
-    assert all(item[3] == "ok" and item[4] == len(item[2]) for item in institutional_writes)
+    assert all(item[3] == "ok" and item[4] == len(item[2]) for item in institutional_writes if item[2] == ("TXF",))
+    assert any(item[2] == ("QFFJ6",) and item[3] == "no_data" for item in institutional_writes)
     assert had_errors is False
 
 

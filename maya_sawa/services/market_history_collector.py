@@ -625,7 +625,17 @@ class MarketHistoryCollector:
                 if not refresh_recent and (institutional_source, code, trading_date) in covered:
                     continue
                 root = selected[code]["root"]
-                commodity = "STF" if root in {"QFF", "STF"} else "TXF" if code == "TXF" else root
+                # TAIFEX publishes stock-futures institutions only as a
+                # combined stock-futures product (STF). Do not attribute
+                # that aggregate to every individual contract. Keep exact
+                # contract-level coverage explicitly non-applicable.
+                if root not in {"TX", "STF"}:
+                    market_history_db.write_source_day(
+                        institutional_source, trading_date, "futures", [], [code],
+                        status="no_data", detail="TAIFEX institutional positions are not published per stock-futures contract",
+                        source_url=institutional_url, unit="contracts / TWD thousands")
+                    continue
+                commodity = "TXF" if code == "TXF" else root
                 commodity_by_code[code] = commodity
                 institutional_by_date.setdefault(trading_date, []).append(code)
         for commodity in sorted(set(commodity_by_code.values())):
