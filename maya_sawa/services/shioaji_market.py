@@ -6,7 +6,7 @@ import os
 import platform
 import re
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -92,6 +92,38 @@ class ReadOnlyShioajiClient:
         return self._api.logout()
 
 
+def _has_price(row: dict[str, Any] | None) -> bool:
+    try:
+        return bool(row) and float(row.get("close") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _daily_close_quotes(instruments: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Last stored official daily close (TWSE/TPEx for stocks, TAIFEX for futures) when no quote was ever saved."""
+    from ..databases.market_history_db import market_history_db
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+    sources = {"stock": ["twse:daily-price", "tpex:daily-price"], "futures": ["taifex:daily-futures-price"]}
+    rows = []
+    for item in instruments:
+        kind, code = item.get("productType"), str(item.get("code", "")).upper()
+        points = market_history_db.history(code, today - timedelta(days=14), today, sources=sources.get(kind, []))["points"]
+        closes = [(p, next((p["sources"][s] for s in sources.get(kind, []) if isinstance(p["sources"].get(s, {}).get("close"), (int, float))), None)) for p in points]
+        closes = [(p, values) for p, values in closes if values and values["close"] > 0]
+        if not closes:
+            continue
+        point, values = closes[-1]
+        previous = closes[-2][1]["close"] if len(closes) > 1 else None
+        change = values.get("change") if isinstance(values.get("change"), (int, float)) else (values["close"] - previous if previous else 0.0)
+        base = values["close"] - change
+        rows.append({"symbol": code, "name": point.get("name") or item.get("name") or code, "productType": kind,
+                     "close": values["close"], "open": values.get("open", 0), "high": values.get("high", 0), "low": values.get("low", 0),
+                     "change": change, "changePercent": round(change / base * 100, 2) if base else 0.0,
+                     "volume": int(values.get("volume_shares") or values.get("volume_contracts") or 0),
+                     "timestamp": f"{point['date']}T13:30:00+08:00"})
+    return rows
+
+
 _WARRANT_CODE = re.compile(r"(0[3-9]|7[0-3])\d{3}[0-9A-Z]")
 _WARRANT_NAME = re.compile(r"[購售]\d")
 
@@ -145,17 +177,30 @@ class ShioajiMarketService:
         return await self._get_cached_payload("TXF")
 
     async def get_dashboard_quotes(self, instruments: list[dict[str, str]]) -> list[dict[str, Any]]:
-        """Serve persisted/cache quotes only; the background refresh owns broker calls."""
+        """Never hits the broker (the background refresh owns that). Each instrument gets the best price on hand:
+        live Redis cache -> last saved snapshot in PostgreSQL -> last stored daily close. `quoteSource` says which.
+        """
         cache_id = hashlib.sha256(json.dumps(instruments, sort_keys=True).encode()).hexdigest()[:20]
-        cache_key = f"DASHBOARD_QUOTES_V2_{cache_id}"
+        found: dict[tuple[str, str], dict[str, Any]] = {}
+
+        def add(rows: list[dict[str, Any]] | None, source: str) -> None:
+            for row in rows or []:
+                key = (str(row.get("productType")), str(row.get("symbol", "")).upper())
+                if key not in found and _has_price(row):
+                    found[key] = {**row, "quoteSource": source}
         try:
-            cached = await asyncio.to_thread(self._read_cached_payload, cache_key)
-            if cached is not None:
-                return cached
+            add(await asyncio.to_thread(self._read_cached_payload, f"DASHBOARD_QUOTES_V2_{cache_id}"), "live")
         except redis.RedisError:
             logger.warning("Market quote cache unavailable; serving last PostgreSQL snapshot")
+
+        def missing() -> list[dict[str, str]]:
+            return [item for item in instruments if (item.get("productType"), str(item.get("code", "")).upper()) not in found]
         from ..databases.market_fundamentals_db import market_fundamentals_db
-        return await asyncio.to_thread(market_fundamentals_db.quote_snapshots, instruments)
+        if missing():
+            add(await asyncio.to_thread(market_fundamentals_db.quote_snapshots, missing()), "snapshot")
+        if missing():
+            add(await asyncio.to_thread(_daily_close_quotes, missing()), "dailyClose")
+        return list(found.values())
 
     async def search_contracts(self, query: str, product_type: str | None = None) -> list[dict[str, str]]:
         return await self._run_with_relogin(lambda api: self._search_contracts(api, query, product_type))
@@ -209,7 +254,8 @@ class ShioajiMarketService:
             selected = list({(item.get("productType"), item.get("code", "").upper()): item for item in selected}.values())
             if selected:
                 rows = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, selected))
-                await asyncio.to_thread(market_fundamentals_db.save_quote_snapshots, rows)
+                # Off-session snapshots can come back with close=0; never let them overwrite the last real price.
+                await asyncio.to_thread(market_fundamentals_db.save_quote_snapshots, [row for row in rows if _has_price(row)])
                 cache_id = hashlib.sha256(json.dumps(selected, sort_keys=True).encode()).hexdigest()[:20]
                 await asyncio.to_thread(self._write_cached_payload, f"DASHBOARD_QUOTES_V2_{cache_id}", rows, 300)
         except Exception:
