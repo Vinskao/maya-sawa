@@ -219,18 +219,6 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                container('python') {
-                    sh '''
-                        pip install poetry
-                        poetry config virtualenvs.create false
-                        poetry install --no-root --only main
-                    '''
-                }
-            }
-        }
-
         stage('Build Docker Image with BuildKit') {
             steps {
                 container('docker') {
