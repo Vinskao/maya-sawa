@@ -11,9 +11,10 @@ RUN pip install --no-cache-dir poetry
 COPY pyproject.toml poetry.lock ./
 
 # Install dependencies to system site-packages (since we are in a container)
-# Configure Poetry for better network reliability
+# Serialize system package updates: concurrent uninstalls can remove dist-info
+# while another pip process is scanning it (e.g. certifi / charset-normalizer).
 RUN poetry config virtualenvs.create false \
-    && poetry config installer.max-workers 10 \
+    && poetry config installer.max-workers 1 \
     && poetry install --no-root --only main --verbose \
     && pip cache purge \
     && rm -rf /root/.cache/pypoetry
