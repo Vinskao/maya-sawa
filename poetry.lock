@@ -3163,21 +3163,21 @@ pyasn1 = ">=0.1.3"
 
 [[package]]
 name = "shioaji"
-version = "1.5.3"
+version = "1.5.8"
 description = "Shioaji — cross-language, cross-platform universal trading API. Native Python bindings, HTTP API with SSE streaming, standalone CLI, and a visual dashboard."
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "shioaji-1.5.3-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:3710f727a340c157b8f36fc8b5125b117b6ab918e4021a036928adbe24e33e5e"},
-    {file = "shioaji-1.5.3-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:2ca5db6ea8045cc4a674ecfa255238ddf5bfd4ebb6338a186d043ed9e01ad917"},
-    {file = "shioaji-1.5.3-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:553b70b11d949aad33be0e923e44934734ddaacebffdb740f91faf577c2fe108"},
-    {file = "shioaji-1.5.3-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:74ec300d9d47c841615652da11030eaea558f96b58549dc1c388c74514d96a6c"},
-    {file = "shioaji-1.5.3-cp37-abi3-macosx_10_15_x86_64.whl", hash = "sha256:4aa46733c1212a25165b30e36e63d3cc2f36bfb35f1ab94195b3a3f3bda4c53d"},
-    {file = "shioaji-1.5.3-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:1dca2ff948dd787ee222c5d50a8490ef51603d6888a774492be991cdec960891"},
-    {file = "shioaji-1.5.3-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:166dea80e8c57f76ca36dd60d70c056a57288b35f18e4fedd7fab1d5cdd59d20"},
-    {file = "shioaji-1.5.3-cp37-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:3b2169d30f659e13bba41a4ff80a6dff5309a65ad9d99dbf3b8b40d719bfc903"},
-    {file = "shioaji-1.5.3-cp37-abi3-win_amd64.whl", hash = "sha256:77e7fa8edaa0d670787a379fbdb1f47683f5da20b26aa58cff642457d38de669"},
+    {file = "shioaji-1.5.8-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:2264b8f2a96180a2a99bbc2e3bdd87a5bc0f09a619cfec7d9385423bb6d83739"},
+    {file = "shioaji-1.5.8-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:4b3f2d6ff96defefc713c6b05e6ff5ce49a0a90b716acf8ee2e5c92b581efc9a"},
+    {file = "shioaji-1.5.8-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:44a21d385e452ed65d07e72432ec744b47f6e79a54860df9ce38255c16b903b2"},
+    {file = "shioaji-1.5.8-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:6c7e296563fe6d79fb163c145d1a6b00395cf8601be7b535a390ce3125d9da3f"},
+    {file = "shioaji-1.5.8-cp37-abi3-macosx_10_15_x86_64.whl", hash = "sha256:b346db469bb9c5e004564e919e5e59b2ede6338db470abf49e2914c2eb2a3a47"},
+    {file = "shioaji-1.5.8-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:d2c7b3a82581ba760246041b0464bbc3b279e5cc02ae1b883306f495fd9f00f2"},
+    {file = "shioaji-1.5.8-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:facb752ba1796c3b2a0a2a3900292bc5e7c9aae410e3c31f40c72ff7edaaee4e"},
+    {file = "shioaji-1.5.8-cp37-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:1913ebd97b5e0ea09cd85d045ae1e56c4e75dade521581257564bc9564b16d01"},
+    {file = "shioaji-1.5.8-cp37-abi3-win_amd64.whl", hash = "sha256:4aa513f88ba04430de5f561412a34d69b883378e0dac1de1b2f8afb8d9943a2d"},
 ]
 
 [package.extras]
@@ -4134,4 +4134,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "35ca12d49936d7d2529c401a0f2ac507e84fd93f2bb920546caf90fbc1573009"
+content-hash = "85f1035a3999a2fb2c71e0cec21b6efc6ffbeea530523d386641aefcacc6784a"

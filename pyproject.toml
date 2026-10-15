@@ -30,7 +30,9 @@ sqlalchemy = "^2.0.0"
 aiosqlite = "^0.20.0"
 pymongo = "^4.15.5"
 websocket-client = "^1.9.0"
-shioaji = "^1.2.6"
+# 1.5.3 has been withdrawn from the package index. 1.5.8 is available for
+# the OKE cluster's aarch64 runtime and preserves the Shioaji integration.
+shioaji = "^1.5.8"
 langgraph = ">=0.6,<1.0"
 langgraph-checkpoint-postgres = ">=2.0,<3.0"
 
