@@ -1,9 +1,10 @@
 import asyncio
 import time
 import logging
+import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -27,6 +28,7 @@ from ..services.ibkr_market import (
 from ..databases.portfolio_history_db import portfolio_history_db
 from ..databases.market_dashboard_db import market_dashboard_db
 from ..databases.market_history_db import market_history_db
+from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
 from ..services.market_selection import attach_underlying
 from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
@@ -38,6 +40,60 @@ router = APIRouter(prefix="/market", tags=["market"])
 
 class DashboardCustomSelection(BaseModel):
     symbols: list[dict[str, str]] = Field(max_length=5)
+
+
+class MarketAiAnalysisUpdate(BaseModel):
+    model: str = Field(min_length=1, max_length=120)
+    content: str = Field(min_length=1, max_length=20000)
+    expectedRevision: int = Field(ge=0)
+
+    @field_validator("model", "content")
+    @classmethod
+    def nonblank(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Must not be blank")
+        return value
+
+
+def analysis_target(code: str, product_type: str):
+    normalized = code.strip().upper()
+    if product_type not in {"stock", "futures"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
+        raise HTTPException(status_code=422, detail="Invalid instrument code or productType")
+    return product_type, normalized
+
+
+@router.get("/dashboard/analysis/{code}")
+async def get_market_ai_analysis(code: str, productType: str = "stock"):
+    target = analysis_target(code, productType)
+    try:
+        result = await asyncio.to_thread(market_ai_analysis_db.read, *target)
+    except Exception as exc:
+        logger.exception("AI analysis read failed")
+        raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
+    return {"code": target[1], "productType": target[0], **result,
+            "historyLimit": 20, "writeMethod": "PUT", "writeAccess": "authenticated",
+            "instructions": "Read the current analysis, review this instrument's data, then update the same analysis. "
+                "Send model, content and expectedRevision (current revision, or 0 if absent). "
+                "On 409 reload and reconcile your draft. Verify the returned saved revision."}
+
+
+@router.put("/dashboard/analysis/{code}")
+async def put_market_ai_analysis(code: str, body: MarketAiAnalysisUpdate, productType: str = "stock",
+                                 claims: dict = Depends(require_authenticated)):
+    target = analysis_target(code, productType)
+    editor = claims.get("sub")
+    if not editor:
+        raise HTTPException(status_code=401, detail="Authenticated identity required")
+    try:
+        analysis = await asyncio.to_thread(market_ai_analysis_db.save, *target, body.model, body.content,
+                                          body.expectedRevision, str(editor))
+        return {"analysis": analysis, "saved": True}
+    except AnalysisConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("AI analysis save failed")
+        raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
 
 
 @router.get("/dashboard")
