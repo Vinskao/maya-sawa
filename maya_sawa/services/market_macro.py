@@ -33,10 +33,16 @@ BLS_SERIES = {
     "CUUR0000SA0": ("CPI, all items, not seasonally adjusted", "index 1982-84=100", "monthly"),
     "CUUR0000SA0L1E": ("Core CPI, not seasonally adjusted", "index 1982-84=100", "monthly"),
 }
-FRED_RELEASES = {"50": ("employment", "Nonfarm payrolls / Employment Situation"), "10": ("cpi", "CPI / Consumer Price Index")}
+FRED_RELEASES = {
+    "50": ("employment", "Nonfarm payrolls / Employment Situation"),
+    "10": ("cpi", "CPI / Consumer Price Index"),
+    "9": ("retail_sales", "Advance Monthly Sales for Retail and Food Services"),
+}
 FRED_SERIES = {
     "DFEDTARL": ("Federal funds target range, lower limit", "percent", "daily"),
     "DFEDTARU": ("Federal funds target range, upper limit", "percent", "daily"),
+    "RSAFS": ("Advance retail sales and food services", "millions of dollars", "monthly"),
+    "DGS10": ("10-year Treasury constant maturity yield", "percent", "daily"),
 }
 def _bounded_budget(name: str, default: int, ceiling: int) -> int:
     try: requested = int(os.getenv(name, str(default)))
@@ -127,7 +133,7 @@ class MarketMacroService:
                 await self.refresh()
             except Exception:
                 logger.exception("Macro scheduled refresh failed")
-            # Four BLS batches and up to sixteen FRED calls per rolling day stay
+            # Four BLS batches and up to twenty-eight keyed FRED calls per day stay
             # comfortably inside the site's conservative daily budgets.
             await asyncio.sleep(6 * 3600)
 
@@ -240,7 +246,7 @@ class MarketMacroService:
                     try: scheduled = date.fromisoformat(item["date"])
                     except (KeyError, ValueError, TypeError): continue
                     if not date.today() - timedelta(days=7) <= scheduled <= date.today() + timedelta(days=90): continue
-                    # Release 50 and 10 are monthly; month identity remains stable if the day is revised.
+                    # Monthly release identity remains stable if the day is revised.
                     source_id = f"{release_id}:{scheduled:%Y-%m}"
                     local_time = release_times.get(scheduled)
                     events.append({"id": f"fred:{source_id}", "sourceId": source_id, "groupId": group,
@@ -265,8 +271,11 @@ class MarketMacroService:
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=10)
             if run_id is None: raise RuntimeError("fred_daily_or_minute_budget_exhausted")
             params = urllib.parse.urlencode({"series_id": code, "file_type": "json",
-                "observation_start": f"{date.today().year - 6}-01-01", "frequency": "m",
-                "aggregation_method": "eop", "sort_order": "asc", "limit": "1000", "api_key": FRED_KEY})
+                "observation_start": (date.today() - timedelta(days=180)).isoformat() if FRED_SERIES[code][2] == "daily"
+                    else f"{date.today().year - 6}-01-01",
+                "sort_order": "asc", "limit": "1000", "api_key": FRED_KEY})
+            if FRED_SERIES[code][2] == "monthly":
+                params += "&" + urllib.parse.urlencode({"frequency": "m", "aggregation_method": "eop"})
             try:
                 status, raw = _request(f"https://api.stlouisfed.org/fred/series/observations?{params}")
                 payload = json.loads(raw)
@@ -275,7 +284,9 @@ class MarketMacroService:
                 rows = []
                 for item in observations:
                     if not item.get("value") or item["value"] == ".": continue
-                    try: period = date.fromisoformat(item["date"]).isoformat()[:7]
+                    try:
+                        observation_date = date.fromisoformat(item["date"])
+                        period = observation_date.isoformat() if FRED_SERIES[code][2] == "daily" else observation_date.isoformat()[:7]
                     except (KeyError, ValueError, TypeError): continue
                     rows.append({"code": code, "period": period, "value": item["value"]})
                 saved = market_macro_db.save_observations("FRED", rows); count += saved
@@ -342,6 +353,8 @@ class MarketMacroService:
                     group = "fed"
                 elif "cpi" in lowered and ("us " in lowered or "united states" in lowered):
                     group = "cpi"
+                elif "retail sales" in lowered or "retail trade" in lowered:
+                    group = "retail_sales"
                 elif any(term in lowered for term in ("nonfarm payroll", "employment situation", "us jobs report")):
                     group = "employment"
                 if not group:
