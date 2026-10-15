@@ -32,6 +32,7 @@ from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisCon
 from ..services.market_selection import attach_underlying
 from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
+from ..services.market_company_events import market_company_events_service
 from ..services.market_brief import brief_markdown, market_brief_service
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,29 @@ async def get_market_dashboard():
         "custom": [expose(item) for item in custom_rows],
         "customLimit": 5,
     }
+
+
+@router.get("/dashboard/events")
+async def get_market_dashboard_events():
+    """Recent revenue/report releases and upcoming investor conferences for selected stock targets."""
+    auto = market_dashboard_db.latest_auto()
+    symbols = [*auto.get("positions", []), *market_dashboard_db.custom_symbols()]
+    try:
+        quote_rows = await shioaji_market_service.get_dashboard_quotes(symbols)
+        await asyncio.to_thread(attach_underlying, symbols, quote_rows)
+    except Exception as exc:
+        logger.info("Unable to resolve company underlyings for event targets: %s", exc)
+    codes: set[str] = set()
+    for item in symbols:
+        if item.get("productType") == "stock":
+            codes.add(str(item.get("code", "")).strip())
+        elif item.get("underlyingCode"):
+            codes.add(str(item["underlyingCode"]).strip())
+    try:
+        return await market_company_events_service.get(sorted(codes))
+    except Exception as exc:
+        logger.exception("Market company events request failed")
+        raise HTTPException(status_code=502, detail="Company events are temporarily unavailable") from exc
 
 
 @router.get("/dashboard/brief")

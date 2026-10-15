@@ -5,13 +5,14 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import csv
 import io
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -28,6 +29,21 @@ def _get_json(url: str) -> Any:
     request = urllib.request.Request(url, headers={"User-Agent": "TY-Multiverse-MarketDashboard/1.0"})
     with urllib.request.urlopen(request, timeout=25) as response:
         return json.loads(response.read().decode("utf-8-sig"))
+
+
+def _publication_date(value: Any) -> str | None:
+    """Normalize Gregorian or Republic of China calendar dates to YYYY-MM-DD."""
+    raw = str(value or "").strip()
+    match = re.search(r"(\d{2,4})[/-](\d{1,2})[/-](\d{1,2})", raw)
+    if not match:
+        return None
+    year, month, day = (int(part) for part in match.groups())
+    if year < 1911:
+        year += 1911
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
 
 
 class MarketFundamentalsService:
@@ -183,6 +199,44 @@ class MarketFundamentalsService:
             monthly = self._monthly_rows(cached("monthly:otc"), code)
         income = self._statement_rows(cached("income"), code, "income") if cached("income") else []
         return monthly, income
+
+    async def published_events(self, codes: list[str]) -> list[dict[str, Any]]:
+        """Return actual monthly-revenue and quarterly-statement publication dates from official feeds."""
+        wanted = {str(code).strip() for code in codes if str(code).strip().isdigit() and len(str(code).strip()) == 4}
+        if not wanted:
+            return []
+        monthly_raw, income_raw = await asyncio.gather(
+            self._official("monthly:listed"), self._official("income"), return_exceptions=True,
+        )
+        monthly_feed = monthly_raw if not isinstance(monthly_raw, Exception) else []
+        income_feed = income_raw if not isinstance(income_raw, Exception) else []
+        listed_codes = {str(row.get("公司代號", "")).strip() for row in monthly_feed if isinstance(row, dict)}
+        otc_monthly: dict[str, list[dict]] = {}
+        otc_codes = wanted - listed_codes
+        if otc_codes:
+            try:
+                otc_feed = await self._official("monthly:otc")
+                otc_monthly = {code: self._monthly_rows(otc_feed, code) for code in otc_codes}
+            except Exception as exc:
+                logger.info("OTC monthly publication dates unavailable: %s", exc)
+        events: list[dict[str, Any]] = []
+        for code in wanted:
+            monthly_rows = (self._monthly_rows(monthly_feed, code) if code in listed_codes
+                            else otc_monthly.get(code, []))
+            for row in monthly_rows:
+                if row.get("publishedAt"):
+                    events.append({"code": code, "name": row.get("name") or code,
+                                   "type": "monthly_revenue", "period": row["period"],
+                                   "date": _publication_date(row["publishedAt"]),
+                                   "source": "TWSE OpenAPI / MOPS OTC"})
+            for row in self._statement_rows(income_feed, code, "income"):
+                if row.get("publishedAt"):
+                    events.append({"code": code, "name": row.get("raw", {}).get("公司名稱") or code,
+                                   "type": "financial_report", "period": row["period"],
+                                   "date": _publication_date(row["publishedAt"]),
+                                   "source": "TWSE OpenAPI"})
+        # A quarter's income statement is the release signal; avoid duplicating its balance-sheet row.
+        return events
 
     def request_history(self, codes: list[str]) -> None:
         for code in codes:
