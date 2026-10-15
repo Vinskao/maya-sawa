@@ -18,7 +18,7 @@ Base = declarative_base()
 
 
 def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_code: str | None = None) -> list[dict[str, str]] | None:
-    """Return label-only top holdings for a complete snapshot, or None if invalid."""
+    """Return all label-only holdings by descending exposure, or None if invalid."""
     if not portfolio.get("balanceAvailable") or portfolio.get("accountErrors"):
         return None
     positions = portfolio.get("positions")
@@ -48,7 +48,7 @@ def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_cod
     if not rows:
         return None
     rows.sort(key=lambda row: (-row["weight"], row["code"], row["productType"]))
-    return [{k: row[k] for k in ("code", "name", "productType")} for row in rows[:5]]
+    return [{k: row[k] for k in ("code", "name", "productType")} for row in rows]
 
 
 class MarketDashboardSnapshot(Base):
@@ -131,7 +131,10 @@ class MarketDashboardDatabase:
                 session.execute(insert(MarketDashboardSnapshot).values(
                     source="shioaji", snapshot_at=snapshot_at,
                     positions=json.dumps(selected, ensure_ascii=False), created_at=datetime.now(timezone.utc),
-                ).on_conflict_do_nothing(constraint="uq_market_dashboard_snapshot"))
+                ).on_conflict_do_update(
+                    constraint="uq_market_dashboard_snapshot",
+                    set_={"positions": json.dumps(selected, ensure_ascii=False)},
+                ))
             self.record_candidates("portfolio-auto", selected)
             return True
         except Exception:

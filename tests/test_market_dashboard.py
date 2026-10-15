@@ -16,7 +16,7 @@ def test_selection_uses_stock_market_value_and_absolute_futures_exposure_without
         ],
     }
     result = public_selection_from_portfolio(portfolio)
-    assert [item["code"] for item in result] == ["TXFJ6", "2330", "2317", "2308", "2454"]
+    assert [item["code"] for item in result] == ["TXFJ6", "2330", "2317", "2308", "2454", "2881", "9999"]
     assert all(set(item) == {"code", "name", "productType"} for item in result)
 
 
@@ -42,7 +42,7 @@ def test_successful_portfolio_snapshot_records_candidate_membership(monkeypatch)
     monkeypatch.setattr(db, "record_candidates", lambda source, symbols: candidates.append((source, symbols)) or len(symbols))
     monkeypatch.setattr("maya_sawa.databases.market_dashboard_db.insert", lambda _model: type("Values", (), {
         "values": lambda self, **_kwargs: self,
-        "on_conflict_do_nothing": lambda self, **_kwargs: self,
+        "on_conflict_do_update": lambda self, **_kwargs: self,
     })())
     portfolio = {"balanceAvailable": True, "fetchedAt": "2026-10-13T13:00:00+00:00", "positions": [
         {"code": "2330", "name": "TSMC", "productType": "stock", "marketValue": 100},
