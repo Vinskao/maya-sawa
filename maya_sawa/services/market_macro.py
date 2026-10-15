@@ -220,7 +220,9 @@ class MarketMacroService:
             if run_id is None:
                 raise RuntimeError("fred_daily_or_minute_budget_exhausted")
             params = urllib.parse.urlencode({"release_id": release_id, "file_type": "json", "include_release_dates_with_no_data": "true",
-                "sort_order": "desc", "limit": "100", "offset": "0", "api_key": FRED_KEY})
+                # Keep the response to the recent schedule window. A larger page
+                # can stall from the production pod even though smaller pages work.
+                "sort_order": "desc", "limit": "20", "offset": "0", "api_key": FRED_KEY})
             try:
                 status, raw = _request(f"https://api.stlouisfed.org/fred/release/dates?{params}")
                 payload = json.loads(raw)

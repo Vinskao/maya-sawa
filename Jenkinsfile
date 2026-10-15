@@ -102,7 +102,7 @@ pipeline {
         disableConcurrentBuilds()
     }
     parameters {
-        booleanParam(name: 'ENABLE_MACRO_COLLECTION', defaultValue: false,
+        booleanParam(name: 'ENABLE_MACRO_COLLECTION', defaultValue: true,
             description: 'Enable scheduled macro data collection during deployment (requires BLS_API_KEY and FRED_API_KEY Jenkins credentials).')
         booleanParam(name: 'DEPLOY_IBKR_GATEWAY', defaultValue: false,
             description: 'Deploy and restart the separate IBKR Gateway only when its code or configuration changed.')
@@ -258,6 +258,9 @@ pipeline {
         }
 
         stage('Build & Push IBKR Gateway') {
+            when {
+                expression { return params.DEPLOY_IBKR_GATEWAY }
+            }
             steps {
                 container('docker') {
                     script {

@@ -16,6 +16,8 @@ spec:
       labels:
         app.kubernetes.io/name: maya-sawa
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: 10.0.158.183
       imagePullSecrets:
       - name: dockerhub-credentials
       affinity:
@@ -200,11 +202,6 @@ spec:
         # Refresh every 4 min: also keeps the gateway session alive (idle ~6 min)
         - name: IBKR_REFRESH_SECONDS
           value: "240"
-        - name: MARKET_INTERNAL_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: market-internal-secret
-              key: MARKET_INTERNAL_SECRET
         # Vector search tuning
         - name: MATCH_COUNT
           value: "5"
