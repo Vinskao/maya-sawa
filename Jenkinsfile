@@ -101,10 +101,17 @@ pipeline {
         timestamps()
         disableConcurrentBuilds()
     }
+    parameters {
+        booleanParam(name: 'ENABLE_MACRO_COLLECTION', defaultValue: false,
+            description: 'Enable scheduled macro data collection during deployment (requires BLS_API_KEY and FRED_API_KEY Jenkins credentials).')
+        booleanParam(name: 'DEPLOY_IBKR_GATEWAY', defaultValue: false,
+            description: 'Deploy and restart the separate IBKR Gateway only when its code or configuration changed.')
+    }
     environment {
         DOCKER_IMAGE = 'papakao/maya-sawa'
         DOCKER_TAG = "${BUILD_NUMBER}"
         IBKR_GATEWAY_IMAGE = 'papakao/ibkr-gateway'
+        MACRO_ENABLED = "${params.ENABLE_MACRO_COLLECTION}"
     }
     stages {
         stage('Clone and Setup') {
@@ -297,6 +304,28 @@ pipeline {
             }
         }
 
+        stage('Configure Macro Collection') {
+            when {
+                expression { return params.ENABLE_MACRO_COLLECTION }
+            }
+            steps {
+                container('kubectl') {
+                    withCredentials([
+                        string(credentialsId: 'BLS_API_KEY', variable: 'BLS_API_KEY'),
+                        string(credentialsId: 'FRED_API_KEY', variable: 'FRED_API_KEY')
+                    ]) {
+                        sh '''
+                            set -e
+                            printf 'BLS_API_KEY=%s\nFRED_API_KEY=%s\n' "$BLS_API_KEY" "$FRED_API_KEY" | kubectl create secret generic macro-data-credentials \
+                              --from-env-file=/dev/stdin \
+                              -n default \
+                              --dry-run=client -o yaml | kubectl apply -f -
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {
@@ -385,11 +414,14 @@ pipeline {
                                         # 部署 CronJob
                                         envsubst < k8s/cronjob.yaml | kubectl apply -f -
 
-                                        # Deploy IBKR Client Portal Gateway (separate image, no env subst).
-                                        # :latest + imagePullPolicy Always; restart to pull the fresh image.
-                                        kubectl apply -f ibkr-gateway/k8s/deployment.yaml
-                                        kubectl rollout restart deployment/ibkr-gw -n default
-                                        kubectl rollout status deployment/ibkr-gw -n default
+                                        # Keep unrelated IBKR Gateway stable during Maya-only releases.
+                                        if [ "${DEPLOY_IBKR_GATEWAY:-false}" = "true" ]; then
+                                          kubectl apply -f ibkr-gateway/k8s/deployment.yaml
+                                          kubectl rollout restart deployment/ibkr-gw -n default
+                                          kubectl rollout status deployment/ibkr-gw -n default
+                                        else
+                                          echo "Skipping IBKR Gateway deployment; DEPLOY_IBKR_GATEWAY is false"
+                                        fi
                                     '''
 
                                     // 檢查部署狀態

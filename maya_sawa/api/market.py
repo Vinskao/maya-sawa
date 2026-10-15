@@ -34,6 +34,7 @@ from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
 from ..services.market_company_events import market_company_events_service
 from ..services.market_brief import brief_markdown, market_brief_service
+from ..services.market_macro import market_macro_service, MACRO_ENABLED
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -160,6 +161,21 @@ async def get_market_dashboard_events():
     except Exception as exc:
         logger.exception("Market company events request failed")
         raise HTTPException(status_code=502, detail="Company events are temporarily unavailable") from exc
+
+
+@router.get("/dashboard/macro")
+async def get_market_macro_dashboard(historyMonths: int = 24):
+    """Persisted macro indicators and release calendar. GET never calls upstream providers."""
+    if not MACRO_ENABLED:
+        return {"status": "disabled", "enabled": False, "displayTimezone": "Asia/Taipei",
+                "indicators": [], "events": [], "sources": [], "configuration": {"feature": "disabled"}}
+    if historyMonths < 12 or historyMonths > 60:
+        raise HTTPException(status_code=422, detail="historyMonths must be between 12 and 60")
+    try:
+        return await market_macro_service.get(historyMonths)
+    except Exception as exc:
+        logger.exception("Market macro snapshot failed")
+        raise HTTPException(status_code=503, detail="Macroeconomic data is temporarily unavailable") from exc
 
 
 @router.get("/dashboard/brief")

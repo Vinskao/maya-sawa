@@ -160,6 +160,24 @@ spec:
             secretKeyRef:
               name: shioaji-market
               key: SHIOAJI_SECRET_KEY
+        - name: BLS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: macro-data-credentials
+              key: BLS_API_KEY
+              optional: true
+        - name: FRED_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: macro-data-credentials
+              key: FRED_API_KEY
+              optional: true
+        - name: MACRO_ENABLED
+          value: "${MACRO_ENABLED}"
+        - name: MACRO_BLS_DAILY_BUDGET
+          value: "40"
+        - name: MACRO_FRED_DAILY_BUDGET
+          value: "100"
         - name: SHIOAJI_SIMULATION
           value: "false"
         - name: SHIOAJI_PORTFOLIO_ENABLED
