@@ -155,9 +155,17 @@ class MarketMacroService:
                 return {"enabled": True, "status": "another_replica_or_database_unavailable"}
             output = {"enabled": True, "sources": {}}
             if FRED_KEY:
-                try: output["sources"]["FRED"] = {"calendarEvents": self._fetch_fred_dates(), "rateObservations": self._fetch_fred_observations()}
-                except Exception as exc:
-                    logger.warning("FRED refresh failed: %s", str(exc)[:80]); _record_run("FRED", "error", detail=str(exc))
+                # Calendar outages must not prevent the actual macro series from being
+                # persisted. Each sync path records its own provider-call results.
+                fred_result = {}
+                for label, fetch in (("calendarEvents", self._fetch_fred_dates),
+                                     ("rateObservations", self._fetch_fred_observations)):
+                    try:
+                        fred_result[label] = fetch()
+                    except Exception as exc:
+                        logger.warning("FRED %s refresh failed: %s", label, str(exc)[:80])
+                        _record_run("FRED", "error", detail=f"{label}:{str(exc)[:60]}")
+                output["sources"]["FRED"] = fred_result
             else:
                 _record_run("FRED", "blocked", detail="missing_key")
                 output["sources"]["FRED"] = "missing_key"
@@ -221,6 +229,7 @@ class MarketMacroService:
     def _fetch_fred_dates(self) -> int:
         # FRED authenticated API is the canonical calendar source. api_key never enters persisted URL/logs.
         count = 0
+        failures = 0
         for release_id, (group, title) in FRED_RELEASES.items():
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=10)
             if run_id is None:
@@ -259,7 +268,10 @@ class MarketMacroService:
                 market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             except Exception as exc:
                 market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
-                raise
+                failures += 1
+                logger.warning("FRED release-date refresh failed for release %s: %s", release_id, str(exc)[:60])
+        if failures == len(FRED_RELEASES):
+            raise RuntimeError("fred_release_dates_all_failed")
         return count
 
     def _fetch_fred_observations(self) -> int:
@@ -267,6 +279,7 @@ class MarketMacroService:
         with market_macro_db.sessions.begin() as session:
             for code, (name, unit, frequency) in FRED_SERIES.items():
                 session.merge(MacroSeries(code=code, name=name, unit=unit, frequency=frequency, source="FRED"))
+        failures = 0
         for code in FRED_SERIES:
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=10)
             if run_id is None: raise RuntimeError("fred_daily_or_minute_budget_exhausted")
@@ -292,7 +305,11 @@ class MarketMacroService:
                 saved = market_macro_db.save_observations("FRED", rows); count += saved
                 market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             except Exception as exc:
-                market_macro_db.finish_source_call(run_id, "error", detail=str(exc)); raise
+                market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+                failures += 1
+                logger.warning("FRED observation refresh failed for %s: %s", code, str(exc)[:60])
+        if failures == len(FRED_SERIES):
+            raise RuntimeError("fred_observations_all_failed")
         return count
 
     def _fred_calendar_times(self, release_id: str) -> dict[date, datetime]:
