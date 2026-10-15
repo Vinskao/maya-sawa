@@ -16,8 +16,6 @@ spec:
       labels:
         app.kubernetes.io/name: maya-sawa
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: 10.0.158.183
       imagePullSecrets:
       - name: dockerhub-credentials
       affinity:

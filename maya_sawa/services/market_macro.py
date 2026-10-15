@@ -56,9 +56,11 @@ FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 100, 100)
 
 def _request(url: str, body: dict | None = None) -> tuple[int, bytes]:
     data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(url, data=data, method="POST" if data else "GET", headers={
-        "User-Agent": "TY-Multiverse-Macro/1.0", "Accept": "application/json,text/html",
-        **({"Content-Type": "application/json"} if data else {})})
+    # Keep urllib's standard User-Agent and Accept headers. FRED stalls when it
+    # receives the custom macro client headers, while its default headers return
+    # the same payload immediately. BLS JSON POSTs still need an explicit type.
+    headers = {"Content-Type": "application/json"} if data else {}
+    request = urllib.request.Request(url, data=data, method="POST" if data else "GET", headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=25) as response:
             return response.status, response.read()
