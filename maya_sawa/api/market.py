@@ -40,6 +40,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
 
 
+@router.get('/dashboard/overseas/{code}')
+async def get_overseas_research(code: str, market: str):
+    """Public contract/market data from PostgreSQL only; no broker or account access."""
+    from ..services.ibkr_research import ibkr_research_collector
+    code, market = code.strip().upper(), market.strip().upper()
+    if not re.fullmatch(r'[A-Z0-9.-]{1,24}', code) or market not in {'US', 'JP', 'KR', 'HK'}:
+        raise HTTPException(status_code=422, detail='Invalid overseas instrument identity')
+    try:
+        return await asyncio.to_thread(ibkr_research_collector.read, code, market)
+    except Exception:
+        logger.exception('Persisted IBKR research unavailable')
+        raise HTTPException(status_code=503, detail='Persisted overseas data temporarily unavailable')
+
+
 class DashboardCustomSelection(BaseModel):
     symbols: list[dict[str, str]] = Field(max_length=5)
 

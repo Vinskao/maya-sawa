@@ -24,6 +24,9 @@ from typing import Any
 import httpx
 import redis
 
+from ..databases.ibkr_research_db import get_ibkr_research_db
+from .ibkr_research import ibkr_research_collector
+
 logger = logging.getLogger(__name__)
 
 # Live USD->TWD rate, no API key required. Falls back to FX_FALLBACK on failure.
@@ -81,10 +84,13 @@ class IbkrMarketService:
             raise IbkrNotConfiguredError("IBKR integration is disabled")
         try:
             cached = await asyncio.to_thread(self._read_cached_payload, "IBKR")
-        except redis.RedisError as exc:
-            raise IbkrCacheUnavailableError("Redis cache is unavailable") from exc
+        except redis.RedisError:
+            cached = None
         if cached is None:
-            raise IbkrCacheUnavailableError("No cached IBKR snapshot available")
+            saved = await asyncio.to_thread(get_ibkr_research_db().latest, 'ACCOUNT', 'PRIVATE', 'portfolio')
+            if not saved:
+                raise IbkrCacheUnavailableError("No persisted IBKR snapshot available")
+            cached = saved['payload']
         return cached
 
     async def start_background_refresh(self) -> None:
@@ -104,16 +110,27 @@ class IbkrMarketService:
             logger.exception("Unexpected error fetching IBKR snapshot")
             return False
         try:
+            stamp = datetime.now(timezone.utc)
+            period = stamp.strftime('%Y-%m-%dT%H:') + str(stamp.minute // 15 * 15).zfill(2)
+            await asyncio.to_thread(get_ibkr_research_db().save, 'ACCOUNT', 'PRIVATE', 0, 'portfolio', snapshot, period=period)
+        except Exception:
+            logger.exception("IBKR persistence failed; snapshot will not be treated as collected")
+            return False
+        try:
             await asyncio.to_thread(self._write_cached_payload, "IBKR", snapshot)
         except redis.RedisError:
             logger.exception("Failed to write IBKR snapshot to Redis")
-            return False
         return True
 
     async def _refresh_loop(self) -> None:
         while True:
             try:
-                await self.refresh_cache_now()
+                if await self.refresh_cache_now():
+                    try:
+                        snapshot = await self.get_snapshot()
+                        await ibkr_research_collector.collect(self, snapshot.get('positions', []))
+                    except Exception:
+                        logger.exception("IBKR research collection failed; portfolio remains available")
                 await asyncio.sleep(self._cache_seconds)
             except asyncio.CancelledError:
                 raise
@@ -279,6 +296,8 @@ class IbkrMarketService:
             positions.append(
                 {
                     "code": code,
+                    "conid": row.get("conid"),
+                    "exchange": row.get("listingExchange"),
                     "name": name,
                     "assetClass": str(row.get("assetClass") or ""),
                     "currency": currency,
