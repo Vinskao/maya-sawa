@@ -178,6 +178,8 @@ class IbkrResearchCollector:
                             {'reason': type(exc).__name__, 'detail': str(exc) if isinstance(exc, ValueError) else 'Broker request unavailable'},
                             status='unavailable')
                     await asyncio.sleep(1.3)  # comfortably below 50 history requests/minute
+                from .overseas_financials import collect_sec_financials
+                await collect_sec_financials(self, code, market, cid)
 
     def read(self, code, market):
         if market not in ZONES:
@@ -185,7 +187,7 @@ class IbkrResearchCollector:
         cached = self._read_cache.get((code, market))
         if cached and time.monotonic() - cached[0] < 60:
             return deepcopy(cached[1])
-        datasets = {kind: self.db.latest(code, market, kind) for kind in ('profile', 'quote', 'history_raw')}
+        datasets = {kind: self.db.latest(code, market, kind) for kind in ('profile', 'quote', 'history_raw', 'financials')}
         coverage = {kind: self.db.latest(code, market, kind, successful=False) for kind in datasets}
         # Request metadata contains a complete history chunk; normalized daily bars are the union of backfill + increments.
         history_meta = datasets['history_raw']
@@ -195,7 +197,7 @@ class IbkrResearchCollector:
         result = {'code': code, 'market': market, 'source': 'Interactive Brokers CPAPI', 'persisted': True,
                 'datasets': datasets, 'coverage': {k: {a: b for a, b in (v or {}).items() if a != 'payload'} | {'detail': (v or {}).get('payload', {}) if (v or {}).get('status') != 'ok' else None} for k, v in coverage.items()},
                 'daily': daily, 'technical': technical_summary(daily),
-                'gaps': ['Quarterly financial statements, earnings estimates, institutional ownership and short interest are not supplied by these CPAPI endpoints.',
+                'gaps': ['CPAPI does not supply quarterly statements, earnings estimates, institutional ownership or short interest. US SEC financials are supplemented where available; Japan EDINET and Korea OpenDART require separate keys.',
                          'Fundamental snapshot tags (EPS, PE, market capitalization, dividend yield, beta) deprecated by IBKR 2026-01-06.']}
         self._read_cache[(code, market)] = (time.monotonic(), result)
         return deepcopy(result)

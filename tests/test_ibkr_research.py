@@ -125,12 +125,14 @@ def test_collector_persists_all_three_sources_and_second_pass_uses_db_cache(monk
         def _client(self): return Client()
     async def no_sleep(*args): pass
     monkeypatch.setattr(ibkr_research.asyncio, 'sleep', no_sleep)
+    from maya_sawa.services import overseas_financials
+    monkeypatch.setattr(overseas_financials, 'collect_sec_financials', no_sleep)
     positions = [{'code': 'META', 'currency': 'USD', 'conid': 107113386, 'assetClass': 'STK'}]
     asyncio.run(collector.collect(Gateway(), positions))
     assert len(calls) == 4  # profile, history, quote preflight, quote
     saved = collector.read('META', 'US')
     assert len(saved['daily']) == 1
-    assert all(saved['datasets'].values())
+    assert all(saved['datasets'][kind] for kind in ('profile', 'quote', 'history_raw'))
     assert 'private' not in str(saved)
     asyncio.run(collector.collect(Gateway(), positions))
     assert len(calls) == 4

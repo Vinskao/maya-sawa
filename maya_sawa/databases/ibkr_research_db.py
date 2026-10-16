@@ -35,7 +35,7 @@ class IbkrDataset(Base):
 class IbkrResearchDatabase:
     def __init__(self, engine=None):
         self.engine = engine or create_engine(Config.DB_CONNECTION_STRING, pool_pre_ping=True,
-                                               pool_size=2, max_overflow=2)
+                                               pool_size=2, max_overflow=2, hide_parameters=True)
         self.sessions = sessionmaker(bind=self.engine)
         Base.metadata.create_all(self.engine)
 
