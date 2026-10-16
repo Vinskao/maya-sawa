@@ -71,6 +71,11 @@ TAIWAN_SERIES = {
 TPEX_SERIES = {
     "TPEx_GOLD_TWD": ("Taiwan gold spot average transaction price", "TWD/tael", "daily"),
 }
+# TPEx only publishes the latest gold quote, so the gold trend chart uses COMEX front-month futures history.
+COMEX_SERIES = {
+    "COMEX_GOLD_USD": ("COMEX gold futures (front month) daily close", "USD/troy oz", "daily"),
+}
+COMEX_GOLD_URL = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=1y&interval=1d"
 DGBAS_COMMODITY_SERIES = {
     "WORLD_GOLD_USD": ("World Bank monthly gold price", "USD/troy oz", "monthly"),
 }
@@ -129,15 +134,17 @@ class LocalTTLCache:
 _macro_local_cache = LocalTTLCache()
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
-FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | {"GBRSLRTTO01GPSAM", "GBRSLRTTO01GYSAM"}
+FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(COMEX_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | {"GBRSLRTTO01GPSAM", "GBRSLRTTO01GYSAM"}
 
 
-def _request(url: str, body: dict | None = None) -> tuple[int, bytes]:
+def _request(url: str, body: dict | None = None, extra_headers: dict | None = None) -> tuple[int, bytes]:
     data = json.dumps(body).encode() if body is not None else None
     # Keep urllib's standard User-Agent and Accept headers. FRED stalls when it
     # receives the custom macro client headers, while its default headers return
     # the same payload immediately. BLS JSON POSTs still need an explicit type.
+    # Only sources that reject urllib's agent (Yahoo chart) pass extra_headers.
     headers = {"Content-Type": "application/json"} if data else {}
+    headers.update(extra_headers or {})
     request = urllib.request.Request(url, data=data, method="POST" if data else "GET", headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=25) as response:
@@ -149,13 +156,14 @@ def _request(url: str, body: dict | None = None) -> tuple[int, bytes]:
         raise RuntimeError(type(exc).__name__) from None
 
 
-def _request_free_cached(cache_key: str, url: str, ttl_seconds: int = FREE_HTTP_TTL_SECONDS) -> tuple[int, bytes]:
+def _request_free_cached(cache_key: str, url: str, ttl_seconds: int = FREE_HTTP_TTL_SECONDS,
+                         extra_headers: dict | None = None) -> tuple[int, bytes]:
     """Cache public-source HTTP responses per Python process to avoid repeat calls."""
     key = f"http:{cache_key}"
     cached = _macro_local_cache.get(key)
     if cached is not None:
         return cached
-    response = _request(url)
+    response = _request(url, extra_headers=extra_headers)
     _macro_local_cache.set(key, response, ttl_seconds)
     return response
 
@@ -279,7 +287,8 @@ class MarketMacroService:
             except Exception as exc:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
-                ("TPExGold", self._fetch_tpex_gold), ("DGBAS", self._fetch_dgbas_employment),
+                ("TPExGold", self._fetch_tpex_gold), ("COMEXGold", self._fetch_comex_gold),
+                ("DGBAS", self._fetch_dgbas_employment),
                 ("DGBASPrices", self._fetch_taiwan_ppi),
                 ("WorldBank", self._fetch_world_bank_gold),
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
@@ -343,7 +352,7 @@ class MarketMacroService:
         count = 0
         failures = 0
         for release_id, (group, title) in FRED_RELEASES.items():
-            run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=10)
+            run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=60)
             if run_id is None:
                 raise RuntimeError("fred_daily_or_minute_budget_exhausted")
             params = urllib.parse.urlencode({"release_id": release_id, "file_type": "json", "include_release_dates_with_no_data": "true",
@@ -394,7 +403,7 @@ class MarketMacroService:
                 session.merge(MacroSeries(code=code, name=name, unit=unit, frequency=frequency, source="FRED"))
         failures = 0
         for code in FRED_SERIES:
-            run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=10)
+            run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=60)
             if run_id is None: raise RuntimeError("fred_daily_or_minute_budget_exhausted")
             params = urllib.parse.urlencode({"series_id": code, "file_type": "json",
                 "observation_start": (date.today() - timedelta(days=730)).isoformat() if FRED_SERIES[code][2] in ("daily", "weekly")
@@ -521,6 +530,25 @@ class MarketMacroService:
                 if value in (None, "", "-"): continue
                 rows.append({"code": "TPEx_GOLD_TWD", "period": observation_date.isoformat(), "value": value})
             saved = self._cache_free_series(rows, TPEX_SERIES, "TPEx", "https://www.tpex.org.tw/openapi/")
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_comex_gold(self) -> int:
+        """Cache one year of free COMEX gold futures daily closes (Yahoo chart API, no key)."""
+        run_id = market_macro_db.reserve_source_call("COMEX", daily_limit=12, minute_limit=2)
+        if run_id is None: raise RuntimeError("comex_gold_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("yahoo:GC=F:1y", COMEX_GOLD_URL, ttl_seconds=6 * 3600,
+                extra_headers={"User-Agent": "Mozilla/5.0 (compatible; maya-sawa macro dashboard)"})
+            result = (json.loads(raw).get("chart", {}).get("result") or [{}])[0]
+            zone = ZoneInfo(result.get("meta", {}).get("exchangeTimezoneName") or "America/New_York")
+            closes = ((result.get("indicators", {}).get("quote") or [{}])[0]).get("close") or []
+            rows = [{"code": "COMEX_GOLD_USD", "period": datetime.fromtimestamp(stamp, zone).date().isoformat(), "value": round(close, 2)}
+                for stamp, close in zip(result.get("timestamp") or [], closes) if close]
+            saved = self._cache_free_series(rows, COMEX_SERIES, "COMEX via Yahoo Finance", "https://finance.yahoo.com/quote/GC=F/")
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
         except Exception as exc:
