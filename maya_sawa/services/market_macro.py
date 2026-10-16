@@ -39,10 +39,13 @@ BLS_SERIES = {
     "CUSR0000SA0L1E": ("Core CPI, seasonally adjusted", "index 1982-84=100", "monthly"),
     "CUUR0000SA0": ("CPI, all items, not seasonally adjusted", "index 1982-84=100", "monthly"),
     "CUUR0000SA0L1E": ("Core CPI, not seasonally adjusted", "index 1982-84=100", "monthly"),
+    "WPUFD4": ("Producer Price Index, final demand", "index Nov 2009=100", "monthly"),
 }
 FRED_RELEASES = {
     "50": ("employment", "Nonfarm payrolls / Employment Situation"),
+    "180": ("claims", "Unemployment Insurance Weekly Claims Report"),
     "10": ("cpi", "CPI / Consumer Price Index"),
+    "46": ("ppi", "Producer Price Index"),
     "9": ("retail_sales", "Advance Monthly Sales for Retail and Food Services"),
 }
 FRED_SERIES = {
@@ -51,6 +54,9 @@ FRED_SERIES = {
     "RSAFS": ("Advance retail sales and food services", "millions of dollars", "monthly"),
     "DGS10": ("10-year Treasury constant maturity yield", "percent", "daily"),
     "DCOILWTICO": ("WTI crude oil spot price", "USD/barrel", "daily"),
+    "ICSA": ("Initial unemployment insurance claims, seasonally adjusted", "persons", "weekly"),
+    "GBRSLRTTO01GPSAM": ("United Kingdom retail sales volume, month over month", "percent", "monthly"),
+    "GBRSLRTTO01GYSAM": ("United Kingdom retail sales volume, year over year", "percent", "monthly"),
 }
 CBC_SERIES = {
     "CBC_REDISCOUNT": ("Taiwan CBC rediscount rate", "percent", "daily"),
@@ -71,9 +77,16 @@ DGBAS_COMMODITY_SERIES = {
 DGBAS_SERIES = {
     "TW_EMPLOYED": ("Taiwan employed persons", "thousand persons", "monthly"),
     "TW_UNEMPLOYED": ("Taiwan unemployed persons", "thousand persons", "monthly"),
+    "TW_PPI": ("Taiwan producer price index", "index points", "monthly"),
 }
 UMICH_SERIES = {
     "UMICH_CPI_EXPECTED_1Y": ("Michigan median expected inflation over next 12 months", "percent", "monthly"),
+}
+PMI_SERIES = {
+    "TW_PMI": ("Taiwan manufacturing PMI", "index points", "monthly"),
+    "TW_NMI": ("Taiwan non-manufacturing NMI", "index points", "monthly"),
+    "US_ISM_MFG_PMI": ("U.S. ISM manufacturing PMI", "index points", "monthly"),
+    "US_ISM_SERVICES_PMI": ("U.S. ISM services PMI", "index points", "monthly"),
 }
 def _bounded_budget(name: str, default: int, ceiling: int) -> int:
     try: requested = int(os.getenv(name, str(default)))
@@ -116,7 +129,7 @@ class LocalTTLCache:
 _macro_local_cache = LocalTTLCache()
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
-FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES)
+FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | {"GBRSLRTTO01GPSAM", "GBRSLRTTO01GYSAM"}
 
 
 def _request(url: str, body: dict | None = None) -> tuple[int, bytes]:
@@ -221,8 +234,8 @@ class MarketMacroService:
                 await self.refresh()
             except Exception:
                 logger.exception("Macro scheduled refresh failed")
-            # Four BLS batches and up to twenty-eight keyed FRED calls per day stay
-            # comfortably inside the site's conservative daily budgets.
+            # FRED uses eight series observations plus five release date/time lookups
+            # per refresh; four refreshes daily remain below its 100-call budget.
             await asyncio.sleep(6 * 3600)
 
     async def refresh(self) -> dict:
@@ -267,8 +280,10 @@ class MarketMacroService:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("DGBAS", self._fetch_dgbas_employment),
+                ("DGBASPrices", self._fetch_taiwan_ppi),
                 ("WorldBank", self._fetch_world_bank_gold),
-                ("UMichInflation", self._fetch_umich_inflation_expectations)):
+                ("UMichInflation", self._fetch_umich_inflation_expectations),
+                ("PMI", self._fetch_pmi_series)):
                 try: output["sources"][source_name] = fetch()
                 except Exception as exc:
                     logger.warning("%s refresh failed: %s", source_name, str(exc)[:80])
@@ -304,8 +319,9 @@ class MarketMacroService:
                         "value": item["value"], "preliminary": any(note.get("code") == "P" for note in footnotes)})
             previous_employment = market_macro_db.latest_period("CES0000000001")
             previous_cpi = market_macro_db.latest_period("CUSR0000SA0")
+            previous_ppi = market_macro_db.latest_period("WPUFD4")
             newest = {code: max((row["period"] for row in rows if row["code"] == code), default=None)
-                for code in ("CES0000000001", "CUSR0000SA0")}
+                for code in ("CES0000000001", "CUSR0000SA0", "WPUFD4")}
             with market_macro_db.sessions.begin() as session:
                 for code, (name, unit, frequency) in BLS_SERIES.items():
                     session.merge(MacroSeries(code=code, name=name, unit=unit, frequency=frequency, source="BLS"))
@@ -314,6 +330,8 @@ class MarketMacroService:
                 market_macro_db.record_observed_release("employment", newest["CES0000000001"], "https://www.bls.gov/news.release/empsit.htm")
             if previous_cpi and newest["CUSR0000SA0"] and newest["CUSR0000SA0"] > previous_cpi:
                 market_macro_db.record_observed_release("cpi", newest["CUSR0000SA0"], "https://www.bls.gov/news.release/cpi.htm")
+            if previous_ppi and newest["WPUFD4"] and newest["WPUFD4"] > previous_ppi:
+                market_macro_db.record_observed_release("ppi", newest["WPUFD4"], "https://www.bls.gov/news.release/ppi.htm")
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
         except Exception as exc:
@@ -350,7 +368,8 @@ class MarketMacroService:
                     except (KeyError, ValueError, TypeError): continue
                     if not date.today() - timedelta(days=7) <= scheduled <= date.today() + timedelta(days=90): continue
                     # Monthly release identity remains stable if the day is revised.
-                    source_id = f"{release_id}:{scheduled:%Y-%m}"
+                    source_period = scheduled.isoformat() if release_id == "180" else scheduled.strftime("%Y-%m")
+                    source_id = f"{release_id}:{source_period}"
                     local_time = release_times.get(scheduled)
                     events.append({"id": f"fred:{source_id}", "sourceId": source_id, "groupId": group,
                         "type": group, "title": title, "scheduledDate": scheduled,
@@ -378,7 +397,7 @@ class MarketMacroService:
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=10)
             if run_id is None: raise RuntimeError("fred_daily_or_minute_budget_exhausted")
             params = urllib.parse.urlencode({"series_id": code, "file_type": "json",
-                "observation_start": (date.today() - timedelta(days=730)).isoformat() if FRED_SERIES[code][2] == "daily"
+                "observation_start": (date.today() - timedelta(days=730)).isoformat() if FRED_SERIES[code][2] in ("daily", "weekly")
                     else f"{date.today().year - 6}-01-01",
                 "sort_order": "asc", "limit": "1000", "api_key": FRED_KEY})
             if FRED_SERIES[code][2] == "monthly":
@@ -393,10 +412,15 @@ class MarketMacroService:
                     if not item.get("value") or item["value"] == ".": continue
                     try:
                         observation_date = date.fromisoformat(item["date"])
-                        period = observation_date.isoformat() if FRED_SERIES[code][2] == "daily" else observation_date.isoformat()[:7]
+                        period = observation_date.isoformat() if FRED_SERIES[code][2] in ("daily", "weekly") else observation_date.isoformat()[:7]
                     except (KeyError, ValueError, TypeError): continue
                     rows.append({"code": code, "period": period, "value": item["value"]})
-                saved = market_macro_db.save_observations("FRED", rows); count += saved
+                if code in FREE_CACHE_CODES:
+                    saved = self._cache_free_series(rows, FRED_SERIES, "OECD (via FRED)",
+                        f"https://fred.stlouisfed.org/series/{code}", fresh_for_seconds=12 * 3600)
+                else:
+                    saved = market_macro_db.save_observations("FRED", rows)
+                count += saved
                 market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             except Exception as exc:
                 market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
@@ -530,7 +554,8 @@ class MarketMacroService:
                 series = next(iter(data_set.get("series", {}).values()), {})
                 for period_index, values in series.get("observations", {}).items():
                     index = int(period_index)
-                    if index >= len(periods) or not values or values[0] in (None, ""):
+                    # DGBAS fills months not yet published with 0; a population count is never 0.
+                    if index >= len(periods) or not values or values[0] in (None, "") or float(values[0]) == 0:
                         continue
                     period = str(periods[index].get("id", ""))
                     match = re.fullmatch(r"(\d{4})-M(\d{1,2})", period)
@@ -538,6 +563,76 @@ class MarketMacroService:
                         rows.append({"code": code, "period": f"{match.group(1)}-{int(match.group(2)):02d}", "value": values[0]})
             saved = self._cache_free_series(rows, DGBAS_SERIES, "DGBAS", "https://nstatdb.dgbas.gov.tw/dgbasAll/")
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=saved_http_status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_taiwan_ppi(self) -> int:
+        """Cache Taiwan's official producer price total index from DGBAS, in process memory only."""
+        run_id = market_macro_db.reserve_source_call("DGBASPrices", daily_limit=12, minute_limit=3)
+        if run_id is None: raise RuntimeError("dgbas_prices_daily_budget_exhausted")
+        try:
+            today = date.today()
+            end_year, end_month = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+            start_period = f"{end_year - 6}-M{end_month}"
+            end_period = f"{end_year}-M{end_month}"
+            query = urllib.parse.urlencode({"startTime": start_period, "endTime": end_period})
+            url = f"https://nstatdb.dgbas.gov.tw/dgbasAll/webMain.aspx?sdmx/A030701015/1.1.1.M&{query}"
+            status, raw = _request_free_cached(f"dgbas:TW_PPI:{start_period}:{end_period}", url, ttl_seconds=12 * 3600)
+            payload = json.loads(raw)
+            data = payload.get("data", {})
+            data_set = (data.get("dataSets") or [{}])[0]
+            periods = data.get("structure", {}).get("dimensions", {}).get("observation", [{}])[0].get("values", [])
+            series = next(iter(data_set.get("series", {}).values()), {})
+            observations = series.get("observations", {})
+            rows = []
+            for period_index, values in observations.items():
+                index = int(period_index)
+                if index >= len(periods) or not values or values[0] in (None, ""):
+                    continue
+                match = re.fullmatch(r"(\d{4})-M(\d{1,2})", str(periods[index].get("id", "")))
+                if match:
+                    rows.append({"code": "TW_PPI", "period": f"{match.group(1)}-{int(match.group(2)):02d}", "value": values[0]})
+            if not rows:
+                raise RuntimeError("dgbas_ppi_observations_empty")
+            saved = self._cache_free_series(rows, DGBAS_SERIES, "DGBAS", "https://nstatdb.dgbas.gov.tw/dgbasAll/", fresh_for_seconds=12 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_pmi_series(self) -> int:
+        """Cache Taiwan PMI/NMI history from CIER's published monthly trend tables."""
+        cache_key = "series:TW_PMI"
+        existing = _macro_local_cache.get(cache_key)
+        if existing and (datetime.now(UTC) - datetime.fromisoformat(existing["fetchedAt"])).total_seconds() < 12 * 3600:
+            return sum(len((_macro_local_cache.get(f"series:{code}") or {}).get("history", [])) for code in PMI_SERIES if code.startswith("TW_"))
+        run_id = market_macro_db.reserve_source_call("PMI", daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError("pmi_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("cier:pmi-trend", "https://www.cier.edu.tw/pmi-trend/", ttl_seconds=12 * 3600)
+            html = raw.decode("utf-8", errors="replace")
+            tables = re.findall(r"<table\b[^>]*>(.*?)</table>", html, flags=re.I | re.S)
+            output: dict[str, list[dict]] = {"TW_PMI": [], "TW_NMI": []}
+            for table in tables:
+                text = unescape(re.sub(r"<[^>]+>", " ", table))
+                code = "TW_PMI" if "臺灣製造業PMI" in text else "TW_NMI" if "臺灣非製造業NMI" in text else None
+                if not code:
+                    continue
+                for row in re.findall(r"<tr\b[^>]*>(.*?)</tr>", table, flags=re.I | re.S):
+                    cells = [unescape(re.sub(r"<[^>]+>", " ", cell)).strip() for cell in re.findall(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", row, flags=re.I | re.S)]
+                    if len(cells) < 2:
+                        continue
+                    period_match = re.fullmatch(r"(\d{4})/(\d{1,2})", cells[0])
+                    value_match = re.search(r"\d+(?:\.\d+)?", cells[1].replace(",", ""))
+                    if period_match and value_match:
+                        output[code].append({"code": code, "period": f"{period_match.group(1)}-{int(period_match.group(2)):02d}", "value": value_match.group(0)})
+            if not output["TW_PMI"] or not output["TW_NMI"]:
+                raise RuntimeError("cier_pmi_tables_incomplete")
+            saved = self._cache_free_series(output["TW_PMI"] + output["TW_NMI"], PMI_SERIES, "CIER", "https://www.cier.edu.tw/pmi-trend/", fresh_for_seconds=12 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
         except Exception as exc:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
@@ -679,15 +774,29 @@ class MarketMacroService:
                 for item in payload["events"]:
                     title = str(item.get("title") or item.get("name") or "")
                     lowered = title.lower()
+                    country = str(item.get("country") or item.get("country_code") or item.get("region") or "").strip().lower()
+                    is_us = country in {"us", "usa", "united states", "united states of america"} or bool(re.search(r"(?:\bu\.s\.\s|\bus\s|\bunited states\b)", lowered))
+                    is_uk = country in {"gb", "uk", "gbr", "united kingdom", "great britain"} or bool(re.match(r"\s*(?:uk\s|u\.k\.\s)", lowered))
                     group = None
                     if "fomc" in lowered and ("decision" in lowered or "rate" in lowered):
                         group = "fed"
-                    elif "cpi" in lowered and ("us " in lowered or "united states" in lowered):
+                    elif "cpi" in lowered and is_us:
                         group = "cpi"
-                    elif "retail sales" in lowered or "retail trade" in lowered:
+                    elif "ppi" in lowered and is_us:
+                        group = "ppi"
+                    elif ("retail sales" in lowered or "retail trade" in lowered) and (is_us or is_uk):
                         group = "retail_sales"
                     elif any(term in lowered for term in ("nonfarm payroll", "employment situation", "us jobs report")):
                         group = "employment"
+                    elif is_us and any(term in lowered for term in ("jobless claims", "initial claims", "weekly claims")):
+                        group = "claims"
+                    elif is_us and str(item.get("impact") or "").strip().lower() in {"medium", "high"} and any(term in lowered for term in (
+                        "gdp", "gross domestic product", "pce", "personal consumption", "personal income", "personal spending",
+                        "durable goods", "industrial production", "housing starts", "building permits", "new home sales",
+                        "existing home sales", "consumer confidence", "consumer sentiment", "michigan sentiment", "trade balance",
+                        "business inventories", "factory orders", "consumer credit", "leading indicators", "ism manufacturing",
+                        "ism services", " ism pmi", "jobless claims", "initial claims", "weekly claims")):
+                        group = "other"
                     if not group:
                         continue
                     try:
@@ -701,13 +810,20 @@ class MarketMacroService:
                         scheduled_at = None
                     source_url = str(item.get("url") or "https://www.financecalendar.com/api/")
                     consensus, actual = item.get("consensus"), item.get("actual")
-                    event_id = f"financecalendar:{group}:{scheduled.isoformat()}"
-                    events_by_id[event_id] = {"id": event_id, "sourceId": f"{group}:{scheduled.isoformat()}",
-                        "groupId": group, "type": group, "title": title, "scheduledDate": scheduled,
+                    # Multiple countries and multiple releases can share a calendar date.
+                    # Keep their identities distinct so one event cannot overwrite another.
+                    event_title = f"UK {title}" if group == "retail_sales" and is_uk and not lowered.startswith(("uk ", "u.k.")) else title
+                    title_key = hashlib.sha256(f"{country}:{title}".casefold().encode("utf-8")).hexdigest()[:12]
+                    use_title_key = group == "other" or (group == "retail_sales" and is_uk)
+                    identity = f"{scheduled.isoformat()}:{title_key}" if use_title_key else scheduled.isoformat()
+                    event_id = f"financecalendar:{group}:{identity}"
+                    protected_ism = group == "other" and "ism" in lowered
+                    events_by_id[event_id] = {"id": event_id, "sourceId": f"{group}:{identity}",
+                        "groupId": group, "type": group, "title": event_title, "scheduledDate": scheduled,
                         "scheduledAt": scheduled_at, "timePrecision": "minute" if scheduled_at else "date",
                         "scheduleVerification": "confirmed" if scheduled_at else "date_only",
-                        "consensusValue": str(consensus) if consensus not in (None, "") else None,
-                        "actualValue": str(actual) if actual not in (None, "") else None,
+                        "consensusValue": str(consensus) if not protected_ism and consensus not in (None, "") else None,
+                        "actualValue": str(actual) if not protected_ism and actual not in (None, "") else None,
                         "expectationSource": "Finance Calendar", "sourceUrl": source_url}
                 market_macro_db.finish_source_call(run_id, "success", len(payload["events"]), http_status=status)
             except Exception as exc:

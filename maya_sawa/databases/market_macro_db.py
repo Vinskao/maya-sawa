@@ -349,9 +349,8 @@ class MarketMacroDatabase:
         indicators = []
         for code, rows in by_code.items():
             meta = series.get(code)
-            # Daily series need calendar-day history, not just 24 rows; otherwise
-            # all daily charts collapse to roughly one month despite a 24-month window.
-            row_limit = max(history_months, 24) * 32 if meta and meta.frequency == "daily" else max(history_months, 24)
+            # Daily and weekly series need higher point limits than monthly series.
+            row_limit = max(history_months, 24) * (32 if meta and meta.frequency == "daily" else 5 if meta and meta.frequency == "weekly" else 1)
             rows = rows[-row_limit:]
             latest = rows[-1]
             previous = rows[-2] if len(rows) > 1 else None
@@ -362,6 +361,13 @@ class MarketMacroDatabase:
                 "preliminary": bool(latest.preliminary), "source": latest.source, "fetchedAt": latest.fetched_at.isoformat(),
                 "sourcePublishedAt": latest.source_published_at.isoformat() if latest.source_published_at else None,
                 "history": [{"period": row.reference_period, "value": row.value} for row in rows]}
+            if code == "ICSA":
+                indicator["source"] = "U.S. Department of Labor ETA (via FRED)"
+                indicator["sourceUrl"] = "https://oui.doleta.gov/unemploy/claims.asp/wkclaims/report.asp"
+            elif code == "WPUFD4":
+                indicator["sourceUrl"] = "https://www.bls.gov/ppi/data-retrieval-guide/home.htm"
+            elif code == "RSAFS":
+                indicator["sourceUrl"] = "https://api.census.gov/data/timeseries/eits/mrts.html"
             if code == "CUUR0000SA0":
                 forecasts = []
                 for event in cpi_history_rows:
@@ -407,7 +413,7 @@ class MarketMacroDatabase:
 
 
 # Series whose stored observations prove a release group has published.
-RELEASE_SERIES = {"employment": "CES0000000001", "cpi": "CUSR0000SA0", "retail_sales": "RSAFS", "fed": "DFEDTARU"}
+RELEASE_SERIES = {"employment": "CES0000000001", "claims": "ICSA", "cpi": "CUSR0000SA0", "ppi": "WPUFD4", "retail_sales": "RSAFS", "fed": "DFEDTARU"}
 
 
 def _release_observed(event: MacroEvent, observed_period: str | None) -> bool:
