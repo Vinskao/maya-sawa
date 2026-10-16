@@ -136,3 +136,27 @@ def test_collector_persists_all_three_sources_and_second_pass_uses_db_cache(monk
     assert 'private' not in str(saved)
     asyncio.run(collector.collect(Gateway(), positions))
     assert len(calls) == 4
+
+
+def test_shioaji_background_refresh_keeps_overseas_selection_without_mutating_taiwan_source(monkeypatch):
+    from maya_sawa.services.shioaji_market import ShioajiMarketService
+    from maya_sawa.services.ibkr_market import ibkr_market_service
+    from maya_sawa.databases.market_dashboard_db import market_dashboard_db
+    from maya_sawa.databases.portfolio_history_db import portfolio_history_db
+    service = ShioajiMarketService()
+    payload = {'balanceAvailable': True, 'fetchedAt': '2026-10-16T11:00:00Z', 'cashBalance': 10,
+               'totalAssetsEstimated': 100, 'totalPnl': 0, 'positions': []}
+    async def fetch(*args): return payload
+    async def ibkr(): return {'positions': [{'code': 'META', 'assetClass': 'STK', 'currency': 'USD'}],
+        'twd': {'cashBalance': 0, 'netLiquidation': 10, 'grossPositionValue': 10, 'unrealizedPnl': 0},
+        'usd': {'netLiquidation': 10, 'grossPositionValue': 10}, 'usdTwdRate': 32}
+    recorded = []
+    monkeypatch.setattr(service, '_run_with_relogin', fetch)
+    monkeypatch.setattr(service, '_read_cached_payload', lambda *args: {'symbol': 'TXF'})
+    monkeypatch.setattr(service, '_write_cached_payload', lambda *args: None)
+    monkeypatch.setattr(ibkr_market_service, 'get_snapshot', ibkr)
+    monkeypatch.setattr(portfolio_history_db, 'record_taiwan', lambda *args: None)
+    monkeypatch.setattr(market_dashboard_db, 'record_portfolio', lambda value, *args: recorded.append(value))
+    assert asyncio.run(service._refresh_payload('PORTFOLIO', None))
+    assert recorded[0]['ibkr']['positions'][0]['code'] == 'META'
+    assert 'ibkr' not in payload

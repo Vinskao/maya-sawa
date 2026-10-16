@@ -6,6 +6,7 @@ import os
 import platform
 import re
 import time
+from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -334,7 +335,17 @@ class ShioajiMarketService:
                 from ..databases.market_dashboard_db import market_dashboard_db
                 await asyncio.to_thread(portfolio_history_db.record_taiwan, payload)
                 fixed_quote = await asyncio.to_thread(self._read_cached_payload, "TXF")
-                await asyncio.to_thread(market_dashboard_db.record_portfolio, payload, fixed_quote.get("symbol"))
+                # The automatic universe is shared across brokers. A Taiwan-only
+                # background refresh must not erase overseas holdings between visits.
+                selection_payload = deepcopy(payload)
+                try:
+                    from .ibkr_market import ibkr_market_service, merge_ibkr_into_portfolio
+                    overseas = await ibkr_market_service.get_snapshot()  # cache/DB only
+                    merge_ibkr_into_portfolio(selection_payload, overseas)
+                except Exception:
+                    logger.info('IBKR cached selection unavailable during Taiwan refresh')
+                await asyncio.to_thread(market_dashboard_db.record_portfolio, selection_payload,
+                                        fixed_quote.get("symbol") if fixed_quote else None)
             except Exception:
                 logger.exception("Failed to record Taiwan portfolio/dashboard history (non-fatal)")
         elif key in {"TXF", "QFFR1"}:
