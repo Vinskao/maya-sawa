@@ -4,6 +4,8 @@
 
 **直接在 `main` 上改。不建立特性分支。**
 
+測試規則：遵守 `AGENTS.md` 的「TDD」一節（修 bug 先寫失敗測試、改到沒測試的程式先補測試）。
+
 - 本專案只用 `main`
 - 改動完測通後直接 `git push origin main`（用 SSH URL，HTTPS token 無效）
 - 分岔分支會導致合併地獄（已有經驗教訓）

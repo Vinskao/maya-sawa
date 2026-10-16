@@ -71,11 +71,16 @@ TAIWAN_SERIES = {
 TPEX_SERIES = {
     "TPEx_GOLD_TWD": ("Taiwan gold spot average transaction price", "TWD/tael", "daily"),
 }
-# TPEx only publishes the latest gold quote, so the gold trend chart uses COMEX front-month futures history.
-COMEX_SERIES = {
+# Free daily market closes from the Yahoo chart API (no key; it rejects urllib's default agent).
+# TPEx only publishes the latest gold quote, so the gold trend uses COMEX front-month futures; JPY and the ICE
+# dollar index come from here instead of FRED so they do not consume the FRED daily budget.
+YAHOO_SERIES = {
     "COMEX_GOLD_USD": ("COMEX gold futures (front month) daily close", "USD/troy oz", "daily"),
+    "USD_JPY": ("Japanese yen per U.S. dollar, daily close", "JPY/USD", "daily"),
+    "US_DOLLAR_INDEX": ("ICE U.S. Dollar Index (DXY), daily close", "index points", "daily"),
 }
-COMEX_GOLD_URL = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=1y&interval=1d"
+YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB"}
+YAHOO_AGENT = {"User-Agent": "Mozilla/5.0 (compatible; maya-sawa macro dashboard)"}
 DGBAS_COMMODITY_SERIES = {
     "WORLD_GOLD_USD": ("World Bank monthly gold price", "USD/troy oz", "monthly"),
 }
@@ -137,7 +142,7 @@ class LocalTTLCache:
 _macro_local_cache = LocalTTLCache()
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
-FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(COMEX_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | {"GBRSLRTTO01GPSAM", "GBRSLRTTO01GYSAM"}
+FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | {"GBRSLRTTO01GPSAM", "GBRSLRTTO01GYSAM"}
 
 
 def _request(url: str, body: dict | None = None, extra_headers: dict | None = None) -> tuple[int, bytes]:
@@ -290,7 +295,7 @@ class MarketMacroService:
             except Exception as exc:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
-                ("TPExGold", self._fetch_tpex_gold), ("COMEXGold", self._fetch_comex_gold),
+                ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
                 ("DGBAS", self._fetch_dgbas_employment),
                 ("DGBASPrices", self._fetch_taiwan_ppi),
                 ("WorldBank", self._fetch_world_bank_gold),
@@ -539,24 +544,29 @@ class MarketMacroService:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
             raise
 
-    def _fetch_comex_gold(self) -> int:
-        """Cache one year of free COMEX gold futures daily closes (Yahoo chart API, no key)."""
-        run_id = market_macro_db.reserve_source_call("COMEX", daily_limit=12, minute_limit=2)
-        if run_id is None: raise RuntimeError("comex_gold_daily_budget_exhausted")
-        try:
-            status, raw = _request_free_cached("yahoo:GC=F:1y", COMEX_GOLD_URL, ttl_seconds=6 * 3600,
-                extra_headers={"User-Agent": "Mozilla/5.0 (compatible; maya-sawa macro dashboard)"})
-            result = (json.loads(raw).get("chart", {}).get("result") or [{}])[0]
-            zone = ZoneInfo(result.get("meta", {}).get("exchangeTimezoneName") or "America/New_York")
-            closes = ((result.get("indicators", {}).get("quote") or [{}])[0]).get("close") or []
-            rows = [{"code": "COMEX_GOLD_USD", "period": datetime.fromtimestamp(stamp, zone).date().isoformat(), "value": round(close, 2)}
-                for stamp, close in zip(result.get("timestamp") or [], closes) if close]
-            saved = self._cache_free_series(rows, COMEX_SERIES, "COMEX via Yahoo Finance", "https://finance.yahoo.com/quote/GC=F/")
-            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
-            return saved
-        except Exception as exc:
-            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
-            raise
+    def _fetch_yahoo_markets(self) -> int:
+        """Cache one year of daily closes per Yahoo symbol; one failing symbol does not drop the others."""
+        run_id = market_macro_db.reserve_source_call("Yahoo", daily_limit=12, minute_limit=2)
+        if run_id is None: raise RuntimeError("yahoo_daily_budget_exhausted")
+        saved, failures, status = 0, [], None
+        for code, symbol in YAHOO_SYMBOLS.items():
+            try:
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}?range=1y&interval=1d"
+                status, raw = _request_free_cached(f"yahoo:{symbol}:1y", url, ttl_seconds=6 * 3600, extra_headers=YAHOO_AGENT)
+                result = (json.loads(raw).get("chart", {}).get("result") or [{}])[0]
+                zone = ZoneInfo(result.get("meta", {}).get("exchangeTimezoneName") or "America/New_York")
+                closes = ((result.get("indicators", {}).get("quote") or [{}])[0]).get("close") or []
+                rows = [{"code": code, "period": datetime.fromtimestamp(stamp, zone).date().isoformat(), "value": round(close, 2)}
+                    for stamp, close in zip(result.get("timestamp") or [], closes) if close]
+                saved += self._cache_free_series(rows, YAHOO_SERIES, "Yahoo Finance",
+                    f"https://finance.yahoo.com/quote/{urllib.parse.quote(symbol)}/")
+            except Exception as exc:
+                failures.append(f"{code}:{str(exc)[:30]}")
+        if len(failures) == len(YAHOO_SYMBOLS):
+            market_macro_db.finish_source_call(run_id, "error", detail=";".join(failures))
+            raise RuntimeError("yahoo_all_symbols_failed")
+        market_macro_db.finish_source_call(run_id, "success", saved, detail=";".join(failures), http_status=status)
+        return saved
 
     def _fetch_dgbas_employment(self) -> int:
         """Cache free DGBAS employment/unemployment totals; the API is monthly and anonymous."""
