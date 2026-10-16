@@ -173,7 +173,6 @@ class Config:
     MONGODB_URI = os.getenv("MONGODB_URI")
     MONGODB_DB = os.getenv("MONGODB_DB", "palais")
     MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "tyf_visits")
-    MONGODB_VISITS_COLLECTION = os.getenv("MONGODB_VISITS_COLLECTION", "visit_count_history")
     
     # Redis Queue for Voyeur
     REDIS_QUEUE_VOYEUR = os.getenv("REDIS_QUEUE_VOYEUR", "voyeur_queue")

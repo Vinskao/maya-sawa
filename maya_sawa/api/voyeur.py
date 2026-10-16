@@ -4,18 +4,11 @@ Migrated from Voyeur Django project.
 Contains Visit and Queue functionality using Redis.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Form, Query
 from fastapi.responses import JSONResponse
 import logging
-from threading import Lock
-
-try:
-    import pymongo
-    from pymongo import ASCENDING
-except ImportError:
-    pymongo = None
-    ASCENDING = 1
+from ..databases.visit_count_db import visit_count_db
 
 from ..core.database.connection_pool import get_pool_manager
 from ..core.config.config import Config
@@ -23,29 +16,6 @@ from ..core.config.config import Config
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/voyeur", tags=["Voyeur"])
-
-_BASELINE_ID = "legacy-baseline"
-_VISIT_TIMEZONE = timezone(timedelta(hours=8))
-_mongo_client = None
-_mongo_client_lock = Lock()
-
-
-def _visit_collection():
-    """Return the durable visit-count collection, using a pooled Mongo client."""
-    global _mongo_client
-    if pymongo is None or not Config.MONGODB_URI:
-        raise HTTPException(status_code=503, detail="Persistent visit storage unavailable")
-    if _mongo_client is None:
-        with _mongo_client_lock:
-            if _mongo_client is None:
-                _mongo_client = pymongo.MongoClient(
-                    Config.MONGODB_URI,
-                    serverSelectionTimeoutMS=4000,
-                    connectTimeoutMS=4000,
-                    maxPoolSize=4,
-                )
-    return _mongo_client[Config.MONGODB_DB][Config.MONGODB_VISITS_COLLECTION]
-
 
 def _redis_count(redis_client) -> int:
     if redis_client is None:
@@ -65,36 +35,6 @@ def _optional_redis_client():
         return None
 
 
-def _ensure_legacy_baseline(collection, redis_client):
-    """Seed the pre-persistence Redis total once, preserving the existing counter."""
-    if collection.find_one({"_id": _BASELINE_ID}, {"_id": 1}):
-        return
-    recorded_at = datetime.now(_VISIT_TIMEZONE).isoformat(timespec="seconds")
-    persisted_daily_total = sum(
-        int(item.get("visits", 0))
-        for item in collection.find({"_id": {"$ne": _BASELINE_ID}}, {"visits": 1})
-    )
-    legacy_total = _redis_count(redis_client)
-    collection.update_one(
-        {"_id": _BASELINE_ID},
-        {"$setOnInsert": {
-            "kind": "baseline",
-            "timestamp": recorded_at,
-            "total": max(0, legacy_total - persisted_daily_total),
-        }},
-        upsert=True,
-    )
-
-
-def _total_visit_count(collection) -> int:
-    baseline = collection.find_one({"_id": _BASELINE_ID}, {"total": 1}) or {}
-    daily_total = sum(
-        int(item.get("visits", 0))
-        for item in collection.find({"_id": {"$ne": _BASELINE_ID}}, {"visits": 1})
-    )
-    return int(baseline.get("total", 0)) + daily_total
-
-
 def _sync_redis_cache(redis_client, total: int) -> None:
     if redis_client is None:
         return
@@ -106,13 +46,13 @@ def _sync_redis_cache(redis_client, total: int) -> None:
 @router.get("/count/")
 async def get_visit_count():
     """
-    Read the durable count from MongoDB and refresh the Redis cache.
+    Read the durable count from PostgreSQL and refresh the Redis cache.
     """
     try:
         r = _optional_redis_client()
-        collection = _visit_collection()
-        _ensure_legacy_baseline(collection, r)
-        count = _total_visit_count(collection)
+        legacy_total = _redis_count(r)
+        visit_count_db.ensure_baseline(legacy_total)
+        count = visit_count_db.history(1)["totalCount"]
         _sync_redis_cache(r, count)
         logger.info("Current persistent visit count: %s", count)
         return {"count": count, "persisted": True}
@@ -125,20 +65,12 @@ async def get_visit_count():
 @router.post("/increment/")
 async def increment_visit_count():
     """
-    Persist one visit in the daily MongoDB bucket, then refresh Redis as a cache.
+    Persist one visit in the daily PostgreSQL bucket, then refresh Redis as a cache.
     """
     try:
         r = _optional_redis_client()
-        collection = _visit_collection()
-        _ensure_legacy_baseline(collection, r)
-        now = datetime.now(_VISIT_TIMEZONE)
-        period = now.date().isoformat()
-        collection.update_one(
-            {"_id": period},
-            {"$inc": {"visits": 1}, "$set": {"kind": "daily", "period": period, "timestamp": now.isoformat(timespec="seconds")}},
-            upsert=True,
-        )
-        count = _total_visit_count(collection)
+        now = datetime.now(timezone.utc)
+        count = visit_count_db.increment(now, _redis_count(r))
         _sync_redis_cache(r, count)
         logger.info("Persisted visit count increment: %s", count)
         return {"count": count, "persisted": True, "timestamp": now.isoformat(timespec="seconds")}
@@ -154,33 +86,9 @@ async def get_visit_history(days: int = Query(default=365, ge=1, le=1825)):
     """Return daily persisted visits and cumulative totals for the homepage trend chart."""
     try:
         r = _optional_redis_client()
-        collection = _visit_collection()
-        _ensure_legacy_baseline(collection, r)
-        baseline = collection.find_one({"_id": _BASELINE_ID}) or {}
-        rows = list(
-            collection.find({"_id": {"$ne": _BASELINE_ID}}, {"period": 1, "visits": 1, "timestamp": 1})
-            .sort("period", ASCENDING)
-        )
-        cumulative = int(baseline.get("total", 0))
-        all_points = []
-        if baseline.get("timestamp"):
-            all_points.append({"timestamp": baseline["timestamp"], "date": baseline["timestamp"][:10], "visits": 0, "cumulative": cumulative})
-        for row in rows:
-            visits = int(row.get("visits", 0))
-            cumulative += visits
-            all_points.append({
-                "timestamp": row.get("timestamp", f"{row.get('period', '')}T23:59:59+08:00"),
-                "date": row.get("period", ""),
-                "visits": visits,
-                "cumulative": cumulative,
-            })
-        cutoff = (datetime.now(_VISIT_TIMEZONE).date() - timedelta(days=days - 1)).isoformat()
-        prior_points = [point for point in all_points if point["date"] < cutoff]
-        visible_points = [point for point in all_points if point["date"] >= cutoff]
-        if prior_points:
-            visible_points.insert(0, prior_points[-1])
-        _sync_redis_cache(r, cumulative)
-        return {"totalCount": cumulative, "days": days, "points": visible_points, "persisted": True}
+        history = visit_count_db.history(days)
+        _sync_redis_cache(r, history["totalCount"])
+        return history
     except HTTPException:
         raise
     except Exception as exc:
