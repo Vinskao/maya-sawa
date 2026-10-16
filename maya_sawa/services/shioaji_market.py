@@ -272,8 +272,15 @@ class ShioajiMarketService:
                 stock_rows = await self._run_with_relogin(
                     lambda api: self._fetch_dashboard_quotes(api, stock_selection)
                 ) if stock_selection else []
-                # Off-session snapshots can come back with close=0; never let them overwrite the last real price.
-                valid_rows = [row for row in [*rows, *stock_rows] if _has_price(row)]
+                # A selected stock may also be the underlying of a held future.
+                # Collapse those duplicate identities before the PostgreSQL upsert;
+                # the later stock-only snapshot wins for duplicate stock symbols.
+                unique_rows: dict[tuple[str, str], dict[str, Any]] = {}
+                for row in [*rows, *stock_rows]:
+                    key = (str(row.get("productType", "")), str(row.get("symbol", "")).upper())
+                    if _has_price(row) and key[1]:
+                        unique_rows[key] = row
+                valid_rows = list(unique_rows.values())
                 await asyncio.to_thread(market_fundamentals_db.save_quote_snapshots, valid_rows)
                 cache_id = hashlib.sha256(json.dumps(selected, sort_keys=True).encode()).hexdigest()[:20]
                 await asyncio.to_thread(self._write_cached_payload, f"DASHBOARD_QUOTES_V2_{cache_id}", rows, 300)
