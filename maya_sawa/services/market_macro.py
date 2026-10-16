@@ -100,7 +100,10 @@ def _bounded_budget(name: str, default: int, ceiling: int) -> int:
 
 
 BLS_DAILY_BUDGET = _bounded_budget("MACRO_BLS_DAILY_BUDGET", 40, 40)
-FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 100, 100)
+# Eight observation series plus five release schedules use about 13 calls per
+# refresh. Four scheduled refreshes/day need ~52; this headroom covers deploys
+# and manual recovery while remaining well below FRED's per-minute limit.
+FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 200, 200)
 
 
 class LocalTTLCache:

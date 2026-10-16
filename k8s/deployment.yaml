@@ -180,7 +180,7 @@ spec:
         - name: MACRO_BLS_DAILY_BUDGET
           value: "40"
         - name: MACRO_FRED_DAILY_BUDGET
-          value: "100"
+          value: "200"
         - name: SHIOAJI_SIMULATION
           value: "false"
         - name: SHIOAJI_PORTFOLIO_ENABLED
