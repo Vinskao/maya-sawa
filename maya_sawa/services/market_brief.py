@@ -362,7 +362,7 @@ def brief_markdown(brief: dict, lang: str = "zh") -> str:
 
 
 class MarketBriefService:
-    TTL_SECONDS = 300
+    TTL_SECONDS = 60
 
     def __init__(self) -> None:
         self._cached: tuple[float, tuple, dict] | None = None

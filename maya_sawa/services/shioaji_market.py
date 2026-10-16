@@ -267,8 +267,10 @@ class ShioajiMarketService:
                         stock_instruments[("stock", underlying)] = {
                             "code": underlying, "productType": "stock"
                         }
-                stock_selection = sorted(stock_instruments.values(),
-                                          key=lambda item: (item["productType"], item["code"].upper()))
+                stock_selection = [
+                    {"code": code, "productType": product_type}
+                    for product_type, code in sorted(stock_instruments)
+                ]
                 stock_rows = await self._run_with_relogin(
                     lambda api: self._fetch_dashboard_quotes(api, stock_selection)
                 ) if stock_selection else []
