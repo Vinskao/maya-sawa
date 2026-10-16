@@ -17,6 +17,16 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 
+# Exchange country of an overseas holding, from its trading currency. A code alone is ambiguous: Tokyo's 6857
+# (Advantest) and Taiwan's 6857 (宏碁智醫) share the same digits.
+CURRENCY_MARKET = {"TWD": "TW", "NTD": "TW", "USD": "US", "JPY": "JP", "KRW": "KR", "HKD": "HK", "EUR": "EU", "GBP": "GB"}
+
+
+def market_for_currency(currency: Any) -> str:
+    code = str(currency or "TWD").upper()
+    return CURRENCY_MARKET.get(code, code)
+
+
 def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_code: str | None = None) -> list[dict[str, str]] | None:
     """Return all label-only holdings by descending exposure, or None if invalid."""
     if not portfolio.get("balanceAvailable") or portfolio.get("accountErrors"):
@@ -29,7 +39,8 @@ def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_cod
     # enter the same durable instrument universe as Shioaji positions.
     ibkr = portfolio.get("ibkr") or {}
     positions.extend(
-        {**position, "productType": "stock", "allocationValue": position.get("marketValueTwd"), "currency": "TWD"}
+        {**position, "productType": "stock", "allocationValue": position.get("marketValueTwd"), "currency": "TWD",
+         "market": market_for_currency(position.get("currency"))}
         for position in ibkr.get("positions", [])
         if str(position.get("assetClass") or "").upper() == "STK"
     )
@@ -53,11 +64,11 @@ def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_cod
         if (kind not in {"stock", "futures"} or not code or not name or weight <= 0
                 or (kind == "futures" and fixed_futures_code and code == fixed_futures_code.upper())):
             continue
-        rows.append({"code": code, "name": name, "productType": kind, "weight": weight})
+        rows.append({"code": code, "name": name, "productType": kind, "weight": weight, "market": position.get("market") or "TW"})
     if not rows:
         return None
     rows.sort(key=lambda row: (-row["weight"], row["code"], row["productType"]))
-    return [{k: row[k] for k in ("code", "name", "productType")} for row in rows]
+    return [{k: row[k] for k in ("code", "name", "productType", "market")} for row in rows]
 
 
 class MarketDashboardSnapshot(Base):

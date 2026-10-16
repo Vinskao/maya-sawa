@@ -12,7 +12,15 @@ from ..databases.market_dashboard_db import market_dashboard_db
 from ..databases.market_fundamentals_db import market_fundamentals_db
 
 
+def is_taiwan(item: dict) -> bool:
+    """Rows without a market predate overseas holdings and are Taiwan instruments."""
+    return str(item.get("market") or "TW").upper() == "TW"
+
+
 def stock_code(item: dict) -> str | None:
+    # Taiwan collectors (TWSE/TPEx/TDCC/MOPS) only: an overseas code such as Tokyo 6857 is not Taiwan 6857.
+    if not is_taiwan(item):
+        return None
     code = str(item.get("underlyingCode") or (item.get("code") if item.get("productType") == "stock" else "") or "").upper()
     return code if code.isdigit() and len(code) == 4 else None
 
@@ -22,6 +30,8 @@ def attach_underlying(instruments: list[dict], live_quotes: list[dict] | None = 
     for row in market_fundamentals_db.quote_snapshots(instruments) + list(live_quotes or []):
         quotes[(row.get("productType"), str(row.get("symbol", "")).upper())] = row  # live quotes win
     for item in instruments:
+        if not is_taiwan(item):
+            continue
         quote = quotes.get((item.get("productType"), str(item.get("code", "")).upper())) or {}
         if not item.get("underlyingCode") and quote.get("underlyingCode"):
             item["underlyingCode"] = quote["underlyingCode"]

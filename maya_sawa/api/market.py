@@ -26,7 +26,7 @@ from ..services.ibkr_market import (
     merge_ibkr_into_portfolio,
 )
 from ..databases.portfolio_history_db import portfolio_history_db
-from ..databases.market_dashboard_db import market_dashboard_db
+from ..databases.market_dashboard_db import market_dashboard_db, market_for_currency
 from ..databases.market_history_db import market_history_db
 from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
 from ..services.market_selection import attach_underlying
@@ -106,53 +106,63 @@ async def get_market_dashboard():
     """Public, privacy-safe selection and live quotes; never returns account values."""
     auto = market_dashboard_db.latest_auto()
     custom = market_dashboard_db.custom_symbols()
-    seen: set[str] = set()
+    seen: set[tuple[str, ...]] = set()
+    # The cached IBKR snapshot (read-only, refreshed by its own loop) tells which codes are overseas holdings,
+    # including selections stored before rows carried a market.
+    try:
+        ibkr_snapshot = await ibkr_market_service.get_snapshot()
+    except Exception as exc:
+        ibkr_snapshot = {}
+        logger.info("IBKR cached market quotes unavailable: %s", exc)
+    ibkr_stocks = [position for position in ibkr_snapshot.get("positions", [])
+                   if str(position.get("assetClass") or "").upper() == "STK" and position.get("code")]
+    ibkr_markets = {str(position["code"]).upper(): market_for_currency(position.get("currency")) for position in ibkr_stocks}
     auto_rows = []
     for item in auto["positions"]:
-        key = item["code"].upper()
+        item = {**item, "market": item.get("market") or ibkr_markets.get(item["code"].upper(), "TW")}
+        key = (item["code"].upper(), item["market"])
         if key not in seen:
             seen.add(key)
             auto_rows.append(item)
     custom_rows = []
     for item in custom:
+        item = {**item, "market": item.get("market") or "TW"}  # custom picks come from the Taiwan contract search
         key = (item["productType"], item["code"].upper())
         if key not in seen:
             seen.add(key)
             custom_rows.append(item)
-    quotes: dict[tuple[str, str], dict] = {}
+    # Quotes are keyed by (productType, code, market): Shioaji only quotes Taiwan instruments.
+    quotes: dict[tuple[str, str, str], dict] = {}
     try:
-        rows = await shioaji_market_service.get_dashboard_quotes(auto_rows + custom_rows)
-        quotes = {(item["productType"], item["symbol"].upper()): item for item in rows}
+        rows = await shioaji_market_service.get_dashboard_quotes([item for item in auto_rows + custom_rows if item["market"] == "TW"])
+        quotes = {(item["productType"], item["symbol"].upper(), "TW"): item for item in rows}
     except Exception as exc:
         logger.info("Market selection quotes unavailable: %s", exc)
     # The authenticated IBKR gateway refresh loop owns upstream calls. Public
     # dashboard reads only the cached snapshot and expose quote fields, never
     # account quantities, market values, or account identifiers.
-    try:
-        ibkr_snapshot = await ibkr_market_service.get_snapshot()
-        for position in ibkr_snapshot.get("positions", []):
-            if str(position.get("assetClass") or "").upper() != "STK":
-                continue
-            code = str(position.get("code") or "").upper()
-            key = ("stock", code)
-            if key in quotes or not code or not position.get("lastPrice"):
-                continue
-            quotes[key] = {
-                "symbol": code,
-                "name": position.get("name") or code,
-                "productType": "stock",
-                "close": position["lastPrice"],
-                "open": position["lastPrice"],
-                "high": position["lastPrice"],
-                "low": position["lastPrice"],
-                "change": 0,
-                "changePercent": 0,
-                "volume": 0,
-                "timestamp": ibkr_snapshot.get("fetchedAt"),
-                "quoteSource": "Interactive Brokers CPAPI",
-            }
-    except Exception as exc:
-        logger.info("IBKR cached market quotes unavailable: %s", exc)
+    # IBKR quotes its own holdings under their own market, so they never replace a Taiwan quote.
+    for position in ibkr_stocks:
+        code = str(position.get("code") or "").upper()
+        key = ("stock", code, market_for_currency(position.get("currency")))
+        if key in quotes or not code or not position.get("lastPrice"):
+            continue
+        quotes[key] = {
+            "symbol": code,
+            "name": position.get("name") or code,
+            "productType": "stock",
+            # The position snapshot carries only the last price: no previous close, day range or volume.
+            "close": position["lastPrice"],
+            "open": None,
+            "high": None,
+            "low": None,
+            "change": None,
+            "changePercent": None,
+            "volume": None,
+            "timestamp": ibkr_snapshot.get("fetchedAt"),
+            "quoteSource": "Interactive Brokers CPAPI",
+            "currency": position.get("currency"),
+        }
     try:
         txf = await shioaji_market_service.get_taiex_futures_quote()
     except Exception:
@@ -162,7 +172,7 @@ async def get_market_dashboard():
     await asyncio.to_thread(attach_underlying, auto_rows + custom_rows, list(quotes.values()))
 
     def expose(item: dict) -> dict:
-        return {**item, "quote": quotes.get((item["productType"], item["code"].upper()))}
+        return {**item, "quote": quotes.get((item["productType"], item["code"].upper(), item["market"]))}
     return {
         "fixed": {"code": "TXF", "name": "TAIEX Futures · front month", "productType": "futures", "quote": txf},
         "automatic": {"snapshotAt": auto["snapshotAt"], "positions": [expose(item) for item in auto_rows]},
