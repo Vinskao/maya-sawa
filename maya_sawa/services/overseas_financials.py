@@ -8,11 +8,18 @@ from __future__ import annotations
 import asyncio
 import math
 import os
+import hashlib
+import json
 from datetime import date, datetime, timezone
 
 import httpx
 
 SEC_CIK = {'META': '0001326801', 'LITE': '0001633978'}
+
+
+def financial_content_period(data):
+    return 'content-' + hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
 METRICS = {
     'revenue': ('USD', ['RevenueFromContractWithCustomerExcludingAssessedTax', 'RevenueFromContractWithCustomerIncludingAssessedTax', 'SalesRevenueNet', 'SalesRevenueGoodsNet', 'Revenues']),
     'grossProfit': ('USD', ['GrossProfit']),
@@ -97,7 +104,7 @@ async def collect_sec_financials(collector, code, market, conid):
         if not data['quarterly']:
             raise ValueError('No reported quarterly facts')
         data['sourceUrl'] = url
-        period = datetime.now(timezone.utc).date().isoformat()
+        period = financial_content_period(raw)
         await asyncio.to_thread(collector.db.save, code, market, conid, 'sec_raw', raw, period=period)
         await asyncio.to_thread(collector.db.save, code, market, conid, 'financials', data, period=period)
         collector._read_cache.pop((code, market), None)

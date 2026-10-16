@@ -1,6 +1,12 @@
 from maya_sawa.services.overseas_financials import normalize_sec_facts
 
 
+def test_unchanged_financial_payload_does_not_create_a_new_daily_archive():
+    from maya_sawa.services.overseas_financials import financial_content_period
+    assert financial_content_period({'a': 1, 'b': 2}) == financial_content_period({'b': 2, 'a': 1})
+    assert financial_content_period({'a': 2}) != financial_content_period({'a': 1})
+
+
 def fact(rows, unit='USD'):
     return {'units': {unit: rows}}
 

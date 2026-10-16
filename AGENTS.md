@@ -245,6 +245,8 @@ status = result.status
 
 ## IBKR Client Portal API 整合（海外資產）
 
+Current durable overseas/SEC collection, cache, source gaps and verification: read `docs/IBKR_OVERSEAS_DATA.md`. AI agents must read the current `/market/dashboard/overseas/{code}?market=...` response, especially financial filing periods, coverage and gaps, before updating a research note. `fetchedAt` is not a publication date. Never map a Japan/Korea numeric ticker to a Taiwan data source.
+
 ### 架構與 Shioaji 的差異
 - Shioaji 用 API key 直接登入；IBKR CPAPI v1 需要**有狀態的 Client Portal Gateway**（瀏覽器登入維持 session），maya-sawa 只讀取已驗證的 gateway，不碰帳密。
 - 本地 gateway：`clientportal.gw/`，因 macOS 5000 被 AirPlay 佔用，改 `listenPort: 5050`，`https://localhost:5050`。
