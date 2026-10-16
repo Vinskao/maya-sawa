@@ -18,6 +18,9 @@ spec:
     spec:
       imagePullSecrets:
       - name: dockerhub-credentials
+      # FRED HTTPS egress is available from this worker; the other worker times out.
+      nodeSelector:
+        kubernetes.io/hostname: 10.0.158.183
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
