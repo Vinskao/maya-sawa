@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
+from copy import deepcopy
 import hashlib
 import json
 import logging
@@ -12,7 +14,11 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import io
+import zipfile
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
+from html import unescape
 from html.parser import HTMLParser
 from zoneinfo import ZoneInfo
 
@@ -43,6 +49,27 @@ FRED_SERIES = {
     "DFEDTARU": ("Federal funds target range, upper limit", "percent", "daily"),
     "RSAFS": ("Advance retail sales and food services", "millions of dollars", "monthly"),
     "DGS10": ("10-year Treasury constant maturity yield", "percent", "daily"),
+    "DCOILWTICO": ("WTI crude oil spot price", "USD/barrel", "daily"),
+}
+CBC_SERIES = {
+    "CBC_REDISCOUNT": ("Taiwan CBC rediscount rate", "percent", "daily"),
+    "CBC_SECURED_LOAN": ("Taiwan CBC secured loan rate", "percent", "daily"),
+    "CBC_SHORT_TERM_LOAN": ("Taiwan CBC short-term loan rate", "percent", "daily"),
+}
+TAIWAN_SERIES = {
+    "CBC_USD_TWD": ("Taiwan interbank USD/TWD closing rate", "TWD/USD", "daily"),
+    "TW_EXPORTS": ("Taiwan exports, customs value", "NTD thousand", "monthly"),
+    "TW_IMPORTS": ("Taiwan imports, customs value", "NTD thousand", "monthly"),
+}
+TPEX_SERIES = {
+    "TPEx_GOLD_TWD": ("Taiwan gold spot average transaction price", "TWD/tael", "daily"),
+}
+DGBAS_COMMODITY_SERIES = {
+    "WORLD_GOLD_USD": ("World Bank monthly gold price", "USD/troy oz", "monthly"),
+}
+DGBAS_SERIES = {
+    "TW_EMPLOYED": ("Taiwan employed persons", "thousand persons", "monthly"),
+    "TW_UNEMPLOYED": ("Taiwan unemployed persons", "thousand persons", "monthly"),
 }
 def _bounded_budget(name: str, default: int, ceiling: int) -> int:
     try: requested = int(os.getenv(name, str(default)))
@@ -52,6 +79,40 @@ def _bounded_budget(name: str, default: int, ceiling: int) -> int:
 
 BLS_DAILY_BUDGET = _bounded_budget("MACRO_BLS_DAILY_BUDGET", 40, 40)
 FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 100, 100)
+
+
+class LocalTTLCache:
+    """Small process-local TTL cache for free, low-frequency macro source data."""
+    def __init__(self, max_entries: int = 64):
+        self._entries: OrderedDict[str, tuple[float, object]] = OrderedDict()
+        self._lock = threading.RLock()
+        self._max_entries = max_entries
+
+    def get(self, key: str):
+        now = time.monotonic()
+        with self._lock:
+            entry = self._entries.get(key)
+            if not entry:
+                return None
+            expires_at, value = entry
+            if expires_at <= now:
+                self._entries.pop(key, None)
+                return None
+            self._entries.move_to_end(key)
+            return deepcopy(value)
+
+    def set(self, key: str, value, ttl_seconds: int = 12 * 3600):
+        with self._lock:
+            self._entries[key] = (time.monotonic() + ttl_seconds, deepcopy(value))
+            self._entries.move_to_end(key)
+            while len(self._entries) > self._max_entries:
+                self._entries.popitem(last=False)
+
+
+_macro_local_cache = LocalTTLCache()
+LOCAL_MACRO_TTL_SECONDS = 12 * 3600
+FREE_HTTP_TTL_SECONDS = 4 * 3600
+FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES)
 
 
 def _request(url: str, body: dict | None = None) -> tuple[int, bytes]:
@@ -69,6 +130,17 @@ def _request(url: str, body: dict | None = None) -> tuple[int, bytes]:
         raise RuntimeError(f"upstream_http_{exc.code}") from None
     except Exception as exc:
         raise RuntimeError(type(exc).__name__) from None
+
+
+def _request_free_cached(cache_key: str, url: str, ttl_seconds: int = FREE_HTTP_TTL_SECONDS) -> tuple[int, bytes]:
+    """Cache public-source HTTP responses per Python process to avoid repeat calls."""
+    key = f"http:{cache_key}"
+    cached = _macro_local_cache.get(key)
+    if cached is not None:
+        return cached
+    response = _request(url)
+    _macro_local_cache.set(key, response, ttl_seconds)
+    return response
 
 
 def _record_run(source: str, status: str, count: int = 0, detail: str = "", http_status: int | None = None) -> None:
@@ -106,16 +178,26 @@ class MarketMacroService:
         self._cache: tuple[float, dict] | None = None
         self._sync_lock = threading.Lock()
 
+    def _cache_free_series(self, rows: list[dict], definitions: dict, source: str, source_url: str,
+        fresh_for_seconds: int = LOCAL_MACRO_TTL_SECONDS) -> int:
+        """Keep free source observations in bounded process memory; never write them to PostgreSQL."""
+        grouped: dict[str, list[dict]] = {}
+        for row in rows:
+            grouped.setdefault(row["code"], []).append({"period": row["period"], "value": str(row["value"])})
+        fetched_at = datetime.now(UTC).isoformat()
+        for code, series_rows in grouped.items():
+            series_rows.sort(key=lambda item: item["period"])
+            _macro_local_cache.set(f"series:{code}", {
+                "code": code, "name": definitions[code][0], "unit": definitions[code][1],
+                "frequency": definitions[code][2], "source": source, "sourceUrl": source_url,
+                "fetchedAt": fetched_at, "freshForSeconds": fresh_for_seconds, "history": series_rows,
+            }, 30 * 24 * 3600)
+        self._cache = None
+        return sum(len(items) for items in grouped.values())
+
     async def start(self):
         if not MACRO_ENABLED:
             logger.info("Macro data collection disabled by MACRO_ENABLED")
-            return
-        if not BLS_KEY or not FRED_KEY:
-            missing = [name for name, configured in (("BLS_API_KEY", BLS_KEY), ("FRED_API_KEY", FRED_KEY)) if not configured]
-            for source in ("BLS", "FRED"):
-                if (source == "BLS" and not BLS_KEY) or (source == "FRED" and not FRED_KEY):
-                    _record_run(source, "blocked", detail="missing_key")
-            logger.warning("Macro collection not started; missing runtime credentials: %s", ", ".join(missing))
             return
         if self._task and not self._task.done():
             return
@@ -142,8 +224,6 @@ class MarketMacroService:
     async def refresh(self) -> dict:
         if not MACRO_ENABLED:
             return {"enabled": False, "reason": "disabled"}
-        if not BLS_KEY or not FRED_KEY:
-            return {"enabled": False, "reason": "missing_credentials"}
         async with self._lock:
             return await asyncio.to_thread(self._refresh_sync)
 
@@ -181,6 +261,13 @@ class MarketMacroService:
             try: output["sources"]["FederalReserve"] = self._fetch_fed_calendar()
             except Exception as exc:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
+            for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
+                ("TPExGold", self._fetch_tpex_gold), ("DGBAS", self._fetch_dgbas_employment),
+                ("WorldBank", self._fetch_world_bank_gold)):
+                try: output["sources"][source_name] = fetch()
+                except Exception as exc:
+                    logger.warning("%s refresh failed: %s", source_name, str(exc)[:80])
+                    _record_run(source_name, "error", detail=str(exc)[:70])
             try: output["sources"]["FinanceCalendar"] = self._fetch_consensus_calendar()
             except Exception as exc:
                 logger.warning("Consensus calendar refresh failed: %s", str(exc)[:80]); _record_run("FinanceCalendar", "error", detail=str(exc))
@@ -286,7 +373,7 @@ class MarketMacroService:
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=10)
             if run_id is None: raise RuntimeError("fred_daily_or_minute_budget_exhausted")
             params = urllib.parse.urlencode({"series_id": code, "file_type": "json",
-                "observation_start": (date.today() - timedelta(days=180)).isoformat() if FRED_SERIES[code][2] == "daily"
+                "observation_start": (date.today() - timedelta(days=730)).isoformat() if FRED_SERIES[code][2] == "daily"
                     else f"{date.today().year - 6}-01-01",
                 "sort_order": "asc", "limit": "1000", "api_key": FRED_KEY})
             if FRED_SERIES[code][2] == "monthly":
@@ -313,6 +400,186 @@ class MarketMacroService:
         if failures == len(FRED_SERIES):
             raise RuntimeError("fred_observations_all_failed")
         return count
+
+    def _fetch_cbc_observations(self) -> int:
+        """Persist official CBC policy-rate history and daily interbank USD/TWD history."""
+        rows = []
+        # CBC publishes the policy-rate history as [date, rediscount, secured loan, short-term loan].
+        run_id = market_macro_db.reserve_source_call("CBC", daily_limit=24, minute_limit=5)
+        if run_id is None: raise RuntimeError("cbc_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("cbc:EG28D01", "https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=EG28D01")
+            payload = json.loads(raw)
+            rows = []
+            for item in payload.get("data", {}).get("dataSets", []):
+                if len(item) < 4 or not re.fullmatch(r"\d{8}", str(item[0])): continue
+                period = f"{item[0][:4]}-{item[0][4:6]}-{item[0][6:8]}"
+                for code, index in (("CBC_REDISCOUNT", 1), ("CBC_SECURED_LOAN", 2), ("CBC_SHORT_TERM_LOAN", 3)):
+                    if item[index] not in (None, "", "-"):
+                        rows.append({"code": code, "period": period, "value": item[index]})
+            policy_rows = rows
+            market_macro_db.finish_source_call(run_id, "success", len(rows), http_status=status)
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+        # Official open data API, sourced by CBC from Taipei Forex Inc.; only retain recent history.
+        run_id = market_macro_db.reserve_source_call("CBC", daily_limit=24, minute_limit=5)
+        if run_id is None: raise RuntimeError("cbc_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("cbc:FTDOpenData_Day", "https://cpx.cbc.gov.tw/api/OpenData/FTDOpenData_Day")
+            payload = json.loads(raw)
+            fx_rows = []
+            cutoff = date.today() - timedelta(days=365 * 6)
+            for item in payload if isinstance(payload, list) else []:
+                raw_date = str(item.get("\u65e5\u671f", ""))
+                try: observation_date = datetime.strptime(raw_date, "%Y%m%d").date()
+                except ValueError: continue
+                if observation_date < cutoff: continue
+                value = item.get("NTD_USD")
+                if value in (None, "", "-"): continue
+                fx_rows.append({"code": "CBC_USD_TWD", "period": observation_date.isoformat(), "value": value})
+            market_macro_db.finish_source_call(run_id, "success", len(fx_rows), http_status=status)
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+        return self._cache_free_series(policy_rows + fx_rows, {**CBC_SERIES, "CBC_USD_TWD": TAIWAN_SERIES["CBC_USD_TWD"]},
+            "CBC", "https://cpx.cbc.gov.tw/Data/ExportToAPIInfo")
+
+    def _fetch_taiwan_trade(self) -> int:
+        """Persist Taiwan's free monthly Customs exports/imports CSV, including revisions."""
+        run_id = market_macro_db.reserve_source_call("TaiwanCustoms", daily_limit=4, minute_limit=2)
+        if run_id is None: raise RuntimeError("customs_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("customs:6053", "https://opendata.customs.gov.tw/data/6053/csv.csv")
+            import csv
+            import io
+            rows = []
+            export_field = "\u51fa\u53e3\u7e3d\u503c(\u65b0\u81fa\u5e63\u5343\u5143)"
+            import_field = "\u9032\u53e3\u7e3d\u503c(\u65b0\u81fa\u5e63\u5343\u5143)"
+            for item in csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))):
+                year = re.sub(r"\D", "", item.get("\u5e74\u5ea6", ""))
+                month = re.sub(r"\D", "", item.get("\u6708\u4efd", ""))
+                if len(year) != 3 or not month: continue
+                period = f"{int(year) + 1911:04d}-{int(month):02d}"
+                for code, field in (("TW_EXPORTS", export_field), ("TW_IMPORTS", import_field)):
+                    value = re.sub(r"[^0-9.-]", "", item.get(field, ""))
+                    if value: rows.append({"code": code, "period": period, "value": value})
+            saved = self._cache_free_series(rows, TAIWAN_SERIES, "TaiwanCustoms", "https://data.gov.tw/dataset/6053")
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_tpex_gold(self) -> int:
+        """Persist the free daily TPEx Taiwan-bank gold spot quote (TWD per tael)."""
+        run_id = market_macro_db.reserve_source_call("TPEx", daily_limit=24, minute_limit=5)
+        if run_id is None: raise RuntimeError("tpex_gold_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("tpex:gold_latest", "https://www.tpex.org.tw/openapi/v1/tpex_gold_latest")
+            payload = json.loads(raw)
+            rows = []
+            for item in payload if isinstance(payload, list) else []:
+                raw_date = str(item.get("Date", ""))
+                try:
+                    if len(raw_date) == 7:
+                        observation_date = date(int(raw_date[:3]) + 1911, int(raw_date[3:5]), int(raw_date[5:7]))
+                    else:
+                        observation_date = datetime.strptime(raw_date, "%Y%m%d").date()
+                except ValueError: continue
+                value = item.get("TradingAvg.") or item.get("TradingLatestTradingInfo.LatestPrice")
+                if value in (None, "", "-"): continue
+                rows.append({"code": "TPEx_GOLD_TWD", "period": observation_date.isoformat(), "value": value})
+            saved = self._cache_free_series(rows, TPEX_SERIES, "TPEx", "https://www.tpex.org.tw/openapi/")
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_dgbas_employment(self) -> int:
+        """Cache free DGBAS employment/unemployment totals; the API is monthly and anonymous."""
+        run_id = market_macro_db.reserve_source_call("DGBAS", daily_limit=24, minute_limit=5)
+        if run_id is None: raise RuntimeError("dgbas_daily_budget_exhausted")
+        try:
+            today = date.today()
+            end_year, end_month = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+            start_year, start_month = end_year - 2, end_month + 1
+            if start_month > 12:
+                start_year, start_month = start_year + 1, 1
+            start_period = f"{start_year}-M{start_month}"
+            end_period = f"{end_year}-M{end_month}"
+            rows = []
+            saved_http_status = None
+            for code, stat_id in (("TW_EMPLOYED", "1"), ("TW_UNEMPLOYED", "2")):
+                path = f"A040101020/{stat_id}.1.1.M"
+                query = urllib.parse.urlencode({"startTime": start_period, "endTime": end_period})
+                url = f"https://nstatdb.dgbas.gov.tw/dgbasAll/webMain.aspx?sdmx/{path}&{query}"
+                status, raw = _request_free_cached(f"dgbas:{code}:{start_period}:{end_period}", url)
+                saved_http_status = status
+                payload = json.loads(raw)
+                data = payload.get("data", {})
+                data_set = (data.get("dataSets") or [{}])[0]
+                periods = data.get("structure", {}).get("dimensions", {}).get("observation", [{}])[0].get("values", [])
+                series = next(iter(data_set.get("series", {}).values()), {})
+                for period_index, values in series.get("observations", {}).items():
+                    index = int(period_index)
+                    if index >= len(periods) or not values or values[0] in (None, ""):
+                        continue
+                    period = str(periods[index].get("id", ""))
+                    match = re.fullmatch(r"(\d{4})-M(\d{1,2})", period)
+                    if match:
+                        rows.append({"code": code, "period": f"{match.group(1)}-{int(match.group(2)):02d}", "value": values[0]})
+            saved = self._cache_free_series(rows, DGBAS_SERIES, "DGBAS", "https://nstatdb.dgbas.gov.tw/dgbasAll/")
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=saved_http_status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_world_bank_gold(self) -> int:
+        """Load the free World Bank monthly gold history into process-local memory only."""
+        existing = _macro_local_cache.get("series:WORLD_GOLD_USD")
+        if existing and (datetime.now(UTC) - datetime.fromisoformat(existing["fetchedAt"])).total_seconds() < 45 * 24 * 3600:
+            return len(existing["history"])
+        run_id = market_macro_db.reserve_source_call("WorldBank", daily_limit=4, minute_limit=2)
+        if run_id is None: raise RuntimeError("world_bank_daily_budget_exhausted")
+        try:
+            _, catalog = _request_free_cached("worldbank:catalog", "https://www.worldbank.org/en/research/commodity-markets", ttl_seconds=24 * 3600)
+            match = re.search(r"href=[\"']([^\"']*CMO-Historical-Data-Monthly\.xlsx[^\"']*)[\"']", catalog.decode("utf-8", errors="replace"), re.I)
+            if not match:
+                raise RuntimeError("world_bank_monthly_file_link_missing")
+            url = urllib.parse.urljoin("https://www.worldbank.org", unescape(match.group(1)))
+            status, raw = _request_free_cached("worldbank:pink-sheet-monthly", url, ttl_seconds=45 * 24 * 3600)
+            namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            with zipfile.ZipFile(io.BytesIO(raw)) as workbook:
+                shared_root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+                shared = ["".join(node.text or "" for node in item.findall(".//x:t", namespace))
+                    for item in shared_root.findall("x:si", namespace)]
+                sheet = ET.fromstring(workbook.read("xl/worksheets/sheet2.xml"))
+            rows = []
+            for row in sheet.findall(".//x:sheetData/x:row", namespace):
+                cells = {cell.attrib.get("r", ""): cell for cell in row.findall("x:c", namespace)}
+                date_cell, gold_cell = cells.get(f"A{row.attrib.get('r')}"), cells.get(f"BR{row.attrib.get('r')}")
+                if date_cell is None or gold_cell is None:
+                    continue
+                def cell_value(cell):
+                    value = cell.find("x:v", namespace)
+                    if value is None:
+                        return ""
+                    return shared[int(value.text)] if cell.attrib.get("t") == "s" else value.text or ""
+                period_match = re.fullmatch(r"(\d{4})M(\d{1,2})", cell_value(date_cell).strip())
+                price = cell_value(gold_cell).strip()
+                if not period_match or not re.fullmatch(r"\d+(?:\.\d+)?", price):
+                    continue
+                rows.append({"code": "WORLD_GOLD_USD", "period": f"{period_match.group(1)}-{int(period_match.group(2)):02d}", "value": price})
+            saved = self._cache_free_series(rows, DGBAS_COMMODITY_SERIES, "WorldBank", url, fresh_for_seconds=45 * 24 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
 
     def _fred_calendar_times(self, release_id: str) -> dict[date, datetime]:
         today = date.today()
@@ -443,11 +710,38 @@ class MarketMacroService:
 
     async def get(self, history_months: int = 24) -> dict:
         if self._cache and time.monotonic() - self._cache[0] < 300:
-            return self._cache[1]
-        result = await asyncio.to_thread(market_macro_db.snapshot, min(max(history_months, 12), 60))
-        result["enabled"] = MACRO_ENABLED
-        result["configuration"] = {"BLS": "configured" if BLS_KEY else "missing_key", "FRED": "configured" if FRED_KEY else "missing_key"}
-        self._cache = (time.monotonic(), result)
+            result = deepcopy(self._cache[1])
+        else:
+            result = await asyncio.to_thread(market_macro_db.snapshot, min(max(history_months, 12), 60))
+            result["enabled"] = MACRO_ENABLED
+            result["configuration"] = {"BLS": "configured" if BLS_KEY else "missing_key", "FRED": "configured" if FRED_KEY else "missing_key"}
+            self._cache = (time.monotonic(), deepcopy(result))
+        local_indicators = []
+        for code in FREE_CACHE_CODES:
+            series = _macro_local_cache.get(f"series:{code}")
+            if not series or not series["history"]:
+                continue
+            history = series["history"]
+            latest = history[-1]
+            previous = history[-2] if len(history) > 1 else None
+            local_indicators.append({
+                "code": code, "name": series["name"], "unit": series["unit"], "frequency": series["frequency"],
+                "value": latest["value"], "referencePeriod": latest["period"],
+                "previousValue": previous["value"] if previous else None,
+                "previousPeriod": previous["period"] if previous else None,
+                "change": float(latest["value"]) - float(previous["value"]) if previous else None,
+                "source": series["source"], "sourceUrl": series["sourceUrl"], "fetchedAt": series["fetchedAt"],
+                "cacheStale": (datetime.now(UTC) - datetime.fromisoformat(series["fetchedAt"])).total_seconds() > series.get("freshForSeconds", LOCAL_MACRO_TTL_SECONDS),
+                "history": history[-max(history_months * 32 if series["frequency"] == "daily" else history_months, 24):],
+            })
+        result["indicators"] = [item for item in result.get("indicators", []) if item.get("code") not in FREE_CACHE_CODES] + local_indicators
+        if local_indicators:
+            result["status"] = "ready"
+        known_sources = {item.get("source") for item in result.get("sources", [])}
+        for source in {item["source"] for item in local_indicators} - known_sources:
+            result.setdefault("sources", []).append({"source": source, "availability": "success", "stale": False,
+                "lastSuccessAt": next(item["fetchedAt"] for item in local_indicators if item["source"] == source)})
+        result["asOf"] = datetime.now(UTC).isoformat()
         return result
 
 

@@ -342,8 +342,11 @@ class MarketMacroDatabase:
             by_code.setdefault(row.series_code, []).append(row)
         indicators = []
         for code, rows in by_code.items():
-            rows = rows[-max(history_months, 24):]
             meta = series.get(code)
+            # Daily series need calendar-day history, not just 24 rows; otherwise
+            # all daily charts collapse to roughly one month despite a 24-month window.
+            row_limit = max(history_months, 24) * 32 if meta and meta.frequency == "daily" else max(history_months, 24)
+            rows = rows[-row_limit:]
             latest = rows[-1]
             previous = rows[-2] if len(rows) > 1 else None
             indicators.append({"code": code, "name": meta.name if meta else code, "unit": meta.unit if meta else "",
