@@ -161,22 +161,14 @@ async def get_market_dashboard():
         key = ("stock", code, market_for_currency(position.get("currency")))
         if key in quotes or not code or not position.get("lastPrice"):
             continue
-        quotes[key] = {
-            "symbol": code,
-            "name": position.get("name") or code,
-            "productType": "stock",
-            # The position snapshot carries only the last price: no previous close, day range or volume.
-            "close": position["lastPrice"],
-            "open": None,
-            "high": None,
-            "low": None,
-            "change": None,
-            "changePercent": None,
-            "volume": None,
-            "timestamp": ibkr_snapshot.get("fetchedAt"),
-            "quoteSource": "Interactive Brokers CPAPI",
-            "currency": position.get("currency"),
-        }
+        from ..services.ibkr_research import dashboard_quote, ibkr_research_collector
+        persisted = None
+        if position.get('conid'):
+            try:
+                persisted = await asyncio.to_thread(ibkr_research_collector.db.latest, code, key[2], 'quote')
+            except Exception:
+                logger.warning('Persisted IBKR quote unavailable; using position valuation')
+        quotes[key] = dashboard_quote(position, ibkr_snapshot.get('fetchedAt'), persisted)
     try:
         txf = await shioaji_market_service.get_taiex_futures_quote()
     except Exception:

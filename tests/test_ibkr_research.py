@@ -40,6 +40,20 @@ def test_public_snapshot_handles_prefixes_missing_values_and_strips_account_fiel
     assert quote['volume'] == 2500000
     assert quote['availability'] == 'DpB'
     assert 'SECRET' not in str(quote)
+    assert public_quote({'31': '740.70', '70': '0.00', '71': '0.00'})['high'] is None
+
+
+def test_dashboard_uses_persisted_quote_and_keeps_delay_and_source_time():
+    from maya_sawa.services.ibkr_research import dashboard_quote
+    quote = dashboard_quote({'code': 'META', 'name': 'META', 'lastPrice': 741.49, 'currency': 'USD'},
+        '2026-10-16T11:00:00Z', {'fetchedAt': '2026-10-16T11:00:00Z', 'payload': {
+            'close': 740.7, 'change': 3.98, 'changePercent': .54, 'high': None, 'low': None,
+            'volume': 53311, 'availability': 'DPB', 'sourceUpdatedAt': 1792149084224}})
+    assert quote['close'] == 740.7
+    assert quote['availability'] == 'DPB'
+    assert quote['changePercent'] == .54
+    assert quote['high'] is None
+    assert quote['timestamp'] != quote['fetchedAt']
 
 
 def test_durable_identity_and_failed_refresh_keep_last_success():

@@ -48,7 +48,23 @@ def public_quote(raw):
                  priceType='previousClose' if str(raw.get('31', '')).startswith('C') else
                            'halted' if str(raw.get('31', '')).startswith('H') else 'last',
                  sourceUpdatedAt=raw.get('_updated'))
+    for key in ('close', 'high', 'low', 'bid', 'ask'):
+        if quote[key] is not None and quote[key] <= 0:
+            quote[key] = None  # premarket often reports 0.00 for unavailable day ranges
     return quote
+
+
+def dashboard_quote(position, fetched_at, persisted=None):
+    values = (persisted or {}).get('payload') or {}
+    stamp = values.get('sourceUpdatedAt')
+    timestamp = datetime.fromtimestamp(stamp/1000, timezone.utc).isoformat() if isinstance(stamp, (int, float)) else fetched_at
+    return {'symbol': position['code'], 'name': values.get('name') or position.get('name') or position['code'],
+            'productType': 'stock', 'currency': position.get('currency'),
+            'close': values.get('close') or position.get('lastPrice'), 'open': None,
+            **{key: values.get(key) for key in ('high', 'low', 'change', 'changePercent', 'volume', 'availability', 'priceType')},
+            'timestamp': timestamp, 'fetchedAt': (persisted or {}).get('fetchedAt') or fetched_at,
+            'quoteSource': 'Interactive Brokers CPAPI',
+            'priceBasis': 'marketData' if values.get('close') else 'positionValuation'}
 
 
 def normalize_bars(raw, market):
