@@ -274,11 +274,12 @@ class IbkrMarketService:
             rate = to_twd.get(currency, to_twd.get("USD", _FX_FALLBACK_USD_TWD))
             market_value = float(row.get("mktValue") or 0)
             pnl = float(row.get("unrealizedPnl") or 0)
-            code = str(row.get("contractDesc") or row.get("conid") or "?")
+            code = str(row.get("ticker") or row.get("contractDesc") or row.get("conid") or "?")
+            name = str(row.get("name") or row.get("chineseName") or row.get("contractDesc") or code)
             positions.append(
                 {
                     "code": code,
-                    "name": code,
+                    "name": name,
                     "assetClass": str(row.get("assetClass") or ""),
                     "currency": currency,
                     "quantity": qty,

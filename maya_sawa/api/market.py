@@ -125,6 +125,34 @@ async def get_market_dashboard():
         quotes = {(item["productType"], item["symbol"].upper()): item for item in rows}
     except Exception as exc:
         logger.info("Market selection quotes unavailable: %s", exc)
+    # The authenticated IBKR gateway refresh loop owns upstream calls. Public
+    # dashboard reads only the cached snapshot and expose quote fields, never
+    # account quantities, market values, or account identifiers.
+    try:
+        ibkr_snapshot = await ibkr_market_service.get_snapshot()
+        for position in ibkr_snapshot.get("positions", []):
+            if str(position.get("assetClass") or "").upper() != "STK":
+                continue
+            code = str(position.get("code") or "").upper()
+            key = ("stock", code)
+            if key in quotes or not code or not position.get("lastPrice"):
+                continue
+            quotes[key] = {
+                "symbol": code,
+                "name": position.get("name") or code,
+                "productType": "stock",
+                "close": position["lastPrice"],
+                "open": position["lastPrice"],
+                "high": position["lastPrice"],
+                "low": position["lastPrice"],
+                "change": 0,
+                "changePercent": 0,
+                "volume": 0,
+                "timestamp": ibkr_snapshot.get("fetchedAt"),
+                "quoteSource": "Interactive Brokers CPAPI",
+            }
+    except Exception as exc:
+        logger.info("IBKR cached market quotes unavailable: %s", exc)
     try:
         txf = await shioaji_market_service.get_taiex_futures_quote()
     except Exception:
@@ -338,12 +366,6 @@ async def _portfolio_with_ibkr() -> dict:
     except Exception:
         fixed_quote = None
         logger.info("Fixed TXF quote unavailable while refreshing public automatic selection")
-    try:
-        await asyncio.to_thread(market_dashboard_db.record_portfolio, portfolio,
-                                 fixed_quote.get("symbol") if fixed_quote else None)
-    except Exception:
-        logger.exception("Failed to update public automatic market selection")
-
     if not ibkr_market_service.enabled:
         merged = attach_taiwan_only_regions(portfolio)
     else:
@@ -356,6 +378,12 @@ async def _portfolio_with_ibkr() -> dict:
         except Exception:
             logger.exception("Unexpected error merging IBKR portfolio")
             merged = attach_taiwan_only_regions(portfolio)
+
+    try:
+        await asyncio.to_thread(market_dashboard_db.record_portfolio, merged,
+                                 fixed_quote.get("symbol") if fixed_quote else None)
+    except Exception:
+        logger.exception("Failed to update public automatic market selection")
 
     try:
         # A dashboard read can be the first successful access after the market

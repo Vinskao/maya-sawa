@@ -24,6 +24,15 @@ def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_cod
     positions = portfolio.get("positions")
     if not isinstance(positions, list):
         return None
+    positions = list(positions)
+    # Overseas equity positions come from the same merged account snapshot and
+    # enter the same durable instrument universe as Shioaji positions.
+    ibkr = portfolio.get("ibkr") or {}
+    positions.extend(
+        {**position, "productType": "stock", "allocationValue": position.get("marketValueTwd"), "currency": "TWD"}
+        for position in ibkr.get("positions", [])
+        if str(position.get("assetClass") or "").upper() == "STK"
+    )
     rows = []
     for position in positions:
         kind = position.get("productType")
@@ -32,7 +41,7 @@ def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_cod
         try:
             # A portfolio may include multiple currencies. Normalize USD notional
             # using the snapshot's conversion rate before comparing with TWD.
-            raw_weight = abs(float(position.get("allocationValue") or position.get("marketValue") or 0))
+            raw_weight = abs(float(position.get("allocationValue") or position.get("marketValueTwd") or position.get("marketValue") or 0))
             currency = str(position.get("currency") or "TWD").upper()
             rate = portfolio.get("usdTwdRate") or portfolio.get("usdTwdExchangeRate") or portfolio.get("fxRateUsdTwd")
             fx = float(rate) if rate else None
