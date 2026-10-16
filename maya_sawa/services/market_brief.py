@@ -18,6 +18,7 @@ from ..databases.market_fundamentals_db import market_fundamentals_db
 from ..databases.market_history_db import market_history_db
 from .market_fundamentals import MarketFundamentalsService, _quarter_label, build_fundamental_metrics, market_fundamentals_service
 from .market_selection import current_selection, stock_code
+from .shioaji_market import shioaji_market_service
 
 TZ = ZoneInfo("Asia/Taipei")
 PRICE = ("twse:daily-price", "tpex:daily-price")
@@ -73,7 +74,8 @@ def _tier_share(tiers: list[dict], predicate) -> float | None:
     return round(sum(picked), 2) if picked else None
 
 
-def summarize_stock(code: str, daily: list[dict], ownership: list[dict], metrics: dict) -> dict[str, Any]:
+def summarize_stock(code: str, daily: list[dict], ownership: list[dict], metrics: dict,
+                    quote: dict[str, Any] | None = None) -> dict[str, Any]:
     closes = _series(daily, PRICE, "close")
     price_dates = [p["date"] for p in daily if _value(p, PRICE, "close") is not None]
     result: dict[str, Any] = {"code": code, "asOf": price_dates[-1] if price_dates else None}
@@ -81,6 +83,28 @@ def summarize_stock(code: str, daily: list[dict], ownership: list[dict], metrics
         result["price"] = {"close": closes[-1], "change1dPct": _pct(closes[-1], closes[-2] if len(closes) > 1 else None),
                            "change5dPct": _pct(closes[-1], closes[-6] if len(closes) > 5 else None),
                            "change20dPct": _pct(closes[-1], closes[-21] if len(closes) > 20 else None)}
+    quote_source = (quote or {}).get("quoteSource")
+    if (quote and quote_source in {"live", "snapshot"}
+            and isinstance(quote.get("close"), (int, float)) and quote["close"] > 0):
+        # The Shioaji snapshot is the latest-price authority. Keep the official daily
+        # history only as the baseline for multi-session returns.
+        quote_date = str(quote.get("timestamp") or "")[:10]
+        prior_closes = [_value(point, PRICE, "close") for point in daily
+                        if quote_date and point.get("date", "") < quote_date
+                        and _value(point, PRICE, "close") is not None]
+        if not prior_closes:
+            prior_closes = closes
+        result["price"] = {
+            "close": float(quote["close"]),
+            "change1dPct": quote.get("changePercent") if isinstance(quote.get("changePercent"), (int, float)) else None,
+            "change5dPct": _pct(float(quote["close"]), prior_closes[-5] if len(prior_closes) >= 5 else None),
+            "change20dPct": _pct(float(quote["close"]), prior_closes[-20] if len(prior_closes) >= 20 else None),
+            "quoteSource": quote_source,
+            "timestamp": quote.get("timestamp"),
+            "fetchedAt": quote.get("fetchedAt"),
+        }
+        if quote_date:
+            result["asOf"] = quote_date
     flows = {}
     for key, field in (("foreign", "foreign_net_shares"), ("trust", "investment_trust_net_shares"), ("dealer", "dealer_net_shares")):
         values = _series(daily, INSTITUTIONAL, field)
@@ -191,7 +215,8 @@ def selection_fingerprint(instruments: list[dict]) -> tuple:
     return tuple(sorted((i["group"], i.get("productType"), str(i.get("code", "")).upper(), _spot_code(i) or "") for i in instruments))
 
 
-def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None) -> dict[str, Any]:
+def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None,
+                quotes: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     auto, instruments = selection or current_selection()
     today = datetime.now(TZ).date()
     stocks: dict[str, dict] = {}
@@ -209,7 +234,7 @@ def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None) -> d
         # memory still give the latest month's YoY/MoM and the latest quarter's margins.
         monthly, income = market_fundamentals_service.cached_official(code)
         metrics = build_fundamental_metrics(monthly, income, history)
-        stocks[code] = summarize_stock(code, daily, ownership, metrics)
+        stocks[code] = summarize_stock(code, daily, ownership, metrics, (quotes or {}).get(code))
         # The stock's own name (e.g. 台積電), not the futures contract that led to it (小型台積電期貨).
         stock_names = [p.get("name") for p in daily + ownership if p.get("name") and p.get("name") != code]
         own = next((item.get("name") for item in instruments if item.get("productType") == "stock" and str(item.get("code", "")).upper() == code), None)
@@ -288,7 +313,10 @@ def brief_markdown(brief: dict, lang: str = "zh") -> str:
         lines += [f"| {t('指標', 'Metric')} | {t('數值', 'Value')} |", "|---|---|"]
         price = s.get("price") or {}
         if price:
-            lines.append(f"| {t('收盤 / 1日 / 5日 / 20日', 'Close / 1d / 5d / 20d')} | {_fmt(price.get('close'))} / {_fmt(price.get('change1dPct'), '%', True)} / {_fmt(price.get('change5dPct'), '%', True)} / {_fmt(price.get('change20dPct'), '%', True)} |")
+            price_label = "現價 / 1日 / 5日 / 20日" if price.get("quoteSource") != "dailyClose" else "收盤 / 1日 / 5日 / 20日"
+            source_label = "Shioaji" if price.get("quoteSource") in {"live", "snapshot"} else (price.get("quoteSource") or "日線")
+            quote_time = price.get("timestamp") or price.get("fetchedAt") or s.get("asOf") or "—"
+            lines.append(f"| {t(price_label, 'Price / 1d / 5d / 20d')} | {_fmt(price.get('close'))} / {_fmt(price.get('change1dPct'), '%', True)} / {_fmt(price.get('change5dPct'), '%', True)} / {_fmt(price.get('change20dPct'), '%', True)} · {source_label} · {quote_time} |")
         for key, zh_label, en_label in (("foreign", "外資", "Foreign"), ("trust", "投信", "Investment trust"), ("dealer", "自營商", "Dealers")):
             flow = (s.get("institutional") or {}).get(key)
             if flow:
@@ -356,7 +384,16 @@ class MarketBriefService:
         async with self._lock:
             if fresh():
                 return self._cached[2]
-            brief = await asyncio.to_thread(build_brief, selection)
+            # Read the already refreshed Shioaji cache / persisted snapshots; never
+            # initiate a broker request per dashboard or brief-page request.
+            stock_codes = sorted({_spot_code(item) for item in selection[1] if _spot_code(item)})
+            quote_instruments = [{"code": code, "productType": "stock"} for code in stock_codes]
+            try:
+                quote_rows = await shioaji_market_service.get_dashboard_quotes(quote_instruments)
+                quotes = {str(row.get("symbol", "")).upper(): row for row in quote_rows}
+            except Exception:
+                quotes = {}
+            brief = await asyncio.to_thread(build_brief, selection, quotes)
             self._cached = (time.monotonic(), fingerprint, brief)
             await self._request_missing(brief.get("collecting", {}))
             return brief

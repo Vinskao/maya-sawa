@@ -194,7 +194,7 @@ pipeline {
                                 SHIOAJI_SECRET_KEY=${SHIOAJI_SECRET_KEY}
                                 SHIOAJI_SIMULATION=false
                                 SHIOAJI_PORTFOLIO_ENABLED=true
-                                SHIOAJI_QUOTE_CACHE_SECONDS=600
+                                SHIOAJI_QUOTE_CACHE_SECONDS=60
                                 SHIOAJI_PORTFOLIO_CACHE_SECONDS=3600
                                 
                                 # Voyeur Configuration (MONGODB_URI includes auth credentials)

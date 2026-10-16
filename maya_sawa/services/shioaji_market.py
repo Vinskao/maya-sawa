@@ -146,7 +146,7 @@ class ShioajiMarketService:
         self._login_lock = asyncio.Lock()
         self._request_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task[None] | None = None
-        self._cache_seconds = int(os.getenv("SHIOAJI_QUOTE_CACHE_SECONDS", "600"))
+        self._cache_seconds = int(os.getenv("SHIOAJI_QUOTE_CACHE_SECONDS", "60"))
         self._portfolio_cache_seconds = int(
             os.getenv("SHIOAJI_PORTFOLIO_CACHE_SECONDS", "3600")
         )
@@ -254,10 +254,33 @@ class ShioajiMarketService:
             selected = list({(item.get("productType"), item.get("code", "").upper()): item for item in selected}.values())
             if selected:
                 rows = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, selected))
+                # When a holding is a stock future, also snapshot its underlying cash
+                # stock. The chip summary is about the company, so it must use the
+                # Shioaji stock quote rather than a stale TWSE close or futures price.
+                stock_instruments = {
+                    (item.get("productType"), str(item.get("code", "")).upper()): item
+                    for item in selected if item.get("productType") == "stock"
+                }
+                for row in rows:
+                    underlying = str(row.get("underlyingCode") or "").strip()
+                    if row.get("productType") == "futures" and underlying.isdigit() and len(underlying) == 4:
+                        stock_instruments[("stock", underlying)] = {
+                            "code": underlying, "productType": "stock"
+                        }
+                stock_selection = sorted(stock_instruments.values(),
+                                          key=lambda item: (item["productType"], item["code"].upper()))
+                stock_rows = await self._run_with_relogin(
+                    lambda api: self._fetch_dashboard_quotes(api, stock_selection)
+                ) if stock_selection else []
                 # Off-session snapshots can come back with close=0; never let them overwrite the last real price.
-                await asyncio.to_thread(market_fundamentals_db.save_quote_snapshots, [row for row in rows if _has_price(row)])
+                valid_rows = [row for row in [*rows, *stock_rows] if _has_price(row)]
+                await asyncio.to_thread(market_fundamentals_db.save_quote_snapshots, valid_rows)
                 cache_id = hashlib.sha256(json.dumps(selected, sort_keys=True).encode()).hexdigest()[:20]
                 await asyncio.to_thread(self._write_cached_payload, f"DASHBOARD_QUOTES_V2_{cache_id}", rows, 300)
+                if stock_selection:
+                    stock_cache_id = hashlib.sha256(json.dumps(stock_selection, sort_keys=True).encode()).hexdigest()[:20]
+                    await asyncio.to_thread(self._write_cached_payload,
+                                            f"DASHBOARD_QUOTES_V2_{stock_cache_id}", stock_rows, 300)
         except Exception:
             logger.exception("Failed to refresh dashboard quote snapshot (non-fatal)")
         portfolio_due = (
