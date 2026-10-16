@@ -88,6 +88,8 @@ DGBAS_SERIES = {
     "TW_EMPLOYED": ("Taiwan employed persons", "thousand persons", "monthly"),
     "TW_UNEMPLOYED": ("Taiwan unemployed persons", "thousand persons", "monthly"),
     "TW_PPI": ("Taiwan producer price index", "index points", "monthly"),
+    "TW_CPI": ("Taiwan consumer price index, general", "index points", "monthly"),
+    "TW_UNEMPLOYMENT_RATE": ("Taiwan unemployment rate (unemployed / labour force)", "percent", "monthly"),
 }
 UMICH_SERIES = {
     "UMICH_CPI_EXPECTED_1Y": ("Michigan median expected inflation over next 12 months", "percent", "monthly"),
@@ -297,7 +299,7 @@ class MarketMacroService:
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
                 ("DGBAS", self._fetch_dgbas_employment),
-                ("DGBASPrices", self._fetch_taiwan_ppi),
+                ("DGBASPrices", self._fetch_taiwan_prices),
                 ("WorldBank", self._fetch_world_bank_gold),
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series)):
@@ -602,6 +604,14 @@ class MarketMacroService:
                     match = re.fullmatch(r"(\d{4})-M(\d{1,2})", period)
                     if match:
                         rows.append({"code": code, "period": f"{match.group(1)}-{int(match.group(2)):02d}", "value": values[0]})
+            # DGBAS defines the unemployment rate as unemployed / labour force (employed + unemployed).
+            counts: dict[str, dict[str, float]] = {}
+            for row in rows:
+                counts.setdefault(row["period"], {})[row["code"]] = float(row["value"])
+            for period, pair in sorted(counts.items()):
+                employed, unemployed = pair.get("TW_EMPLOYED"), pair.get("TW_UNEMPLOYED")
+                if employed and unemployed:
+                    rows.append({"code": "TW_UNEMPLOYMENT_RATE", "period": period, "value": round(unemployed / (employed + unemployed) * 100, 2)})
             saved = self._cache_free_series(rows, DGBAS_SERIES, "DGBAS", "https://nstatdb.dgbas.gov.tw/dgbasAll/")
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=saved_http_status)
             return saved
@@ -609,8 +619,8 @@ class MarketMacroService:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
             raise
 
-    def _fetch_taiwan_ppi(self) -> int:
-        """Cache Taiwan's official producer price total index from DGBAS, in process memory only."""
+    def _fetch_taiwan_prices(self) -> int:
+        """Cache Taiwan's official CPI and PPI general indices from DGBAS, in process memory only."""
         run_id = market_macro_db.reserve_source_call("DGBASPrices", daily_limit=12, minute_limit=3)
         if run_id is None: raise RuntimeError("dgbas_prices_daily_budget_exhausted")
         try:
@@ -619,24 +629,25 @@ class MarketMacroService:
             start_period = f"{end_year - 6}-M{end_month}"
             end_period = f"{end_year}-M{end_month}"
             query = urllib.parse.urlencode({"startTime": start_period, "endTime": end_period})
-            url = f"https://nstatdb.dgbas.gov.tw/dgbasAll/webMain.aspx?sdmx/A030701015/1.1.1.M&{query}"
-            status, raw = _request_free_cached(f"dgbas:TW_PPI:{start_period}:{end_period}", url, ttl_seconds=12 * 3600)
-            payload = json.loads(raw)
-            data = payload.get("data", {})
-            data_set = (data.get("dataSets") or [{}])[0]
-            periods = data.get("structure", {}).get("dimensions", {}).get("observation", [{}])[0].get("values", [])
-            series = next(iter(data_set.get("series", {}).values()), {})
-            observations = series.get("observations", {})
             rows = []
-            for period_index, values in observations.items():
-                index = int(period_index)
-                if index >= len(periods) or not values or values[0] in (None, ""):
-                    continue
-                match = re.fullmatch(r"(\d{4})-M(\d{1,2})", str(periods[index].get("id", "")))
-                if match:
-                    rows.append({"code": "TW_PPI", "period": f"{match.group(1)}-{int(match.group(2)):02d}", "value": values[0]})
+            status = None
+            for code, table in (("TW_CPI", "A030101015"), ("TW_PPI", "A030701015")):
+                url = f"https://nstatdb.dgbas.gov.tw/dgbasAll/webMain.aspx?sdmx/{table}/1.1.1.M&{query}"
+                status, raw = _request_free_cached(f"dgbas:{code}:{start_period}:{end_period}", url, ttl_seconds=12 * 3600)
+                data = json.loads(raw).get("data", {})
+                data_set = (data.get("dataSets") or [{}])[0]
+                periods = data.get("structure", {}).get("dimensions", {}).get("observation", [{}])[0].get("values", [])
+                series = next(iter(data_set.get("series", {}).values()), {})
+                for period_index, values in series.get("observations", {}).items():
+                    index = int(period_index)
+                    # Unpublished months come back as 0 or blank; an index level is never 0.
+                    if index >= len(periods) or not values or values[0] in (None, "") or float(values[0]) == 0:
+                        continue
+                    match = re.fullmatch(r"(\d{4})-M(\d{1,2})", str(periods[index].get("id", "")))
+                    if match:
+                        rows.append({"code": code, "period": f"{match.group(1)}-{int(match.group(2)):02d}", "value": values[0]})
             if not rows:
-                raise RuntimeError("dgbas_ppi_observations_empty")
+                raise RuntimeError("dgbas_price_observations_empty")
             saved = self._cache_free_series(rows, DGBAS_SERIES, "DGBAS", "https://nstatdb.dgbas.gov.tw/dgbasAll/", fresh_for_seconds=12 * 3600)
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
