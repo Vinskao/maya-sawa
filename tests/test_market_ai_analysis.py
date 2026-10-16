@@ -46,3 +46,20 @@ def test_api_requires_login_and_validates_updates(database, monkeypatch):
     assert client.put(endpoint, json=body).json()["analysis"]["revision"] == 1
     assert client.put(endpoint, json={**body, "content": "Stale"}).status_code == 409
     assert client.get(endpoint).json()["analysis"]["content"] == "Reviewed analysis"
+
+
+def test_shared_macro_commentary_uses_its_own_slot(database, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market
+    monkeypatch.setattr(market, "market_ai_analysis_db", database)
+    app = FastAPI()
+    app.include_router(market.router)
+    app.dependency_overrides[market.require_authenticated] = lambda: {"sub": "owner"}
+    client = TestClient(app)
+    body = {"model": "AI", "content": "Rates are a valuation headwind", "expectedRevision": 0}
+    assert client.put("/market/dashboard/analysis/US?productType=macro", json=body).json()["analysis"]["revision"] == 1
+    assert client.get("/market/dashboard/analysis/us?productType=macro").json()["analysis"]["productType"] == "macro"
+    assert client.get("/market/dashboard/analysis/US?productType=stock").json()["analysis"] is None
+    assert client.put("/market/dashboard/analysis/2330?productType=macro", json=body).status_code == 422
+    assert client.get("/market/dashboard/analysis/US?productType=bond").status_code == 422

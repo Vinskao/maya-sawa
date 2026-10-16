@@ -60,8 +60,11 @@ class MarketAiAnalysisUpdate(BaseModel):
 
 def analysis_target(code: str, product_type: str):
     normalized = code.strip().upper()
-    if product_type not in {"stock", "futures"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
+    if product_type not in {"stock", "futures", "macro"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
         raise HTTPException(status_code=422, detail="Invalid instrument code or productType")
+    # One shared macro commentary that every instrument analysis reads instead of restating.
+    if product_type == "macro" and normalized != "US":
+        raise HTTPException(status_code=422, detail="Macro commentary code must be US")
     return product_type, normalized
 
 

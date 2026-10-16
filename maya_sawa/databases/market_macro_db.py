@@ -334,7 +334,13 @@ class MarketMacroDatabase:
         start_year, start_month = divmod(start_period, 12)
         with self.sessions() as session:
             observations = session.query(MacroObservation).filter(MacroObservation.reference_period >= f"{start_year:04d}-{start_month + 1:02d}").order_by(MacroObservation.series_code, MacroObservation.reference_period).all()
-            event_rows = session.query(MacroEvent).filter(MacroEvent.scheduled_date >= (now - timedelta(days=7)).date(), MacroEvent.scheduled_date <= (now + timedelta(days=90)).date()).order_by(MacroEvent.scheduled_date).all()
+            event_rows = session.query(MacroEvent).filter(
+                MacroEvent.scheduled_date >= (now - timedelta(days=7)).date(),
+                MacroEvent.scheduled_date <= (now + timedelta(days=90)).date()).order_by(MacroEvent.scheduled_date).all()
+            cpi_history_rows = session.query(MacroEvent).filter(
+                MacroEvent.group_id == "cpi",
+                MacroEvent.scheduled_date >= (now - timedelta(days=730)).date(),
+                MacroEvent.scheduled_date <= (now + timedelta(days=90)).date()).order_by(MacroEvent.scheduled_date).all()
             runs = session.query(MacroFetchRun).order_by(MacroFetchRun.started_at.desc()).all()
             series = {row.code: row for row in session.query(MacroSeries).all()}
         by_code: dict[str, list] = {}
@@ -349,13 +355,25 @@ class MarketMacroDatabase:
             rows = rows[-row_limit:]
             latest = rows[-1]
             previous = rows[-2] if len(rows) > 1 else None
-            indicators.append({"code": code, "name": meta.name if meta else code, "unit": meta.unit if meta else "",
+            indicator = {"code": code, "name": meta.name if meta else code, "unit": meta.unit if meta else "",
                 "frequency": meta.frequency if meta else "monthly", "value": latest.value, "referencePeriod": latest.reference_period,
                 "previousValue": previous.value if previous else None, "previousPeriod": previous.reference_period if previous else None,
                 "change": float(latest.value) - float(previous.value) if previous else None,
                 "preliminary": bool(latest.preliminary), "source": latest.source, "fetchedAt": latest.fetched_at.isoformat(),
                 "sourcePublishedAt": latest.source_published_at.isoformat() if latest.source_published_at else None,
-                "history": [{"period": row.reference_period, "value": row.value} for row in rows]})
+                "history": [{"period": row.reference_period, "value": row.value} for row in rows]}
+            if code == "CUUR0000SA0":
+                forecasts = []
+                for event in cpi_history_rows:
+                    raw = event.consensus_value or ""
+                    match = re.search(r"([-+]?\d+(?:\.\d+)?)\s*%?\s*(?:yoy|y/y|year[- ]over[- ]year)", raw, re.I)
+                    if not match:
+                        continue
+                    period_date = event.scheduled_date.replace(day=1) - timedelta(days=1)
+                    forecasts.append({"period": period_date.strftime("%Y-%m"), "value": match.group(1),
+                        "source": event.expectation_source or "Economic Calendar", "sourceUrl": event.source_url})
+                indicator["consensusHistory"] = forecasts
+            indicators.append(indicator)
         latest_observed = {group: by_code[code][-1].reference_period
             for group, code in RELEASE_SERIES.items() if by_code.get(code)}
         events = []

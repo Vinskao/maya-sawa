@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 from collections import OrderedDict
 from copy import deepcopy
 import hashlib
@@ -71,6 +72,9 @@ DGBAS_SERIES = {
     "TW_EMPLOYED": ("Taiwan employed persons", "thousand persons", "monthly"),
     "TW_UNEMPLOYED": ("Taiwan unemployed persons", "thousand persons", "monthly"),
 }
+UMICH_SERIES = {
+    "UMICH_CPI_EXPECTED_1Y": ("Michigan median expected inflation over next 12 months", "percent", "monthly"),
+}
 def _bounded_budget(name: str, default: int, ceiling: int) -> int:
     try: requested = int(os.getenv(name, str(default)))
     except ValueError: requested = default
@@ -112,7 +116,7 @@ class LocalTTLCache:
 _macro_local_cache = LocalTTLCache()
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
-FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES)
+FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES)
 
 
 def _request(url: str, body: dict | None = None) -> tuple[int, bytes]:
@@ -263,7 +267,8 @@ class MarketMacroService:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("DGBAS", self._fetch_dgbas_employment),
-                ("WorldBank", self._fetch_world_bank_gold)):
+                ("WorldBank", self._fetch_world_bank_gold),
+                ("UMichInflation", self._fetch_umich_inflation_expectations)):
                 try: output["sources"][source_name] = fetch()
                 except Exception as exc:
                     logger.warning("%s refresh failed: %s", source_name, str(exc)[:80])
@@ -538,6 +543,44 @@ class MarketMacroService:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
             raise
 
+    def _fetch_umich_inflation_expectations(self) -> int:
+        """Cache the University of Michigan's official monthly one-year inflation expectations CSV."""
+        code = "UMICH_CPI_EXPECTED_1Y"
+        existing = _macro_local_cache.get(f"series:{code}")
+        if existing and (datetime.now(UTC) - datetime.fromisoformat(existing["fetchedAt"])).total_seconds() < 12 * 3600:
+            return len(existing["history"])
+        run_id = market_macro_db.reserve_source_call("UMichInflation", daily_limit=4, minute_limit=2)
+        if run_id is None:
+            raise RuntimeError("umich_inflation_daily_budget_exhausted")
+        source_url = "https://www.sca.isr.umich.edu/files/tbcpx1px5.csv"
+        try:
+            status, raw = _request_free_cached("umich:inflation-expectations", source_url, ttl_seconds=12 * 3600)
+            text = raw.decode("utf-8-sig", errors="replace")
+            rows = csv.reader(text.splitlines())
+            observations = []
+            for row in rows:
+                if len(row) < 4:
+                    continue
+                date_match = re.fullmatch(r"([A-Za-z]+)(?:\s*\([^)]*\))?", row[0].strip())
+                if not date_match or not re.fullmatch(r"\d{4}", row[1].strip()):
+                    continue
+                try:
+                    period = datetime.strptime(f"{date_match.group(1)} {row[1].strip()}", "%B %Y").strftime("%Y-%m")
+                except ValueError:
+                    continue
+                value = row[3].strip()
+                if re.fullmatch(r"\d+(?:\.\d+)?", value):
+                    observations.append({"code": code, "period": period, "value": value})
+            if not observations:
+                raise RuntimeError("umich_inflation_csv_empty")
+            saved = self._cache_free_series(observations, UMICH_SERIES, "University of Michigan Surveys of Consumers",
+                "https://www.sca.isr.umich.edu/tables.html", fresh_for_seconds=12 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
     def _fetch_world_bank_gold(self) -> int:
         """Load the free World Bank monthly gold history into process-local memory only."""
         existing = _macro_local_cache.get("series:WORLD_GOLD_USD")
@@ -619,58 +662,59 @@ class MarketMacroService:
             raise
 
     def _fetch_consensus_calendar(self) -> int:
-        """Low-frequency free calendar supplement; consensus and actual may be unavailable per event."""
-        run_id = market_macro_db.reserve_source_call("FinanceCalendar", daily_limit=4, minute_limit=2)
-        if run_id is None:
-            raise RuntimeError("consensus_calendar_budget_exhausted")
-        try:
-            today = date.today()
-            query = urllib.parse.urlencode({"from": today.isoformat(), "to": (today + timedelta(days=90)).isoformat(), "limit": "500"})
-            status, raw = _request(f"https://www.financecalendar.com/wp-json/fc/v1/calendar?{query}")
-            payload = json.loads(raw)
-            if not isinstance(payload.get("events"), list):
-                raise RuntimeError("consensus_calendar_response_invalid")
-            events = []
-            for item in payload["events"]:
-                title = str(item.get("title") or item.get("name") or "")
-                lowered = title.lower()
-                group = None
-                if "fomc" in lowered and ("decision" in lowered or "rate" in lowered):
-                    group = "fed"
-                elif "cpi" in lowered and ("us " in lowered or "united states" in lowered):
-                    group = "cpi"
-                elif "retail sales" in lowered or "retail trade" in lowered:
-                    group = "retail_sales"
-                elif any(term in lowered for term in ("nonfarm payroll", "employment situation", "us jobs report")):
-                    group = "employment"
-                if not group:
-                    continue
-                try:
-                    scheduled = date.fromisoformat(str(item["date"])[:10])
-                except (KeyError, ValueError, TypeError):
-                    continue
-                raw_time = item.get("time_utc")
-                try:
-                    scheduled_at = datetime.fromisoformat(str(raw_time).replace("Z", "+00:00")) if raw_time else None
-                except ValueError:
-                    scheduled_at = None
-                source_url = str(item.get("url") or "https://www.financecalendar.com/api/")
-                consensus = item.get("consensus")
-                actual = item.get("actual")
-                events.append({"id": f"financecalendar:{group}:{scheduled.isoformat()}",
-                    "sourceId": f"{group}:{scheduled.isoformat()}", "groupId": group,
-                    "type": group, "title": title, "scheduledDate": scheduled,
-                    "scheduledAt": scheduled_at, "timePrecision": "minute" if scheduled_at else "date",
-                    "scheduleVerification": "confirmed" if scheduled_at else "date_only",
-                    "consensusValue": str(consensus) if consensus not in (None, "") else None,
-                    "actualValue": str(actual) if actual not in (None, "") else None,
-                    "expectationSource": "Finance Calendar", "sourceUrl": source_url})
-            saved = market_macro_db.update_event_expectations(events)
-            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
-            return saved
-        except Exception as exc:
-            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
-            raise
+        """Cache calendar history and upcoming releases so CPI consensus can be charted beside actuals."""
+        today = date.today()
+        windows = ((today - timedelta(days=90), today), (today + timedelta(days=1), today + timedelta(days=90)))
+        events_by_id: dict[str, dict] = {}
+        for start, end in windows:
+            run_id = market_macro_db.reserve_source_call("FinanceCalendar", daily_limit=8, minute_limit=2)
+            if run_id is None:
+                raise RuntimeError("consensus_calendar_budget_exhausted")
+            try:
+                query = urllib.parse.urlencode({"from": start.isoformat(), "to": end.isoformat(), "limit": "500"})
+                status, raw = _request(f"https://www.financecalendar.com/wp-json/fc/v1/calendar?{query}")
+                payload = json.loads(raw)
+                if not isinstance(payload.get("events"), list):
+                    raise RuntimeError("consensus_calendar_response_invalid")
+                for item in payload["events"]:
+                    title = str(item.get("title") or item.get("name") or "")
+                    lowered = title.lower()
+                    group = None
+                    if "fomc" in lowered and ("decision" in lowered or "rate" in lowered):
+                        group = "fed"
+                    elif "cpi" in lowered and ("us " in lowered or "united states" in lowered):
+                        group = "cpi"
+                    elif "retail sales" in lowered or "retail trade" in lowered:
+                        group = "retail_sales"
+                    elif any(term in lowered for term in ("nonfarm payroll", "employment situation", "us jobs report")):
+                        group = "employment"
+                    if not group:
+                        continue
+                    try:
+                        scheduled = date.fromisoformat(str(item["date"])[:10])
+                    except (KeyError, ValueError, TypeError):
+                        continue
+                    raw_time = item.get("time_utc")
+                    try:
+                        scheduled_at = datetime.fromisoformat(str(raw_time).replace("Z", "+00:00")) if raw_time else None
+                    except ValueError:
+                        scheduled_at = None
+                    source_url = str(item.get("url") or "https://www.financecalendar.com/api/")
+                    consensus, actual = item.get("consensus"), item.get("actual")
+                    event_id = f"financecalendar:{group}:{scheduled.isoformat()}"
+                    events_by_id[event_id] = {"id": event_id, "sourceId": f"{group}:{scheduled.isoformat()}",
+                        "groupId": group, "type": group, "title": title, "scheduledDate": scheduled,
+                        "scheduledAt": scheduled_at, "timePrecision": "minute" if scheduled_at else "date",
+                        "scheduleVerification": "confirmed" if scheduled_at else "date_only",
+                        "consensusValue": str(consensus) if consensus not in (None, "") else None,
+                        "actualValue": str(actual) if actual not in (None, "") else None,
+                        "expectationSource": "Finance Calendar", "sourceUrl": source_url}
+                market_macro_db.finish_source_call(run_id, "success", len(payload["events"]), http_status=status)
+            except Exception as exc:
+                market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+                raise
+        saved = market_macro_db.update_event_expectations(list(events_by_id.values()))
+        return saved
 
     def _fetch_fed_calendar_reserved(self, run_id: int) -> int:
         status, raw = _request("https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm")
@@ -735,6 +779,12 @@ class MarketMacroService:
                 "history": history[-max(history_months * 32 if series["frequency"] == "daily" else history_months, 24):],
             })
         result["indicators"] = [item for item in result.get("indicators", []) if item.get("code") not in FREE_CACHE_CODES] + local_indicators
+        umich = next((item for item in local_indicators if item["code"] == "UMICH_CPI_EXPECTED_1Y"), None)
+        if umich:
+            for indicator in result["indicators"]:
+                if indicator.get("code") == "CUUR0000SA0":
+                    indicator["expectationHistory"] = [{**point, "source": umich["source"], "sourceUrl": umich["sourceUrl"]}
+                        for point in umich["history"]]
         if local_indicators:
             result["status"] = "ready"
         known_sources = {item.get("source") for item in result.get("sources", [])}
