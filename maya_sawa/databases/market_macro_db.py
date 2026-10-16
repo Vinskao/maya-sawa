@@ -353,6 +353,8 @@ class MarketMacroDatabase:
                 "preliminary": bool(latest.preliminary), "source": latest.source, "fetchedAt": latest.fetched_at.isoformat(),
                 "sourcePublishedAt": latest.source_published_at.isoformat() if latest.source_published_at else None,
                 "history": [{"period": row.reference_period, "value": row.value} for row in rows]})
+        latest_observed = {group: by_code[code][-1].reference_period
+            for group, code in RELEASE_SERIES.items() if by_code.get(code)}
         events = []
         for row in event_rows:
             events.append({"id": row.id, "groupId": row.group_id, "type": row.event_type, "title": row.title,
@@ -364,7 +366,7 @@ class MarketMacroDatabase:
                 "surpriseValue": row.surprise_value,
                 "surpriseStatus": _surprise_status(row.consensus_value, row.actual_value),
                 "expectationSource": row.expectation_source,
-                "highlightLevel": _highlight(row, now), "source": row.source, "sourceUrl": row.source_url})
+                "highlightLevel": _highlight(row, now, latest_observed.get(row.group_id)), "source": row.source, "sourceUrl": row.source_url})
         latest_runs: dict[str, dict[str, MacroFetchRun]] = {}
         for run in runs:
             state = latest_runs.setdefault(run.source, {})
@@ -383,18 +385,38 @@ class MarketMacroDatabase:
             "nextRefreshAt": (now + timedelta(minutes=5)).isoformat()}
 
 
-def _highlight(event: MacroEvent, now: datetime) -> str:
+# Series whose stored observations prove a release group has published.
+RELEASE_SERIES = {"employment": "CES0000000001", "cpi": "CUSR0000SA0", "retail_sales": "RSAFS", "fed": "DFEDTARU"}
+
+
+def _release_observed(event: MacroEvent, observed_period: str | None) -> bool:
+    """A past-due release counts as published once its data is stored, even if the data
+    arrived with the initial history load and no new-period transition was ever seen."""
+    if not observed_period:
+        return False
+    if len(observed_period) == 7:
+        # Monthly releases report the previous month: the 10-14 CPI release carries 2026-09.
+        first_of_month = event.scheduled_date.replace(day=1)
+        expected = (first_of_month - timedelta(days=1)).strftime("%Y-%m")
+        return observed_period >= expected
+    # Daily series (Fed target) are posted for the day after the decision.
+    return observed_period > event.scheduled_date.isoformat()
+
+
+def _highlight(event: MacroEvent, now: datetime, observed_period: str | None = None) -> str:
     if event.status == "published":
         if event.published_at and (now - event.published_at).total_seconds() <= 24 * 3600:
             return "published"
         return "none"
     if not event.scheduled_at:
         days = (event.scheduled_date - now.astimezone(ZoneInfo("Asia/Taipei")).date()).days
-        if days < 0: return "waiting"
+        if days < 0: return "none" if _release_observed(event, observed_period) else "waiting"
         if days <= 7: return "upcoming"
         return "none"
     delta = (event.scheduled_at - now).total_seconds()
     if delta < 0:
+        if _release_observed(event, observed_period):
+            return "published" if delta >= -24 * 3600 else "none"
         return "waiting"
     if delta <= 24 * 3600: return "urgent"
     if delta <= 72 * 3600: return "soon"
