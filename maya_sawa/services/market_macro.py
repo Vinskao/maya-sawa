@@ -186,12 +186,35 @@ class LocalTTLCache:
                 self._entries.popitem(last=False)
 
 
-_macro_local_cache = LocalTTLCache()
+# One entry per cached series plus the raw responses of free sources (ECB, BoJ, CBC, DGBAS, ...).
+_macro_local_cache = LocalTTLCache(max_entries=128)
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES))
+
+
+# Money and central-bank liquidity series keep history since 2019, so charts show the 2020 expansion, the 2022-23
+# contraction and the reverse repo draining to zero; two years of these slow-moving levels drew flat lines.
+LONG_HISTORY_START = "2019-01"
+LONG_HISTORY_CODES = {"M2SL", "WALCL", "WTREGEN", "RRPONTSYD", "ECBASSETSW", "JPNASSETS", "US_NET_LIQUIDITY"} | set(WORLD_MONEY_SERIES)
+
+
+def fred_observation_start(code: str, frequency: str, today: date) -> str:
+    """First FRED observation date requested: 2019 for liquidity, two years for daily/weekly, six years otherwise."""
+    if code in LONG_HISTORY_CODES:
+        return f"{LONG_HISTORY_START}-01"
+    if frequency in ("daily", "weekly"):
+        return (today - timedelta(days=730)).isoformat()
+    return f"{today.year - 6}-01-01"
+
+
+def snapshot_history(code: str, frequency: str, history: list[dict], months: int) -> list[dict]:
+    """History sent to the dashboard: everything since 2019 for liquidity series, the usual window otherwise."""
+    if code in LONG_HISTORY_CODES:
+        return [row for row in history if row["period"] >= LONG_HISTORY_START]
+    return history[-history_window(frequency, months):]
 
 
 def history_window(frequency: str, months: int) -> int:
@@ -575,9 +598,8 @@ class MarketMacroService:
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=60)
             if run_id is None: raise RuntimeError("fred_daily_or_minute_budget_exhausted")
             params = urllib.parse.urlencode({"series_id": code, "file_type": "json",
-                "observation_start": (date.today() - timedelta(days=730)).isoformat() if FRED_SERIES[code][2] in ("daily", "weekly")
-                    else f"{date.today().year - 6}-01-01",
-                "sort_order": "asc", "limit": "1000", "api_key": FRED_KEY})
+                "observation_start": fred_observation_start(code, FRED_SERIES[code][2], date.today()),
+                "sort_order": "asc", "limit": "10000", "api_key": FRED_KEY})
             if FRED_SERIES[code][2] == "monthly":
                 params += "&" + urllib.parse.urlencode({"frequency": "m", "aggregation_method": "eop"})
             try:
@@ -612,7 +634,7 @@ class MarketMacroService:
         """Cache euro-area (ECB), Japan (BoJ) and Taiwan (CBC) money supply; FRED's OECD copies stopped in 2023."""
         run_id = market_macro_db.reserve_source_call("WorldMoney", daily_limit=12, minute_limit=3)
         if run_id is None: raise RuntimeError("world_money_daily_budget_exhausted")
-        start_year = date.today().year - 6
+        start_year = LONG_HISTORY_START[:4]
         sources = (
             ("ECB", "https://data-api.ecb.europa.eu/service/data/BSI/M.U2.Y.V.M20.X.I.U2.2300.Z01.E"
                 f"?format=csvdata&detail=dataonly&startPeriod={start_year}-01",
@@ -1136,7 +1158,7 @@ class MarketMacroService:
                 "change": float(latest["value"]) - float(previous["value"]) if previous else None,
                 "source": series["source"], "sourceUrl": series["sourceUrl"], "fetchedAt": series["fetchedAt"],
                 "cacheStale": (datetime.now(UTC) - datetime.fromisoformat(series["fetchedAt"])).total_seconds() > series.get("freshForSeconds", LOCAL_MACRO_TTL_SECONDS),
-                "history": history[-history_window(series["frequency"], history_months):],
+                "history": snapshot_history(code, series["frequency"], history, history_months),
             })
         result["indicators"] = [item for item in result.get("indicators", []) if item.get("code") not in FREE_CACHE_CODES] + local_indicators
         umich = next((item for item in local_indicators if item["code"] == "UMICH_CPI_EXPECTED_1Y"), None)

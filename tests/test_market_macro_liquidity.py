@@ -161,3 +161,28 @@ def test_world_money_keeps_other_central_banks_when_one_fails(monkeypatch):
     service._fetch_world_money()
     assert {row["code"] for row in saved} == {"EZ_M2_INDEX", "TW_M1B", "TW_M2"}
     assert finished[-1][0][1] == "success" and "BoJ" in finished[-1][1]["detail"]
+
+
+# Liquidity series keep history since 2019 so the 2020 expansion, the 2022-23 contraction and the reverse repo
+# draining from 2.5T to zero are on the chart; two years of data drew flat lines.
+def test_liquidity_series_fetch_from_2019_and_others_keep_their_windows():
+    today = market_macro.date(2026, 10, 17)
+    for code in ("M2SL", "WALCL", "WTREGEN", "RRPONTSYD", "ECBASSETSW", "JPNASSETS"):
+        assert market_macro.fred_observation_start(code, market_macro.FRED_SERIES[code][2], today) == "2019-01-01", code
+    assert market_macro.fred_observation_start("SOFR", "daily", today) == "2024-10-17"
+    assert market_macro.fred_observation_start("DRALACBS", "quarterly", today) == "2020-01-01"
+
+
+def test_snapshot_keeps_all_liquidity_history_since_2019_but_trims_other_series():
+    daily = [{"period": f"{year}-01-0{day}", "value": "1"} for year in range(2018, 2027) for day in (2, 3)]
+    assert [row["period"][:4] for row in market_macro.snapshot_history("RRPONTSYD", "daily", daily, 24)][0] == "2019"
+    assert len(market_macro.snapshot_history("RRPONTSYD", "daily", daily, 24)) == 16
+    monthly = [{"period": f"{year}-{month:02d}", "value": "1"} for year in range(2018, 2027) for month in range(1, 13)]
+    assert market_macro.snapshot_history("TW_M2", "monthly", monthly, 24)[0]["period"] == "2019-01"
+    assert market_macro.snapshot_history("US_NET_LIQUIDITY", "weekly", monthly, 24)[0]["period"] == "2019-01"
+    assert len(market_macro.snapshot_history("SOFR", "monthly", monthly, 24)) == 24
+
+
+def test_local_cache_holds_every_series_plus_raw_source_responses():
+    # 54 cached series plus ~13 raw source responses overflowed the old 64-entry LRU and evicted series.
+    assert market_macro._macro_local_cache._max_entries >= len(market_macro.FREE_CACHE_CODES) + 32
