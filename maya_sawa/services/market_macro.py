@@ -57,6 +57,50 @@ FRED_SERIES = {
     "ICSA": ("Initial unemployment insurance claims, seasonally adjusted", "persons", "weekly"),
     "GBRSLRTTO01GPSAM": ("United Kingdom retail sales volume, month over month", "percent", "monthly"),
     "GBRSLRTTO01GYSAM": ("United Kingdom retail sales volume, year over year", "percent", "monthly"),
+    # Money supply and central-bank balance sheets (plan section 22). Units are after FRED_SCALE.
+    "M2SL": ("U.S. M2 money stock, seasonally adjusted", "USD billion", "monthly"),
+    "WALCL": ("Federal Reserve total assets (H.4.1, Wednesday level)", "USD billion", "weekly"),
+    "WTREGEN": ("U.S. Treasury General Account at the Fed (Wednesday level)", "USD billion", "weekly"),
+    "RRPONTSYD": ("Fed overnight reverse repurchase agreements", "USD billion", "daily"),
+    "ECBASSETSW": ("Eurosystem total assets", "EUR billion", "weekly"),
+    "JPNASSETS": ("Bank of Japan total assets", "JPY trillion", "monthly"),
+    # Market and policy rates beyond the Fed target and 10-year yield.
+    "SOFR": ("Secured Overnight Financing Rate", "percent", "daily"),
+    "DGS3MO": ("3-month Treasury constant maturity yield", "percent", "daily"),
+    "DGS2": ("2-year Treasury constant maturity yield", "percent", "daily"),
+    "T10Y2Y": ("10-year minus 2-year Treasury spread", "percent", "daily"),
+    "T10Y3M": ("10-year minus 3-month Treasury spread", "percent", "daily"),
+    "DFII10": ("10-year TIPS real yield", "percent", "daily"),
+    "T10YIE": ("10-year breakeven inflation rate", "percent", "daily"),
+    "ECBDFR": ("ECB deposit facility rate", "percent", "daily"),
+    "IUDSOIA": ("Sterling Overnight Index Average (SONIA)", "percent", "daily"),
+    "IRSTCI01JPM156N": ("Japan overnight call rate (OECD)", "percent", "monthly"),
+    # Credit spreads, bank delinquency/charge-off rates and financial stress.
+    "BAMLH0A0HYM2": ("ICE BofA U.S. high yield option-adjusted spread", "percent", "daily"),
+    "BAMLC0A0CM": ("ICE BofA U.S. investment grade corporate option-adjusted spread", "percent", "daily"),
+    "BAA10Y": ("Moody's Baa corporate yield minus 10-year Treasury", "percent", "daily"),
+    "DRALACBS": ("U.S. bank delinquency rate, all loans", "percent", "quarterly"),
+    "DRBLACBS": ("U.S. bank delinquency rate, business loans", "percent", "quarterly"),
+    "DRSFRMACBS": ("U.S. bank delinquency rate, single-family residential mortgages", "percent", "quarterly"),
+    "DRCCLACBS": ("U.S. bank delinquency rate, credit cards", "percent", "quarterly"),
+    "CORCCACBS": ("U.S. bank net charge-off rate, credit cards", "percent", "quarterly"),
+    "STLFSI4": ("St. Louis Fed Financial Stress Index (0 = normal)", "index points", "weekly"),
+    "NFCI": ("Chicago Fed National Financial Conditions Index (0 = average)", "index points", "weekly"),
+}
+# Source units converted to the units declared above: millions -> billions, 100 million yen -> trillion yen.
+FRED_SCALE = {"WALCL": 1 / 1000, "WTREGEN": 1 / 1000, "ECBASSETSW": 1 / 1000, "JPNASSETS": 1 / 10000}
+FRED_SOURCE_LABELS = {"GBRSLRTTO01GPSAM": "OECD (via FRED)", "GBRSLRTTO01GYSAM": "OECD (via FRED)",
+    "IRSTCI01JPM156N": "OECD (via FRED)", "BAMLH0A0HYM2": "ICE BofA (via FRED)", "BAMLC0A0CM": "ICE BofA (via FRED)"}
+# Series written to PostgreSQL before section 22; everything newer stays in process memory (postgres has 100m CPU).
+FRED_PERSISTED = {"DFEDTARL", "DFEDTARU", "RSAFS", "DGS10", "DCOILWTICO", "ICSA"}
+WORLD_MONEY_SERIES = {
+    "EZ_M2_INDEX": ("Euro area M2, index of notional stocks, seasonally adjusted (ECB)", "index points", "monthly"),
+    "JP_M2": ("Japan M2 money stock, average amounts outstanding (BoJ)", "JPY trillion", "monthly"),
+    "TW_M1B": ("Taiwan M1B, daily average (CBC)", "NTD million", "monthly"),
+    "TW_M2": ("Taiwan M2, daily average (CBC)", "NTD million", "monthly"),
+}
+DERIVED_SERIES = {
+    "US_NET_LIQUIDITY": ("Fed net liquidity: total assets - TGA - overnight reverse repo", "USD billion", "weekly"),
 }
 CBC_SERIES = {
     "CBC_REDISCOUNT": ("Taiwan CBC rediscount rate", "percent", "daily"),
@@ -107,9 +151,10 @@ def _bounded_budget(name: str, default: int, ceiling: int) -> int:
 
 
 BLS_DAILY_BUDGET = _bounded_budget("MACRO_BLS_DAILY_BUDGET", 40, 40)
-# Eight observation series plus five release schedules use about 13 calls per
-# refresh. Four scheduled refreshes/day need ~52; this headroom covers deploys
-# and manual recovery while remaining well below FRED's per-minute limit.
+# 17 daily series, RSAFS/ICSA (persisted) and 5 release schedules run every 6-hour refresh
+# (~96 calls/day); the 15 cached weekly/monthly/quarterly series are refetched once a day. A
+# restart refetches all 39. The rest of the 200 covers deploys and manual recovery while
+# remaining well below FRED's per-minute limit.
 FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 200, 200)
 
 
@@ -144,7 +189,111 @@ class LocalTTLCache:
 _macro_local_cache = LocalTTLCache()
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
-FREE_CACHE_CODES = set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES) | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | {"GBRSLRTTO01GPSAM", "GBRSLRTTO01GYSAM"}
+FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
+    | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
+    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES))
+
+
+def history_window(frequency: str, months: int) -> int:
+    """Observations per series in a snapshot: ~32 per month for daily, ~5 for weekly, at least 24 otherwise."""
+    if frequency == "daily":
+        return months * 32
+    if frequency == "weekly":
+        return months * 5
+    return max(months, 24)
+
+
+def _scaled(value: str, scale: float) -> str:
+    if scale == 1:
+        return value
+    return f"{float(value) * scale:.10f}".rstrip("0").rstrip(".")
+
+
+def fred_observation_rows(code: str, observations: list, frequency: str, scale: float = 1) -> list[dict]:
+    """FRED observations -> rows. "." marks a missing day; daily/weekly keep the date, others keep YYYY-MM."""
+    rows = []
+    for item in observations:
+        value = str(item.get("value") or "").strip()
+        if not value or value == ".":
+            continue
+        try:
+            observation_date = date.fromisoformat(item["date"])
+            float(value)
+        except (KeyError, ValueError, TypeError):
+            continue
+        period = observation_date.isoformat() if frequency in ("daily", "weekly") else observation_date.isoformat()[:7]
+        rows.append({"code": code, "period": period, "value": _scaled(value, scale)})
+    return rows
+
+
+def parse_ecb_csv(raw: bytes, code: str) -> list[dict]:
+    """ECB Data Portal csvdata: one row per TIME_PERIOD with OBS_VALUE; blanks and NaN are unpublished."""
+    rows = []
+    for item in csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))):
+        period, value = str(item.get("TIME_PERIOD") or "").strip(), str(item.get("OBS_VALUE") or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}", period):
+            continue
+        try:
+            if float(value) != float(value):
+                continue
+        except ValueError:
+            continue
+        rows.append({"code": code, "period": period, "value": value})
+    return rows
+
+
+def parse_boj_series(payload: dict, series_code: str, code: str, scale: float = 1) -> list[dict]:
+    """BoJ Time-Series Data Search API (getDataCode): parallel SURVEY_DATES (YYYYMM) and VALUES arrays."""
+    if payload.get("STATUS") != 200:
+        raise RuntimeError(f"boj_status_{payload.get('STATUS')}:{payload.get('MESSAGEID')}")
+    series = next((item for item in payload.get("RESULTSET") or [] if item.get("SERIES_CODE") == series_code), None)
+    if not series:
+        raise RuntimeError("boj_series_missing")
+    values = series.get("VALUES") or {}
+    rows = []
+    for stamp, value in zip(values.get("SURVEY_DATES") or [], values.get("VALUES") or []):
+        if value in (None, "") or not re.fullmatch(r"\d{6}", str(stamp)):
+            continue
+        rows.append({"code": code, "period": f"{str(stamp)[:4]}-{str(stamp)[4:]}", "value": _scaled(str(value), scale)})
+    return rows
+
+
+# EF15M01 rows: period, then 15 (level, YoY%) pairs; the last three pairs are M1A, M1B, M2. The column headers come
+# back mis-encoded, so positions are fixed and a row with any other width is rejected.
+CBC_MONEY_COLUMNS = {"TW_M1B": 27, "TW_M2": 29}
+
+
+def parse_cbc_money_stock(payload: dict) -> list[dict]:
+    rows = []
+    for item in payload.get("data", {}).get("dataSets", []):
+        if len(item) != 31:
+            raise RuntimeError("cbc_money_stock_layout_changed")
+        match = re.fullmatch(r"(\d{4})M(\d{2})", str(item[0]))
+        if not match:
+            continue
+        for code, index in CBC_MONEY_COLUMNS.items():
+            if re.fullmatch(r"\d+(?:\.\d+)?", str(item[index])):
+                rows.append({"code": code, "period": f"{match.group(1)}-{match.group(2)}", "value": str(item[index])})
+    return rows
+
+
+def net_liquidity_rows(walcl: list[dict], tga: list[dict], rrp: list[dict]) -> list[dict]:
+    """Weekly Fed net liquidity in USD billion: Wednesday total assets - Wednesday TGA - that day's ON RRP.
+    RRP falls back to the latest day up to 7 days earlier (holidays); weeks missing either input are skipped."""
+    tga_by_day = {row["period"]: float(row["value"]) for row in tga}
+    rrp_days = sorted((row["period"], float(row["value"])) for row in rrp)
+    rows = []
+    for row in sorted(walcl, key=lambda item: item["period"]):
+        day = row["period"]
+        if day not in tga_by_day:
+            continue
+        floor = (date.fromisoformat(day) - timedelta(days=7)).isoformat()
+        reverse_repo = next((value for period, value in reversed(rrp_days) if floor <= period <= day), None)
+        if reverse_repo is None:
+            continue
+        value = float(row["value"]) - tga_by_day[day] - reverse_repo
+        rows.append({"code": "US_NET_LIQUIDITY", "period": day, "value": f"{value:.1f}"})
+    return rows
 
 
 def _request(url: str, body: dict | None = None, extra_headers: dict | None = None) -> tuple[int, bytes]:
@@ -252,8 +401,7 @@ class MarketMacroService:
                 await self.refresh()
             except Exception:
                 logger.exception("Macro scheduled refresh failed")
-            # FRED uses eight series observations plus five release date/time lookups
-            # per refresh; four refreshes daily remain below its 100-call budget.
+            # Four refreshes daily stay inside FRED_DAILY_BUDGET (see its comment).
             await asyncio.sleep(6 * 3600)
 
     async def refresh(self) -> dict:
@@ -302,7 +450,8 @@ class MarketMacroService:
                 ("DGBASPrices", self._fetch_taiwan_prices),
                 ("WorldBank", self._fetch_world_bank_gold),
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
-                ("PMI", self._fetch_pmi_series)):
+                ("PMI", self._fetch_pmi_series),
+                ("WorldMoney", self._fetch_world_money)):
                 try: output["sources"][source_name] = fetch()
                 except Exception as exc:
                     logger.warning("%s refresh failed: %s", source_name, str(exc)[:80])
@@ -408,11 +557,21 @@ class MarketMacroService:
 
     def _fetch_fred_observations(self) -> int:
         count = 0
-        with market_macro_db.sessions.begin() as session:
-            for code, (name, unit, frequency) in FRED_SERIES.items():
-                session.merge(MacroSeries(code=code, name=name, unit=unit, frequency=frequency, source="FRED"))
+        if market_macro_db.sessions:
+            with market_macro_db.sessions.begin() as session:
+                for code in FRED_PERSISTED:
+                    name, unit, frequency = FRED_SERIES[code]
+                    session.merge(MacroSeries(code=code, name=name, unit=unit, frequency=frequency, source="FRED"))
         failures = 0
+        attempted = 0
         for code in FRED_SERIES:
+            # Weekly/monthly/quarterly series change at most once a day; refetching them every 6 hours would
+            # spend the FRED budget for nothing. Daily series and persisted series refresh every run.
+            cached = _macro_local_cache.get(f"series:{code}") if code in FREE_CACHE_CODES else None
+            if cached and FRED_SERIES[code][2] != "daily" and \
+                    (datetime.now(UTC) - datetime.fromisoformat(cached["fetchedAt"])).total_seconds() < 24 * 3600:
+                continue
+            attempted += 1
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=60)
             if run_id is None: raise RuntimeError("fred_daily_or_minute_budget_exhausted")
             params = urllib.parse.urlencode({"series_id": code, "file_type": "json",
@@ -426,17 +585,12 @@ class MarketMacroService:
                 payload = json.loads(raw)
                 observations = payload.get("observations")
                 if not isinstance(observations, list): raise RuntimeError("fred_observation_response_invalid")
-                rows = []
-                for item in observations:
-                    if not item.get("value") or item["value"] == ".": continue
-                    try:
-                        observation_date = date.fromisoformat(item["date"])
-                        period = observation_date.isoformat() if FRED_SERIES[code][2] in ("daily", "weekly") else observation_date.isoformat()[:7]
-                    except (KeyError, ValueError, TypeError): continue
-                    rows.append({"code": code, "period": period, "value": item["value"]})
+                rows = fred_observation_rows(code, observations, FRED_SERIES[code][2], FRED_SCALE.get(code, 1))
                 if code in FREE_CACHE_CODES:
-                    saved = self._cache_free_series(rows, FRED_SERIES, "OECD (via FRED)",
-                        f"https://fred.stlouisfed.org/series/{code}", fresh_for_seconds=12 * 3600)
+                    # Low-frequency series are refetched daily, so they count as stale only after two missed days.
+                    saved = self._cache_free_series(rows, FRED_SERIES, FRED_SOURCE_LABELS.get(code, "FRED"),
+                        f"https://fred.stlouisfed.org/series/{code}",
+                        fresh_for_seconds=12 * 3600 if FRED_SERIES[code][2] == "daily" else 48 * 3600)
                 else:
                     saved = market_macro_db.save_observations("FRED", rows)
                 count += saved
@@ -445,9 +599,47 @@ class MarketMacroService:
                 market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
                 failures += 1
                 logger.warning("FRED observation refresh failed for %s: %s", code, str(exc)[:60])
-        if failures == len(FRED_SERIES):
+        if attempted and failures == attempted:
             raise RuntimeError("fred_observations_all_failed")
+        histories = [(_macro_local_cache.get(f"series:{code}") or {}).get("history") or []
+            for code in ("WALCL", "WTREGEN", "RRPONTSYD")]
+        if all(histories):
+            count += self._cache_free_series(net_liquidity_rows(*histories), DERIVED_SERIES, "FRED (derived)",
+                "https://fred.stlouisfed.org/series/WALCL", fresh_for_seconds=48 * 3600)
         return count
+
+    def _fetch_world_money(self) -> int:
+        """Cache euro-area (ECB), Japan (BoJ) and Taiwan (CBC) money supply; FRED's OECD copies stopped in 2023."""
+        run_id = market_macro_db.reserve_source_call("WorldMoney", daily_limit=12, minute_limit=3)
+        if run_id is None: raise RuntimeError("world_money_daily_budget_exhausted")
+        start_year = date.today().year - 6
+        sources = (
+            ("ECB", "https://data-api.ecb.europa.eu/service/data/BSI/M.U2.Y.V.M20.X.I.U2.2300.Z01.E"
+                f"?format=csvdata&detail=dataonly&startPeriod={start_year}-01",
+                lambda raw: parse_ecb_csv(raw, "EZ_M2_INDEX"), "https://data.ecb.europa.eu/data/datasets/BSI"),
+            ("BoJ", "https://www.stat-search.boj.or.jp/api/v1/getDataCode?format=json&lang=en&db=MD02"
+                f"&code=MAM1NAM2M2MO&startDate={start_year}01",
+                lambda raw: parse_boj_series(json.loads(raw), "MAM1NAM2M2MO", "JP_M2", scale=1 / 10000),
+                "https://www.stat-search.boj.or.jp/"),
+            ("CBC", "https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=EF15M01",
+                lambda raw: [row for row in parse_cbc_money_stock(json.loads(raw)) if row["period"] >= f"{start_year}-01"],
+                "https://cpx.cbc.gov.tw/Data/ExportToAPIInfo"),
+        )
+        saved, failures, status = 0, [], None
+        for source, url, parse, source_url in sources:
+            try:
+                status, raw = _request_free_cached(f"world-money:{source}", url, ttl_seconds=12 * 3600)
+                rows = parse(raw)
+                if not rows:
+                    raise RuntimeError("empty")
+                saved += self._cache_free_series(rows, WORLD_MONEY_SERIES, source, source_url, fresh_for_seconds=48 * 3600)
+            except Exception as exc:
+                failures.append(f"{source}:{str(exc)[:30]}")
+        if len(failures) == len(sources):
+            market_macro_db.finish_source_call(run_id, "error", detail=";".join(failures))
+            raise RuntimeError("world_money_all_sources_failed")
+        market_macro_db.finish_source_call(run_id, "success", saved, detail=";".join(failures), http_status=status)
+        return saved
 
     def _fetch_cbc_observations(self) -> int:
         """Persist official CBC policy-rate history and daily interbank USD/TWD history."""
@@ -944,7 +1136,7 @@ class MarketMacroService:
                 "change": float(latest["value"]) - float(previous["value"]) if previous else None,
                 "source": series["source"], "sourceUrl": series["sourceUrl"], "fetchedAt": series["fetchedAt"],
                 "cacheStale": (datetime.now(UTC) - datetime.fromisoformat(series["fetchedAt"])).total_seconds() > series.get("freshForSeconds", LOCAL_MACRO_TTL_SECONDS),
-                "history": history[-max(history_months * 32 if series["frequency"] == "daily" else history_months, 24):],
+                "history": history[-history_window(series["frequency"], history_months):],
             })
         result["indicators"] = [item for item in result.get("indicators", []) if item.get("code") not in FREE_CACHE_CODES] + local_indicators
         umich = next((item for item in local_indicators if item["code"] == "UMICH_CPI_EXPECTED_1Y"), None)
