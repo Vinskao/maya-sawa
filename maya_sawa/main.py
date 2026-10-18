@@ -224,6 +224,9 @@ async def _startup_event():
             from .databases.market_ai_analysis_db import market_ai_analysis_db
             from .services.market_research import seed_bundled_research
             await asyncio.to_thread(seed_bundled_research, market_ai_analysis_db)
+            from .databases.market_industry_db import market_industry_db
+            from .services.market_research import seed_bundled_industries
+            await asyncio.to_thread(seed_bundled_industries, market_industry_db)
         except Exception as e:
             logger.error(f"Failed to seed market research maps: {e}")
 

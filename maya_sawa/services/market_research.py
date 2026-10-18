@@ -109,3 +109,30 @@ def seed_bundled_research(database) -> None:
         logger.info("Research seeds: %s", seed_research(database, load_seed_records()))
     except Exception:
         logger.exception("Research seeding failed")
+
+
+INDUSTRY_SEED = SEED_DIR.parent / "market_industries.json"
+
+
+def load_industry_groups(path: Path = INDUSTRY_SEED) -> list[dict]:
+    """Bundled industry groups (族群) and their member stocks."""
+    return json.loads(path.read_text(encoding="utf-8"))["groups"]
+
+
+def seed_industry_groups(database, groups: list[dict]) -> dict:
+    """Create bundled groups that do not exist yet; groups edited through the API are never overwritten."""
+    counts = {"inserted": 0, "kept": 0}
+    for group in groups:
+        if database.group(group["id"]) is None:
+            database.save_group(group)
+            counts["inserted"] += 1
+        else:
+            counts["kept"] += 1
+    return counts
+
+
+def seed_bundled_industries(database) -> None:
+    try:
+        logger.info("Industry group seeds: %s", seed_industry_groups(database, load_industry_groups()))
+    except Exception:
+        logger.exception("Industry group seeding failed")

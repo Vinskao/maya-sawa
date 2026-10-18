@@ -30,6 +30,7 @@ from ..databases.market_dashboard_db import market_dashboard_db, market_for_curr
 from ..databases.market_history_db import market_history_db
 from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
 from ..services.market_research import validate_research_content, list_research
+from ..databases.market_industry_db import market_industry_db, validate_group
 from ..services.market_selection import attach_underlying
 from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
@@ -129,6 +130,34 @@ async def list_market_research():
     except Exception as exc:
         logger.exception("Research list failed")
         raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
+
+
+@router.get("/dashboard/industries")
+async def list_market_industries(code: str | None = None):
+    """Industry groups (族群) with their member stocks; with ?code= only the groups that stock belongs to."""
+    if code is not None and not re.fullmatch(r"[A-Z0-9]{1,12}(-[A-Z]{2})?", code.strip().upper()):
+        raise HTTPException(status_code=422, detail="Invalid record code")
+    try:
+        groups = await asyncio.to_thread(market_industry_db.groups_for, code.strip().upper()) if code else             await asyncio.to_thread(market_industry_db.list_groups)
+    except Exception as exc:
+        logger.exception("Industry groups unavailable")
+        raise HTTPException(status_code=503, detail="Industry database unavailable") from exc
+    return {"groups": groups}
+
+
+@router.put("/dashboard/industries/{group_id}")
+async def put_market_industry(group_id: str, body: dict, claims: dict = Depends(require_authenticated)):
+    if body.get("id") != group_id:
+        raise HTTPException(status_code=422, detail="Group id in the body must match the URL")
+    try:
+        validate_group(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        return {"group": await asyncio.to_thread(market_industry_db.save_group, body), "saved": True}
+    except Exception as exc:
+        logger.exception("Industry group save failed")
+        raise HTTPException(status_code=503, detail="Industry database unavailable") from exc
 
 
 @router.get("/dashboard")

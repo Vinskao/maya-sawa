@@ -1,0 +1,205 @@
+{
+ "note": "Industry groups (族群) for current holdings, plus 光寶科 for the datacenter power-rack diagram. Seeded at startup only where the group does not exist yet.",
+ "groups": [
+  {
+   "id": "advanced-packaging",
+   "name": {
+    "zh": "先進封裝與測試",
+    "en": "Advanced packaging and test"
+   },
+   "diagram": null,
+   "members": [
+    {
+     "recordCode": "2330",
+     "name": "台積電",
+     "market": "TW",
+     "role": "CoWoS / SoIC 先進封裝與前段製程"
+    },
+    {
+     "recordCode": "3711",
+     "name": "日月光投控",
+     "market": "TW",
+     "role": "封裝與最終測試"
+    },
+    {
+     "recordCode": "6187",
+     "name": "萬潤",
+     "market": "TW",
+     "role": "CoWoS 製程設備"
+    },
+    {
+     "recordCode": "3443",
+     "name": "創意",
+     "market": "TW",
+     "role": "ASIC 設計與 HBM / 2.5D 介面"
+    },
+    {
+     "recordCode": "6857-JP",
+     "name": "Advantest",
+     "market": "JP",
+     "role": "SoC / HBM 測試機"
+    }
+   ]
+  },
+  {
+   "id": "ai-optics",
+   "name": {
+    "zh": "AI 光通訊",
+    "en": "AI optical interconnect"
+   },
+   "diagram": null,
+   "members": [
+    {
+     "recordCode": "3081",
+     "name": "聯亞",
+     "market": "TW",
+     "role": "InP 磊晶片"
+    },
+    {
+     "recordCode": "LITE-US",
+     "name": "Lumentum",
+     "market": "US",
+     "role": "EML / CW 雷射與光模組"
+    },
+    {
+     "recordCode": "3105",
+     "name": "穩懋",
+     "market": "TW",
+     "role": "化合物半導體代工（光電元件）"
+    },
+    {
+     "recordCode": "6442",
+     "name": "光聖",
+     "market": "TW",
+     "role": "光纖連接器與跳線"
+    },
+    {
+     "recordCode": "6524-JP",
+     "name": "湖北工業",
+     "market": "JP",
+     "role": "光通訊被動元件（推論）"
+    }
+   ]
+  },
+  {
+   "id": "liquid-cooling",
+   "name": {
+    "zh": "AI 液冷散熱",
+    "en": "AI liquid cooling"
+   },
+   "diagram": null,
+   "members": [
+    {
+     "recordCode": "3017",
+     "name": "奇鋐",
+     "market": "TW",
+     "role": "水冷板與機櫃 manifold"
+    },
+    {
+     "recordCode": "3324",
+     "name": "雙鴻",
+     "market": "TW",
+     "role": "水冷板與 CDU"
+    },
+    {
+     "recordCode": "8996",
+     "name": "高力",
+     "market": "TW",
+     "role": "板式熱交換器與 CDU"
+    }
+   ]
+  },
+  {
+   "id": "memory",
+   "name": {
+    "zh": "記憶體",
+    "en": "Memory"
+   },
+   "diagram": null,
+   "members": [
+    {
+     "recordCode": "000660-KR",
+     "name": "SK 海力士",
+     "market": "KR",
+     "role": "HBM 與 DRAM"
+    },
+    {
+     "recordCode": "2408",
+     "name": "南亞科",
+     "market": "TW",
+     "role": "標準型 DRAM"
+    }
+   ]
+  },
+  {
+   "id": "ai-pcb",
+   "name": {
+    "zh": "AI PCB 與材料",
+    "en": "AI PCB and materials"
+   },
+   "diagram": null,
+   "members": [
+    {
+     "recordCode": "6213",
+     "name": "聯茂",
+     "market": "TW",
+     "role": "高速 CCL 銅箔基板"
+    },
+    {
+     "recordCode": "3167",
+     "name": "大量",
+     "market": "TW",
+     "role": "PCB 鑽孔 / 成型設備"
+    }
+   ]
+  },
+  {
+   "id": "smartphone-optics",
+   "name": {
+    "zh": "手機光學",
+    "en": "Smartphone optics"
+   },
+   "diagram": null,
+   "members": [
+    {
+     "recordCode": "3008",
+     "name": "大立光",
+     "market": "TW",
+     "role": "手機鏡頭"
+    }
+   ]
+  },
+  {
+   "id": "ai-capex",
+   "name": {
+    "zh": "AI 資本支出需求端",
+    "en": "AI capex demand"
+   },
+   "diagram": null,
+   "members": [
+    {
+     "recordCode": "META-US",
+     "name": "Meta Platforms",
+     "market": "US",
+     "role": "雲端 AI 資本支出與自研晶片"
+    }
+   ]
+  },
+  {
+   "id": "dc-power-rack",
+   "name": {
+    "zh": "機房直流電源",
+    "en": "Datacenter DC power"
+   },
+   "diagram": "power-rack",
+   "members": [
+    {
+     "recordCode": "2301",
+     "name": "光寶科",
+     "market": "TW",
+     "role": "電源架整流器與 BBU"
+    }
+   ]
+  }
+ ]
+}
