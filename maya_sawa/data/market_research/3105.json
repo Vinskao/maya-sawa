@@ -1,0 +1,44 @@
+{
+ "name": "穩懋",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "砷化鎵（GaAs）晶圓代工龍頭，手機功率放大器為主，光通訊與基礎建設元件成長中。",
+ "supplyChain": "flowchart LR\n  GAAS[\"GaAs / InP 基板 / 磊晶\"] --> WIN[\"穩懋 化合物半導體代工\"]\n  WIN --> PA[\"手機 PA 設計公司\"]\n  WIN --> OPT[\"光通訊 雷射 / 檢光元件（推論）\"]\n  WIN --> INFRA[\"基地台 / 衛星 GaN\"]\n  PA --> PHONE[\"智慧型手機\"]\n  OPT --> DC[\"資料中心光模組\"]",
+ "technology": "flowchart LR\n  HBT[\"GaAs HBT 量產\"] --> GAN[\"GaN on SiC 量產\"]\n  GAN --> OPTO[\"光電元件 VCSEL / 雷射 量產擴展\"]\n  OPTO --> SIPHX[\"資料中心光源 驗證中（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "中性",
+   "note": "手機 PA 需求平淡，資料中心光通訊與衛星帶來新成長，兩者混合。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "GaAs 代工規模領先，但光通訊相對專業 InP 廠尚在追趕階段。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 30.0%、月增 4.8%，年累計年增 32.6%；Q2 毛利率年增 9.8 pp。"
+  }
+ },
+ "lean": "中立",
+ "leanReason": "時機：10/23 法說前籌碼由外資主導（20 日買超 42,834 張）、投信賣；等法說驗證光通訊占比。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "10/23 法說",
+  "光通訊營收占比",
+  "現金流"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3105"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/3105"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

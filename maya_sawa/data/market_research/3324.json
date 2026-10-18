@@ -1,0 +1,44 @@
+{
+ "name": "雙鴻",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "散熱模組廠，伺服器水冷板、CDU 與機櫃液冷為主要成長來源。",
+ "supplyChain": "flowchart LR\n  CU[\"銅材 / 泵浦\"] --> AURAS[\"雙鴻 散熱\"]\n  AURAS --> CP[\"水冷板\"]\n  AURAS --> CDU[\"CDU 冷卻分配\"]\n  CP --> ODM[\"伺服器 ODM / 品牌\"]\n  CDU --> DC[\"資料中心機房\"]\n  AVC[\"奇鋐等競爭者\"] -. 份額競爭 .-> ODM",
+ "technology": "flowchart LR\n  AIR[\"氣冷模組 量產\"] --> LCP[\"水冷板 量產\"]\n  LCP --> CDU[\"In-row / In-rack CDU 量產\"]\n  CDU --> FAC[\"機房級液冷系統 規劃（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "與奇鋐相同受惠 AI 機櫃液冷化。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "CDU 布局完整，但水冷板主力平台份額相對奇鋐較低。"
+  },
+  "delivery": {
+   "view": "中性",
+   "note": "2026-09 營收年增 23.2% 但月減 8.2%，成長明顯減速；Q2 毛利率 28.4%，季對季下滑。"
+  }
+ },
+ "lean": "中立",
+ "leanReason": "時機：外資 20 日賣超 5,401 張、借券增加；交貨轉強或毛利回升前不加碼（目前 AI 分析 rev 4 依籌碼給賣）。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "10 月營收是否再加速",
+  "毛利率",
+  "借券餘額"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3324"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/3324"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

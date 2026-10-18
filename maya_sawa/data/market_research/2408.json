@@ -1,0 +1,43 @@
+{
+ "name": "南亞科",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "標準型 DRAM（DDR4 / DDR5 / LPDDR）製造商，價格隨記憶體循環劇烈波動。",
+ "supplyChain": "flowchart LR\n  EQ[\"製程設備 / 材料\"] --> NANYA[\"南亞科 DRAM 自有製程\"]\n  NANYA --> MOD[\"模組廠\"]\n  MOD --> PC[\"PC / 伺服器 / 消費性\"]\n  HBM[\"三星 / 海力士 / 美光 產能轉 HBM\"] -. 排擠標準 DRAM 供給 .-> PRICE[\"DRAM 合約價\"]\n  PRICE --> NANYA",
+ "technology": "flowchart LR\n  D1A[\"1A nm 自有製程 量產\"] --> D1B[\"1B nm 量產爬坡（推論）\"]\n  D1B --> DDR5[\"DDR5 / LPDDR5 比重提升\"]\n  HBMX[\"HBM 未量產\"]",
+ "assessment": {
+  "cycle": {
+   "view": "逆風",
+   "note": "營收年增 576.6%、Q2 毛利率 79.5% 屬價格驅動高峰；SK 海力士 20 日 -25% 顯示市場開始定價記憶體循環見頂。"
+  },
+  "technology": {
+   "view": "逆風",
+   "note": "製程落後三大廠且沒有 HBM，只能吃標準型 DRAM 價格循環。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "出貨與價格目前仍強，2026-09 營收月增 0.9%。"
+  }
+ },
+ "lean": "賣",
+ "leanReason": "時機：外資 20 日賣超 28,083 張、借券大增、仍在 60 日線下；反彈減碼。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "DRAM 合約價",
+  "海力士 / 美光財報"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2408"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/2408"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

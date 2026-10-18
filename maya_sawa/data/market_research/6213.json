@@ -1,0 +1,43 @@
+{
+ "name": "聯茂",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "銅箔基板（CCL）廠，高速低損耗材料供應 AI 伺服器與交換器 PCB。",
+ "supplyChain": "flowchart LR\n  CU[\"銅箔\"] --> ITEQ[\"聯茂 CCL\"]\n  GLASS[\"玻纖布 / 樹脂\"] --> ITEQ\n  ITEQ --> PCB[\"PCB 廠 高層板\"]\n  PCB --> SRV[\"AI 伺服器 / 交換器\"]\n  EMC[\"台光電等競爭者\"] -. 高階材料競爭 .-> PCB",
+ "technology": "flowchart LR\n  MID[\"中損耗 CCL 量產\"] --> LOW[\"超低損耗 M7/M8 量產\"]\n  LOW --> M9[\"M9 等級 驗證中（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "AI 伺服器與 800G 交換器帶動高層 PCB 與高速 CCL 需求。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "已打入高速材料，但最高階平台材料份額仍以台光電為主。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 110.7%、月增 15.5%；Q2 毛利率年增 6.4 pp。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：20 日 +49% 已過熱、營業現金流為負，不追價；回到 20 日線再評估，跌破 10 日線先減碼。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "現金流",
+  "高階材料認證"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6213"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/6213"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

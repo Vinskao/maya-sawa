@@ -1,0 +1,44 @@
+{
+ "name": "大立光",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "手機光學鏡頭龍頭，營收集中於高階智慧型手機（潛望式長焦、主鏡頭）。",
+ "supplyChain": "flowchart LR\n  RESIN[\"光學塑料 / 玻璃材料\"] --> LARGAN[\"大立光 鏡頭\"]\n  MOLD[\"精密模具 自製\"] --> LARGAN\n  LARGAN --> CCM[\"相機模組廠\"]\n  CCM --> APPLE[\"美系手機品牌\"]\n  CCM --> CN[\"中國手機品牌\"]\n  SUNNY[\"舜宇等競爭者\"] -. 價格競爭 .-> CCM",
+ "technology": "flowchart LR\n  P7[\"7P/8P 塑膠鏡頭 量產\"] --> PERI[\"潛望式長焦 量產\"]\n  PERI --> HYB[\"玻塑混合 量產初期\"]\n  HYB --> VAR[\"可變光圈 / 新光學結構 規劃（推論）\"]\n  AR[\"AR / 車用鏡頭 小量\"]",
+ "assessment": {
+  "cycle": {
+   "view": "逆風",
+   "note": "智慧型手機為成熟市場，換機循環平淡，AI 手機尚未帶動明顯鏡頭升規。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "潛望式與玻塑混合仍具良率與專利優勢，但規格升級幅度放緩、中國競爭者追近。"
+  },
+  "delivery": {
+   "view": "逆風",
+   "note": "2026-09 為傳統旺季，營收月增 15.3% 但年減 7.3%，年累計僅年增 2.1%；Q2 毛利率年減 4.2 pp。"
+  }
+ },
+ "lean": "賣",
+ "leanReason": "時機：10/16 跌 3.1% 收在 20 日線下，外資 20 日賣超 5,658 張；反彈不追。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "10 月營收能否轉正年增",
+  "新機鏡頭規格",
+  "毛利率"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3008"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/3008"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

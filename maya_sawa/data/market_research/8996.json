@@ -1,0 +1,44 @@
+{
+ "name": "高力",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "板式熱交換器廠，延伸至資料中心液冷 CDU 與燃料電池（SOFC）熱元件。",
+ "supplyChain": "flowchart LR\n  SS[\"不鏽鋼 / 銅 / 鎳焊材\"] --> KAORI[\"高力 硬焊板式熱交換器\"]\n  KAORI --> CDU[\"液冷 CDU / 熱交換模組\"]\n  KAORI --> FC[\"SOFC 燃料電池 熱元件\"]\n  CDU --> DC[\"AI 資料中心\"]\n  FC --> PWR[\"資料中心現地發電\"]\n  PWR --> DC",
+ "technology": "flowchart LR\n  BPHE[\"硬焊板式熱交換器 量產\"] --> CDU[\"CDU 熱交換 量產\"]\n  BPHE --> SOFC[\"SOFC 熱盒元件 量產\"]\n  CDU --> MW[\"MW 級機房液冷 驗證中（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "AI 機房同時面臨散熱與供電瓶頸，液冷熱交換與現地發電需求同步。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "熱交換器焊接與流道設計具經驗，但 CDU 系統整合競爭者多。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 153.8%、月增 34.2%，年累計年增 120.8%；惟 Q2 毛利率 26.0%（年減 3.4 pp）。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：20 日 +28.7% 後 5 日回檔 8.2%，等 20 日線支撐確認再分批；毛利率續降則降為中立。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "毛利率",
+  "燃料電池出貨",
+  "10 月營收"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/8996"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/8996"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

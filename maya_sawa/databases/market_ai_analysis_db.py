@@ -58,6 +58,20 @@ class MarketAiAnalysisDatabase:
             return {"analysis": public_analysis(current) if current else None,
                     "history": [public_analysis(row) for row in history]}
 
+    def last_editor(self, product_type, code):
+        if not self.sessions:
+            raise RuntimeError("Analysis database unavailable")
+        with self.sessions() as session:
+            current = session.get(MarketAiAnalysis, (product_type, code))
+            return current.updated_by if current else None
+
+    def list(self, product_type):
+        if not self.sessions:
+            raise RuntimeError("Analysis database unavailable")
+        with self.sessions() as session:
+            rows = session.query(MarketAiAnalysis).filter_by(product_type=product_type).order_by(MarketAiAnalysis.code).all()
+            return [public_analysis(row) for row in rows]
+
     def save(self, product_type, code, model, content, expected_revision, editor):
         if not self.sessions:
             raise RuntimeError("Analysis database unavailable")

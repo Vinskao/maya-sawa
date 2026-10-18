@@ -1,0 +1,44 @@
+{
+ "name": "聯亞",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "InP（磷化銦）磊晶片供應商，產品用於資料中心光收發模組的雷射與檢光元件。",
+ "supplyChain": "flowchart LR\n  SUB[\"InP 基板\"] --> LM[\"聯亞 InP 磊晶\"]\n  MOCVD[\"MOCVD 設備\"] --> LM\n  LM --> LD[\"雷射晶片廠 EML / DFB / CW\"]\n  LD --> MOD[\"光收發模組 800G / 1.6T\"]\n  MOD --> SW[\"AI 交換器 / GPU 叢集\"]\n  LD --> SIPH[\"矽光子 CW 光源\"]\n  SIPH --> MOD",
+ "technology": "flowchart LR\n  DFB[\"DFB / EML 磊晶 量產\"] --> HP[\"高功率 CW 雷射磊晶 量產擴產\"]\n  HP --> CPO[\"CPO 外部光源 驗證中\"]\n  PD[\"檢光器磊晶 量產\"]\n  SIZE[\"4 吋 → 6 吋 InP 規劃（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "AI 叢集由 800G 轉 1.6T，矽光子模組需要大量 CW 雷射光源，InP 為上游瓶頸材料。"
+  },
+  "technology": {
+   "view": "順風",
+   "note": "高功率 CW 雷射磊晶為矽光子關鍵，量產經驗與良率構成門檻。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 190.2%、年累計年增 136.3%；Q2 毛利率 57.5%（年增 14.1 pp）。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：10/16 收 2,545 跌破 20 日低點、5 日 -14%，三大法人同步賣超；基本面順風但價格破線，等站回 20 日線再分批（目前 AI 分析 rev 6 依價格給賣）。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "站回 20 日線",
+  "10 月營收",
+  "6 吋擴產"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3081"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/3081"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

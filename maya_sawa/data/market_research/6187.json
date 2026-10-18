@@ -1,0 +1,43 @@
+{
+ "name": "萬潤",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "半導體先進封裝與被動元件自動化設備廠，CoWoS 製程設備為主要成長來源。",
+ "supplyChain": "flowchart LR\n  PARTS[\"精密機構 / 視覺系統\"] --> ALL[\"萬潤 設備\"]\n  ALL --> CW[\"CoWoS 點膠 / 檢測 / 貼合設備\"]\n  CW --> TSMC[\"台積電 先進封裝\"]\n  CW --> OSAT[\"封測廠 先進封裝\"]\n  TSMC --> AI[\"AI GPU / ASIC\"]",
+ "technology": "flowchart LR\n  PASSIVE[\"被動元件設備 量產\"] --> COWOS[\"CoWoS 製程設備 量產\"]\n  COWOS --> SOIC[\"SoIC / 3D 封裝設備 驗證中（推論）\"]\n  SOIC --> PANEL[\"面板級封裝設備 規劃（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "台積電與封測廠持續擴充 CoWoS 產能，設備訂單能見度高。"
+  },
+  "technology": {
+   "view": "順風",
+   "note": "已在先進封裝產線量產出貨，在地服務與客製化具優勢。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 109.2%、年累計年增 58.3%；Q2 毛利率 54.8%（年增 2.8 pp）。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：拉回守 20 日線分批，跌破 60 日線停損（與 AI 分析 rev 2 一致）。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "CoWoS 擴產時程",
+  "設備認列節奏"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6187"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/6187"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

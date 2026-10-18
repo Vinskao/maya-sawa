@@ -1,0 +1,40 @@
+{
+ "name": "台指期（近月）",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "加權指數期貨。指數由台積電與 AI 伺服器供應鏈主導，方向取決於 AI 資本支出循環、權值股技術領先與出口交貨。",
+ "supplyChain": "flowchart LR\n  CSP[\"美系雲端 CSP 資本支出\"] --> GPU[\"GPU / ASIC 設計\"]\n  GPU --> FAB[\"台積電 晶圓代工 + CoWoS\"]\n  FAB --> OSAT[\"封測 日月光等\"]\n  OSAT --> ODM[\"伺服器 ODM 組裝\"]\n  COMP[\"散熱 / 電源 / PCB / CCL / 光通訊 零組件\"] --> ODM\n  ODM --> EXP[\"台灣出口\"]\n  EXP --> TAIEX[\"加權指數 / 台指期\"]\n  RATE[\"美國利率 / 美元\"] -. 評價 .-> TAIEX",
+ "technology": "flowchart LR\n  N3[\"N3 量產\"] --> N2[\"N2 量產爬坡\"] --> A16[\"A16 規劃\"]\n  COWOS[\"CoWoS-L 擴產\"] --> SOIC[\"SoIC 3D 堆疊\"]\n  LIQ[\"液冷 機櫃化\"] --> PWR[\"800V DC 供電 規劃\"]\n  CPO[\"矽光子 / CPO 驗證中\"]",
+ "assessment": {
+  "cycle": {
+   "view": "中性",
+   "note": "需求面 AI 資本支出仍強，但總經評論（rev 1）指出聯準會重啟升息、美債 10 年期約 5.19%，對高本益比權值股是評價逆風，兩者抵銷。"
+  },
+  "technology": {
+   "view": "順風",
+   "note": "指數最大權值台積電 N2 爬坡與 CoWoS 擴產維持技術領先；台灣在 AI 伺服器散熱、電源、光通訊供應鏈占主導。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "台積電 2026-09 營收年增 54.6%，本站多數 AI 供應鏈持股 9 月營收年增 30–190%，出口交貨持續放大。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：10/16 近月收 46,140、單日 -2.42%，技術轉弱，等待站回 20 日線再加碼，避免追空。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "10/28–29 FOMC",
+  "台積電外資賣超是否止步",
+  "台灣 10 月出口"
+ ],
+ "sources": [
+  {
+   "label": "本站總經評論",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/analysis/US?productType=macro"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

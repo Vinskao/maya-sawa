@@ -1,0 +1,43 @@
+{
+ "name": "光聖",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "光纖連接元件與被動光元件廠，供應資料中心高密度光纖佈線。",
+ "supplyChain": "flowchart LR\n  FIB[\"光纖 / 陶瓷插芯\"] --> EZ[\"光聖 光纖連接器 / 跳線\"]\n  EZ --> MPO[\"MPO 高密度連接\"]\n  MPO --> DC[\"資料中心機房佈線\"]\n  EZ --> MOD[\"光模組廠 內部光纖\"]\n  MOD --> DC",
+ "technology": "flowchart LR\n  LC[\"LC / SC 連接器 量產\"] --> MPO[\"MPO / MTP 高密度 量產\"]\n  MPO --> FA[\"光纖陣列 / CPO 光纖 驗證中（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "AI 叢集光纖用量隨 GPU 數量倍增。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "被動元件技術門檻相對中等，競爭來自中國與美系大廠。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 97.3%、月增 26.6%；Q2 毛利率 62.5%。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：5 日 -15.7% 回到 60 日線攻防；守住再分批，跌破則等待。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "60 日線",
+  "CPO 光纖出貨"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6442"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/6442"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

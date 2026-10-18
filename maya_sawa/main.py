@@ -221,6 +221,13 @@ async def _startup_event():
         
         # 啟動 Voyeur Metrics Consumer (如果配置允許)
         try:
+            from .databases.market_ai_analysis_db import market_ai_analysis_db
+            from .services.market_research import seed_bundled_research
+            await asyncio.to_thread(seed_bundled_research, market_ai_analysis_db)
+        except Exception as e:
+            logger.error(f"Failed to seed market research maps: {e}")
+
+        try:
             metrics_consumer.start()
         except Exception as e:
             logger.error(f"Failed to start MetricsConsumer: {e}")

@@ -1,0 +1,43 @@
+{
+ "name": "日月光投控",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "全球最大封測集團，傳統封裝、測試與先進封裝（FOCoS、2.5D）兼具。",
+ "supplyChain": "flowchart LR\n  SUB[\"載板 / 導線架 / 封裝材料\"] --> ASE[\"日月光 封裝 + 測試\"]\n  FOUND[\"晶圓代工\"] --> ASE\n  ASE --> AI[\"AI / HPC 先進封裝與測試\"]\n  ASE --> CONS[\"手機 / 車用 / 消費性\"]\n  ASE --> EMS[\"環旭 系統級封裝\"]",
+ "technology": "flowchart LR\n  FC[\"覆晶 / 打線 量產\"] --> FOCOS[\"FOCoS 扇出 量產\"]\n  FOCOS --> D25[\"2.5D 中介層 量產擴產\"]\n  D25 --> PANEL[\"面板級封裝 規劃\"]\n  TEST[\"AI 晶片最終測試 擴產\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "AI 封測外溢與傳統封測稼動回升同時發生。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "先進封裝規模擴大中，但最高階 CoWoS 仍由台積電主導，屬追隨者。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 45.5%、月增 7.2%；Q2 毛利率 21.0%（年增 4.0 pp）。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：外資單日大賣後待止穩，收復 20 日線再分批。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "先進封測營收",
+  "毛利率"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3711"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/3711"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

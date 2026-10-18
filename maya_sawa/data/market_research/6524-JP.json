@@ -1,0 +1,39 @@
+{
+ "name": "湖北工業 Kohoku Kogyo",
+ "market": "JP",
+ "asOf": "2026-10-18",
+ "summary": "鋁電解電容導線端子與光通訊被動元件（光隔離器、光纖組件）廠（業務結構屬推論，需以年報覆核）。",
+ "supplyChain": "flowchart LR\n  WIRE[\"金屬線材\"] --> KOH[\"湖北工業\"]\n  KOH --> LEAD[\"電容導線端子\"]\n  KOH --> OPT[\"光通訊被動元件\"]\n  LEAD --> CAP[\"電容廠 → 車用 / 工業\"]\n  OPT --> MOD[\"光模組 / 海底電纜\"]\n  MOD --> DC[\"資料中心\"]",
+ "technology": "flowchart LR\n  TERM[\"導線端子 量產\"] --> OPTC[\"光隔離器 / 光纖元件 量產\"]\n  OPTC --> DCX[\"資料中心光元件 擴展中（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "光通訊需求隨 AI 擴張；電容端子跟隨工業與車用循環（中性）。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "利基被動元件，門檻在材料與製程，非系統級。"
+  },
+  "delivery": {
+   "view": "中性",
+   "note": "本站尚無日本財報（需 EDINET key），交貨無法驗證。"
+  }
+ },
+ "lean": "中立",
+ "leanReason": "時機：股價在 MA20（5,483）與 MA60（4,971）之間，RSI 48；等財報確認光通訊占比。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "光通訊營收占比",
+  "財報"
+ ],
+ "sources": [
+  {
+   "label": "本站 IB 日線／技術指標",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/6524?market=JP"
+  },
+  {
+   "label": "EDINET (Japan filings)",
+   "url": "https://disclosure2.edinet-fsa.go.jp/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

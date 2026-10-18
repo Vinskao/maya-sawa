@@ -1,0 +1,39 @@
+{
+ "name": "SK 海力士",
+ "market": "KR",
+ "asOf": "2026-10-18",
+ "summary": "記憶體大廠，HBM 市占與技術領先，主要供應 NVIDIA AI GPU。",
+ "supplyChain": "flowchart LR\n  EQ[\"設備 / 材料\"] --> SKH[\"SK 海力士 DRAM / HBM / NAND\"]\n  SKH --> HBM[\"HBM 堆疊\"]\n  HBM --> COWOS[\"台積電 CoWoS 封裝\"]\n  COWOS --> GPU[\"NVIDIA / ASIC AI 加速器\"]\n  SKH --> STD[\"標準 DRAM / NAND → PC / 手機 / 伺服器\"]",
+ "technology": "flowchart LR\n  H3E[\"HBM3E 12-Hi 量產\"] --> H4[\"HBM4 量產爬坡\"]\n  H4 --> H4E[\"HBM4E / 客製 base die 規劃（與台積電合作）\"]\n  D1C[\"1c nm DRAM 量產初期（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "逆風",
+   "note": "記憶體價格循環疑似見頂：股價 20 日 -25%、RSI 26，市場開始定價標準型 DRAM 與 NAND 價格反轉。"
+  },
+  "technology": {
+   "view": "順風",
+   "note": "HBM 技術與良率領先，HBM4 為主要 GPU 平台主力供應商。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "HBM 產能長約鎖定，出貨能見度高（本站尚無韓國財報，需 OpenDART key，屬推論）。"
+  }
+ },
+ "lean": "中立",
+ "leanReason": "時機：1,272,000 遠低於 MA20（1,689,100），RSI 26 超賣；循環逆風下不攤平，等止跌訊號與財報。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "10 月下旬財報 HBM 指引",
+  "DRAM 合約價"
+ ],
+ "sources": [
+  {
+   "label": "本站 IB 日線／技術指標",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/000660?market=KR"
+  },
+  {
+   "label": "OpenDART / DART (Korea filings)",
+   "url": "https://dart.fss.or.kr/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

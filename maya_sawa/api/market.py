@@ -29,6 +29,7 @@ from ..databases.portfolio_history_db import portfolio_history_db
 from ..databases.market_dashboard_db import market_dashboard_db, market_for_currency
 from ..databases.market_history_db import market_history_db
 from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
+from ..services.market_research import validate_research_content, list_research
 from ..services.market_selection import attach_underlying
 from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
@@ -74,7 +75,7 @@ class MarketAiAnalysisUpdate(BaseModel):
 
 def analysis_target(code: str, product_type: str):
     normalized = code.strip().upper()
-    if product_type not in {"stock", "futures", "macro"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
+    if product_type not in {"stock", "futures", "macro", "research"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
         raise HTTPException(status_code=422, detail="Invalid instrument code or productType")
     # One shared macro commentary that every instrument analysis reads instead of restating.
     if product_type == "macro" and normalized != "US":
@@ -104,6 +105,11 @@ async def put_market_ai_analysis(code: str, body: MarketAiAnalysisUpdate, produc
     editor = claims.get("sub")
     if not editor:
         raise HTTPException(status_code=401, detail="Authenticated identity required")
+    if target[0] == "research":
+        try:
+            validate_research_content(body.content)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         analysis = await asyncio.to_thread(market_ai_analysis_db.save, *target, body.model, body.content,
                                           body.expectedRevision, str(editor))
@@ -112,6 +118,16 @@ async def put_market_ai_analysis(code: str, body: MarketAiAnalysisUpdate, produc
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("AI analysis save failed")
+        raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
+
+
+@router.get("/dashboard/research")
+async def list_market_research():
+    """All stored research maps, including instruments no longer held (records are never deleted)."""
+    try:
+        return {"records": await asyncio.to_thread(list_research, market_ai_analysis_db)}
+    except Exception as exc:
+        logger.exception("Research list failed")
         raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
 
 

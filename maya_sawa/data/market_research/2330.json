@@ -1,0 +1,48 @@
+{
+ "name": "台積電",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "全球晶圓代工與先進封裝（CoWoS / SoIC）龍頭，AI 加速器幾乎全數在此投片與封裝。",
+ "supplyChain": "flowchart LR\n  ASML[\"ASML EUV 曝光機\"] --> TSMC\n  AMAT[\"應材 / 科林 / TEL 製程設備\"] --> TSMC\n  SUMCO[\"矽晶圓 / 化學品 / 光罩\"] --> TSMC\n  TSMC[\"台積電 前段晶圓 + CoWoS\"] --> NV[\"NVIDIA GPU\"]\n  TSMC --> AMD[\"AMD MI 系列\"]\n  TSMC --> ASIC[\"Broadcom / Marvell / 創意 ASIC\"]\n  TSMC --> APL[\"Apple 手機 / PC SoC\"]\n  NV --> CSP[\"雲端資料中心\"]\n  ASIC --> CSP",
+ "technology": "flowchart LR\n  N3[\"N3 家族 量產\"] --> N2[\"N2 GAA 2025 底量產 爬坡中\"]\n  N2 --> A16[\"A16 背面供電 規劃 2026 下半\"]\n  A16 --> A14[\"A14 規劃\"]\n  COWOS[\"CoWoS-S/L 量產 持續擴產\"] --> SOIC[\"SoIC 3D 堆疊 量產初期\"]\n  SOIC --> COPOS[\"面板級封裝 CoPoS 規劃\"]\n  SIPH[\"矽光子 COUPE 驗證中\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "AI 加速器需求仍處擴張段，2026Q2 營收年增 36.1%、EPS 年增 77.4%。"
+  },
+  "technology": {
+   "view": "順風",
+   "note": "N2 GAA 領先同業量產、A16 背面供電在後；CoWoS / SoIC 先進封裝為 AI GPU 必經環節，競爭者尚無同等量產規模。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 54.6%（月減 0.6%），年累計年增 41.1%；Q2 毛利率 67.7%（年增 9.1 pp），交貨與產品組合同步改善。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：外資連 8 日賣超、5 日 -5.1%，收在 60 日線附近；守 60 日線分批，跌破則等待。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "外資賣超是否止步",
+  "N2 營收占比",
+  "CoWoS 擴產進度"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2330"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/2330"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  },
+  {
+   "label": "TSMC Investor Relations",
+   "url": "https://investor.tsmc.com/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

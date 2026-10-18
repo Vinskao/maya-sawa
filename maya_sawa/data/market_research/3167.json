@@ -1,0 +1,43 @@
+{
+ "name": "大量",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "PCB 鑽孔／成型等製程設備廠，受惠 AI 伺服器高層板擴產。",
+ "supplyChain": "flowchart LR\n  SPINDLE[\"主軸 / 控制器 / 視覺\"] --> TL[\"大量 PCB 設備\"]\n  TL --> PCB[\"PCB 廠 高層板 / 載板\"]\n  PCB --> SRV[\"AI 伺服器 / 交換器\"]",
+ "technology": "flowchart LR\n  DRILL[\"機械鑽孔 / 成型機 量產\"] --> HDI[\"高層板 / 背鑽 量產\"]\n  HDI --> SEMI[\"半導體 / 載板相關設備 驗證中（推論）\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "PCB 廠為 AI 高層板擴產，設備需求上升。"
+  },
+  "technology": {
+   "view": "中性",
+   "note": "設備屬成熟製程，背鑽與高層板精度為差異化。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 172.3%、年累計年增 140.2%；Q2 毛利率 44.2%（年增 5.3 pp）。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：10/16 漲停，不追；回測約 1,000 守住再分批，跌破 20 日線降為中立。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "PCB 擴產訂單",
+  "毛利率"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3167"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/3167"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

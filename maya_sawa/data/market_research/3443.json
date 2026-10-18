@@ -1,0 +1,43 @@
+{
+ "name": "創意",
+ "market": "TW",
+ "asOf": "2026-10-18",
+ "summary": "台積電體系 ASIC 設計服務公司，提供先進製程 ASIC、HBM 與 2.5D 封裝介面 IP。",
+ "supplyChain": "flowchart LR\n  CSP[\"雲端 / 系統客戶 自研晶片\"] --> GUC[\"創意 ASIC 設計服務\"]\n  IP[\"HBM / UCIe / SerDes IP\"] --> GUC\n  GUC --> TSMC[\"台積電 投片 + CoWoS\"]\n  TSMC --> CHIP[\"AI ASIC / 網通晶片\"]\n  CHIP --> CSP",
+ "technology": "flowchart LR\n  N5[\"N5 / N3 ASIC 量產\"] --> N2[\"N2 ASIC 設計定案中（推論）\"]\n  HBM3E[\"HBM3E 介面 量產\"] --> HBM4[\"HBM4 PHY 驗證中\"]\n  UCIE[\"UCIe 小晶片介面 量產\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "雲端自研 AI ASIC 進入量產期。"
+  },
+  "technology": {
+   "view": "順風",
+   "note": "與台積電先進製程、CoWoS 緊密整合，HBM4 介面為門檻。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "2026-09 營收年增 97.8%、月增 22.3%，年累計年增 102.8%；惟 turnkey 量產比重升高，Q2 毛利率年減 11.8 pp。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：跌破 20 日線（5 日 -10.5%），等止穩；營收強、毛利率稀釋屬組合變化。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "NRE 與 turnkey 比重",
+  "HBM4 案"
+ ],
+ "sources": [
+  {
+   "label": "本站基本面（月營收／季報）",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3443"
+  },
+  {
+   "label": "本站日線與籌碼",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/3443"
+  },
+  {
+   "label": "公開資訊觀測站 MOPS",
+   "url": "https://mops.twse.com.tw/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}

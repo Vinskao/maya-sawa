@@ -1,0 +1,43 @@
+{
+ "name": "Meta Platforms",
+ "market": "US",
+ "asOf": "2026-10-18",
+ "summary": "社群與廣告平台，AI 推薦與廣告排序驅動營收；同時是最大 AI 資本支出方之一（GPU 與自研 MTIA 晶片）。",
+ "supplyChain": "flowchart LR\n  NV[\"NVIDIA GPU\"] --> META[\"Meta 資料中心\"]\n  MTIA[\"自研 MTIA（與 ASIC 夥伴）\"] --> META\n  NET[\"交換器 / 光模組\"] --> META\n  META --> APPS[\"Facebook / Instagram / WhatsApp\"]\n  APPS --> ADS[\"廣告主\"]\n  META --> RL[\"Reality Labs 眼鏡 / VR\"]",
+ "technology": "flowchart LR\n  RANK[\"AI 推薦 / 廣告排序 量產\"] --> GENAI[\"Llama 生成式模型 量產\"]\n  GENAI --> AGENT[\"AI 助理 / 商家代理 擴展中\"]\n  MTIA[\"MTIA 推論晶片 量產 / 訓練版 驗證中（推論）\"]\n  GLASS[\"AI 眼鏡 量產\"]",
+ "assessment": {
+  "cycle": {
+   "view": "順風",
+   "note": "數位廣告景氣與 AI 推薦提升轉換率，同時資本支出循環向上。"
+  },
+  "technology": {
+   "view": "順風",
+   "note": "自有大型模型、推薦系統與自研推論晶片垂直整合。"
+  },
+  "delivery": {
+   "view": "順風",
+   "note": "SEC 10-Q：2026Q2 營收 608.0 億美元，季增 8.0%、年增 28.0%；營業利益率 30.9%（Q1 40.6%），資本支出折舊壓縮利潤率。"
+  }
+ },
+ "lean": "買",
+ "leanReason": "時機：股價 736.7 在 MA20（733.6）與 MA60（641.3）之上，RSI 58；10 月下旬財報前不追高，財報後確認資本支出指引。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+ "watch": [
+  "Q3 財報 資本支出指引",
+  "營業利益率"
+ ],
+ "sources": [
+  {
+   "label": "本站 IB 日線／技術指標",
+   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/META?market=US"
+  },
+  {
+   "label": "SEC EDGAR",
+   "url": "https://www.sec.gov/edgar/search/"
+  },
+  {
+   "label": "Meta Investor Relations",
+   "url": "https://investor.atmeta.com/"
+  }
+ ],
+ "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+}
