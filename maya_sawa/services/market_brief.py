@@ -132,9 +132,13 @@ def summarize_stock(code: str, daily: list[dict], ownership: list[dict], metrics
             return round(series[-1] - series[-1 - back], 2) if len(series) > back and series[-1] is not None and series[-1 - back] is not None else None
         result["tdcc"] = {"week": weeks[-1][0], "largeHolderPercent": large[-1], "largeHolderChange1wPp": delta(large, 1),
                           "largeHolderChange4wPp": delta(large, 4), "retailPercent": retail[-1], "retailChange1wPp": delta(retail, 1)}
-    monthly, quarterly = metrics.get("monthly") or [], metrics.get("quarterly") or []
+    monthly, quarterly, balance = metrics.get("monthly") or [], metrics.get("quarterly") or [], metrics.get("balance") or []
     if monthly or quarterly:
         result["fundamentals"] = {"latestMonth": monthly[-1] if monthly else None, "latestQuarter": quarterly[-1] if quarterly else None}
+        inventory_keys = ("inventoryDays", "inventoryDaysQoQ", "inventoryDaysYoY", "inventoryQoQ", "inventoryYoY", "inventoryVsRevenueYoY")
+        latest = balance[-1] if balance else {}
+        result["fundamentals"]["latestInventory"] = ({"period": latest.get("period"), **{key: latest.get(key) for key in inventory_keys}}
+                                                     if any(latest.get(key) is not None for key in inventory_keys) else None)
     result["signals"] = _signals(result)
     return result
 

@@ -1,3 +1,4 @@
+import pytest
 from maya_sawa.services.market_fundamentals import MarketFundamentalsService
 
 
@@ -81,3 +82,33 @@ def test_official_monthly_yoy_takes_precedence_and_thousands_are_scaled():
     history = {"TaiwanStockMonthRevenue": [{"period": "2026-08", "item": "revenue", "value": 400000}]}
     september = build_fundamental_metrics(official, [], history)["monthly"][-1]
     assert september["yoyPercent"] == 31.4 and september["momPercent"] == -0.6
+
+
+def test_inventory_days_and_growth_from_real_finmind_rows():
+    # Nanya (2408): inventory fell from NT$35.5bn (2025Q2) to NT$21.5bn (2026Q2) while revenue rose 684% YoY.
+    import json
+    from pathlib import Path
+    from maya_sawa.services.market_fundamentals import build_fundamental_metrics, _finmind_records
+    raw = json.loads((Path(__file__).parent / "fixtures" / "finmind_2408_inventory.json").read_text(encoding="utf-8"))
+    history = {dataset: _finmind_records(dataset, raw[dataset]) for dataset in ("TaiwanStockBalanceSheet", "TaiwanStockFinancialStatements")}
+    q2 = next(row for row in build_fundamental_metrics([], [], history)["balance"] if row["period"] == "2026Q2")
+    days_now = 21530230000 / 16931613000 * 91.25
+    days_year_ago = 35528632000 / 12689937000 * 91.25
+    assert q2["inventoryDays"] == pytest.approx(days_now, abs=0.01)
+    assert q2["inventoryDaysYoY"] == pytest.approx(days_now - days_year_ago, abs=0.01)
+    assert q2["inventoryQoQ"] == pytest.approx((21530230000 / 24330735000 - 1) * 100, abs=0.01)
+    assert q2["inventoryYoY"] == pytest.approx((21530230000 / 35528632000 - 1) * 100, abs=0.01)
+    # Inventory growth minus revenue growth: negative = inventory building slower than sales (destocking).
+    assert q2["inventoryVsRevenueYoY"] == pytest.approx(q2["inventoryYoY"] - (82549073000 / 10526094000 - 1) * 100, abs=0.02)
+    assert "inventory" not in q2  # amounts never leave the metrics
+
+
+def test_inventory_days_fall_back_to_revenue_minus_gross_profit_and_skip_missing_inventory():
+    from maya_sawa.services.market_fundamentals import build_fundamental_metrics
+    income = [{"period": "2026-06-30", "item": "Revenue", "value": 200}, {"period": "2026-06-30", "item": "GrossProfit", "value": 50}]
+    balance = [{"period": "2026-06-30", "item": "Inventories", "value": 30}, {"period": "2026-06-30", "item": "TotalAssets", "value": 100}]
+    row = build_fundamental_metrics([], [], {"TaiwanStockFinancialStatements": income, "TaiwanStockBalanceSheet": balance})["balance"][-1]
+    assert row["inventoryDays"] == pytest.approx(30 / 150 * 91.25)
+    no_inventory = build_fundamental_metrics([], [], {"TaiwanStockFinancialStatements": income,
+        "TaiwanStockBalanceSheet": [{"period": "2026-06-30", "item": "TotalAssets", "value": 100}]})["balance"][-1]
+    assert no_inventory["inventoryDays"] is None and no_inventory["inventoryYoY"] is None

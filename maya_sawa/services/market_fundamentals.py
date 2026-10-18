@@ -500,11 +500,22 @@ def build_fundamental_metrics(monthly_official: list[dict], income_official: lis
 
     balance_values = _pivot(history.get("TaiwanStockBalanceSheet", []))
 
+    def cost_of_goods(period: str) -> float | None:
+        values = income.get(period, {})
+        if values.get("CostOfGoodsSold") is not None:
+            return values["CostOfGoodsSold"]
+        revenue_value, gross = values.get("Revenue"), values.get("GrossProfit")
+        return revenue_value - gross if revenue_value is not None and gross is not None else None
+
     def balance_ratios(period: str) -> dict[str, float | None]:
         values = balance_values.get(period, {})
+        inventory, cogs = values.get("Inventories"), cost_of_goods(period)
         return {"debtRatio": _ratio(values.get("Liabilities"), values.get("TotalAssets")),
                 "currentRatio": _ratio(values.get("CurrentAssets"), values.get("CurrentLiabilities")),
-                "equity": _pick(values, ("Equity", "TotalEquity", "EquityAttributableToOwnersOfParent"))}
+                "equity": _pick(values, ("Equity", "TotalEquity", "EquityAttributableToOwnersOfParent")),
+                "inventory": inventory,
+                # Days of inventory: quarter-end inventory / single-quarter cost of goods sold x 91.25 days.
+                "inventoryDays": round(inventory / cogs * 91.25, 2) if inventory is not None and cogs and cogs > 0 else None}
 
     balance = []
     for period in sorted(balance_values)[-8:]:
@@ -513,7 +524,15 @@ def build_fundamental_metrics(monthly_official: list[dict], income_official: lis
                         "debtRatio": now["debtRatio"], "debtRatioQoQ": _diff(now["debtRatio"], prev["debtRatio"]),
                         "debtRatioYoY": _diff(now["debtRatio"], year_ago["debtRatio"]),
                         "currentRatio": now["currentRatio"], "currentRatioYoY": _diff(now["currentRatio"], year_ago["currentRatio"]),
-                        "equityYoY": _growth(now["equity"], year_ago["equity"])})
+                        "equityYoY": _growth(now["equity"], year_ago["equity"]),
+                        "inventoryDays": now["inventoryDays"],
+                        "inventoryDaysQoQ": _diff(now["inventoryDays"], prev["inventoryDays"]),
+                        "inventoryDaysYoY": _diff(now["inventoryDays"], year_ago["inventoryDays"]),
+                        "inventoryQoQ": _growth(now["inventory"], prev["inventory"]),
+                        "inventoryYoY": _growth(now["inventory"], year_ago["inventory"]),
+                        # Inventory growth minus revenue growth (pp): above 0 means stock builds faster than sales.
+                        "inventoryVsRevenueYoY": _diff(_growth(now["inventory"], year_ago["inventory"]),
+                            _growth(income_ratios(period)["revenue"], income_ratios(_shift_quarter(period, 4))["revenue"]))})
 
     # Cash flow statements are year-to-date, so only same-period-last-year comparisons are like for like.
     cash_values = _pivot(history.get("TaiwanStockCashFlowsStatement", []))

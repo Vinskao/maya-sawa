@@ -1,0 +1,151 @@
+{
+ "note": "Trimmed FinMind v4 response for 2408 (Nanya Technology), fetched 2026-10-18; NT$ amounts.",
+ "TaiwanStockBalanceSheet": [
+  {
+   "date": "2025-03-31",
+   "stock_id": "2408",
+   "type": "Inventories",
+   "value": 37588408000.0
+  },
+  {
+   "date": "2025-06-30",
+   "stock_id": "2408",
+   "type": "Inventories",
+   "value": 35528632000.0
+  },
+  {
+   "date": "2025-09-30",
+   "stock_id": "2408",
+   "type": "Inventories",
+   "value": 32063706000.0
+  },
+  {
+   "date": "2025-12-31",
+   "stock_id": "2408",
+   "type": "Inventories",
+   "value": 27287519000.0
+  },
+  {
+   "date": "2026-03-31",
+   "stock_id": "2408",
+   "type": "Inventories",
+   "value": 24330735000.0
+  },
+  {
+   "date": "2026-06-30",
+   "stock_id": "2408",
+   "type": "Inventories",
+   "value": 21530230000.0
+  }
+ ],
+ "TaiwanStockFinancialStatements": [
+  {
+   "date": "2025-03-31",
+   "stock_id": "2408",
+   "type": "CostOfGoodsSold",
+   "value": 8262612000.0
+  },
+  {
+   "date": "2025-03-31",
+   "stock_id": "2408",
+   "type": "Revenue",
+   "value": 7187940000.0
+  },
+  {
+   "date": "2025-03-31",
+   "stock_id": "2408",
+   "type": "GrossProfit",
+   "value": -1074672000.0
+  },
+  {
+   "date": "2025-06-30",
+   "stock_id": "2408",
+   "type": "CostOfGoodsSold",
+   "value": 12689937000.0
+  },
+  {
+   "date": "2025-06-30",
+   "stock_id": "2408",
+   "type": "Revenue",
+   "value": 10526094000.0
+  },
+  {
+   "date": "2025-06-30",
+   "stock_id": "2408",
+   "type": "GrossProfit",
+   "value": -2163843000.0
+  },
+  {
+   "date": "2025-09-30",
+   "stock_id": "2408",
+   "type": "CostOfGoodsSold",
+   "value": 15314997000.0
+  },
+  {
+   "date": "2025-09-30",
+   "stock_id": "2408",
+   "type": "Revenue",
+   "value": 18778868000.0
+  },
+  {
+   "date": "2025-09-30",
+   "stock_id": "2408",
+   "type": "GrossProfit",
+   "value": 3463871000.0
+  },
+  {
+   "date": "2025-12-31",
+   "stock_id": "2408",
+   "type": "CostOfGoodsSold",
+   "value": 15332774000.0
+  },
+  {
+   "date": "2025-12-31",
+   "stock_id": "2408",
+   "type": "Revenue",
+   "value": 30093618000.0
+  },
+  {
+   "date": "2025-12-31",
+   "stock_id": "2408",
+   "type": "GrossProfit",
+   "value": 14760844000.0
+  },
+  {
+   "date": "2026-03-31",
+   "stock_id": "2408",
+   "type": "CostOfGoodsSold",
+   "value": 15761450000.0
+  },
+  {
+   "date": "2026-03-31",
+   "stock_id": "2408",
+   "type": "Revenue",
+   "value": 49086932000.0
+  },
+  {
+   "date": "2026-03-31",
+   "stock_id": "2408",
+   "type": "GrossProfit",
+   "value": 33325482000.0
+  },
+  {
+   "date": "2026-06-30",
+   "stock_id": "2408",
+   "type": "CostOfGoodsSold",
+   "value": 16931613000.0
+  },
+  {
+   "date": "2026-06-30",
+   "stock_id": "2408",
+   "type": "Revenue",
+   "value": 82549073000.0
+  },
+  {
+   "date": "2026-06-30",
+   "stock_id": "2408",
+   "type": "GrossProfit",
+   "value": 65617460000.0
+  }
+ ]
+}

@@ -32,6 +32,7 @@ METRICS = {
     'assets': ('USD', ['Assets']), 'liabilities': ('USD', ['Liabilities']),
     'equity': ('USD', ['StockholdersEquity']),
     'cash': ('USD', ['CashAndCashEquivalentsAtCarryingValue']),
+    'inventory': ('USD', ['InventoryNet']),
     'longTermDebtCurrent': ('USD', ['LongTermDebtCurrent']),
     'longTermDebtNoncurrent': ('USD', ['LongTermDebtNoncurrent']),
 }

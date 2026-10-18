@@ -136,3 +136,11 @@ def test_markdown_is_available_in_english():
     body = " ".join(lines).replace("小型台積電期貨", "").replace("台積電", "")
     assert not any(0x4E00 <= ord(ch) <= 0x9FFF for ch in body)
     assert "月營收 2026-09（10-14 公布）" in brief_markdown(brief)
+
+
+def test_brief_carries_the_latest_inventory_quarter():
+    metrics = {"quarterly": [{"period": "2026Q2", "grossMargin": 79.5}],
+               "balance": [{"period": "2026Q2", "inventoryDays": 116.03, "inventoryYoY": -39.4, "inventoryVsRevenueYoY": -723.6, "debtRatio": 20.1}]}
+    inventory = summarize_stock("2408", [], [], metrics)["fundamentals"]["latestInventory"]
+    assert inventory == {"period": "2026Q2", "inventoryDays": 116.03, "inventoryDaysQoQ": None, "inventoryDaysYoY": None,
+                         "inventoryQoQ": None, "inventoryYoY": -39.4, "inventoryVsRevenueYoY": -723.6}

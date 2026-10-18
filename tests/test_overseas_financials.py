@@ -76,3 +76,8 @@ def test_sec_collection_persists_raw_and_normalized_then_skips_upstream(monkeypa
     assert db.latest('META', 'US', 'financials')['payload']['quarterly'][0]['revenue'] == 100
     asyncio.run(source.collect_sec_financials(collector, 'META', 'US', 107113386))
     assert len(calls) == 1
+
+
+def test_inventory_is_kept_as_a_balance_sheet_instant():
+    raw = {'facts': {'us-gaap': {'InventoryNet': fact([{'end': '2026-03-28', 'val': 512300000, 'filed': '2026-05-06', 'form': '10-Q'}])}}}
+    assert normalize_sec_facts(raw)['balanceSheet'][0]['inventory'] == 512300000
