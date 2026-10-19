@@ -90,7 +90,7 @@ def test_api_validates_research_writes_and_lists_records(database, monkeypatch):
     monkeypatch.setattr(market, "market_ai_analysis_db", database)
     app = FastAPI()
     app.include_router(market.router)
-    app.dependency_overrides[market.require_authenticated] = lambda: {"sub": "owner"}
+    app.dependency_overrides[market.analysis_editor] = lambda: "owner"
     client = TestClient(app)
     endpoint = "/market/dashboard/analysis/2330?productType=research"
     assert client.put(endpoint, json={"model": "AI", "content": "free text", "expectedRevision": 0}).status_code == 422

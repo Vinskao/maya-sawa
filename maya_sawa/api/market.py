@@ -1,4 +1,7 @@
 import asyncio
+import hashlib
+import hmac
+import os
 import time
 import logging
 import re
@@ -6,7 +9,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field, field_validator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from ..core.auth.keycloak import require_authenticated, require_manage_users_request
@@ -99,13 +102,34 @@ async def get_market_ai_analysis(code: str, productType: str = "stock"):
                 "On 409 reload and reconcile your draft. Verify the returned saved revision."}
 
 
+AGENT_EDITOR = "agent:scheduled-analysis"
+AGENT_PRODUCT_TYPES = {"stock", "futures", "macro"}
+
+
+async def analysis_editor(request: Request) -> str:
+    """Who is writing an AI analysis: a signed-in user, or the scheduled analysis routine.
+
+    The routine has no Keycloak login. It sends X-Market-Agent-Key, and the server keeps only that key's SHA-256
+    (MARKET_AGENT_KEY_SHA256), so the deployment config holds no usable secret. The key writes only this endpoint.
+    """
+    key = request.headers.get("x-market-agent-key")
+    if key is None:
+        claims = await require_authenticated(request)
+        if not claims.get("sub"):
+            raise HTTPException(status_code=401, detail="Authenticated identity required")
+        return str(claims["sub"])
+    expected = os.environ.get("MARKET_AGENT_KEY_SHA256", "").strip().lower()
+    if not expected or not hmac.compare_digest(hashlib.sha256(key.encode()).hexdigest(), expected):
+        raise HTTPException(status_code=401, detail="Invalid agent key")
+    return AGENT_EDITOR
+
+
 @router.put("/dashboard/analysis/{code}")
 async def put_market_ai_analysis(code: str, body: MarketAiAnalysisUpdate, productType: str = "stock",
-                                 claims: dict = Depends(require_authenticated)):
+                                 editor: str = Depends(analysis_editor)):
     target = analysis_target(code, productType)
-    editor = claims.get("sub")
-    if not editor:
-        raise HTTPException(status_code=401, detail="Authenticated identity required")
+    if editor == AGENT_EDITOR and target[0] not in AGENT_PRODUCT_TYPES:
+        raise HTTPException(status_code=403, detail="The agent key writes daily analyses only")
     if target[0] == "research":
         try:
             validate_research_content(body.content)

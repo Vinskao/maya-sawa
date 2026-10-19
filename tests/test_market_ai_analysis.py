@@ -40,7 +40,7 @@ def test_api_requires_login_and_validates_updates(database, monkeypatch):
     body = {"model": "AI", "content": "Reviewed analysis", "expectedRevision": 0}
     assert client.get(endpoint).json()["analysis"] is None
     assert client.put(endpoint, json=body).status_code == 401
-    app.dependency_overrides[market.require_authenticated] = lambda: {"sub": "owner"}
+    app.dependency_overrides[market.analysis_editor] = lambda: "owner"
     assert client.put(endpoint, json={**body, "content": "   "}).status_code == 422
     assert client.put(endpoint, json={**body, "expectedRevision": -1}).status_code == 422
     assert client.put(endpoint, json=body).json()["analysis"]["revision"] == 1
@@ -55,7 +55,7 @@ def test_shared_macro_commentary_uses_its_own_slot(database, monkeypatch):
     monkeypatch.setattr(market, "market_ai_analysis_db", database)
     app = FastAPI()
     app.include_router(market.router)
-    app.dependency_overrides[market.require_authenticated] = lambda: {"sub": "owner"}
+    app.dependency_overrides[market.analysis_editor] = lambda: "owner"
     client = TestClient(app)
     body = {"model": "AI", "content": "Rates are a valuation headwind", "expectedRevision": 0}
     assert client.put("/market/dashboard/analysis/US?productType=macro", json=body).json()["analysis"]["revision"] == 1
@@ -63,3 +63,33 @@ def test_shared_macro_commentary_uses_its_own_slot(database, monkeypatch):
     assert client.get("/market/dashboard/analysis/US?productType=stock").json()["analysis"] is None
     assert client.put("/market/dashboard/analysis/2330?productType=macro", json=body).status_code == 422
     assert client.get("/market/dashboard/analysis/US?productType=bond").status_code == 422
+
+
+AGENT_KEY = "test-agent-key-not-a-real-secret"
+
+
+def test_scheduled_agent_key_writes_daily_analyses_only(database, monkeypatch):
+    # The scheduled Claude Code routine has no Keycloak login; it sends a dedicated key whose SHA-256 is the only
+    # thing the server stores. The key can write stock / futures / macro analyses and nothing else.
+    import hashlib
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market
+    monkeypatch.setattr(market, "market_ai_analysis_db", database)
+    app = FastAPI()
+    app.include_router(market.router)
+    client = TestClient(app)
+    body = {"model": "Claude (scheduled)", "content": "Daily refresh", "expectedRevision": 0}
+    endpoint = "/market/dashboard/analysis/2330?productType=stock"
+    monkeypatch.delenv("MARKET_AGENT_KEY_SHA256", raising=False)
+    assert client.put(endpoint, json=body, headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 401  # not configured
+    monkeypatch.setenv("MARKET_AGENT_KEY_SHA256", hashlib.sha256(AGENT_KEY.encode()).hexdigest())
+    assert client.put(endpoint, json=body, headers={"X-Market-Agent-Key": "wrong"}).status_code == 401
+    assert client.put(endpoint, json=body, headers={"X-Market-Agent-Key": AGENT_KEY}).json()["analysis"]["revision"] == 1
+    assert client.put("/market/dashboard/analysis/US?productType=macro", json=body,
+                      headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 200
+    assert client.put("/market/dashboard/analysis/2330?productType=research", json=body,
+                      headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 403
+    assert database.last_editor("stock", "2330") == "agent:scheduled-analysis"
+    assert client.put("/market/dashboard/industries/ai-optics", json={},
+                      headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 401  # the key is not a login

@@ -148,6 +148,9 @@ spec:
           value: "http://ty-multiverse-backend/tymb"
         - name: AI_USAGE_INGEST_TOKEN
           value: "${AI_USAGE_INGEST_TOKEN}"
+        # SHA-256 of the scheduled analysis routine's write key (not the key itself); see docs/MARKET_AGENT_KEY.md
+        - name: MARKET_AGENT_KEY_SHA256
+          value: "7765262f9c8c415680a394cfb488f60cb9bbea9daf61ae707a28eb65173b75c7"
         - name: MARKET_INTERNAL_SECRET
           valueFrom:
             secretKeyRef:
