@@ -40,6 +40,7 @@ from ..services.market_fundamentals import market_fundamentals_service
 from ..services.market_company_events import market_company_events_service
 from ..services.market_brief import brief_markdown, market_brief_service
 from ..services.market_macro import market_macro_service, MACRO_ENABLED
+from ..services import market_automation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -579,6 +580,12 @@ async def get_portfolio(_claims: dict = Depends(require_manage_users_request)):
                 "message": "Portfolio data is temporarily unavailable",
             },
         ) from exc
+
+
+@router.post("/automation/check")
+async def check_market_automation(_claims: dict = Depends(require_manage_users_request)):
+    """Owner opened the site: report the IBKR session and fire analysis routines that are due."""
+    return await market_automation.check(market_automation.automation_store(), market_automation.IbkrSource())
 
 
 @router.get("/ibkr")

@@ -131,6 +131,12 @@ class IbkrMarketService:
                         await ibkr_research_collector.collect(self, snapshot.get('positions', []))
                     except Exception:
                         logger.exception("IBKR research collection failed; portfolio remains available")
+                    try:
+                        # Fresh overseas bars may make an analysis routine due (see market_automation).
+                        from . import market_automation
+                        await market_automation.check(market_automation.automation_store(), market_automation.IbkrSource())
+                    except Exception:
+                        logger.exception("Market routine check failed")
                 await asyncio.sleep(self._cache_seconds)
             except asyncio.CancelledError:
                 raise

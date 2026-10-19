@@ -16,10 +16,10 @@ localhost can reach it; without that the gateway returns 403.
 ## Build & deploy
 This lives **inside the maya-sawa repo** (`maya-sawa/ibkr-gateway/`) and shares
 maya-sawa's Jenkins pipeline — the `Build & Push IBKR Gateway` stage builds this
-dir's image (`papakao/ibkr-gateway:latest`, build context `ibkr-gateway/`) and the
-Deploy stage applies `ibkr-gateway/k8s/deployment.yaml`. So a normal maya-sawa
-build rebuilds and redeploys the gateway too (and brings up maya-sawa with
-`IBKR_ENABLED=true`). The maya-sawa `.dockerignore` excludes `ibkr-gateway/` so the
+dir's image (`papakao/ibkr-gateway:latest`, build context `ibkr-gateway/`). The
+Deploy stage applies and restarts `ibkr-gateway/k8s/deployment.yaml` **only when
+`DEPLOY_IBKR_GATEWAY=true`**, because a restart drops the authenticated session.
+A normal maya-sawa release leaves the gateway and its login alone. The maya-sawa `.dockerignore` excludes `ibkr-gateway/` so the
 12MB vendored runtime doesn't bloat the maya-sawa image context.
 
 Manual fallback (run from the `maya-sawa/` repo root):

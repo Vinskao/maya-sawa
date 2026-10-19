@@ -350,6 +350,20 @@ pipeline {
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                             script {
                                 try {
+                                    // Routine fire tokens for market_automation are optional: skip quietly until the
+                                    // Jenkins credentials exist, and keep the existing Secret otherwise.
+                                    try {
+                                        withCredentials([
+                                            string(credentialsId: 'MARKET_ROUTINE_TAIWAN_TOKEN', variable: 'MARKET_ROUTINE_TAIWAN_TOKEN'),
+                                            string(credentialsId: 'MARKET_ROUTINE_US_TOKEN', variable: 'MARKET_ROUTINE_US_TOKEN')
+                                        ]) {
+                                            sh '''
+                                                kubectl create secret generic market-routine-fire                                                   --from-literal=MARKET_ROUTINE_TAIWAN_TOKEN="${MARKET_ROUTINE_TAIWAN_TOKEN}"                                                   --from-literal=MARKET_ROUTINE_US_TOKEN="${MARKET_ROUTINE_US_TOKEN}"                                                   -n default --dry-run=client -o yaml | kubectl apply -f -
+                                            '''
+                                        }
+                                    } catch (err) {
+                                        echo "Routine fire tokens not configured in Jenkins; automatic routine runs stay off"
+                                    }
                                     sh '''
                                         set -e
 

@@ -148,6 +148,19 @@ spec:
           value: "http://ty-multiverse-backend/tymb"
         - name: AI_USAGE_INGEST_TOKEN
           value: "${AI_USAGE_INGEST_TOKEN}"
+        # Fire tokens for the analysis routines (services/market_automation.py); absent until set in Jenkins.
+        - name: MARKET_ROUTINE_TAIWAN_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: market-routine-fire
+              key: MARKET_ROUTINE_TAIWAN_TOKEN
+              optional: true
+        - name: MARKET_ROUTINE_US_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: market-routine-fire
+              key: MARKET_ROUTINE_US_TOKEN
+              optional: true
         # SHA-256 of the scheduled analysis routine's write key (not the key itself); see docs/MARKET_AGENT_KEY.md
         - name: MARKET_AGENT_KEY_SHA256
           value: "7765262f9c8c415680a394cfb488f60cb9bbea9daf61ae707a28eb65173b75c7"
