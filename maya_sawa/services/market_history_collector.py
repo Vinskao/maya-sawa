@@ -26,6 +26,18 @@ from ..services.shioaji_market import shioaji_market_service
 
 logger = logging.getLogger(__name__)
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+# 18:20 picks up prices and institutional flows; margin (MI_MARGN) and borrowed-share sales (TWT93U) publish
+# around 21:00, so a 22:00 pass refreshes the recent days again and the day's chips land the same night.
+COLLECTION_TIMES = ((18, 20), (22, 0))
+
+
+def next_collection_run(now: datetime) -> datetime:
+    for hour, minute in COLLECTION_TIMES:
+        run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if run > now:
+            return run
+    hour, minute = COLLECTION_TIMES[0]
+    return (now + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
 def _number(value: Any) -> float | int | None:
@@ -457,10 +469,7 @@ class MarketHistoryCollector:
                 codes = {code for item in selections if (code := stock_code(item))}
                 await self.collect_codes(sorted(code for code in codes if code), self._backfill_days)
                 now = datetime.now(TAIPEI_TZ)
-                next_run = now.replace(hour=18, minute=20, second=0, microsecond=0)
-                if next_run <= now:
-                    next_run += timedelta(days=1)
-                await asyncio.sleep(max(60, (next_run - now).total_seconds()))
+                await asyncio.sleep(max(60, (next_collection_run(now) - now).total_seconds()))
             except asyncio.CancelledError:
                 raise
             except Exception:
