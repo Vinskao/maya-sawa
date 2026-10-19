@@ -9,14 +9,15 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
   - Research maps return 403.
   - Every other endpoint still requires a login.
 - **Edit history:** saves are recorded with editor `agent:scheduled-analysis` and keep the normal revision history.
-- **Routine side:** the key is stored as the `MARKET_AGENT_KEY` environment variable of the routine's claude.ai cloud
-  environment. It must never appear in a prompt, the repository or a log.
+- **Routine side:** the key is a **network secret** on the routine's claude.ai cloud environment (header
+  `X-Market-Agent-Key`, no prefix, host `peoplesystem.tatdvsonorth.com`). The agent proxy adds it outside the session VM,
+  so the routine never sees it. The key must never appear in a prompt, the repository or a log.
 
 ## Rotate or revoke
 
 1. Generate a new random key, for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 2. Put `sha256(key)` in `MARKET_AGENT_KEY_SHA256` and deploy maya-sawa.
-3. Replace `MARKET_AGENT_KEY` in the cloud environment settings.
+3. In the cloud environment, delete the network secret and add it again with the new value.
 
 To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string and deploy.
 
@@ -30,5 +31,5 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 - **Taiwan run timing:** the 18:40 run follows the 18:20 history pass. Margin and borrowed-share data that publish later
   are picked up by the 22:00 pass and land in the next run.
 - **Model:** both run Claude Sonnet 5.5 on the subscription.
-- **Environment setup:** the cloud environment needs network access to `peoplesystem.tatdvsonorth.com` and the
-  `MARKET_AGENT_KEY` variable.
+- **Environment setup:** the cloud environment needs only the network secret. Its host is reachable even at the
+  default **Trusted** network level.
