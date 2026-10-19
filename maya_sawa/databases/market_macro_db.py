@@ -426,6 +426,10 @@ def _release_observed(event: MacroEvent, observed_period: str | None) -> bool:
         first_of_month = event.scheduled_date.replace(day=1)
         expected = (first_of_month - timedelta(days=1)).strftime("%Y-%m")
         return observed_period >= expected
+    if event.group_id == "claims":
+        # Thursday's claims report covers the week ending the previous Saturday (5 days earlier);
+        # the prior report's week ends 12 days earlier, so 6 days separates the two.
+        return observed_period >= (event.scheduled_date - timedelta(days=6)).isoformat()
     # Daily series (Fed target) are posted for the day after the decision.
     return observed_period > event.scheduled_date.isoformat()
 
