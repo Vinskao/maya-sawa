@@ -19,3 +19,16 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
 3. Replace `MARKET_AGENT_KEY` in the cloud environment settings.
 
 To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string and deploy.
+
+## Routines (claude.ai/code/routines, environment "Default")
+
+| Routine | When (Taipei) | Cron (UTC) | Scope |
+|---|---|---|---|
+| 市場 AI 分析｜台股收盤後 `trig_01ECP68tWfgM749sJa3gBiN9` | Mon–Fri 18:40 | `40 10 * * 1-5` | Taiwan holdings, TXF, JP/KR holdings |
+| 市場 AI 分析｜美股與總經 `trig_01NETQT5DCSHj4TKwv45nbJR` | Tue–Sat 07:30 | `30 23 * * 1-5` | macro commentary first, then US holdings |
+
+- **Taiwan run timing:** the 18:40 run follows the 18:20 history pass. Margin and borrowed-share data that publish later
+  are picked up by the 22:00 pass and land in the next run.
+- **Model:** both run Claude Sonnet 5.5 on the subscription.
+- **Environment setup:** the cloud environment needs network access to `peoplesystem.tatdvsonorth.com` and the
+  `MARKET_AGENT_KEY` variable.
