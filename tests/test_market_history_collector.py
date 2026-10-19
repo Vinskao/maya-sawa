@@ -380,12 +380,13 @@ def test_source_collection_records_incomplete_http_response_for_retry(monkeypatc
 
 
 def test_daily_collection_runs_again_after_late_margin_and_borrow_releases():
-    # TWSE/TPEx margin (MI_MARGN) and borrowed-share sales (TWT93U) publish around 21:00 Taipei, after the 18:20 pass,
+    # TWSE/TPEx margin (MI_MARGN) and borrowed-share sales (TWT93U) published at about 20:45 Taipei on 2026-10-19
+    # (polled every 10 minutes), after the 18:20 pass,
     # so a second evening pass is needed for the day's chips to be in the database the same night.
     from datetime import datetime
     from maya_sawa.services.market_history_collector import TAIPEI_TZ, next_collection_run
     at = lambda h, m: datetime(2026, 10, 19, h, m, tzinfo=TAIPEI_TZ)
     assert next_collection_run(at(14, 0)) == at(18, 20)
-    assert next_collection_run(at(18, 20)) == at(22, 0)
-    assert next_collection_run(at(19, 30)) == at(22, 0)
-    assert next_collection_run(at(22, 0)) == datetime(2026, 10, 20, 18, 20, tzinfo=TAIPEI_TZ)
+    assert next_collection_run(at(18, 20)) == at(21, 0)
+    assert next_collection_run(at(19, 30)) == at(21, 0)
+    assert next_collection_run(at(21, 0)) == datetime(2026, 10, 20, 18, 20, tzinfo=TAIPEI_TZ)

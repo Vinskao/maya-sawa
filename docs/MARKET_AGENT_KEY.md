@@ -25,11 +25,13 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 
 | Routine | When (Taipei) | Cron (UTC) | Scope |
 |---|---|---|---|
-| 市場 AI 分析｜台股收盤後 `trig_01ECP68tWfgM749sJa3gBiN9` | Mon–Fri 18:40 | `40 10 * * 1-5` | Taiwan holdings, TXF, JP/KR holdings |
+| 市場 AI 分析｜台股收盤後 `trig_01ECP68tWfgM749sJa3gBiN9` | Mon–Fri 21:15 | `15 13 * * 1-5` | Taiwan holdings, TXF, JP/KR holdings |
 | 市場 AI 分析｜美股與總經 `trig_01NETQT5DCSHj4TKwv45nbJR` | Tue–Sat 07:30 | `30 23 * * 1-5` | macro commentary first, then US holdings |
 
-- **Taiwan run timing:** the 18:40 run follows the 18:20 history pass. Margin and borrowed-share data that publish later
-  are picked up by the 22:00 pass and land in the next run.
+- **Taiwan run timing (changed 2026-10-19):** margin balances and securities lending (TWSE MI_MARGN/TWT93U and the TPEx
+  equivalents) were first seen at 20:51 on 2026-10-19 by a 10-minute poll, so they publish around 20:45. Prices are out by
+  about 15:00 and institutional flows by 16:30. The second history pass now runs at 21:00 (was 22:00) and the Taiwan
+  run at 21:15 (was 18:40), so each analysis includes the day's margin data.
 - **Model:** both run Claude Sonnet 5.5 on the subscription.
 - **Environment setup:** the cloud environment needs only the network secret. Its host is reachable even at the
   default **Trusted** network level.
@@ -39,7 +41,8 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 IBKR needs a manual login about once a day, so Japan, Korea and US bars only arrive while the session is alive.
 
 - **When a run fires:** at most once per session, as soon as both of these hold:
-  - its markets have closed: Taiwan, JP and KR at 14:30 Taipei Mon–Fri; US at 05:30 Taipei Tue–Sat;
+  - its markets have closed and the day's data is in: Taiwan, JP and KR close at 14:30 Taipei Mon–Fri but the run waits
+    until 21:10 for margin data (`fire_after`); US at 05:30 Taipei Tue–Sat;
   - every holding in those markets has bars collected after the close.
 - **When it is checked:**
   - after every IBKR collection pass;

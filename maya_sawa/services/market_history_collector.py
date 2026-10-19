@@ -26,9 +26,9 @@ from ..services.shioaji_market import shioaji_market_service
 
 logger = logging.getLogger(__name__)
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
-# 18:20 picks up prices and institutional flows; margin (MI_MARGN) and borrowed-share sales (TWT93U) publish
-# around 21:00, so a 22:00 pass refreshes the recent days again and the day's chips land the same night.
-COLLECTION_TIMES = ((18, 20), (22, 0))
+# 18:20 picks up prices and institutional flows; margin (MI_MARGN) and borrowed-share sales (TWT93U) published
+# around 20:45 on 2026-10-19, so a 21:00 pass refreshes the recent days again and the day's chips land that night.
+COLLECTION_TIMES = ((18, 20), (21, 0))
 
 
 def next_collection_run(now: datetime) -> datetime:

@@ -18,7 +18,9 @@ TAIWAN, US = automation.RUNS
 def test_sessions_follow_each_market_close():
     # 2026-10-19 is a Monday.
     assert session_date(TAIWAN, tpe(19, 14, 29)) is None  # Tokyo/Seoul/Taipei not all closed yet
-    assert session_date(TAIWAN, tpe(19, 14, 30)) == date(2026, 10, 19)
+    # Margin balances and securities lending publish around 20:45 (measured 2026-10-19) and are collected at 21:00.
+    assert session_date(TAIWAN, tpe(19, 21, 9)) is None
+    assert session_date(TAIWAN, tpe(19, 21, 10)) == date(2026, 10, 19)
     assert session_date(TAIWAN, tpe(18, 20)) is None  # Sunday
     assert session_date(US, tpe(19, 9)) is None  # Monday morning follows no US session
     assert session_date(US, tpe(20, 5, 29)) is None
@@ -27,7 +29,7 @@ def test_sessions_follow_each_market_close():
 
 
 def test_run_fires_only_after_overseas_bars_were_collected_after_the_close():
-    now = tpe(19, 18)
+    now = tpe(19, 21, 30)
     before_close = tpe(19, 12)
     after_close = tpe(19, 17, 50)
     assert due_runs(now, {}, {"JP": before_close, "KR": after_close}) == []  # IB lapsed before Tokyo closed
@@ -35,6 +37,9 @@ def test_run_fires_only_after_overseas_bars_were_collected_after_the_close():
     assert due_runs(now, {}, {"JP": after_close, "KR": after_close}) == [TAIWAN]
     assert due_runs(now, {}, {}) == [TAIWAN]  # no Japan/Korea holdings: nothing to wait for
     assert due_runs(now, {"taiwan": date(2026, 10, 19)}, {"JP": after_close}) == []  # once per session
+    # Bars from the afternoon still count: the close is 14:30 even though the run waits for the evening data.
+    assert due_runs(now, {}, {"JP": tpe(19, 15), "KR": tpe(19, 15)}) == [TAIWAN]
+    assert due_runs(tpe(19, 18), {}, {"JP": after_close, "KR": after_close}) == []  # margin data not out yet
 
 
 def test_us_run_waits_for_us_bars_and_ignores_asian_markets():
@@ -76,7 +81,7 @@ class FakeSource:
 
 def test_check_fires_due_runs_once_and_reports_ib_status(tmp_path, monkeypatch):
     store = AutomationStore(create_engine(f"sqlite:///{tmp_path / 'fires.db'}"))
-    now = tpe(19, 18).astimezone(timezone.utc)
+    now = tpe(19, 21, 30).astimezone(timezone.utc)  # after the evening margin data
     source = FakeSource(now - timedelta(minutes=3), [("6857", "JP"), ("000660", "KR"), ("META", "US")],
                         {("6857", "JP"): tpe(19, 17), ("000660", "KR"): tpe(19, 17), ("META", "US"): tpe(17, 8)})
     fired = []
@@ -101,7 +106,7 @@ def test_check_fires_due_runs_once_and_reports_ib_status(tmp_path, monkeypatch):
 
 def test_failed_fire_is_released_and_stale_ib_asks_for_login(tmp_path, monkeypatch):
     store = AutomationStore(create_engine(f"sqlite:///{tmp_path / 'fires.db'}"))
-    now = tpe(19, 18).astimezone(timezone.utc)
+    now = tpe(19, 21, 30).astimezone(timezone.utc)  # after the evening margin data
 
     async def broken_fire(run, text):
         raise RuntimeError("MARKET_ROUTINE_TAIWAN_TOKEN is not configured")

@@ -33,21 +33,23 @@ class RoutineRun:
     token_env: str
     markets: tuple[str, ...]  # overseas markets whose bars must be collected after the close
     weekdays: tuple[int, ...]  # Taipei weekdays (Mon=0) that follow a trading session
-    ready: time  # Taipei time after which the session is closed and settled
+    ready: time  # Taipei time the session is closed; overseas bars must be collected after it
+    fire_after: time  # Taipei time the day's local data is in, so the run may start
 
 
 RUNS = (
-    # Taiwan, Tokyo and Seoul all close by 14:30 Taipei.
-    RoutineRun("taiwan", "trig_01ECP68tWfgM749sJa3gBiN9", "MARKET_ROUTINE_TAIWAN_TOKEN", ("JP", "KR"), (0, 1, 2, 3, 4), time(14, 30)),
+    # Taiwan, Tokyo and Seoul all close by 14:30 Taipei. Margin balances and securities lending publish around
+    # 20:45 (measured 2026-10-19) and are collected at 21:00, so the run waits until 21:10.
+    RoutineRun("taiwan", "trig_01ECP68tWfgM749sJa3gBiN9", "MARKET_ROUTINE_TAIWAN_TOKEN", ("JP", "KR"), (0, 1, 2, 3, 4), time(14, 30), time(21, 10)),
     # New York closes 04:00 (EDT) / 05:00 (EST) Taipei, Tuesday to Saturday.
-    RoutineRun("us", "trig_01NETQT5DCSHj4TKwv45nbJR", "MARKET_ROUTINE_US_TOKEN", ("US",), (1, 2, 3, 4, 5), time(5, 30)),
+    RoutineRun("us", "trig_01NETQT5DCSHj4TKwv45nbJR", "MARKET_ROUTINE_US_TOKEN", ("US",), (1, 2, 3, 4, 5), time(5, 30), time(5, 30)),
 )
 
 
 def session_date(run: RoutineRun, now: datetime) -> date | None:
     """The Taipei date of the session this run covers, or None when no closed session is waiting."""
     local = now.astimezone(TAIPEI)
-    if local.weekday() in run.weekdays and local.time() >= run.ready:
+    if local.weekday() in run.weekdays and local.time() >= run.fire_after:
         return local.date()
     return None
 
