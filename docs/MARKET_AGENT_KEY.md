@@ -33,3 +33,20 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 - **Model:** both run Claude Sonnet 5.5 on the subscription.
 - **Environment setup:** the cloud environment needs only the network secret. Its host is reachable even at the
   default **Trusted** network level.
+
+## Automatic runs after the IB login (`services/market_automation.py`)
+
+IBKR needs a manual login about once a day, so Japan, Korea and US bars only arrive while the session is alive.
+
+- **When a run fires:** at most once per session, as soon as both of these hold:
+  - its markets have closed: Taiwan, JP and KR at 14:30 Taipei Mon–Fri; US at 05:30 Taipei Tue–Sat;
+  - every holding in those markets has bars collected after the close.
+- **When it is checked:**
+  - after every IBKR collection pass;
+  - when the owner opens the site (`POST /market/automation/check`).
+
+  The site then shows an IB login reminder and each run's state.
+- **Fire tokens:** routine API trigger tokens, held in the optional Jenkins credentials `MARKET_ROUTINE_TAIWAN_TOKEN` and
+  `MARKET_ROUTINE_US_TOKEN`. Jenkins puts them in the k8s Secret `market-routine-fire`. Without them, nothing is fired
+  and runs report `not-configured`.
+- **Fixed schedules:** still run as a fallback.
