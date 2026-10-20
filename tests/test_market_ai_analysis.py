@@ -28,6 +28,23 @@ def test_stale_writer_cannot_overwrite_and_retry_does_not_duplicate(database):
     assert len(database.read("stock", "2330")["history"]) == 1
 
 
+def test_save_removes_literal_newline_escape_suffixes_from_2408_analysis(database):
+    # This mirrors the 2408 report-view format saved by the manual Taiwan run:
+    # each markdown line ended with the two-character sequence ``\\n`` and
+    # then an actual newline, making the escape visible in the website.
+    content = (
+        "【結論】賣\\n\n"
+        "報告觀點：記憶體循環（p10）與現行判斷相反\\n\n"
+        "來源：財經M平方，p10–p12，9/15（封面未載年份）\\n\n"
+        "維持賣出：2026Q2 毛利率 79.49%，仍需觀察營收年增與報價趨勢。"
+    )
+
+    saved = database.save("stock", "2408", "Claude (scheduled)", content, 0, "agent")
+
+    assert saved["content"] == content.replace("\\n\n", "\n")
+    assert all(not line.endswith("\\n") for line in saved["content"].splitlines())
+
+
 def test_api_requires_login_and_validates_updates(database, monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

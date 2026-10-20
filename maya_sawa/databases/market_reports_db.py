@@ -461,6 +461,7 @@ class MarketReportsDatabase:
                     )
                 )
             report.status = "ready"
+            report.failure_reason = None
             return True
 
     @staticmethod
@@ -476,7 +477,7 @@ class MarketReportsDatabase:
             "page_count": report.page_count,
             "visibility": report.visibility,
             "status": report.status,
-            "failure_reason": report.failure_reason,
+            "failure_reason": report.failure_reason if report.status != "ready" else None,
             "text": report.text,
             "sha256": report.sha256,
             "claim_count": len(report.claims) if report.claims is not None else 0,

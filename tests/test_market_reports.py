@@ -549,7 +549,6 @@ def test_database_deduplicates_and_cascades_chunks_and_claims(tmp_path):
     )
     assert [row["title"] for row in db.list_reports(None)] == ["Sample"]
     assert {row["title"] for row in db.list_reports("owner")} == {"Sample", "Private"}
-
     claim = {
         "page": 2,
         "segment": "memory",
@@ -578,6 +577,36 @@ def test_database_deduplicates_and_cascades_chunks_and_claims(tmp_path):
             ).scalar()
             == 0
         )
+
+
+def test_ready_report_clears_stale_vectorization_failure_reason(tmp_path):
+    from sqlalchemy import create_engine
+    from maya_sawa.databases.market_reports_db import MarketReportsDatabase
+
+    db = MarketReportsDatabase(create_engine(f"sqlite:///{tmp_path / 'ready-report.db'}"))
+    pages = ["Memory supply remains tight."]
+    report, _ = db.save_extracted(
+        title="2408 industry note",
+        publisher="Research",
+        published_at=None,
+        visibility="public",
+        uploaded_by="owner",
+        digest="ready-with-old-vector-error",
+        pdf=b"%PDF-test",
+        pages=pages,
+    )
+    db.fail_by_digest("ready-with-old-vector-error", "向量化失敗，請稍後重試")
+
+    assert db.replace_claims(
+        report["id"],
+        [{"page": 1, "segment": "memory", "dimension": "supply", "direction": "headwind",
+          "claim": "Memory supply is constrained.", "codes": [], "evidence": "Supply remains tight."}],
+        "Claude (scheduled)",
+    )
+
+    ready = next(item for item in db.list_reports("owner") if item["id"] == report["id"])
+    assert ready["status"] == "ready"
+    assert ready["failure_reason"] is None
 
 
 def test_claim_api_requires_agent_key_and_validates_claim_pages(monkeypatch):

@@ -1,5 +1,6 @@
 """Current AI commentary and immutable revision history, stored in Postgres."""
 from datetime import datetime, timezone
+import re
 
 from sqlalchemy import Column, DateTime, Integer, Text, update
 from sqlalchemy.dialects.postgresql import insert
@@ -75,6 +76,10 @@ class MarketAiAnalysisDatabase:
     def save(self, product_type, code, model, content, expected_revision, editor):
         if not self.sessions:
             raise RuntimeError("Analysis database unavailable")
+        # Some scheduled clients serialize literal ``\\n`` at the end of each
+        # markdown line before writing it as multiline text. Remove only those
+        # line-ending escape tokens; preserve intentional ``\\n`` inside lines.
+        content = re.sub(r"(?:\\n)+(?=\r?$)", "", content, flags=re.MULTILINE)
         now = datetime.now(timezone.utc)
         values = dict(model=model, content=content, updated_by=editor, updated_at=now,
                       revision=expected_revision + 1)
