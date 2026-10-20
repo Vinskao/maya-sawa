@@ -199,7 +199,7 @@ class IbkrResearchCollector:
         result = {'code': code, 'market': market, 'source': 'Interactive Brokers CPAPI', 'persisted': True,
                 'datasets': datasets, 'coverage': {k: {a: b for a, b in (v or {}).items() if a != 'payload'} | {'detail': (v or {}).get('payload', {}) if (v or {}).get('status') != 'ok' else None} for k, v in coverage.items()},
                 'daily': daily, 'technical': technical_summary(daily),
-                'gaps': ['CPAPI does not supply quarterly statements, earnings estimates, institutional ownership or short interest. US SEC financials are supplemented where available; Japan EDINET and Korea OpenDART require separate keys.',
+                'gaps': ['CPAPI does not supply quarterly statements, earnings estimates, institutional ownership or short interest. US SEC financials are supplemented where available; Japan results come from TDnet 決算短信 (stored from 2026-10 onward); Korea OpenDART needs a key.',
                          'Fundamental snapshot tags (EPS, PE, market capitalization, dividend yield, beta) deprecated by IBKR 2026-01-06.']}
         self._read_cache[(code, market)] = (time.monotonic(), result)
         return deepcopy(result)

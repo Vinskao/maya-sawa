@@ -68,6 +68,12 @@ class IbkrResearchDatabase:
             row = session.get(IbkrDataset, (code.upper(), market.upper(), kind, 'latest' if successful else 'attempt'))
             return self._expose(row) if row else None
 
+    def market_codes(self, market, kind='profile'):
+        """Codes ever collected for a market (the holdings seen through IBKR), so filings work while IB is logged out."""
+        with self.sessions() as session:
+            return sorted(set(session.scalars(select(IbkrDataset.code).where(
+                IbkrDataset.market == market.upper(), IbkrDataset.kind == kind, IbkrDataset.status == 'ok')).all()))
+
     def history(self, code, market, kind, limit=1000):
         with self.sessions() as session:
             rows = session.scalars(select(IbkrDataset).where(
