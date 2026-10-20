@@ -7,7 +7,9 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
   and the deployment config never contain a usable secret.
 - **Scope:** the key can call `PUT /market/dashboard/analysis/{code}` for `productType` stock, futures or macro, and the
   report-library routine endpoints `GET /market/reports/pending`, `PUT /market/reports/{id}/claims`, and
-  `GET /market/reports/search` (including private reports). It cannot upload, download, list, or delete reports, change
+  `GET /market/reports/search` (public reports by default; private reports only with `include_private=true`). The
+  semantic search endpoint requires this key for `include_private=true`. Published analyses must use public reports only.
+  It cannot upload, download, list, or delete reports, change
   visibility, or edit research maps. Every other endpoint still requires a login.
 - **Edit history:** saves are recorded with editor `agent:scheduled-analysis` and keep the normal revision history.
 - **Routine side:** the key is a **network secret** on the routine's claude.ai cloud environment (header
@@ -26,6 +28,7 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 
 | Routine | When (Taipei) | Cron (UTC) | Scope |
 |---|---|---|---|
+| Market report claim extraction `trig_018MeBwwU74WvydGHRaRt6Wd` | Daily 20:30 | `30 12 * * *` | Extract report claims without OpenAI; subscription Claude Code routine |
 | 市場 AI 分析｜台股收盤後 `trig_01ECP68tWfgM749sJa3gBiN9` | Mon–Fri 21:15 | `15 13 * * 1-5` | Taiwan holdings, TXF, JP/KR holdings |
 | 市場 AI 分析｜美股與總經 `trig_01NETQT5DCSHj4TKwv45nbJR` | Tue–Sat 07:30 | `30 23 * * 1-5` | macro commentary first, then US holdings |
 

@@ -638,3 +638,52 @@ def test_claim_api_requires_agent_key_and_validates_claim_pages(monkeypatch):
         json={"claims": [claim], "extracted_by": "Claude"},
         headers={"X-Market-Agent-Key": key},
     ).json() == {"saved": True, "claim_count": 1}
+
+
+def test_semantic_search_includes_private_reports_only_when_explicitly_requested(monkeypatch):
+    import hashlib
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+
+    calls = []
+
+    class FakeDatabase:
+        def search_chunks(self, _vector, **kwargs):
+            calls.append(kwargs)
+            return []
+
+    class FakeEmbeddings:
+        def embed_query(self, _query):
+            return [0.0] * 1536
+
+    key = "private-search-agent-key"
+    monkeypatch.setenv(
+        "MARKET_AGENT_KEY_SHA256", hashlib.sha256(key.encode()).hexdigest()
+    )
+    monkeypatch.setattr(market_reports, "market_reports_db", FakeDatabase())
+    monkeypatch.setattr(
+        market_reports, "get_embedding_service", lambda: FakeEmbeddings()
+    )
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    client = TestClient(app)
+
+    default_search = client.get(
+        "/market/reports/search?q=CoWoS",
+        headers={"X-Market-Agent-Key": key},
+    )
+    assert default_search.status_code == 200
+    assert calls[-1]["include_private"] is False
+
+    private_search = client.get(
+        "/market/reports/search?q=CoWoS&include_private=true",
+        headers={"X-Market-Agent-Key": key},
+    )
+    assert private_search.status_code == 200
+    assert calls[-1]["include_private"] is True
+
+    anonymous_private_search = client.get(
+        "/market/reports/search?q=CoWoS&include_private=true"
+    )
+    assert anonymous_private_search.status_code == 401

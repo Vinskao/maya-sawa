@@ -210,15 +210,17 @@ async def search_reports(
     code: str | None = None,
     segment: str | None = None,
     limit: int = 10,
+    include_private: bool = False,
     x_market_agent_key: str | None = Header(None),
 ):
     if not q.strip() or len(q) > 1000:
         raise HTTPException(
             status_code=422, detail="Search text must be between 1 and 1000 characters"
         )
-    include_private = bool(x_market_agent_key)
     if x_market_agent_key:
         _verify_agent(x_market_agent_key)
+    elif include_private:
+        _verify_agent(None)
     try:
         vector = await asyncio.to_thread(get_embedding_service().embed_query, q.strip())
         return {
