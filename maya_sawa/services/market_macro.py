@@ -189,6 +189,8 @@ class LocalTTLCache:
 # One entry per cached series plus the raw responses of free sources (ECB, BoJ, CBC, DGBAS, ...).
 _macro_local_cache = LocalTTLCache(max_entries=128)
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
+# Past freshForSeconds a series is shown as stale; past this window it is dropped.
+FREE_SERIES_FALLBACK_SECONDS = 30 * 24 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
@@ -387,20 +389,48 @@ class MarketMacroService:
 
     def _cache_free_series(self, rows: list[dict], definitions: dict, source: str, source_url: str,
         fresh_for_seconds: int = LOCAL_MACRO_TTL_SECONDS) -> int:
-        """Keep free source observations in bounded process memory; never write them to PostgreSQL."""
+        """Keep free source observations in bounded process memory, not in maya_sawa_macro_observations.
+
+        Each series is also copied to one row of maya_sawa_macro_cached_series so a restarted pod can
+        serve it at once (restore_free_series_cache) instead of refetching against the daily budgets."""
         grouped: dict[str, list[dict]] = {}
         for row in rows:
             grouped.setdefault(row["code"], []).append({"period": row["period"], "value": str(row["value"])})
         fetched_at = datetime.now(UTC).isoformat()
+        entries = []
         for code, series_rows in grouped.items():
             series_rows.sort(key=lambda item: item["period"])
-            _macro_local_cache.set(f"series:{code}", {
+            entry = {
                 "code": code, "name": definitions[code][0], "unit": definitions[code][1],
                 "frequency": definitions[code][2], "source": source, "sourceUrl": source_url,
                 "fetchedAt": fetched_at, "freshForSeconds": fresh_for_seconds, "history": series_rows,
-            }, 30 * 24 * 3600)
+            }
+            _macro_local_cache.set(f"series:{code}", entry, FREE_SERIES_FALLBACK_SECONDS)
+            entries.append(entry)
+        try:
+            market_macro_db.save_cached_series(entries)
+        except Exception:
+            logger.warning("Unable to save the restart copy of %s macro series", source)
         self._cache = None
         return sum(len(items) for items in grouped.values())
+
+    def restore_free_series_cache(self) -> int:
+        """Reload the restart copy into process memory, keeping each series' original fetch time."""
+        try:
+            entries = market_macro_db.load_cached_series(max_age_days=FREE_SERIES_FALLBACK_SECONDS // 86400)
+        except Exception:
+            logger.warning("Unable to load the restart copy of macro series")
+            return 0
+        restored = 0
+        for entry in entries:
+            if entry.get("code") not in FREE_CACHE_CODES or _macro_local_cache.get(f"series:{entry['code']}"):
+                continue
+            age = (datetime.now(UTC) - datetime.fromisoformat(entry["fetchedAt"])).total_seconds()
+            _macro_local_cache.set(f"series:{entry['code']}", entry, max(1, int(FREE_SERIES_FALLBACK_SECONDS - age)))
+            restored += 1
+        if restored:
+            self._cache = None
+        return restored
 
     async def start(self):
         if not MACRO_ENABLED:
@@ -408,6 +438,8 @@ class MarketMacroService:
             return
         if self._task and not self._task.done():
             return
+        restored = await asyncio.to_thread(self.restore_free_series_cache)
+        logger.info("Restored %d cached macro series", restored)
         self._task = asyncio.create_task(self._run_loop(), name="market-macro-refresh")
 
     async def close(self):

@@ -96,6 +96,14 @@ class MacroFetchRun(Base):
     detail = Column(Text, nullable=False, default="")
 
 
+class MacroCachedSeries(Base):
+    """Restart copy of one process-cached free series (one row per code, overwritten), not observation rows."""
+    __tablename__ = "maya_sawa_macro_cached_series"
+    code = Column(Text, primary_key=True)
+    fetched_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    payload = Column(Text, nullable=False)
+
+
 class MarketMacroDatabase:
     def __init__(self) -> None:
         self.engine = create_engine(Config.DB_CONNECTION_STRING, pool_size=1, max_overflow=2) if Config.DB_CONNECTION_STRING else None
@@ -184,6 +192,26 @@ class MarketMacroDatabase:
             if run:
                 run.finished_at, run.status, run.record_count = datetime.now(timezone.utc), status, count
                 run.detail, run.http_status = detail[:80], http_status
+
+    def save_cached_series(self, entries: list[dict]) -> None:
+        """Overwrite the restart copy of each process-cached series; one row per series code."""
+        if not self.sessions or not entries:
+            return
+        with self.sessions.begin() as session:
+            for entry in entries:
+                session.merge(MacroCachedSeries(code=entry["code"],
+                    fetched_at=datetime.fromisoformat(entry["fetchedAt"]), payload=json.dumps(entry)))
+
+    def load_cached_series(self, max_age_days: int = 30) -> list[dict]:
+        """Series fetched within the cache's fallback window, oldest first."""
+        if not self.sessions:
+            return []
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        with self.sessions() as session:
+            rows = session.query(MacroCachedSeries).order_by(MacroCachedSeries.fetched_at).all()
+            # SQLite (tests) returns naive datetimes; PostgreSQL returns aware ones.
+            return [json.loads(row.payload) for row in rows
+                    if (row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)) >= cutoff]
 
     def cleanup_fetch_runs(self, retention_days: int = 90) -> int:
         """Expire diagnostic run rows only; never delete observations or calendar history."""
