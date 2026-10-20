@@ -317,6 +317,23 @@ pipeline {
             }
         }
 
+        stage('Configure Filings Keys') {
+            // Korea OpenDART key for the holdings' financial statements; a missing credential must not block deploys.
+            steps {
+                container('kubectl') {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'OPENDART_API_KEY credential unavailable; Korea filings stay off') {
+                        withCredentials([string(credentialsId: 'OPENDART_API_KEY', variable: 'OPENDART_API_KEY')]) {
+                            sh '''
+                                set -e
+                                printf 'OPENDART_API_KEY=%s
+' "$OPENDART_API_KEY" | kubectl create secret generic filings-credentials                                   --from-env-file=/dev/stdin                                   -n default                                   --dry-run=client -o yaml | kubectl apply -f -
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {

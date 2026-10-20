@@ -191,6 +191,12 @@ spec:
               name: macro-data-credentials
               key: FRED_API_KEY
               optional: true
+        - name: OPENDART_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: filings-credentials
+              key: OPENDART_API_KEY
+              optional: true
         - name: MACRO_ENABLED
           value: "${MACRO_ENABLED}"
         - name: MACRO_BLS_DAILY_BUDGET
