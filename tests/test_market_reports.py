@@ -228,6 +228,158 @@ def test_report_api_owner_upload_duplicate_and_private_pdf_rules(monkeypatch):
     )
 
 
+def test_failed_report_upload_can_be_retried_by_its_owner(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+
+    class FakeDatabase:
+        deleted = []
+
+        def find_by_digest(self, _digest):
+            return {
+                "id": "failed-report",
+                "title": "Previously failed",
+                "visibility": "public",
+                "status": "failed",
+                "uploaded_by": "owner-sub",
+            }
+
+        def delete_failed_owned(self, report_id, owner):
+            self.deleted.append((report_id, owner))
+            return report_id == "failed-report" and owner == "owner-sub"
+
+        def ingest(self, **_kwargs):
+            return (
+                {
+                    "id": "retried-report",
+                    "title": "Retry succeeds",
+                    "visibility": "public",
+                    "status": "claims_pending",
+                },
+                False,
+            )
+
+    class FakeEmbeddings:
+        def embed_documents(self, texts):
+            return [[0.0] * 1536 for _ in texts]
+
+    database = FakeDatabase()
+    monkeypatch.setattr(market_reports, "market_reports_db", database)
+    monkeypatch.setattr(market_reports, "report_digest", lambda _data: "same-digest")
+    monkeypatch.setattr(
+        market_reports, "extract_pdf_pages", lambda _data: ["Readable page."]
+    )
+    monkeypatch.setattr(
+        market_reports,
+        "get_embedding_service",
+        lambda: FakeEmbeddings(),
+    )
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    app.dependency_overrides[market_reports.require_manage_users_request] = lambda: {
+        "sub": "owner-sub"
+    }
+    client = TestClient(app)
+
+    response = client.post(
+        "/market/reports",
+        data={"title": "Retry succeeds", "visibility": "public"},
+        files={"file": ("retry.pdf", b"%PDF-test", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["duplicate"] is False
+    assert response.json()["report"]["status"] == "claims_pending"
+    assert database.deleted == [("failed-report", "owner-sub")]
+
+
+def test_failed_report_retry_cleanup_only_deletes_owned_failed_rows(tmp_path):
+    from sqlalchemy import create_engine
+    from maya_sawa.databases.market_reports_db import MarketReportsDatabase
+
+    db = MarketReportsDatabase(create_engine(f"sqlite:///{tmp_path / 'retry.db'}"))
+    failed = db.save_failed(
+        title="Failed",
+        publisher="",
+        published_at=None,
+        visibility="public",
+        uploaded_by="owner",
+        digest="failed-digest",
+        pdf=b"%PDF-failed",
+        reason="Embedding failed",
+        page_count=1,
+        pages=["Text"],
+    )
+    ready, _ = db.ingest(
+        title="Ready",
+        publisher="",
+        published_at=None,
+        visibility="public",
+        uploaded_by="owner",
+        digest="ready-digest",
+        pdf=b"%PDF-ready",
+        pages=["Text"],
+        chunks=[{"page": 1, "seq": 0, "text": "Text"}],
+        vectors=[[0.0] * 1536],
+    )
+
+    assert db.delete_failed_owned(failed["id"], "someone-else") is False
+    assert db.delete_failed_owned(ready["id"], "owner") is False
+    assert db.delete_failed_owned(failed["id"], "owner") is True
+    assert db.find_by_digest("failed-digest") is None
+    assert db.find_by_digest("ready-digest")["id"] == ready["id"]
+
+
+def test_embedding_failure_returns_the_saved_failed_report(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+
+    class FakeDatabase:
+        def find_by_digest(self, _digest):
+            return None
+
+        def save_failed(self, **kwargs):
+            return {
+                "id": "failed-report",
+                "title": kwargs["title"],
+                "visibility": kwargs["visibility"],
+                "status": "failed",
+                "failure_reason": kwargs["reason"],
+                "uploaded_by": kwargs["uploaded_by"],
+            }
+
+    class FailedEmbeddings:
+        def embed_documents(self, _texts):
+            raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(market_reports, "market_reports_db", FakeDatabase())
+    monkeypatch.setattr(market_reports, "report_digest", lambda _data: "new-digest")
+    monkeypatch.setattr(
+        market_reports, "extract_pdf_pages", lambda _data: ["Readable page."]
+    )
+    monkeypatch.setattr(
+        market_reports, "get_embedding_service", lambda: FailedEmbeddings()
+    )
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    app.dependency_overrides[market_reports.require_manage_users_request] = lambda: {
+        "sub": "owner-sub"
+    }
+    client = TestClient(app)
+
+    response = client.post(
+        "/market/reports",
+        data={"title": "Embedding failure", "visibility": "public"},
+        files={"file": ("failed.pdf", b"%PDF-test", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["duplicate"] is False
+    assert response.json()["report"]["status"] == "failed"
+
+
 def test_report_upload_requires_owner_and_pdf_metadata(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

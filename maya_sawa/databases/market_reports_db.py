@@ -230,6 +230,21 @@ class MarketReportsDatabase:
             session.delete(report)
             return True
 
+    def delete_failed_owned(self, report_id, owner):
+        """Remove an owned failed row so the same PDF can be ingested again."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            report = (
+                session.query(MarketReport)
+                .filter_by(id=report_id, uploaded_by=owner, status="failed")
+                .first()
+            )
+            if not report:
+                return False
+            session.delete(report)
+            return True
+
     def pending_claims(self):
         if not self.sessions:
             raise RuntimeError("Market reports database unavailable")

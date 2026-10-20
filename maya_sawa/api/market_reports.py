@@ -91,7 +91,25 @@ async def upload_report(
     # Avoid spending embedding calls when this exact file is already stored.
     existing = market_reports_db.find_by_digest(digest)
     if existing:
-        return {"report": report_for_viewer(existing, uploaded_by), "duplicate": True}
+        if (
+            existing.get("status") == "failed"
+            and existing.get("uploaded_by") == uploaded_by
+        ):
+            # A failed attempt owns the digest but has no usable vectors. Let the same
+            # uploader retry, while the database check prevents deleting a row that
+            # another concurrent request has already repaired.
+            removed = market_reports_db.delete_failed_owned(existing["id"], uploaded_by)
+            if not removed:
+                existing = market_reports_db.find_by_digest(digest) or existing
+                return {
+                    "report": report_for_viewer(existing, uploaded_by),
+                    "duplicate": True,
+                }
+        else:
+            return {
+                "report": report_for_viewer(existing, uploaded_by),
+                "duplicate": True,
+            }
     try:
         pages = extract_pdf_pages(data)
     except ValueError as exc:
@@ -132,7 +150,7 @@ async def upload_report(
     except Exception as exc:
         logger.exception("Market report ingestion failed")
         try:
-            await asyncio.to_thread(
+            stored = await asyncio.to_thread(
                 market_reports_db.save_failed,
                 title=title.strip(),
                 publisher=publisher.strip(),
@@ -147,9 +165,13 @@ async def upload_report(
             )
         except Exception:
             logger.exception("Could not record failed market report")
-        raise HTTPException(
-            status_code=503, detail="Report extraction or embedding failed"
-        ) from exc
+            raise HTTPException(
+                status_code=503, detail="Report extraction or embedding failed"
+            ) from exc
+        return {
+            "report": report_for_viewer(stored, uploaded_by),
+            "duplicate": False,
+        }
 
 
 @router.get("")
