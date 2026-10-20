@@ -269,6 +269,12 @@ async def _startup_event():
         except Exception as e:
             logger.error(f"Failed to start TDnet financials collection: {e}")
 
+        try:
+            from .services.dart_financials import dart_financials_collector
+            await dart_financials_collector.start()
+        except Exception as e:
+            logger.error(f"Failed to start OpenDART financials collection: {e}")
+
         # 執行初始文章同步（如果啟用）
         if Config.ENABLE_AUTO_SYNC_ON_STARTUP:
             logger.info("應用程式啟動，開始執行初始文章同步...")
@@ -347,6 +353,11 @@ async def _shutdown_event():
             await tdnet_financials_collector.close()
         except Exception as e:
             logger.error(f"Error stopping TDnet financials collection: {e}")
+        try:
+            from .services.dart_financials import dart_financials_collector
+            await dart_financials_collector.close()
+        except Exception as e:
+            logger.error(f"Error stopping OpenDART financials collection: {e}")
 
         logger.info("應用程式關閉，排程任務與服務已停止")
     except Exception as e:

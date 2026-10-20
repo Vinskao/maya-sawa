@@ -195,8 +195,18 @@ def _with_margins(row: dict) -> dict:
     return row
 
 
-def build_financials(releases: list[dict]) -> dict:
-    """Merge stored releases (oldest first; later corrections win) into the SEC-shaped payload the page draws."""
+JP_NOTES = ["All monetary amounts are JPY, not millions; EPS is JPY/share.",
+            "Japan has no statutory quarterly reports since 2024: 決算短信 report year-to-date figures, and a single "
+            "quarter after Q1 is the difference of two consecutive year-to-date releases (derivedFromYtd).",
+            "TDnet keeps about one month of disclosures; history starts when collection started.",
+            "Forecasts are the company's own guidance, not analyst consensus."]
+
+
+def build_financials(releases: list[dict], *, currency: str = "JPY", source: str = SOURCE, notes: list[str] | None = None) -> dict:
+    """Merge stored releases (oldest first; later corrections win) into the SEC-shaped payload the page draws.
+
+    Shared with OpenDART (dart_financials.py). A quarter reported as three months beats the same quarter derived
+    from year-to-date differences."""
     durations: dict = {}
     instants: dict = {}
     forecasts: dict = {}
@@ -204,11 +214,11 @@ def build_financials(releases: list[dict]) -> dict:
     for release in ordered:
         evidence = {"releasedAt": release.get("releasedAt"), "title": release.get("title"), "zipUrl": release.get("zipUrl")}
         for row in release.get("durations", []):
-            durations[(row["start"], row["end"])] = {**row, "currency": "JPY", "evidence": evidence}
+            durations[(row["start"], row["end"])] = {**row, "currency": currency, "evidence": evidence}
         for row in release.get("instants", []):
-            instants[row["end"]] = {**row, "currency": "JPY", "evidence": evidence}
+            instants[row["end"]] = {**row, "currency": currency, "evidence": evidence}
         for row in release.get("forecasts", []):
-            forecasts[(row["start"], row["end"])] = {**row, "currency": "JPY", "evidence": evidence}
+            forecasts[(row["start"], row["end"])] = {**row, "currency": currency, "evidence": evidence}
     quarterly, cumulative, annual = [], [], []
     by_start: dict = {}
     for row in durations.values():
@@ -227,26 +237,24 @@ def build_financials(releases: list[dict]) -> dict:
             previous = rows[index - 1] if index else None
             if previous and 75 <= days - previous["durationDays"] <= 105:
                 quarter = {"start": (date.fromisoformat(previous["end"]) + timedelta(days=1)).isoformat(), "end": row["end"],
-                           "durationDays": days - previous["durationDays"], "currency": "JPY", "periodType": "quarterly",
+                           "durationDays": days - previous["durationDays"], "currency": currency, "periodType": "quarterly",
                            "derivedFromYtd": True, "evidence": row["evidence"], "epsBasic": None, "epsDiluted": None}
                 for metric in ADDITIVE:
                     a, b = row.get(metric), previous.get(metric)
                     quarter[metric] = a - b if a is not None and b is not None else None
                 quarterly.append(_with_margins(quarter))
+    reported = {(row["start"], row["end"]) for row in quarterly if not row.get("derivedFromYtd")}
+    quarterly = [row for row in quarterly if not row.get("derivedFromYtd") or (row["start"], row["end"]) not in reported]
     latest = ordered[-1] if ordered else {}
     return {
-        "source": SOURCE, "standard": latest.get("standard"), "company": latest.get("company"),
+        "source": source, "standard": latest.get("standard"), "company": latest.get("company"),
         "sourceUrl": latest.get("zipUrl"),
         "quarterly": sorted(quarterly, key=lambda row: row["end"])[-12:],
         "annual": sorted(annual, key=lambda row: row["end"])[-12:],
         "cumulative": sorted(cumulative, key=lambda row: row["end"])[-12:],
         "balanceSheet": sorted(instants.values(), key=lambda row: row["end"])[-12:],
         "forecasts": sorted(forecasts.values(), key=lambda row: row["end"])[-4:],
-        "notes": ["All monetary amounts are JPY, not millions; EPS is JPY/share.",
-                  "Japan has no statutory quarterly reports since 2024: 決算短信 report year-to-date figures, and a single "
-                  "quarter after Q1 is the difference of two consecutive year-to-date releases (derivedFromYtd).",
-                  "TDnet keeps about one month of disclosures; history starts when collection started.",
-                  "Forecasts are the company's own guidance, not analyst consensus."],
+        "notes": notes if notes is not None else JP_NOTES,
     }
 
 
