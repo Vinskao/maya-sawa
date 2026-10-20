@@ -78,6 +78,81 @@ def test_due_retries_errors_without_refetching_cached_success():
     assert collector.due('META', 'US', 'history_raw', 86400)
 
 
+def test_failed_attempts_are_retried_at_once_when_the_session_comes_back():
+    db = IbkrResearchDatabase(engine=create_engine('sqlite://'))
+    collector = IbkrResearchCollector(db=db)
+    db.save('META', 'US', 107113386, 'history_raw', {'reason': 'HTTPStatusError'}, status='unavailable')
+    db.save('META', 'US', 107113386, 'profile', {'company_name': 'META'})
+    assert not collector.due('META', 'US', 'history_raw', 6 * 3600)  # normal backoff after an error
+    assert collector.due('META', 'US', 'history_raw', 6 * 3600, retry_failed=True)
+    assert not collector.due('META', 'US', 'profile', 86400, retry_failed=True)  # successes keep their cache
+
+
+class GatewayResponse:
+    def __init__(self, data, status_code=200):
+        self.data, self.status_code = data, status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(self.status_code)
+
+    def json(self):
+        return self.data
+
+
+def test_market_data_session_is_recorded_from_gateway_auth_status(monkeypatch):
+    from maya_sawa.services import ibkr_market
+    db = IbkrResearchDatabase(engine=create_engine('sqlite://', poolclass=StaticPool, connect_args={'check_same_thread': False}))
+    monkeypatch.setattr(ibkr_market, 'get_ibkr_research_db', lambda: db)
+    # Real /iserver/auth/status payload on 2026-10-20 (portfolio reads were still 200), then after a login.
+    replies = iter([{'authenticated': False, 'established': False, 'competing': False, 'connected': False, 'MAC': 'b6:ee:b9:42:b1:78'},
+                    {'authenticated': True, 'established': True, 'competing': False, 'connected': True, 'MAC': 'b6:ee:b9:42:b1:78'},
+                    {'authenticated': True, 'established': True, 'competing': False, 'connected': True, 'MAC': 'b6:ee:b9:42:b1:78'}])
+    posted = []
+
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def post(self, url):
+            posted.append(url)
+            return GatewayResponse(next(replies))
+
+    service = ibkr_market.IbkrMarketService()
+    monkeypatch.setattr(service, '_client', lambda: Client())
+    assert asyncio.run(service.market_data_session()) == (False, False)
+    assert db.latest('ACCOUNT', 'PRIVATE', 'iserver_session') is None
+    assert asyncio.run(service.market_data_session()) == (True, True)  # live again: retry failed fetches now
+    assert asyncio.run(service.market_data_session()) == (True, False)
+    assert posted[0].endswith('/iserver/auth/status')
+    assert 'MAC' not in str(db.latest('ACCOUNT', 'PRIVATE', 'iserver_session'))
+
+
+def test_refresh_skips_market_data_while_logged_out_and_catches_up_after_login(monkeypatch):
+    from maya_sawa.services import ibkr_market, market_automation
+    service = ibkr_market.IbkrMarketService()
+    collected, checks = [], []
+    sessions = iter([(False, False), (True, True)])
+
+    async def refreshed(): return True
+    async def snapshot(): return {'positions': [{'code': 'META'}]}
+    async def session(): return next(sessions)
+    async def collect(gateway, positions, retry_failed=False): collected.append(retry_failed)
+    async def check(store, source): checks.append(1)
+
+    monkeypatch.setattr(service, 'refresh_cache_now', refreshed)
+    monkeypatch.setattr(service, 'get_snapshot', snapshot)
+    monkeypatch.setattr(service, 'market_data_session', session)
+    monkeypatch.setattr(ibkr_market.ibkr_research_collector, 'collect', collect)
+    monkeypatch.setattr(market_automation, 'check', check)
+    monkeypatch.setattr(market_automation, 'automation_store', lambda: None)
+    monkeypatch.setattr(market_automation, 'IbkrSource', lambda: None)
+    asyncio.run(service.refresh_once())
+    assert collected == []  # no /iserver calls that can only fail
+    asyncio.run(service.refresh_once())
+    assert collected == [True]
+    assert len(checks) == 2  # routines are checked either way, so the status (and login prompt) stays current
+
+
 def test_positions_keep_broker_identity_for_collection():
     from maya_sawa.services.ibkr_market import IbkrMarketService
     rows = IbkrMarketService._build_positions([{'conid': 13905743, 'ticker': '6857', 'name': 'ADVANTEST',

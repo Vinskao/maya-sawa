@@ -50,9 +50,19 @@ def test_us_run_waits_for_us_bars_and_ignores_asian_markets():
 
 def test_ib_session_counts_as_live_only_while_the_gateway_is_being_polled():
     now = datetime(2026, 10, 19, 10, 0, tzinfo=timezone.utc)
-    assert ib_authenticated(now - timedelta(minutes=5), now)
-    assert not ib_authenticated(now - timedelta(hours=2), now)
-    assert not ib_authenticated(None, now)
+    fresh = now - timedelta(minutes=5)
+    assert ib_authenticated(fresh, fresh, now)
+    assert not ib_authenticated(now - timedelta(hours=2), fresh, now)
+    assert not ib_authenticated(None, fresh, now)
+
+
+def test_ib_needs_the_market_data_session_not_just_portfolio_reads():
+    # 2026-10-19/20: /portfolio/* kept answering 200 while /iserver/auth/status said authenticated=false
+    # ("no bridge"), so no bars were collected for a day and the site never asked for a login.
+    now = datetime(2026, 10, 20, 3, 0, tzinfo=timezone.utc)
+    fresh = now - timedelta(minutes=3)
+    assert not ib_authenticated(fresh, now - timedelta(hours=14), now)
+    assert not ib_authenticated(fresh, None, now)
 
 
 def test_store_claims_each_session_once(tmp_path):
@@ -66,11 +76,15 @@ def test_store_claims_each_session_once(tmp_path):
 
 
 class FakeSource:
-    def __init__(self, portfolio_at, positions, bars):
+    def __init__(self, portfolio_at, positions, bars, market_data_at="same"):
         self.portfolio_at, self.positions, self.bars = portfolio_at, positions, bars
+        self.market_data_at = portfolio_at if market_data_at == "same" else market_data_at
 
     def last_portfolio_at(self):
         return self.portfolio_at
+
+    def last_market_data_at(self):
+        return self.market_data_at
 
     def overseas_positions(self):
         return self.positions
@@ -122,6 +136,11 @@ def test_failed_fire_is_released_and_stale_ib_asks_for_login(tmp_path, monkeypat
     status = asyncio.run(automation.check(store, stale, now))
     assert status["ib"]["authenticated"] is False
     assert {r["key"]: r["state"] for r in status["runs"]}["taiwan"] == "waiting-ib"
+
+    portfolio_only = FakeSource(now - timedelta(minutes=3), [("6857", "JP")], {("6857", "JP"): tpe(16, 19)},
+                                market_data_at=tpe(19, 13).astimezone(timezone.utc))
+    status = asyncio.run(automation.check(store, portfolio_only, now))
+    assert status["ib"]["authenticated"] is False  # the owner is asked to log in again
 
 
 def test_owner_only_endpoint_runs_the_check(tmp_path, monkeypatch):

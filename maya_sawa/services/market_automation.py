@@ -54,8 +54,13 @@ def session_date(run: RoutineRun, now: datetime) -> date | None:
     return None
 
 
-def ib_authenticated(last_portfolio_at: datetime | None, now: datetime) -> bool:
-    return last_portfolio_at is not None and now - last_portfolio_at <= IB_STALE_AFTER
+def ib_authenticated(last_portfolio_at: datetime | None, last_market_data_at: datetime | None, now: datetime) -> bool:
+    """Both the portfolio reads and the market-data session (/iserver/auth/status) must be fresh.
+
+    Portfolio reads can keep answering after the market-data session lapsed ("no bridge"), and only the latter
+    collects overseas bars.
+    """
+    return all(at is not None and now - at <= IB_STALE_AFTER for at in (last_portfolio_at, last_market_data_at))
 
 
 def due_runs(now: datetime, fired: dict[str, date], collected_at: dict[str, datetime | None]) -> list[RoutineRun]:
@@ -150,6 +155,11 @@ class IbkrSource:
         row = self.db.latest("ACCOUNT", "PRIVATE", "portfolio")
         return datetime.fromisoformat(row["fetchedAt"]) if row else None
 
+    def last_market_data_at(self) -> datetime | None:
+        """Last time the gateway reported an authenticated market-data session."""
+        row = self.db.latest("ACCOUNT", "PRIVATE", "iserver_session")
+        return datetime.fromisoformat(row["fetchedAt"]) if row else None
+
     def overseas_positions(self) -> list[tuple[str, str]]:
         from .ibkr_research import MARKETS
         row = self.db.latest("ACCOUNT", "PRIVATE", "portfolio")
@@ -166,7 +176,7 @@ async def check(store: AutomationStore, source, now: datetime | None = None) -> 
     """Report the IBKR session and each routine's state for today, firing the ones that are due."""
     now = now or datetime.now(timezone.utc)
     last_seen = source.last_portfolio_at()
-    authenticated = ib_authenticated(last_seen, now)
+    authenticated = ib_authenticated(last_seen, source.last_market_data_at(), now)
     collected: dict[str, datetime | None] = {}
     for code, market in source.overseas_positions():  # a market is as fresh as its stalest holding
         at = source.bars_collected_at(code, market)

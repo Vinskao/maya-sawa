@@ -49,6 +49,14 @@ IBKR needs a manual login about once a day, so Japan, Korea and US bars only arr
   - when the owner opens the site (`POST /market/automation/check`).
 
   The site then shows an IB login reminder and each run's state.
+- **What "logged in" means:** the portfolio reads *and* the gateway's market-data session (`POST /iserver/auth/status`,
+  `authenticated` and `connected`) were both seen within 15 minutes. The two lapse separately: on 2026-10-19/20 the
+  portfolio kept answering while `/iserver` returned `400 no bridge`, so no bars came in for a day and, because only the
+  portfolio was checked, no login reminder appeared. Each 4-minute pass now records the session as
+  `ACCOUNT/PRIVATE/iserver_session`.
+- **While logged out:** `/iserver` collection is skipped instead of failing every few minutes. On the first pass after a
+  login, failed fetches are retried at once instead of waiting out the one-hour error backoff, so the bars arrive
+  within about 4 minutes and the due routines can fire.
 - **Fire tokens:** routine API trigger tokens, held in the optional Jenkins credentials `MARKET_ROUTINE_TAIWAN_TOKEN` and
   `MARKET_ROUTINE_US_TOKEN`. Jenkins puts them in the k8s Secret `market-routine-fire`. Without them, nothing is fired
   and runs report `not-configured`.

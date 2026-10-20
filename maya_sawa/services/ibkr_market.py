@@ -122,21 +122,47 @@ class IbkrMarketService:
             logger.exception("Failed to write IBKR snapshot to Redis")
         return True
 
+    async def market_data_session(self) -> tuple[bool, bool]:
+        """(live, resumed) for the gateway's market-data session, recorded for market_automation.
+
+        Portfolio reads keep working after this session lapses ("no bridge"), so it is checked on its own.
+        Only authenticated observations count as successful, so `latest` is the last time it was live.
+        """
+        db = get_ibkr_research_db()
+        previous = await asyncio.to_thread(db.latest, 'ACCOUNT', 'PRIVATE', 'iserver_session', successful=False)
+        try:
+            async with self._client() as client:
+                resp = await client.post(f"{self._base}/iserver/auth/status")
+            resp.raise_for_status()
+            state = resp.json()
+            live = bool(state.get('authenticated')) and bool(state.get('connected'))
+        except Exception:
+            live = False
+        await asyncio.to_thread(db.save, 'ACCOUNT', 'PRIVATE', 0, 'iserver_session', {'authenticated': live},
+                                status='ok' if live else 'unavailable')
+        return live, live and (previous is None or previous['status'] != 'ok')
+
+    async def refresh_once(self) -> None:
+        if not await self.refresh_cache_now():
+            return
+        try:
+            live, resumed = await self.market_data_session()
+            if live:
+                snapshot = await self.get_snapshot()
+                await ibkr_research_collector.collect(self, snapshot.get('positions', []), retry_failed=resumed)
+        except Exception:
+            logger.exception("IBKR research collection failed; portfolio remains available")
+        try:
+            # Fresh overseas bars may make an analysis routine due, and the status drives the login prompt.
+            from . import market_automation
+            await market_automation.check(market_automation.automation_store(), market_automation.IbkrSource())
+        except Exception:
+            logger.exception("Market routine check failed")
+
     async def _refresh_loop(self) -> None:
         while True:
             try:
-                if await self.refresh_cache_now():
-                    try:
-                        snapshot = await self.get_snapshot()
-                        await ibkr_research_collector.collect(self, snapshot.get('positions', []))
-                    except Exception:
-                        logger.exception("IBKR research collection failed; portfolio remains available")
-                    try:
-                        # Fresh overseas bars may make an analysis routine due (see market_automation).
-                        from . import market_automation
-                        await market_automation.check(market_automation.automation_store(), market_automation.IbkrSource())
-                    except Exception:
-                        logger.exception("Market routine check failed")
+                await self.refresh_once()
                 await asyncio.sleep(self._cache_seconds)
             except asyncio.CancelledError:
                 raise

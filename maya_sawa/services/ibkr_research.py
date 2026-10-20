@@ -117,14 +117,16 @@ class IbkrResearchCollector:
     def db(self):
         return self._db or get_ibkr_research_db()
 
-    def due(self, code, market, kind, seconds):
+    def due(self, code, market, kind, seconds, retry_failed=False):
         attempt = self.db.latest(code, market, kind, successful=False)
         if not attempt:
+            return True
+        if retry_failed and attempt['status'] != 'ok':  # the session just came back; don't wait out the backoff
             return True
         elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(attempt['fetchedAt'])).total_seconds()
         return elapsed >= (seconds if attempt['status'] == 'ok' else min(seconds, 3600))
 
-    async def collect(self, gateway, positions):
+    async def collect(self, gateway, positions, retry_failed=False):
         if self.lock.locked():
             return
         async with self.lock, gateway._client() as client:
@@ -135,7 +137,7 @@ class IbkrResearchCollector:
                     continue
                 code = p['code']
                 for kind, seconds in [('profile', 7 * 86400), ('history_raw', 6 * 3600), ('quote', 240)]:
-                    if not await asyncio.to_thread(self.due, code, market, kind, seconds):
+                    if not await asyncio.to_thread(self.due, code, market, kind, seconds, retry_failed):
                         continue
                     try:
                         if kind == 'profile':
