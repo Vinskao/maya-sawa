@@ -1,0 +1,437 @@
+from datetime import date
+
+import pytest
+
+from maya_sawa.services.market_reports import (
+    chunk_pages,
+    extract_pdf_pages,
+    MAX_REPORT_BYTES,
+    validate_claims,
+)
+
+
+def text_pdf(pages):
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{' '.join(f'{3 + i * 3} 0 R' for i in range(len(pages)))}] /Count {len(pages)} >>".encode(),
+    ]
+    for index, text in enumerate(pages):
+        page_id = 3 + index * 3
+        stream_id = page_id + 2
+        content = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode("ascii")
+        objects.extend(
+            [
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents {stream_id} 0 R >>".encode(),
+                (
+                    b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+                    if index == 0
+                    else b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+                ),
+                f"<< /Length {len(content)} >>\nstream\n".encode()
+                + content
+                + b"\nendstream",
+            ]
+        )
+    output = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for number, obj in enumerate(objects, 1):
+        offsets.append(len(output))
+        output.extend(f"{number} 0 obj\n".encode() + obj + b"\nendobj\n")
+    xref = len(output)
+    output.extend(f"xref\n0 {len(offsets)}\n0000000000 65535 f \n".encode())
+    for offset in offsets[1:]:
+        output.extend(f"{offset:010} 00000 n \n".encode())
+    output.extend(
+        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF".encode()
+    )
+    return bytes(output)
+
+
+def test_extracts_text_with_original_page_numbers_from_text_pdf():
+    # Minimal, secret-free text PDF fixture; pypdf parses real page objects and text operators.
+    assert extract_pdf_pages(
+        text_pdf(
+            [
+                "Memory makers expect tight supply through 2027.",
+                "Advanced packaging capacity remains constrained.",
+            ]
+        )
+    ) == [
+        "Memory makers expect tight supply through 2027.",
+        "Advanced packaging capacity remains constrained.",
+    ]
+
+
+def test_chunks_stay_within_page_and_keep_sentence_boundaries():
+    pages = ["First sentence. Second sentence. Third sentence.", "Separate page text."]
+    chunks = chunk_pages(pages, max_chars=24)
+    assert [(c["page"], c["text"]) for c in chunks] == [
+        (1, "First sentence."),
+        (1, "Second sentence."),
+        (1, "Third sentence."),
+        (2, "Separate page text."),
+    ]
+
+
+def test_scanned_pdf_fails_with_ocr_reason_and_retains_page_count(monkeypatch):
+    from maya_sawa.services import market_reports
+
+    class EmptyPage:
+        def extract_text(self):
+            return ""
+
+    class ScannedReader:
+        def __init__(self, _stream, strict=False):
+            self.pages = [EmptyPage(), EmptyPage(), EmptyPage()]
+
+    monkeypatch.setattr(market_reports, "PdfReader", ScannedReader)
+    with pytest.raises(ValueError, match="OCR") as error:
+        extract_pdf_pages(b"%PDF-scanned")
+    assert error.value.page_count == 3
+
+
+def test_pdf_validation_rejects_non_pdf_and_files_over_40_mib():
+    from maya_sawa.services.market_reports import validate_pdf
+
+    with pytest.raises(ValueError, match="PDF"):
+        validate_pdf("notes.txt", "text/plain", b"not a pdf")
+    with pytest.raises(ValueError, match="40 MB"):
+        validate_pdf("large.pdf", "application/pdf", b"%PDF-" + b"x" * MAX_REPORT_BYTES)
+
+
+def test_report_visibility_never_exposes_owner_pdf_to_public():
+    from maya_sawa.services.market_reports import report_for_viewer
+
+    report = {
+        "id": "r1",
+        "visibility": "owner",
+        "uploaded_by": "owner-sub",
+        "pdf": b"secret",
+        "text": "full text",
+    }
+    assert report_for_viewer(report, None) is None
+    assert "text" not in report_for_viewer(report, "owner-sub")
+    visible = report_for_viewer(report, "owner-sub", include_text=True)
+    assert visible["text"] == "full text"
+    assert "pdf" not in visible
+
+
+def test_duplicate_digest_is_the_same_report_and_claims_validation_is_bounded():
+    from maya_sawa.services.market_reports import validate_claims
+
+    valid = [
+        {
+            "page": 1,
+            "segment": "memory",
+            "codes": ["2408"],
+            "dimension": "cycle",
+            "direction": "tailwind",
+            "claim": "Tight supply supports pricing.",
+            "evidence": "2027 outlook",
+            "as_of": date(2026, 9, 15).isoformat(),
+        }
+    ]
+    assert validate_claims(valid, page_count=1)[0]["codes"] == ["2408"]
+    with pytest.raises(ValueError, match="page"):
+        validate_claims([{**valid[0], "page": 2}], page_count=1)
+
+
+def test_report_api_owner_upload_duplicate_and_private_pdf_rules(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+
+    class FakeDatabase:
+        stored = {
+            "id": "existing",
+            "title": "Public report",
+            "publisher": "Publisher",
+            "visibility": "public",
+            "status": "ready",
+            "page_count": 1,
+            "text": "private full text",
+            "claim_count": 0,
+            "claims": [],
+        }
+        uploader = "owner-sub"
+
+        def find_by_digest(self, digest):
+            return (
+                {**self.stored, "uploaded_by": self.uploader}
+                if digest == "duplicate-digest"
+                else None
+            )
+
+        def list_reports(self, owner):
+            rows = [
+                {**self.stored, "uploaded_by": self.uploader},
+                {
+                    **self.stored,
+                    "id": "private",
+                    "visibility": "owner",
+                    "uploaded_by": "someone-else",
+                },
+            ]
+            return [
+                row
+                for row in rows
+                if row["visibility"] == "public" or row["uploaded_by"] == owner
+            ]
+
+        def get_report(self, report_id, *, include_pdf=False):
+            if report_id != "private":
+                return None
+            return (
+                {**self.stored, "id": report_id, "visibility": "owner"},
+                b"%PDF-original" if include_pdf else None,
+                self.uploader,
+            )
+
+    class FakeEmbeddings:
+        def embed_documents(self, texts):
+            return [[0.0] * 1536 for _ in texts]
+
+    database = FakeDatabase()
+    monkeypatch.setattr(market_reports, "market_reports_db", database)
+    monkeypatch.setattr(
+        market_reports, "get_embedding_service", lambda: FakeEmbeddings()
+    )
+    monkeypatch.setattr(
+        market_reports, "report_digest", lambda _data: "duplicate-digest"
+    )
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    app.dependency_overrides[market_reports.require_manage_users_request] = lambda: {
+        "sub": "owner-sub"
+    }
+    app.dependency_overrides[market_reports._optional_owner] = lambda: None
+    client = TestClient(app)
+
+    duplicate = client.post(
+        "/market/reports",
+        data={"title": "Same", "visibility": "public"},
+        files={"file": ("same.pdf", b"%PDF-test", "application/pdf")},
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["duplicate"] is True
+    listing = client.get("/market/reports").json()["reports"]
+    assert [row["id"] for row in listing] == ["existing"]
+    assert "text" not in listing[0] and "uploaded_by" not in listing[0]
+
+    assert client.get("/market/reports/private").status_code == 404
+    app.dependency_overrides[market_reports._optional_owner] = lambda: {
+        "sub": "owner-sub"
+    }
+    assert client.get("/market/reports/private").status_code == 200
+    assert (
+        client.get("/market/reports/private?download=true").content == b"%PDF-original"
+    )
+
+
+def test_report_upload_requires_owner_and_pdf_metadata(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    client = TestClient(app)
+    assert (
+        client.post(
+            "/market/reports",
+            files={"file": ("r.pdf", b"%PDF-x", "application/pdf")},
+            data={"title": "Report"},
+        ).status_code
+        == 401
+    )
+    app.dependency_overrides[market_reports.require_manage_users_request] = lambda: {
+        "sub": "owner"
+    }
+    assert (
+        client.post(
+            "/market/reports",
+            files={"file": ("r.txt", b"no", "text/plain")},
+            data={"title": "Report"},
+        ).status_code
+        == 422
+    )
+
+
+def test_scanned_upload_is_saved_as_failed_with_ocr_reason(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+    from maya_sawa.services.market_reports import PDFTextExtractionError
+
+    class FakeDatabase:
+        failed = None
+
+        def find_by_digest(self, digest):
+            return None
+
+        def save_failed(self, **kwargs):
+            self.failed = kwargs
+            return {
+                "id": "r1",
+                "title": kwargs["title"],
+                "status": "failed",
+                "page_count": kwargs["page_count"],
+                "failure_reason": kwargs["reason"],
+                "visibility": kwargs["visibility"],
+            }
+
+    database = FakeDatabase()
+    monkeypatch.setattr(market_reports, "market_reports_db", database)
+
+    def extraction_failure(_data):
+        raise PDFTextExtractionError("PDF has no text layer; OCR is required", 2)
+
+    monkeypatch.setattr(market_reports, "extract_pdf_pages", extraction_failure)
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    app.dependency_overrides[market_reports.require_manage_users_request] = lambda: {
+        "sub": "owner"
+    }
+    client = TestClient(app)
+    response = client.post(
+        "/market/reports",
+        data={"title": "Scan"},
+        files={"file": ("scan.pdf", b"%PDF-scan", "application/pdf")},
+    )
+    assert response.status_code == 200
+    assert response.json()["report"]["status"] == "failed"
+    assert response.json()["report"]["page_count"] == 2
+    assert "OCR" in response.json()["report"]["failure_reason"]
+
+
+def test_database_deduplicates_and_cascades_chunks_and_claims(tmp_path):
+    from sqlalchemy import create_engine, event, text
+    from maya_sawa.databases.market_reports_db import MarketReportsDatabase
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'reports.db'}")
+    event.listen(
+        engine,
+        "connect",
+        lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"),
+    )
+    db = MarketReportsDatabase(engine)
+    pages = ["First page text.", "Second page text."]
+    chunks = chunk_pages(pages)
+    kwargs = dict(
+        title="Sample",
+        publisher="Research",
+        published_at=None,
+        visibility="public",
+        uploaded_by="owner",
+        digest="same-sha",
+        pdf=b"%PDF-test",
+        pages=pages,
+        chunks=chunks,
+        vectors=[[0.0] * 1536 for _ in chunks],
+    )
+    first, duplicate = db.ingest(**kwargs)
+    second, duplicate_again = db.ingest(**kwargs)
+    assert first["id"] == second["id"]
+    assert duplicate is False and duplicate_again is True
+    report_id = first["id"]
+    assert "=====PAGE 2=====\nSecond page text." in first["text"]
+    private, _ = db.ingest(
+        **{
+            **kwargs,
+            "title": "Private",
+            "visibility": "owner",
+            "digest": "private-sha",
+            "uploaded_by": "owner",
+        }
+    )
+    assert [row["title"] for row in db.list_reports(None)] == ["Sample"]
+    assert {row["title"] for row in db.list_reports("owner")} == {"Sample", "Private"}
+
+    claim = {
+        "page": 2,
+        "segment": "memory",
+        "codes": ["2408"],
+        "dimension": "cycle",
+        "direction": "tailwind",
+        "claim": "Tight memory supply.",
+        "evidence": "FY27 guidance",
+        "as_of": "2026-09-15",
+    }
+    assert db.replace_claims(report_id, validate_claims([claim], 2), "Claude routine")
+    assert db.get_report(report_id)[0]["claims"][0]["page"] == 2
+    assert db.delete_owned(report_id, "other-owner") is False
+    assert db.delete_owned(report_id, "owner") is True
+    assert db.delete_owned(private["id"], "owner") is True
+    with db.sessions() as session:
+        assert (
+            session.execute(
+                text("select count(*) from maya_sawa_market_report_chunks")
+            ).scalar()
+            == 0
+        )
+        assert (
+            session.execute(
+                text("select count(*) from maya_sawa_market_report_claims")
+            ).scalar()
+            == 0
+        )
+
+
+def test_claim_api_requires_agent_key_and_validates_claim_pages(monkeypatch):
+    import hashlib
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+
+    class FakeDatabase:
+        def page_count(self, report_id):
+            return 1
+
+        def replace_claims(self, report_id, claims, extracted_by):
+            return report_id == "r1"
+
+    monkeypatch.setattr(market_reports, "market_reports_db", FakeDatabase())
+    key = "test-reports-agent-key"
+    monkeypatch.setenv(
+        "MARKET_AGENT_KEY_SHA256", hashlib.sha256(key.encode()).hexdigest()
+    )
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    client = TestClient(app)
+    endpoint = "/market/reports/r1/claims"
+    claim = {
+        "page": 1,
+        "segment": "memory",
+        "codes": ["2408"],
+        "dimension": "cycle",
+        "direction": "tailwind",
+        "claim": "Supply remains constrained.",
+        "evidence": "FY27",
+    }
+    assert (
+        client.put(
+            endpoint, json={"claims": [claim], "extracted_by": "Claude"}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.put(
+            endpoint,
+            json={"claims": [{**claim, "page": 2}], "extracted_by": "Claude"},
+            headers={"X-Market-Agent-Key": key},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.put(
+            endpoint,
+            json={"claims": [{**claim, "direction": "long"}], "extracted_by": "Claude"},
+            headers={"X-Market-Agent-Key": key},
+        ).status_code
+        == 422
+    )
+    assert client.put(
+        endpoint,
+        json={"claims": [claim], "extracted_by": "Claude"},
+        headers={"X-Market-Agent-Key": key},
+    ).json() == {"saved": True, "claim_count": 1}

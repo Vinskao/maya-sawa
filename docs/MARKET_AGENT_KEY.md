@@ -5,9 +5,10 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
 
 - **Server side:** `MARKET_AGENT_KEY_SHA256` in `k8s/deployment.yaml` holds only the key's SHA-256. The repository
   and the deployment config never contain a usable secret.
-- **Scope:** the key can only call `PUT /market/dashboard/analysis/{code}` for `productType` stock, futures or macro.
-  - Research maps return 403.
-  - Every other endpoint still requires a login.
+- **Scope:** the key can call `PUT /market/dashboard/analysis/{code}` for `productType` stock, futures or macro, and the
+  report-library routine endpoints `GET /market/reports/pending`, `PUT /market/reports/{id}/claims`, and
+  `GET /market/reports/search` (including private reports). It cannot upload, download, list, or delete reports, change
+  visibility, or edit research maps. Every other endpoint still requires a login.
 - **Edit history:** saves are recorded with editor `agent:scheduled-analysis` and keep the normal revision history.
 - **Routine side:** the key is a **network secret** on the routine's claude.ai cloud environment (header
   `X-Market-Agent-Key`, no prefix, host `peoplesystem.tatdvsonorth.com`). The agent proxy adds it outside the session VM,
