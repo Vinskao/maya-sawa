@@ -73,6 +73,20 @@ class PeopleWeaponManager:
         else:
             self.openai_client = None
     
+    @staticmethod
+    def _gateway_url(path: str) -> str:
+        """Read endpoints through the gateway: the backend's /tymb list endpoints now answer 202 with only a
+        requestId (asynchronous), while the gateway's /tymg routes wait for the result, as the website does."""
+        return f"{Config.PUBLIC_API_BASE_URL.rstrip('/')}/tymg{path}"
+
+    @staticmethod
+    def _records(data: Any, what: str) -> List[Dict[str, Any]]:
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and "requestId" in data:
+            raise ValueError(f"{what}: got an asynchronous 202 acknowledgement (requestId) instead of records")
+        raise ValueError(f"{what}: expected a list of records, got {type(data).__name__}")
+
     def fetch_people_data(self) -> List[Dict[str, Any]]:
         """
         Fetch people data from the API
@@ -81,15 +95,13 @@ class PeopleWeaponManager:
             List[Dict[str, Any]]: List of people data
         """
         endpoint = config_manager.get_constant("API_ENDPOINTS")["PEOPLE_GET_ALL"]
-        # 使用 TYMB URL 而不是通用 API URL
-        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
-        url = f"{base_url}{endpoint}"
+        url = self._gateway_url(endpoint)
         
         try:
             with httpx.Client(timeout=30.0) as client:
                 response = client.post(url)
                 response.raise_for_status()
-                data = response.json()
+                data = self._records(response.json(), "people")
                 logger.info(f"Successfully fetched {len(data)} people records")
                 return data
         except Exception as e:
@@ -102,15 +114,13 @@ class PeopleWeaponManager:
         Returns:
             List[Dict[str, Any]]: List of weapons data
         """
-        # 使用 TYMB URL 而不是通用 API URL
-        base_url = Config.PUBLIC_TYMB_URL if Config.PUBLIC_TYMB_URL else Config.PUBLIC_API_BASE_URL
-        url = f"{base_url}/weapons"
+        url = self._gateway_url("/weapons")
         
         try:
             with httpx.Client(timeout=30.0) as client:
                 response = client.get(url)
                 response.raise_for_status()
-                data = response.json()
+                data = self._records(response.json(), "weapons")
                 logger.info(f"Successfully fetched {len(data)} weapons records")
                 return data
         except Exception as e:

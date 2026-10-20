@@ -30,6 +30,15 @@ import os
 from ...people import sync_data
 from ..config.config import Config
 
+
+def periodic_sync_wanted() -> bool:
+    """The periodic loop runs if either sync is on; each sync keeps its own flag inside the loop.
+
+    Article sync from the retired Laravel paprika (/paprika/articles via the gateway) is off in production:
+    articles now live in maya-sawa and the frontend pushes them (POST /maya-sawa/paprika/articles/batch).
+    People/weapons sync must keep running without it."""
+    return Config.ENABLE_PERIODIC_SYNC or Config.ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC
+
 # ==================== 日誌配置 ====================
 logger = logging.getLogger(__name__)
 

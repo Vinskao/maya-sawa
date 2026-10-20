@@ -304,7 +304,8 @@ async def _startup_event():
             logger.info("跳過人員和武器數據同步（已禁用）")
         
         # 啟動定期同步任務（如果啟用）
-        if Config.ENABLE_PERIODIC_SYNC:
+        from .core.services.scheduler import periodic_sync_wanted
+        if periodic_sync_wanted():
             await scheduler.start_periodic_sync(
                 interval_days=Config.SYNC_INTERVAL_DAYS, 
                 hour=Config.SYNC_HOUR, 

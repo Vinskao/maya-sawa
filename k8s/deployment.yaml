@@ -238,12 +238,14 @@ spec:
         # === Auto-sync feature flags (enabled in production) ===
         - name: ENABLE_PEOPLE_WEAPONS_SYNC
           value: "true"
+        # Article pull from the retired Laravel paprika (gateway /paprika/articles, no route since the migration):
+        # articles live in maya-sawa now and the frontend pushes them, so both article syncs stay off.
         - name: ENABLE_AUTO_SYNC_ON_STARTUP
-          value: "true"
+          value: "false"
         - name: ENABLE_PEOPLE_WEAPONS_PERIODIC_SYNC
           value: "true"
         - name: ENABLE_PERIODIC_SYNC
-          value: "true"
+          value: "false"
         # 影片合成的暫存目錄，必須指向下方掛載的 emptyDir，
         # 否則會寫進 container 可寫層（不受 volume 管理、也不會被清掉）
         - name: TEMP_DIR
