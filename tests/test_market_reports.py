@@ -249,7 +249,7 @@ def test_failed_report_upload_can_be_retried_by_its_owner(monkeypatch):
             self.deleted.append((report_id, owner))
             return report_id == "failed-report" and owner == "owner-sub"
 
-        def ingest(self, **_kwargs):
+        def save_extracted(self, **_kwargs):
             return (
                 {
                     "id": "retried-report",
@@ -259,6 +259,9 @@ def test_failed_report_upload_can_be_retried_by_its_owner(monkeypatch):
                 },
                 False,
             )
+
+        def add_chunks(self, *_args, **_kwargs):
+            return None
 
     class FakeEmbeddings:
         def embed_documents(self, texts):
@@ -331,7 +334,7 @@ def test_failed_report_retry_cleanup_only_deletes_owned_failed_rows(tmp_path):
     assert db.find_by_digest("ready-digest")["id"] == ready["id"]
 
 
-def test_embedding_failure_returns_the_saved_failed_report(monkeypatch):
+def test_embedding_failure_keeps_extracted_report_ready_for_claims(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from maya_sawa.api import market_reports
@@ -340,15 +343,17 @@ def test_embedding_failure_returns_the_saved_failed_report(monkeypatch):
         def find_by_digest(self, _digest):
             return None
 
-        def save_failed(self, **kwargs):
+        def save_extracted(self, **kwargs):
             return {
                 "id": "failed-report",
                 "title": kwargs["title"],
                 "visibility": kwargs["visibility"],
-                "status": "failed",
-                "failure_reason": kwargs["reason"],
+                "status": "claims_pending",
                 "uploaded_by": kwargs["uploaded_by"],
-            }
+            }, False
+
+        def add_chunks(self, *_args, **_kwargs):
+            raise AssertionError("chunks must not be stored without embeddings")
 
     class FailedEmbeddings:
         def embed_documents(self, _texts):
@@ -377,7 +382,53 @@ def test_embedding_failure_returns_the_saved_failed_report(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["duplicate"] is False
-    assert response.json()["report"]["status"] == "failed"
+    assert response.json()["report"]["status"] == "claims_pending"
+
+
+def test_extracted_report_without_vectors_is_in_claims_pending_queue(tmp_path):
+    from sqlalchemy import create_engine
+    from maya_sawa.databases.market_reports_db import MarketReportsDatabase
+
+    db = MarketReportsDatabase(create_engine(f"sqlite:///{tmp_path / 'pending.db'}"))
+    report, duplicate = db.save_extracted(
+        title="Readable, not vectorized",
+        publisher="Research",
+        published_at=None,
+        visibility="public",
+        uploaded_by="owner",
+        digest="no-vectors",
+        pdf=b"%PDF-test",
+        pages=["2408 memory supply outlook"],
+    )
+
+    assert duplicate is False
+    assert report["status"] == "claims_pending"
+    pending = db.pending_claims()
+    assert [row["id"] for row in pending] == [report["id"]]
+    assert "2408 memory supply outlook" in pending[0]["text"]
+
+
+def test_legacy_embedding_failed_report_with_text_is_retried_by_claim_queue(tmp_path):
+    from sqlalchemy import create_engine
+    from maya_sawa.databases.market_reports_db import MarketReportsDatabase
+
+    db = MarketReportsDatabase(create_engine(f"sqlite:///{tmp_path / 'legacy.db'}"))
+    failed = db.save_failed(
+        title="Legacy report",
+        publisher="Research",
+        published_at=None,
+        visibility="public",
+        uploaded_by="owner",
+        digest="legacy-failed",
+        pdf=b"%PDF-test",
+        reason="Vectorization failed",
+        page_count=1,
+        pages=["2408 memory cycle outlook"],
+    )
+
+    pending = db.pending_claims()
+    assert [row["id"] for row in pending] == [failed["id"]]
+    assert "2408 memory cycle outlook" in pending[0]["text"]
 
 
 def test_report_upload_requires_owner_and_pdf_metadata(monkeypatch):

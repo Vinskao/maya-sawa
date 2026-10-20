@@ -127,11 +127,8 @@ async def upload_report(
         return {"report": report_for_viewer(stored, uploaded_by), "duplicate": False}
     chunks = chunk_pages(pages)
     try:
-        vectors = await asyncio.to_thread(
-            get_embedding_service().embed_documents, [item["text"] for item in chunks]
-        )
         report, duplicate = await asyncio.to_thread(
-            market_reports_db.ingest,
+            market_reports_db.save_extracted,
             title=title.strip(),
             publisher=publisher.strip(),
             published_at=published_at,
@@ -140,39 +137,28 @@ async def upload_report(
             digest=digest,
             pdf=data,
             pages=pages,
-            chunks=chunks,
-            vectors=vectors,
         )
-        return {
-            "report": report_for_viewer(report, uploaded_by),
-            "duplicate": duplicate,
-        }
     except Exception as exc:
-        logger.exception("Market report ingestion failed")
-        try:
-            stored = await asyncio.to_thread(
-                market_reports_db.save_failed,
-                title=title.strip(),
-                publisher=publisher.strip(),
-                published_at=published_at,
-                visibility=visibility,
-                uploaded_by=uploaded_by,
-                digest=digest,
-                pdf=data,
-                reason="向量化失敗，請稍後重試",
-                page_count=len(pages),
-                pages=pages,
-            )
-        except Exception:
-            logger.exception("Could not record failed market report")
-            raise HTTPException(
-                status_code=503, detail="Report extraction or embedding failed"
-            ) from exc
-        return {
-            "report": report_for_viewer(stored, uploaded_by),
-            "duplicate": False,
-        }
-
+        logger.exception("Could not persist extracted market report")
+        raise HTTPException(
+            status_code=503, detail="Report extraction could not be saved"
+        ) from exc
+    if duplicate:
+        return {"report": report_for_viewer(report, uploaded_by), "duplicate": True}
+    try:
+        vectors = await asyncio.to_thread(
+            get_embedding_service().embed_documents, [item["text"] for item in chunks]
+        )
+        await asyncio.to_thread(
+            market_reports_db.add_chunks, report["id"], chunks, vectors
+        )
+    except Exception as exc:
+        logger.warning(
+            "Semantic indexing unavailable for report %s: %s",
+            report["id"],
+            type(exc).__name__,
+        )
+    return {"report": report_for_viewer(report, uploaded_by), "duplicate": False}
 
 @router.get("")
 async def list_reports(claims: dict | None = Depends(_optional_owner)):

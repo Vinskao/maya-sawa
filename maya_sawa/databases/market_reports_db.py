@@ -162,6 +162,78 @@ class MarketReportsDatabase:
                 return duplicate, True
             raise
 
+    @staticmethod
+    def _page_text(pages):
+        return "\n\n".join(
+            f"=====PAGE {i}=====\n{text}" for i, text in enumerate(pages, 1)
+        )
+
+    def save_extracted(
+        self,
+        *,
+        title,
+        publisher,
+        published_at,
+        visibility,
+        uploaded_by,
+        digest,
+        pdf,
+        pages,
+    ):
+        """Persist readable source text before optional vectorization can fail."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        try:
+            with self.sessions.begin() as session:
+                report = session.query(MarketReport).filter_by(sha256=digest).first()
+                if report:
+                    return {
+                        **self.public_report(report),
+                        "uploaded_by": report.uploaded_by,
+                    }, True
+                report = MarketReport(
+                    title=title,
+                    publisher=publisher,
+                    published_at=published_at,
+                    received_at=datetime.now(timezone.utc),
+                    uploaded_by=uploaded_by,
+                    sha256=digest,
+                    page_count=len(pages),
+                    text=self._page_text(pages),
+                    visibility=visibility,
+                    status="claims_pending",
+                    pdf=pdf,
+                )
+                session.add(report)
+                session.flush()
+                return self.public_report(report), False
+        except IntegrityError:
+            duplicate = self.find_by_digest(digest)
+            if duplicate:
+                return duplicate, True
+            raise
+
+    def add_chunks(self, report_id, chunks, vectors):
+        """Store semantic chunks when vectors are available; claims do not depend on this."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            report = session.get(MarketReport, report_id)
+            if not report:
+                raise ValueError("Report not found")
+            if len(chunks) != len(vectors):
+                raise ValueError("Each semantic chunk must have one embedding")
+            for chunk, vector in zip(chunks, vectors, strict=True):
+                session.add(
+                    MarketReportChunk(
+                        report_id=report_id,
+                        page=chunk["page"],
+                        seq=chunk["seq"],
+                        text=chunk["text"],
+                        embedding=vector,
+                    )
+                )
+
     def find_by_digest(self, digest):
         if not self.sessions:
             raise RuntimeError("Market reports database unavailable")
@@ -261,7 +333,14 @@ class MarketReportsDatabase:
                     "text": row.text,
                 }
                 for row in session.query(MarketReport)
-                .filter_by(status="claims_pending")
+                .filter(
+                    (MarketReport.status == "claims_pending")
+                    | (
+                        (MarketReport.status == "failed")
+                        & (MarketReport.page_count > 0)
+                        & (MarketReport.text != "")
+                    )
+                )
                 .order_by(MarketReport.received_at)
                 .all()
             ]
