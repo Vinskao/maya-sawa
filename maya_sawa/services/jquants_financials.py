@@ -115,7 +115,6 @@ async def collect(db, fetch) -> int:
                 break
             params = {"code": code, "pagination_key": page["pagination_key"]}
         conid = ((await asyncio.to_thread(db.latest, code, "JP", "profile")) or {}).get("conid") or 0
-        added = 0
         for record in records:
             number = record.get("DiscNo")
             if not number or number in seen:
@@ -124,10 +123,9 @@ async def collect(db, fetch) -> int:
             # Skipped documents are stored empty so they are not parsed again.
             await asyncio.to_thread(db.save, code, "JP", conid, "jquants_release", release or {}, period=number)
             seen.add(number)
-            added += 1
             saved += 1 if release else 0
-        if added:
-            await asyncio.to_thread(rebuild_japan, db, code, conid)
+        # Rebuilt every pass, not only on new summaries, so a merge-rule fix reaches stored history on the next deploy.
+        await asyncio.to_thread(rebuild_japan, db, code, conid)
     return saved
 
 

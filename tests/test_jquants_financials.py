@@ -133,3 +133,10 @@ def test_tdnet_rebuild_keeps_the_j_quants_history():
         db.save("6857", "JP", 0, "jquants_release", jq.parse_summary(record), period=record["DiscNo"])
     td.rebuild_japan(db, "6857", 0)
     assert len(db.latest("6857", "JP", "financials")["payload"]["quarterly"]) == 9
+
+
+def test_a_trailing_forecast_revision_does_not_blank_the_accounting_standard():
+    # Live 6524 on 2026-10-21 showed standard None: its newest record is an EarnForecastRevision.
+    releases = [jq.parse_summary(r) for r in records("6524")]
+    assert releases[-1]["docType"] == "EarnForecastRevision" and releases[-1]["standard"] is None
+    assert td.build_financials([r for r in releases if r])["standard"] == "JGAAP"

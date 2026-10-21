@@ -255,8 +255,10 @@ def build_financials(releases: list[dict], *, currency: str = "JPY", source: str
     reported = {(row["start"], row["end"]) for row in quarterly if not row.get("derivedFromYtd")}
     quarterly = [row for row in quarterly if not row.get("derivedFromYtd") or (row["start"], row["end"]) not in reported]
     latest = ordered[-1] if ordered else {}
+    # A forecast revision states no accounting standard; take the newest release that does.
+    standard = next((release["standard"] for release in reversed(ordered) if release.get("standard")), None)
     return {
-        "source": source, "standard": latest.get("standard"), "company": latest.get("company"),
+        "source": source, "standard": standard, "company": latest.get("company"),
         "sourceUrl": latest.get("zipUrl"),
         "quarterly": sorted(quarterly, key=lambda row: row["end"])[-12:],
         "annual": sorted(annual, key=lambda row: row["end"])[-12:],
