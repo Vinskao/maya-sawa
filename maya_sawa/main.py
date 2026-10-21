@@ -270,6 +270,12 @@ async def _startup_event():
             logger.error(f"Failed to start TDnet financials collection: {e}")
 
         try:
+            from .services.jquants_financials import jquants_financials_collector
+            await jquants_financials_collector.start()
+        except Exception as e:
+            logger.error(f"Failed to start J-Quants financials collection: {e}")
+
+        try:
             from .services.dart_financials import dart_financials_collector
             await dart_financials_collector.start()
         except Exception as e:
@@ -354,6 +360,11 @@ async def _shutdown_event():
             await tdnet_financials_collector.close()
         except Exception as e:
             logger.error(f"Error stopping TDnet financials collection: {e}")
+        try:
+            from .services.jquants_financials import jquants_financials_collector
+            await jquants_financials_collector.close()
+        except Exception as e:
+            logger.error(f"Error stopping J-Quants financials collection: {e}")
         try:
             from .services.dart_financials import dart_financials_collector
             await dart_financials_collector.close()

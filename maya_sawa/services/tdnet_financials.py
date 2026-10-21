@@ -198,27 +198,36 @@ def _with_margins(row: dict) -> dict:
 JP_NOTES = ["All monetary amounts are JPY, not millions; EPS is JPY/share.",
             "Japan has no statutory quarterly reports since 2024: 決算短信 report year-to-date figures, and a single "
             "quarter after Q1 is the difference of two consecutive year-to-date releases (derivedFromYtd).",
-            "TDnet keeps about one month of disclosures; history starts when collection started.",
+            "TDnet keeps about one month of disclosures; earlier history is J-Quants (JPX) summaries, two years ending "
+            "12 weeks back on the free plan, so a holding added mid-quarter can miss its latest quarter for a while.",
             "Forecasts are the company's own guidance, not analyst consensus."]
 
 
 def build_financials(releases: list[dict], *, currency: str = "JPY", source: str = SOURCE, notes: list[str] | None = None) -> dict:
     """Merge stored releases (oldest first; later corrections win) into the SEC-shaped payload the page draws.
 
-    Shared with OpenDART (dart_financials.py). A quarter reported as three months beats the same quarter derived
-    from year-to-date differences."""
+    Shared with OpenDART (dart_financials.py) and J-Quants (jquants_financials.py). Rows for the same period merge
+    metric by metric, so a release that left a figure blank keeps the earlier value; at the same release time the
+    higher `precedence` wins (TDnet's attachments over the J-Quants summary of the same 決算短信). A quarter
+    reported as three months beats the same quarter derived from year-to-date differences."""
     durations: dict = {}
     instants: dict = {}
     forecasts: dict = {}
-    ordered = sorted(releases, key=lambda release: release.get("releasedAt") or "")
+    ordered = sorted(releases, key=lambda release: ((release.get("releasedAt") or "")[:16], release.get("precedence", 1)))
+
+    def merge(store, key, row, evidence):
+        known = store.get(key, {})
+        store[key] = {**known, **{k: v for k, v in row.items() if v is not None or k not in known},
+                      "currency": currency, "evidence": evidence}
+
     for release in ordered:
         evidence = {"releasedAt": release.get("releasedAt"), "title": release.get("title"), "zipUrl": release.get("zipUrl")}
         for row in release.get("durations", []):
-            durations[(row["start"], row["end"])] = {**row, "currency": currency, "evidence": evidence}
+            merge(durations, (row["start"], row["end"]), row, evidence)
         for row in release.get("instants", []):
-            instants[row["end"]] = {**row, "currency": currency, "evidence": evidence}
+            merge(instants, row["end"], row, evidence)
         for row in release.get("forecasts", []):
-            forecasts[(row["start"], row["end"])] = {**row, "currency": currency, "evidence": evidence}
+            merge(forecasts, (row["start"], row["end"]), row, evidence)
     quarterly, cumulative, annual = [], [], []
     by_start: dict = {}
     for row in durations.values():
@@ -308,10 +317,21 @@ async def collect(db, fetch, *, days: list[str] | None = None, today: date | Non
                 break
             await asyncio.sleep(0.5)
     for code, conid in touched:
-        releases = [row["payload"] for row in await asyncio.to_thread(db.history, code, "JP", "tdnet_release")]
-        data = build_financials(releases)
-        await asyncio.to_thread(db.save, code, "JP", conid, "financials", data, period=_content_period(data))
+        await asyncio.to_thread(rebuild_japan, db, code, conid)
     return saved
+
+
+JQUANTS_SOURCE = "J-Quants 決算短信サマリー (JPX)"
+
+
+def rebuild_japan(db, code: str, conid) -> dict:
+    """Financials from every stored TDnet release and J-Quants summary of one Japan holding."""
+    tdnet = [row["payload"] for row in db.history(code, "JP", "tdnet_release")]
+    jquants = [{**row["payload"], "precedence": 0} for row in db.history(code, "JP", "jquants_release") if row["payload"]]
+    source = " + ".join(name for name, rows in ((SOURCE, tdnet), (JQUANTS_SOURCE, jquants)) if rows) or SOURCE
+    data = build_financials(tdnet + jquants, source=source)
+    db.save(code, "JP", conid, "financials", data, period=_content_period(data))
+    return data
 
 
 TDNET_RETENTION_DAYS = 31
