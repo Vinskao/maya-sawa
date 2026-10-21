@@ -197,6 +197,12 @@ spec:
               name: filings-credentials
               key: OPENDART_API_KEY
               optional: true
+        - name: JQUANTS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jquants-credentials
+              key: JQUANTS_API_KEY
+              optional: true
         - name: MACRO_ENABLED
           value: "${MACRO_ENABLED}"
         - name: MACRO_BLS_DAILY_BUDGET

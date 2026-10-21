@@ -334,6 +334,23 @@ pipeline {
             }
         }
 
+        stage('Configure J-Quants Key') {
+            // JPX J-Quants key for the Japan holdings' financial history; a missing credential must not block deploys.
+            steps {
+                container('kubectl') {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'JQUANTS_API_KEY credential unavailable; Japan history stays off') {
+                        withCredentials([string(credentialsId: 'JQUANTS_API_KEY', variable: 'JQUANTS_API_KEY')]) {
+                            sh '''
+                                set -e
+                                printf 'JQUANTS_API_KEY=%s
+' "$JQUANTS_API_KEY" | kubectl create secret generic jquants-credentials                                   --from-env-file=/dev/stdin                                   -n default                                   --dry-run=client -o yaml | kubectl apply -f -
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {
