@@ -85,7 +85,11 @@ def parse_summary(record: dict) -> dict | None:
         values = {metric: _value(record, field) for metric, field in RESULT_FIELDS.items()}
         if any(v is not None for v in values.values()):
             release["durations"].append(_duration(period_start, period_end, values))
-        sheet = {"assets": _value(record, "TA"), "equity": _owners_equity(record), "cash": _value(record, "CashEq")}
+        total, net_assets = _value(record, "TA"), _value(record, "Eq")
+        # Liabilities = total assets - net assets (exact under Japan GAAP; under IFRS, Eq may exclude
+        # non-controlling interests, which then count as liabilities).
+        liabilities = total - net_assets if total is not None and net_assets is not None else None
+        sheet = {"assets": total, "liabilities": liabilities, "equity": _owners_equity(record), "cash": _value(record, "CashEq")}
         if any(v is not None for v in sheet.values()):
             release["instants"].append({"end": period_end, **{m: sheet.get(m) for m in INSTANT_METRICS}})
     half_end = None

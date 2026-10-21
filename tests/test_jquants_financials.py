@@ -140,3 +140,13 @@ def test_a_trailing_forecast_revision_does_not_blank_the_accounting_standard():
     releases = [jq.parse_summary(r) for r in records("6524")]
     assert releases[-1]["docType"] == "EarnForecastRevision" and releases[-1]["standard"] is None
     assert td.build_financials([r for r in releases if r])["standard"] == "JGAAP"
+
+
+def test_liabilities_are_total_assets_minus_net_assets_so_the_debt_ratio_has_history():
+    q1 = jq.parse_summary(next(r for r in records("6857") if r["DiscNo"] == "20260728500866"))
+    assert q1["instants"][0]["liabilities"] == 1_514_652_000_000 - 1_042_642_000_000
+    fy = next(r for r in records("6524") if r["DocType"].startswith("FY") and r["CurPerEn"] == "2025-12-31")
+    assert jq.parse_summary(fy)["instants"][0]["liabilities"] == 28_319_000_000 - 23_441_000_000
+    # The page's debt ratio is liabilities / assets.
+    sheet = td.build_financials([q1])["balanceSheet"][0]
+    assert round(sheet["liabilities"] / sheet["assets"] * 100, 1) == 31.2
