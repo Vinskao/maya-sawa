@@ -127,20 +127,47 @@ class IbkrMarketService:
 
         Portfolio reads keep working after this session lapses ("no bridge"), so it is checked on its own.
         Only authenticated observations count as successful, so `latest` is the last time it was live.
+
+        A browser login only signs in to the portal; the market-data session still needs
+        POST /iserver/auth/ssodh/init. That is sent once per login (keyed by /sso/validate AUTH_TIME) and only
+        while nothing competes, so a session the owner's phone or TWS took over is never taken back every pass.
         """
         db = get_ibkr_research_db()
         previous = await asyncio.to_thread(db.latest, 'ACCOUNT', 'PRIVATE', 'iserver_session', successful=False)
+        opened_for = ((previous or {}).get('payload') or {}).get('initializedFor')
         try:
             async with self._client() as client:
-                resp = await client.post(f"{self._base}/iserver/auth/status")
-            resp.raise_for_status()
-            state = resp.json()
-            live = bool(state.get('authenticated')) and bool(state.get('connected'))
+                state = await self._auth_status(client)
+                if not self._live(state) and not state.get('competing'):
+                    login = await self._login_time(client)
+                    if login is not None and login != opened_for:
+                        opened_for = login
+                        await client.post(f"{self._base}/iserver/auth/ssodh/init", json={'publish': True, 'compete': True})
+                        state = await self._auth_status(client)
+            live = self._live(state)
         except Exception:
             live = False
-        await asyncio.to_thread(db.save, 'ACCOUNT', 'PRIVATE', 0, 'iserver_session', {'authenticated': live},
-                                status='ok' if live else 'unavailable')
+        await asyncio.to_thread(db.save, 'ACCOUNT', 'PRIVATE', 0, 'iserver_session',
+                                {'authenticated': live, 'initializedFor': opened_for}, status='ok' if live else 'unavailable')
         return live, live and (previous is None or previous['status'] != 'ok')
+
+    @staticmethod
+    def _live(state: dict) -> bool:
+        return bool(state.get('authenticated')) and bool(state.get('connected'))
+
+    async def _auth_status(self, client) -> dict:
+        resp = await client.post(f"{self._base}/iserver/auth/status")
+        resp.raise_for_status()
+        return resp.json()
+
+    async def _login_time(self, client) -> int | None:
+        """AUTH_TIME of the current browser login, or None when nobody is signed in."""
+        try:
+            resp = await client.get(f"{self._base}/sso/validate")
+            resp.raise_for_status()
+            return resp.json().get('AUTH_TIME')
+        except Exception:
+            return None
 
     async def refresh_once(self) -> None:
         if not await self.refresh_cache_now():

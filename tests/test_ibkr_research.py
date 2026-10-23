@@ -127,6 +127,60 @@ def test_market_data_session_is_recorded_from_gateway_auth_status(monkeypatch):
     assert 'MAC' not in str(db.latest('ACCOUNT', 'PRIVATE', 'iserver_session'))
 
 
+def test_a_fresh_browser_login_opens_the_market_data_session_once(monkeypatch):
+    # 2026-10-23: the owner logged in through the browser (/sso/validate 200) but /iserver/auth/status stayed
+    # authenticated=false until POST /iserver/auth/ssodh/init; bars stayed stuck at 10/15 meanwhile.
+    from maya_sawa.services import ibkr_market
+    db = IbkrResearchDatabase(engine=create_engine('sqlite://', poolclass=StaticPool, connect_args={'check_same_thread': False}))
+    monkeypatch.setattr(ibkr_market, 'get_ibkr_research_db', lambda: db)
+    lapsed = {'authenticated': False, 'established': False, 'competing': False, 'connected': False}
+    live = {'authenticated': True, 'established': True, 'competing': False, 'connected': True}
+    login = {'IS_PENDING_APPLICANT': False, 'SF_ENABLED': True, 'AUTH_TIME': 1792737097614, 'PHYLUM_TYPE': 'P', 'CREDENTIAL_TYPE': 5}
+    gateway = {'status': [lapsed, live], 'sso': login}
+    calls = []
+
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, url):
+            calls.append(('get', url.rsplit('/v1/api', 1)[1]))
+            return GatewayResponse(gateway['sso']) if gateway['sso'] else GatewayResponse({}, 401)
+        async def post(self, url, json=None):
+            path = url.rsplit('/v1/api', 1)[1]
+            calls.append(('post', path, json))
+            if path == '/iserver/auth/ssodh/init':
+                return GatewayResponse({'passed': True, 'authenticated': True, 'connected': True, 'established': False})
+            return GatewayResponse(gateway['status'].pop(0))
+
+    service = ibkr_market.IbkrMarketService()
+    monkeypatch.setattr(service, '_client', lambda: Client())
+    assert asyncio.run(service.market_data_session()) == (True, True)
+    assert ('post', '/iserver/auth/ssodh/init', {'publish': True, 'compete': True}) in calls
+
+    # The same login lapses again (e.g. the owner's phone took the brokerage session): never take it back.
+    calls.clear()
+    gateway['status'] = [lapsed]
+    assert asyncio.run(service.market_data_session()) == (False, False)
+    assert not [c for c in calls if c[1] == '/iserver/auth/ssodh/init']
+
+    # Another session is competing: leave it alone even after a new login.
+    gateway['status'] = [{**lapsed, 'competing': True}]
+    gateway['sso'] = {**login, 'AUTH_TIME': 1792823497614}
+    assert asyncio.run(service.market_data_session()) == (False, False)
+    assert not [c for c in calls if c[1] == '/iserver/auth/ssodh/init']
+
+    # A new browser login while nothing competes is opened once more.
+    gateway['status'] = [lapsed, live]
+    assert asyncio.run(service.market_data_session()) == (True, True)
+    assert len([c for c in calls if c[1] == '/iserver/auth/ssodh/init']) == 1
+
+    # Logged out entirely (/sso/validate 401): nothing to open.
+    calls.clear()
+    gateway['status'], gateway['sso'] = [lapsed], None
+    assert asyncio.run(service.market_data_session()) == (False, False)
+    assert not [c for c in calls if c[1] == '/iserver/auth/ssodh/init']
+
+
 def test_refresh_skips_market_data_while_logged_out_and_catches_up_after_login(monkeypatch):
     from maya_sawa.services import ibkr_market, market_automation
     service = ibkr_market.IbkrMarketService()
