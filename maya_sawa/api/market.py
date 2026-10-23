@@ -342,8 +342,8 @@ async def get_market_dashboard_history(code: str, start: date | None = None, end
         raise HTTPException(status_code=422, detail="Invalid instrument code")
     end_date = end or datetime.now(ZoneInfo("Asia/Taipei")).date()
     start_date = start or (end_date - timedelta(days=92))
-    if start_date > end_date or (end_date - start_date).days > 366:
-        raise HTTPException(status_code=422, detail="History range must be within 366 days")
+    if start_date > end_date or (end_date - start_date).days > 5 * 366:
+        raise HTTPException(status_code=422, detail="History range must be within five years (1830 days)")
     sources = ["tdcc:distribution-history", "twse:foreign-holding", "tpex:foreign-holding"] if view == "ownership" else None
     if view not in {"daily", "ownership"}:
         raise HTTPException(status_code=422, detail="view must be daily or ownership")

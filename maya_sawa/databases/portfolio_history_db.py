@@ -288,7 +288,7 @@ class PortfolioHistoryDatabase:
 
     def history(self, limit: int = 90) -> list[dict[str, Any]]:
         """Return one Taiwan portfolio total per calendar day, oldest first."""
-        limit = min(max(limit, 1), 1000)
+        limit = min(max(limit, 1), 1830)
         with self.get_session() as session:
             rows = (
                 session.query(TaiwanPortfolioDailyHistory)

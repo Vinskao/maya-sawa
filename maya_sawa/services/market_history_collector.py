@@ -9,6 +9,7 @@ import calendar
 import http.client
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -86,6 +87,24 @@ def _download_taifex_csv(request: urllib.request.Request, *, required_fields: se
                 raise
             time.sleep(min(2 ** attempt, 8))
     raise last_error or ValueError("TAIFEX CSV download failed")
+
+
+def parse_exchange_valuation(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Official historical P/E; zero/negative EPS and exchange placeholders have no ratio."""
+    table = next((table for table in payload.get("tables", [payload])
+                  if "本益比" in (table.get("fields") or [])), {})
+    fields = table.get("fields") or []
+    rows = []
+    for raw in table.get("data") or []:
+        row = dict(zip(fields, raw))
+        code = str(row.get("證券代號") or row.get("股票代號") or "").strip()
+        if not code:
+            continue
+        value = _number(row.get("本益比"))
+        valid = value is not None and math.isfinite(value) and value > 0
+        rows.append({"code": code, "name": str(row.get("證券名稱") or row.get("公司名稱") or code).strip(),
+                     "values": {"pe_ratio": value} if valid else {}})
+    return rows
 
 
 def parse_twse_daily_price(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -391,9 +410,12 @@ class MarketHistoryCollector:
     SOURCES = (
         "twse:daily-price", "twse:institutional", "twse:foreign-holding", "twse:margin-balance", "twse:borrow-short",
         "tpex:daily-price", "tpex:institutional", "tpex:foreign-holding", "tpex:margin-balance", "tpex:borrow-short",
+        "twse:valuation", "tpex:valuation",
         "tdcc:distribution-history",
     )
     SOURCE_CONFIG: dict[str, tuple[str, str, str]] = {
+        "twse:valuation": ("stock", "https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date={compact}&selectType=ALL&response=json", "multiple"),
+        "tpex:valuation": ("stock", "https://www.tpex.org.tw/www/zh-tw/afterTrading/peQryDate?date={slash}&response=json", "multiple"),
         "twse:daily-price": ("stock", "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={compact}&type=ALLBUT0999&response=json", "shares"),
         "twse:institutional": ("stock", "https://www.twse.com.tw/rwd/zh/fund/T86?date={compact}&selectType=ALLBUT0999&response=json", "shares"),
         "twse:foreign-holding": ("stock", "https://www.twse.com.tw/rwd/zh/fund/MI_QFIIS?date={compact}&selectType=ALLBUT0999&response=json", "shares_and_percent"),
@@ -812,6 +834,7 @@ class MarketHistoryCollector:
 
     @staticmethod
     def _parse_source(source_key: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        if source_key in {"twse:valuation", "tpex:valuation"}: return parse_exchange_valuation(payload)
         if source_key == "twse:daily-price": return parse_twse_daily_price(payload)
         if source_key == "twse:institutional": return parse_twse_institutional(payload)
         if source_key == "twse:foreign-holding": return parse_twse_foreign_holding(payload)

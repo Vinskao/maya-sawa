@@ -2,6 +2,7 @@ import asyncio
 import importlib
 from datetime import datetime, timezone
 from unittest.mock import Mock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -62,3 +63,13 @@ def test_history_failure_does_not_break_market_cache(history_module, monkeypatch
     monkeypatch.setattr(history_module.portfolio_history_db, 'record_taiwan', Mock(side_effect=RuntimeError('DB down')))
     assert asyncio.run(service._refresh_payload('PORTFOLIO', object())) is True
     write.assert_called_once()
+
+
+def test_history_can_read_five_calendar_years_of_saved_snapshots(history_module):
+    db = history_module.PortfolioHistoryDatabase.__new__(history_module.PortfolioHistoryDatabase)
+    context = MagicMock()
+    query = context.__enter__.return_value.query.return_value.order_by.return_value
+    query.limit.return_value.all.return_value = []
+    db.get_session = Mock(return_value=context)
+    assert db.history(1830) == []
+    query.limit.assert_called_once_with(1830)
