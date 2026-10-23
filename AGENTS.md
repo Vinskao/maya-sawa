@@ -269,12 +269,28 @@ Current durable overseas/SEC collection, cache, source gaps and verification: re
   - ⚠️ 但記憶體裡的 session 是**完整權限**（CPAPI 含下單端點），任何能連到 gateway 的人都能讀 portfolio 甚至下單。**切勿為了省去 port-forward 而把 gateway 開成公開 Ingress** —— 等於把可下單 session 放在公網。維持 ClusterIP + port-forward 登入是目前最安全做法。
 
 ### 重新登入步驟（session 失效時）
-```bash
-ssh oke-node
-kubectl port-forward deployment/ibkr-gw 5000:5000 -n default   # 臨時隧道，登入完關掉即可
-# 另開瀏覽器 https://localhost:5000 → 輸入 thisisunsafe 跳過自簽憑證 → IBKR 帳密 + 2FA
-# 等 "Client login succeeds"，~240s 內 Redis 會更新，前端 Account Portfolio 自動帶出海外資料
+Windows 一鍵（建議）：
+```powershell
+powershell -ExecutionPolicy Bypass -File ibkr-gateway\login.ps1
 ```
+腳本開隧道（本機 :5000 → oke-node → deployment/ibkr-gw）、開登入頁、等你輸入帳密＋2FA，接著送
+`POST /iserver/auth/ssodh/init` 開啟行情 session，成功後關隧道（含節點上的 port-forward）。已登入時直接結束。
+
+手動版：
+```bash
+ssh -L 5000:localhost:5000 oke-node "kubectl port-forward deployment/ibkr-gw 5000:5000"
+# 瀏覽器 https://localhost:5000 → 輸入 thisisunsafe 跳過自簽憑證 → IBKR 帳密 + 2FA
+```
+
+注意（2026-10-23 實測）：
+- **瀏覽器登入只登入 portal（`/sso/validate` 200），行情 session 仍是 `authenticated:false`**，要再送
+  `ssodh/init`。maya-sawa 的 `market_data_session()` 現在會自動補送：每次新登入（以 `/sso/validate` 的
+  `AUTH_TIME` 判斷）只送一次，且 `competing:true` 時不送，避免每 4 分鐘把手機 App／TWS 的 session 搶走。
+- 關掉本機 ssh 不會停掉節點上沒有終端機的 `kubectl port-forward`，它會繼續佔著節點 :5000，下一次隧道就開不起來。
+  腳本會加 `timeout` 並在結束時 `pkill`；手動清理用 `pkill -f '[k]ubectl port-forward deployment/ibkr-gw'`
+  （`[k]` 避免 pkill 殺到自己的 shell）。
+- IBKR 對沒有 body 的 POST 回 411；從 PowerShell 呼叫 gateway 時要帶 JSON body。
+- 斷線提醒：兩個市場分析排程發現 IB 日線落後最近交易日時，會發手機推播提醒執行上面的腳本。
 
 ### 服務與快取（與 Shioaji 同政策）
 - `services/ibkr_market.py` 的 `IbkrMarketService` 為 Redis cache-backed：背景 loop（`IBKR_REFRESH_SECONDS`，預設 240s，同時兼作 keepalive）抓 gateway snapshot 寫入 Redis key `maya-sawa:market:ibkr`；request 只讀 cache。

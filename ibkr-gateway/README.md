@@ -33,7 +33,25 @@ kubectl rollout restart deployment/ibkr-gw -n default
 
 ## Authenticating the gateway (required after every restart / ~daily)
 IBKR has **no headless login** for retail accounts. Each time the session lapses
-(hard expiry ~24h, or a pod restart), a human must log in through a browser:
+(hard expiry ~24h, or a pod restart), a human must log in through a browser.
+
+From Windows, one step (from the maya-sawa repo root):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ibkr-gateway\login.ps1
+```
+
+It opens the tunnel through `oke-node`, opens the login page, waits for your
+user name, password and 2FA (typed by you, never stored), opens the market-data
+session (`POST /iserver/auth/ssodh/init`) and closes the tunnel, including the
+node's `kubectl port-forward`. If the session is already live it just exits.
+
+A browser login alone signs in to the portal (`/sso/validate` answers 200) but
+leaves `/iserver/auth/status` at `authenticated:false` until `ssodh/init`.
+maya-sawa now sends that itself, once per login (`AUTH_TIME`) and never while
+another session competes, so the manual route below also works.
+
+Manual route:
 
 ```bash
 # 1. Forward the in-cluster gateway to your machine
@@ -56,4 +74,10 @@ the session alive between the ~daily manual logins.
   authenticated (`portfolio/accounts` returns JSON not a login redirect), and
   `kubectl logs deployment/maya-sawa` isn't logging "Skipping IBKR merge".
 - A pod restart (node drain, redeploy) drops the session — re-run the login.
-- Consider alerting when `/v1/api/tickle` stops returning `authenticated:true`.
+- Alerting: the two market-analysis routines push a phone notification when the
+  IB daily bars fall behind the last closed session, naming `login.ps1`.
+- Ending a local `ssh -L ... "kubectl port-forward ..."` does not stop the
+  port-forward on the node (no terminal, no hang-up); it keeps node port 5000
+  and the next tunnel fails. Clean up with
+  `pkill -f '[k]ubectl port-forward deployment/ibkr-gw'`.
+- The gateway's upstream answers a POST without a body with HTTP 411.
