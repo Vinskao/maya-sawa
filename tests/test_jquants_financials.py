@@ -127,6 +127,29 @@ def test_a_new_japan_holding_gets_its_history_on_the_first_pass_and_nothing_twic
     assert asyncio.run(jq.collect(db, fetch)) == 0
 
 
+def test_summaries_stored_by_an_older_parser_are_reparsed_on_the_next_pass():
+    # Live 6857 on 2026-10-23: the debt ratio stayed empty after 28fdcce because summaries stored before it had no
+    # liabilities and the collector skipped every DiscNo it had seen.
+    db = FakeDb(["6857"])
+    for record in records("6857"):
+        old = jq.parse_summary(record)
+        for sheet in old["instants"]:
+            sheet.pop("liabilities", None)
+        db.save("6857", "JP", 0, "jquants_release", old, period=record["DiscNo"])
+
+    async def fetch(params):
+        return {"data": records("6857")}
+
+    assert asyncio.run(jq.collect(db, fetch)) == 0  # nothing new, only refreshed
+    sheets = db.latest("6857", "JP", "financials")["payload"]["balanceSheet"]
+    assert sheets[-1]["end"] == "2026-06-30" and sheets[-1]["liabilities"] == 1_514_652_000_000 - 1_042_642_000_000
+    saves = []
+    original_save = db.save
+    db.save = lambda code, market, conid, kind, payload, **kw: (saves.append(kind), original_save(code, market, conid, kind, payload, **kw))
+    asyncio.run(jq.collect(db, fetch))
+    assert "jquants_release" not in saves  # unchanged summaries are not rewritten
+
+
 def test_tdnet_rebuild_keeps_the_j_quants_history():
     db = FakeDb(["6857"])
     for record in records("6857"):

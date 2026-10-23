@@ -60,6 +60,22 @@ def test_ifrs_annual_results_use_ifrs_tags_and_keep_signed_cash_flow():
     assert sheet["equity"] == 5_553_437_000
 
 
+def test_attachments_give_current_ratio_inventory_and_capex():
+    # Values read from the fixtures' raw XBRL. IFRS tags inventory as InventoriesCAIFRS (Advantest files IFRS), and
+    # "Purchase of property, plant and equipment" carries sign="-"; capex is stored positive like SEC and OpenDART.
+    ifrs = td.parse_release(fixture("ifrs_annual_92520_20261015.zip"))
+    sheet = max(ifrs["instants"], key=lambda row: row["end"])
+    assert sheet["currentAssets"] == 6_855_247_000 and sheet["currentLiabilities"] == 4_734_279_000
+    assert sheet["inventory"] == 43_221_000
+    years = sorted((row for row in ifrs["durations"] if row["durationDays"] > 330), key=lambda row: row["end"])
+    assert [row["capitalExpenditure"] for row in years] == [55_788_000, 33_173_000]
+    jgaap = td.parse_release(fixture("jgaap_q2_24110_20261016.zip"))
+    sheet = next(row for row in jgaap["instants"] if row["end"] == "2026-09-30")
+    assert sheet["currentAssets"] == 4_076_000_000 and sheet["currentLiabilities"] == 934_000_000
+    half = next(row for row in jgaap["durations"] if (row["start"], row["end"]) == ("2026-04-01", "2026-09-30"))
+    assert half["capitalExpenditure"] == 36_000_000
+
+
 def test_forecast_revision_keeps_only_the_revised_forecast():
     release = td.parse_release(fixture("forecast_revision_79180_20261020.zip"))
     assert all(row["end"] <= "2026-03-31" for row in release["durations"])  # only last year's actuals for comparison

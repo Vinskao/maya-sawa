@@ -110,7 +110,8 @@ async def collect(db, fetch) -> int:
     holdings = await asyncio.to_thread(db.market_codes, "JP")
     saved = 0
     for code in holdings:
-        seen = {row["period"] for row in await asyncio.to_thread(db.history, code, "JP", "jquants_release")}
+        # Every pass re-parses what it fetched, so a parser fix also reaches summaries stored before it.
+        stored = {row["period"]: row["payload"] for row in await asyncio.to_thread(db.history, code, "JP", "jquants_release")}
         records, params = [], {"code": code}
         while True:
             page = await fetch(params)
@@ -121,13 +122,14 @@ async def collect(db, fetch) -> int:
         conid = ((await asyncio.to_thread(db.latest, code, "JP", "profile")) or {}).get("conid") or 0
         for record in records:
             number = record.get("DiscNo")
-            if not number or number in seen:
+            if not number:
                 continue
-            release = parse_summary(record)
-            # Skipped documents are stored empty so they are not parsed again.
-            await asyncio.to_thread(db.save, code, "JP", conid, "jquants_release", release or {}, period=number)
-            seen.add(number)
-            saved += 1 if release else 0
+            release = parse_summary(record) or {}  # skipped documents are stored empty
+            if stored.get(number) == release:
+                continue
+            await asyncio.to_thread(db.save, code, "JP", conid, "jquants_release", release, period=number)
+            saved += 1 if release and number not in stored else 0
+            stored[number] = release
         # Rebuilt every pass, not only on new summaries, so a merge-rule fix reaches stored history on the next deploy.
         await asyncio.to_thread(rebuild_japan, db, code, conid)
     return saved

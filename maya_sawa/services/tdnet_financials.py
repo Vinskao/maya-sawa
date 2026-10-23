@@ -41,13 +41,18 @@ METRIC_NAMES = {
     "assets": ["Assets", "AssetsIFRS", "TotalAssets", "TotalAssetsIFRS"],
     "liabilities": ["Liabilities", "LiabilitiesIFRS"],
     "equity": ["EquityAttributableToOwnersOfParentIFRS", "OwnersEquity", "ShareholdersEquity", "NetAssets", "TotalEquityIFRS"],
-    "inventory": ["Inventories", "InventoriesIFRS"],
+    "inventory": ["Inventories", "InventoriesIFRS", "InventoriesCAIFRS"],
     "cash": ["CashAndDeposits", "CashAndCashEquivalentsIFRS", "CashAndCashEquivalentsAtEndOfPeriodIFRS"],
+    "currentAssets": ["CurrentAssets", "CurrentAssetsIFRS"],
+    "currentLiabilities": ["CurrentLiabilities", "TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS"],
+    # Shown as an outflow (sign="-"); stored positive like SEC and OpenDART capex.
+    "capitalExpenditure": ["PurchaseOfPropertyPlantAndEquipmentInvCF", "PurchaseOfPropertyPlantAndEquipmentInvCFIFRS"],
 }
-INSTANT_METRICS = {"assets", "liabilities", "equity", "inventory", "cash"}
+INSTANT_METRICS = {"assets", "liabilities", "equity", "inventory", "cash", "currentAssets", "currentLiabilities"}
 # Japan GAAP balance sheets often itemize inventory instead of reporting a total.
 INVENTORY_PARTS = ["MerchandiseAndFinishedGoods", "WorkInProcess", "RawMaterialsAndSupplies", "Merchandise", "FinishedGoods", "RawMaterials", "Supplies"]
-ADDITIVE = ("revenue", "costOfRevenue", "grossProfit", "operatingIncome", "netIncome", "operatingCashFlow", "investingCashFlow")
+ADDITIVE = ("revenue", "costOfRevenue", "grossProfit", "operatingIncome", "netIncome", "operatingCashFlow", "investingCashFlow",
+            "capitalExpenditure")
 _NAME_RANK = {(metric, name): rank for metric, names in METRIC_NAMES.items() for rank, name in enumerate(names)}
 _METRIC_OF = {}
 for _metric, _names in METRIC_NAMES.items():
@@ -181,6 +186,8 @@ def parse_release(data: bytes) -> dict:
         if not any(v is not None for v in values.values()):
             continue
         entry = {"start": start, "end": end, "durationDays": (date.fromisoformat(end) - date.fromisoformat(start)).days, **values}
+        if entry["capitalExpenditure"] is not None:
+            entry["capitalExpenditure"] = abs(entry["capitalExpenditure"])
         if entry["grossProfit"] is None and entry["revenue"] is not None and entry["costOfRevenue"] is not None:
             entry["grossProfit"] = entry["revenue"] - entry["costOfRevenue"]
         (release["durations"] if role == "result" else release["forecasts"]).append(entry)
