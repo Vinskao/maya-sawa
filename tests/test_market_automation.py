@@ -28,24 +28,50 @@ def test_sessions_follow_each_market_close():
     assert session_date(US, tpe(24, 8)) == date(2026, 10, 24)  # Saturday morning covers Friday
 
 
+MISSED_19 = {"taiwan": date(2026, 10, 19)}  # the 21:15 scheduled run found no fresh Japan/Korea bars
+
+
 def test_run_fires_only_after_overseas_bars_were_collected_after_the_close():
-    now = tpe(19, 21, 30)
+    now = tpe(19, 21, 40)
     before_close = tpe(19, 12)
-    after_close = tpe(19, 17, 50)
-    assert due_runs(now, {}, {"JP": before_close, "KR": after_close}) == []  # IB lapsed before Tokyo closed
-    assert due_runs(now, {}, {"JP": after_close, "KR": None}) == []  # a holding was never collected
-    assert due_runs(now, {}, {"JP": after_close, "KR": after_close}) == [TAIWAN]
-    assert due_runs(now, {}, {}) == [TAIWAN]  # no Japan/Korea holdings: nothing to wait for
-    assert due_runs(now, {"taiwan": date(2026, 10, 19)}, {"JP": after_close}) == []  # once per session
+    after_close = tpe(19, 21, 35)
+    assert due_runs(now, {}, {"JP": before_close, "KR": after_close}, MISSED_19) == []  # IB lapsed before Tokyo closed
+    assert due_runs(now, {}, {"JP": after_close, "KR": None}, MISSED_19) == []  # a holding was never collected
+    assert due_runs(now, {}, {"JP": after_close, "KR": after_close}, MISSED_19) == [TAIWAN]
+    assert due_runs(now, {"taiwan": date(2026, 10, 19)}, {"JP": after_close}, MISSED_19) == []  # once per session
     # Bars from the afternoon still count: the close is 14:30 even though the run waits for the evening data.
-    assert due_runs(now, {}, {"JP": tpe(19, 15), "KR": tpe(19, 15)}) == [TAIWAN]
-    assert due_runs(tpe(19, 18), {}, {"JP": after_close, "KR": after_close}) == []  # margin data not out yet
+    assert due_runs(now, {}, {"JP": tpe(19, 15), "KR": tpe(19, 15)}, MISSED_19) == [TAIWAN]
+
+
+def test_a_scheduled_run_that_had_its_data_is_not_repeated():
+    # IB was fine: the 21:15 scheduled run already saw today's bars, so nothing is fired on top of it.
+    assert due_runs(tpe(19, 21, 40), {}, {"JP": tpe(19, 17), "KR": tpe(19, 17)}, {}) == []
+    assert due_runs(tpe(19, 21, 40), {}, {}, {}) == []
+
+
+def test_runs_are_marked_missed_when_their_schedule_passes_without_fresh_bars():
+    stale = {"JP": tpe(16, 17), "KR": tpe(16, 17)}
+    fresh = {"JP": tpe(19, 17), "KR": tpe(19, 17)}
+    assert automation.missed_runs(tpe(19, 21, 14), stale) == []  # the scheduled run has not started yet
+    assert automation.missed_runs(tpe(19, 21, 15), stale) == [TAIWAN]
+    assert automation.missed_runs(tpe(19, 21, 15), fresh) == []
+    assert automation.missed_runs(tpe(19, 21, 15), {}) == []  # no Japan/Korea holdings: nothing to miss
+    assert automation.missed_runs(tpe(20, 7, 30), {"US": tpe(16, 6)}) == [US]  # Monday's New York session
+    assert automation.missed_runs(tpe(20, 7, 30), {"US": tpe(20, 6)}) == []
+
+
+def test_catch_up_waits_until_the_scheduled_run_has_had_time_to_finish():
+    # Logged in at 21:16 while the 21:15 scheduled run is still going: start the catch-up only from 21:30.
+    fresh = {"JP": tpe(19, 21, 16), "KR": tpe(19, 21, 16)}
+    assert due_runs(tpe(19, 21, 20), {}, fresh, MISSED_19) == []
+    assert due_runs(tpe(19, 21, 30), {}, fresh, MISSED_19) == [TAIWAN]
 
 
 def test_us_run_waits_for_us_bars_and_ignores_asian_markets():
-    now = tpe(20, 7)
-    assert due_runs(now, {"taiwan": date(2026, 10, 20)}, {"US": tpe(20, 6), "JP": tpe(19, 12)}) == [US]
-    assert due_runs(now, {"taiwan": date(2026, 10, 20)}, {"US": tpe(19, 18)}) == []
+    now = tpe(20, 9)
+    missed = {"us": date(2026, 10, 20)}
+    assert due_runs(now, {"taiwan": date(2026, 10, 20)}, {"US": tpe(20, 8, 50), "JP": tpe(19, 12)}, missed) == [US]
+    assert due_runs(now, {"taiwan": date(2026, 10, 20)}, {"US": tpe(19, 18)}, missed) == []
 
 
 def test_ib_session_counts_as_live_only_while_the_gateway_is_being_polled():
@@ -95,9 +121,16 @@ class FakeSource:
 
 def test_check_fires_due_runs_once_and_reports_ib_status(tmp_path, monkeypatch):
     store = AutomationStore(create_engine(f"sqlite:///{tmp_path / 'fires.db'}"))
-    now = tpe(19, 21, 30).astimezone(timezone.utc)  # after the evening margin data
-    source = FakeSource(now - timedelta(minutes=3), [("6857", "JP"), ("000660", "KR"), ("META", "US")],
-                        {("6857", "JP"): tpe(19, 17), ("000660", "KR"): tpe(19, 17), ("META", "US"): tpe(17, 8)})
+    positions = [("6857", "JP"), ("000660", "KR"), ("META", "US")]
+    # 21:20: the scheduled run has started without fresh Japan/Korea bars (IB logged out since Friday).
+    logged_out = FakeSource(tpe(16, 19).astimezone(timezone.utc), positions,
+                            {("6857", "JP"): tpe(16, 17), ("000660", "KR"): tpe(16, 17), ("META", "US"): tpe(17, 8)})
+    status = asyncio.run(automation.check(store, logged_out, tpe(19, 21, 20).astimezone(timezone.utc)))
+    assert {r["key"]: r["state"] for r in status["runs"]}["taiwan"] == "waiting-ib"
+    # 21:40: the owner logged in and the bars came in.
+    now = tpe(19, 21, 40).astimezone(timezone.utc)
+    source = FakeSource(now - timedelta(minutes=3), positions,
+                        {("6857", "JP"): tpe(19, 21, 35), ("000660", "KR"): tpe(19, 21, 35), ("META", "US"): tpe(17, 8)})
     fired = []
 
     async def fake_fire(run, text):
@@ -118,8 +151,27 @@ def test_check_fires_due_runs_once_and_reports_ib_status(tmp_path, monkeypatch):
     assert {r["key"]: r["state"] for r in again["runs"]}["taiwan"] == "done"
 
 
+def test_a_day_with_ib_up_fires_nothing_extra(tmp_path, monkeypatch):
+    store = AutomationStore(create_engine(f"sqlite:///{tmp_path / 'fires.db'}"))
+    fired = []
+
+    async def fake_fire(run, text):
+        fired.append(run.key)
+        return ""
+
+    monkeypatch.setattr(automation, "fire_routine", fake_fire)
+    monkeypatch.setenv("MARKET_ROUTINE_TAIWAN_TOKEN", "test-token")
+    for hour, minute in ((18, 0), (21, 20), (22, 0)):
+        now = tpe(19, hour, minute).astimezone(timezone.utc)
+        source = FakeSource(now - timedelta(minutes=3), [("6857", "JP")], {("6857", "JP"): tpe(19, 17)})
+        status = asyncio.run(automation.check(store, source, now))
+    assert fired == []
+    assert {r["key"]: r["state"] for r in status["runs"]}["taiwan"] == "scheduled"  # the 21:15 run had its data
+
+
 def test_failed_fire_is_released_and_stale_ib_asks_for_login(tmp_path, monkeypatch):
     store = AutomationStore(create_engine(f"sqlite:///{tmp_path / 'fires.db'}"))
+    store.record("taiwan:missed", date(2026, 10, 19), "")
     now = tpe(19, 21, 30).astimezone(timezone.utc)  # after the evening margin data
 
     async def broken_fire(run, text):
@@ -130,7 +182,7 @@ def test_failed_fire_is_released_and_stale_ib_asks_for_login(tmp_path, monkeypat
     fresh = FakeSource(now - timedelta(minutes=3), [], {})
     status = asyncio.run(automation.check(store, fresh, now))
     assert {r["key"]: r["state"] for r in status["runs"]}["taiwan"] == "error"
-    assert store.last_fired() == {}  # released, so the next check retries
+    assert "taiwan" not in store.last_fired()  # released, so the next check retries
 
     stale = FakeSource(tpe(16, 19).astimezone(timezone.utc), [("6857", "JP")], {("6857", "JP"): tpe(16, 19)})
     status = asyncio.run(automation.check(store, stale, now))

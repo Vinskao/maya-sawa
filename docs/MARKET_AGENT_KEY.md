@@ -40,14 +40,25 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 - **Environment setup:** the cloud environment needs only the network secret. Its host is reachable even at the
   default **Trusted** network level.
 
-## Automatic runs after the IB login (`services/market_automation.py`)
+## Catch-up runs after the IB login (`services/market_automation.py`)
 
 IBKR needs a manual login about once a day, so Japan, Korea and US bars only arrive while the session is alive.
+The routines run on their own cron (Taiwan 21:15 Mon–Fri, US 07:30 Tue–Sat, Taipei). Since 2026-10-23 maya-sawa
+only re-runs a routine whose scheduled run missed the IB data; a day with IB up fires nothing extra.
 
-- **When a run fires:** at most once per session, as soon as both of these hold:
-  - its markets have closed and the day's data is in: Taiwan, JP and KR close at 14:30 Taipei Mon–Fri but the run waits
-    until 21:10 for margin data (`fire_after`); US at 05:30 Taipei Tue–Sat;
-  - every holding in those markets has bars collected after the close.
+Flow (asynchronous, human in the loop):
+1. The scheduled run finds stale overseas bars, updates what it can and pushes a login reminder to the owner's phone.
+2. maya-sawa marks that session missed (`<run>:missed` in `maya_sawa_market_routine_fire`) once the scheduled time
+   has passed and the bars are still older than the close.
+3. The owner runs `ibkr-gateway\login.ps1`. maya-sawa opens the market-data session and collects the bars within
+   about 4 minutes.
+4. maya-sawa fires the routine again with a catch-up note (at most once per session, not before 15 minutes after
+   the scheduled time so the two runs do not overlap). Holdings already updated today are skipped as having no new
+   data.
+
+- **When a catch-up fires:** a session marked missed, not yet caught up, and every holding in the run's markets has
+  bars collected after the close (Taiwan, JP and KR close at 14:30 Taipei; US at 05:30). Logins after midnight
+  leave that day to the next scheduled run.
 - **When it is checked:**
   - after every IBKR collection pass;
   - when the owner opens the site (`POST /market/automation/check`).
@@ -63,5 +74,6 @@ IBKR needs a manual login about once a day, so Japan, Korea and US bars only arr
   within about 4 minutes and the due routines can fire.
 - **Fire tokens:** routine API trigger tokens, held in the optional Jenkins credentials `MARKET_ROUTINE_TAIWAN_TOKEN` and
   `MARKET_ROUTINE_US_TOKEN`. Jenkins puts them in the k8s Secret `market-routine-fire`. Without them, nothing is fired
-  and runs report `not-configured`.
-- **Fixed schedules:** still run as a fallback.
+  and runs report `not-configured`. As of 2026-10-23 neither is set in production.
+- **States reported:** `no-session`, `scheduled` (the cron run covers it), `waiting-ib` (missed, waiting for the
+  login and bars), `fired`, `done`, `not-configured`, `error` (released and retried on the next check).

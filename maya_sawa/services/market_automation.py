@@ -1,9 +1,11 @@
-"""Fire the scheduled AI-analysis routines once the IBKR data they need is in.
+"""Re-run an AI-analysis routine whose scheduled run missed the IBKR data, once the owner has logged in again.
 
 IBKR has no headless login: the owner signs in to the Client Portal Gateway by hand, and the session lapses after
-about a day. Japan, Korea and US holdings only get new bars while that session is alive. So besides the fixed
-schedules, each routine is fired once per trading day as soon as its markets have closed and the overseas bars
-were collected after that close. Checks run after every IBKR collection pass and when the owner opens the site.
+about a day. Japan, Korea and US holdings only get new bars while that session is alive. The routines run on fixed
+schedules (cloud cron); when a schedule passes while its markets' bars are stale, the run is marked missed (the
+routine itself pushes a login reminder). Once the owner logs in and the bars arrive, the routine is fired again,
+at most once per session. Days with IB up fire nothing extra. Checks run after every IBKR collection pass (about
+every 4 minutes) and when the owner opens the site.
 
 Routines are fired through the Claude Code routine API (POST .../routines/{id}/fire) with a per-routine token
 from the environment (MARKET_ROUTINE_TAIWAN_TOKEN, MARKET_ROUTINE_US_TOKEN). Without a token nothing is fired.
@@ -24,6 +26,7 @@ logger = logging.getLogger(__name__)
 TAIPEI = ZoneInfo("Asia/Taipei")
 FIRE_URL = "https://api.anthropic.com/v1/claude_code/routines/{routine}/fire"
 IB_STALE_AFTER = timedelta(minutes=15)  # the gateway is polled every 4 minutes while the session is alive
+CATCH_UP_AFTER = timedelta(minutes=15)  # give the scheduled run time to finish before starting another
 
 
 @dataclass(frozen=True)
@@ -35,15 +38,19 @@ class RoutineRun:
     weekdays: tuple[int, ...]  # Taipei weekdays (Mon=0) that follow a trading session
     ready: time  # Taipei time the session is closed; overseas bars must be collected after it
     fire_after: time  # Taipei time the day's local data is in, so the run may start
+    scheduled: time  # Taipei time of the routine's own cron run
 
 
 RUNS = (
     # Taiwan, Tokyo and Seoul all close by 14:30 Taipei. Margin balances and securities lending publish around
-    # 20:45 (measured 2026-10-19) and are collected at 21:00, so the run waits until 21:10.
-    RoutineRun("taiwan", "trig_01ECP68tWfgM749sJa3gBiN9", "MARKET_ROUTINE_TAIWAN_TOKEN", ("JP", "KR"), (0, 1, 2, 3, 4), time(14, 30), time(21, 10)),
-    # New York closes 04:00 (EDT) / 05:00 (EST) Taipei, Tuesday to Saturday.
-    RoutineRun("us", "trig_01NETQT5DCSHj4TKwv45nbJR", "MARKET_ROUTINE_US_TOKEN", ("US",), (1, 2, 3, 4, 5), time(5, 30), time(5, 30)),
+    # 20:45 (measured 2026-10-19) and are collected at 21:00, so the run waits until 21:10. Cron: 13:15 UTC.
+    RoutineRun("taiwan", "trig_01ECP68tWfgM749sJa3gBiN9", "MARKET_ROUTINE_TAIWAN_TOKEN", ("JP", "KR"), (0, 1, 2, 3, 4),
+               time(14, 30), time(21, 10), time(21, 15)),
+    # New York closes 04:00 (EDT) / 05:00 (EST) Taipei, Tuesday to Saturday. Cron: 23:30 UTC.
+    RoutineRun("us", "trig_01NETQT5DCSHj4TKwv45nbJR", "MARKET_ROUTINE_US_TOKEN", ("US",), (1, 2, 3, 4, 5),
+               time(5, 30), time(5, 30), time(7, 30)),
 )
+MISSED = ":missed"  # AutomationFire.run suffix marking a session whose scheduled run had stale bars
 
 
 def session_date(run: RoutineRun, now: datetime) -> date | None:
@@ -63,19 +70,39 @@ def ib_authenticated(last_portfolio_at: datetime | None, last_market_data_at: da
     return all(at is not None and now - at <= IB_STALE_AFTER for at in (last_portfolio_at, last_market_data_at))
 
 
-def due_runs(now: datetime, fired: dict[str, date], collected_at: dict[str, datetime | None]) -> list[RoutineRun]:
-    """Runs whose session closed, whose overseas bars were collected after that close, and that have not fired yet.
+def bars_ready(run: RoutineRun, day: date, collected_at: dict[str, datetime | None]) -> bool:
+    """Every market's holdings were collected after the session closed.
 
     collected_at maps a market to the oldest latest-successful bar collection among its holdings (None when a holding
     was never collected). A market without holdings is simply absent and does not block the run.
     """
+    closed_at = datetime.combine(day, run.ready, TAIPEI)
+    return all(collected_at[m] is not None and collected_at[m] >= closed_at for m in run.markets if m in collected_at)
+
+
+def missed_runs(now: datetime, collected_at: dict[str, datetime | None]) -> list[RoutineRun]:
+    """Runs whose scheduled time for today's session has passed while their bars were still stale."""
+    missed = []
+    for run in RUNS:
+        day = session_date(run, now)
+        if day is None or now < datetime.combine(day, run.scheduled, TAIPEI):
+            continue
+        if not bars_ready(run, day, collected_at):
+            missed.append(run)
+    return missed
+
+
+def due_runs(now: datetime, fired: dict[str, date], collected_at: dict[str, datetime | None],
+             missed: dict[str, date]) -> list[RoutineRun]:
+    """Missed runs whose bars have since arrived, once the scheduled run has had time to finish, once per session."""
     due = []
     for run in RUNS:
         day = session_date(run, now)
-        if day is None or fired.get(run.key) == day:
+        if day is None or fired.get(run.key) == day or missed.get(run.key) != day:
             continue
-        closed_at = datetime.combine(day, run.ready, TAIPEI)
-        if all(collected_at[m] is not None and collected_at[m] >= closed_at for m in run.markets if m in collected_at):
+        if now < datetime.combine(day, run.scheduled, TAIPEI) + CATCH_UP_AFTER:
+            continue
+        if bars_ready(run, day, collected_at):
             due.append(run)
     return due
 
@@ -184,8 +211,14 @@ async def check(store: AutomationStore, source, now: datetime | None = None) -> 
             collected[market] = at
         elif collected[market] is not None:
             collected[market] = None if at is None else min(at, collected[market])
-    fired = store.last_fired()
-    due = {run.key for run in due_runs(now, fired, collected)}
+    claims = store.last_fired()
+    fired = {key: day for key, day in claims.items() if not key.endswith(MISSED)}
+    missed = {key[:-len(MISSED)]: day for key, day in claims.items() if key.endswith(MISSED)}
+    for run in missed_runs(now, collected):
+        day = session_date(run, now)
+        if missed.get(run.key) != day and store.record(run.key + MISSED, day, ""):
+            missed[run.key] = day
+    due = {run.key for run in due_runs(now, fired, collected, missed)}
     runs = []
     for run in RUNS:
         day = session_date(run, now)
@@ -194,6 +227,8 @@ async def check(store: AutomationStore, source, now: datetime | None = None) -> 
             entry["state"] = "no-session"
         elif fired.get(run.key) == day:
             entry["state"] = "done"
+        elif missed.get(run.key) != day:
+            entry["state"] = "scheduled"  # the cron run covers it (or its time has not come yet)
         elif run.key not in due:
             entry["state"] = "waiting-ib"
         elif not os.environ.get(run.token_env, "").strip():
@@ -202,7 +237,10 @@ async def check(store: AutomationStore, source, now: datetime | None = None) -> 
             entry["state"] = "done"
         else:
             try:
-                entry["sessionUrl"] = await fire_routine(run, f"自動觸發：{', '.join(run.markets)} 收盤後的 IB 資料已收集（{now.astimezone(TAIPEI):%Y-%m-%d %H:%M} 台北）。")
+                entry["sessionUrl"] = await fire_routine(run, (
+                    f"補跑：今天的排程執行時 {', '.join(run.markets)} 的 IB 資料尚未更新（IB 未登入），"
+                    f"現在已收集（{now.astimezone(TAIPEI):%Y-%m-%d %H:%M} 台北）。照原本規則執行；"
+                    "已用今天資料更新過的標的會因沒有新資料而跳過，重點是先前因缺 IB 資料而跳過的標的。"))
                 entry["state"] = "fired"
             except Exception as exc:  # token missing, routine API down: retry on the next check
                 store.release(run.key, day)
