@@ -32,8 +32,9 @@ except ImportError as e:
     raise ImportError(f"python-dotenv is required but not installed. Please install with: poetry install") from e
 
 # ==================== 日誌配置 ====================
-# 設置日誌級別為 DEBUG，用於開發環境的詳細調試信息
-logging.basicConfig(level=logging.DEBUG)
+# 設置日誌級別為 DEBUG，用於開發環境的詳細調試信息；HTTP 用戶端的請求網址不記錄（OpenDART key 在 query 參數裡）
+from .core.log_config import configure_logging
+configure_logging()
 logger = logging.getLogger(__name__)
 
 # ==================== 環境變數配置 ====================
