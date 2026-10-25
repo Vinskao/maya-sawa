@@ -41,6 +41,33 @@ def test_missing_or_zero_revenue_never_creates_fake_margins():
     assert q['netIncome'] == -12
 
 
+def test_lumentum_debt_extinguishment_is_excluded_with_a_normalized_tax():
+    """FY2026: GAAP net loss $6.94B from a one-time $7.76B convertible-note extinguishment loss (8-K 2026-08-11)."""
+    import json
+    from pathlib import Path
+    raw = json.loads((Path(__file__).parent / 'fixtures' / 'sec_lite_fy2026_one_time.json').read_text(encoding='utf-8'))
+    data = normalize_sec_facts(raw)
+    year = next(row for row in data['annual'] if row['end'] == '2026-06-27')
+    assert year['netIncome'] == -6935100000 and year['epsDiluted'] == -92.96  # reported figures are kept
+    assert year['oneTimeItems'] == -7762500000  # extinguishment -7,756.6M and induced conversion 5.9M
+    # Pre-tax -7,172.8M without the one-time items is 589.7M; the $297M tax benefit that came with the charge is
+    # replaced by the 21% US federal rate, rather than adding the charge back to after-tax income.
+    assert year['netIncomeExcludingOneTime'] == 465863000
+    q1 = next(row for row in data['quarterly'] if row['end'] == '2025-09-27')
+    assert q1['oneTimeItems'] == -5900000 and q1['netIncomeExcludingOneTime'] == 8769000
+    q3 = next(row for row in data['quarterly'] if row['end'] == '2026-03-28')
+    assert q3['oneTimeItems'] == 0 and q3['netIncomeExcludingOneTime'] == 144200000  # zero impairment: as reported
+
+
+def test_one_time_items_need_the_tax_line_to_be_adjusted():
+    row = {'start': '2026-01-01', 'end': '2026-03-31', 'filed': '2026-05-01', 'form': '10-Q'}
+    q = normalize_sec_facts({'facts': {'us-gaap': {
+        'NetIncomeLoss': fact([{**row, 'val': -50}]), 'GoodwillImpairmentLoss': fact([{**row, 'val': 80}])}}})['quarterly'][0]
+    assert q['oneTimeItems'] == -80 and q['netIncomeExcludingOneTime'] is None  # no tax line: no guess
+    plain = normalize_sec_facts({'facts': {'us-gaap': {'NetIncomeLoss': fact([{**row, 'val': 7}])}}})['quarterly'][0]
+    assert 'oneTimeItems' not in plain and plain['netIncomeExcludingOneTime'] == 7
+
+
 def test_lumentum_including_tax_revenue_tag_is_supported():
     row = {'start': '2025-12-28', 'end': '2026-03-28', 'val': 808400000,
            'filed': '2026-05-06', 'form': '10-Q', 'fy': 2026, 'fp': 'Q3'}

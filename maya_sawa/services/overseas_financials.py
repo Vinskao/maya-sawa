@@ -26,6 +26,7 @@ METRICS = {
     'costOfRevenue': ('USD', ['CostOfRevenue', 'CostOfGoodsAndServicesSold']),
     'operatingIncome': ('USD', ['OperatingIncomeLoss']),
     'netIncome': ('USD', ['NetIncomeLoss']),
+    'incomeTax': ('USD', ['IncomeTaxExpenseBenefit']),
     'epsDiluted': ('USD/shares', ['EarningsPerShareDiluted']),
     'operatingCashFlow': ('USD', ['NetCashProvidedByUsedInOperatingActivities']),
     'capitalExpenditure': ('USD', ['PaymentsToAcquirePropertyPlantAndEquipment']),
@@ -36,6 +37,36 @@ METRICS = {
     'longTermDebtCurrent': ('USD', ['LongTermDebtCurrent']),
     'longTermDebtNoncurrent': ('USD', ['LongTermDebtNoncurrent']),
 }
+
+# Pre-tax items that do not recur, with the sign of their effect on income (a "gain/loss" tag is already signed;
+# an expense or impairment tag is reported positive). Restructuring is left in: some companies record it every year.
+ONE_TIME_ITEMS = {
+    'debtExtinguishmentGainLoss': (1, ['GainsLossesOnExtinguishmentOfDebt']),
+    'inducedConversionExpense': (-1, ['InducedConversionOfConvertibleDebtExpense']),
+    'goodwillImpairment': (-1, ['GoodwillImpairmentLoss']),
+    'intangibleImpairment': (-1, ['ImpairmentOfIntangibleAssetsExcludingGoodwill', 'ImpairmentOfIntangibleAssetsFinitelived']),
+    'businessDisposalGainLoss': (1, ['DisposalGroupNotDiscontinuedOperationGainLossOnDisposal']),
+}
+METRICS.update({key: ('USD', tags) for key, (_, tags) in ONE_TIME_ITEMS.items()})
+NORMALIZED_TAX_RATE = 0.21  # US federal statutory rate
+
+
+def _exclude_one_time(row):
+    """Net income without one-time items. A one-time charge usually carries its own tax effect (Lumentum FY2026: a
+    $297M benefit with a $7.76B debt-extinguishment loss), so the period's pre-tax income without those items is taxed
+    at the statutory rate instead of adding the pre-tax charge back to after-tax income. No tax line: no figure."""
+    items = [sign * row[key] for key, (sign, _) in ONE_TIME_ITEMS.items() if row.get(key) is not None]
+    net = row.get('netIncome')
+    if not items:
+        row['netIncomeExcludingOneTime'] = net
+        return
+    row['oneTimeItems'] = total = sum(items)
+    if not total or net is None:
+        row['netIncomeExcludingOneTime'] = net
+    elif row.get('incomeTax') is None:
+        row['netIncomeExcludingOneTime'] = None
+    else:
+        row['netIncomeExcludingOneTime'] = round((net + row['incomeTax'] - total) * (1 - NORMALIZED_TAX_RATE))
 
 
 def normalize_sec_facts(raw):
@@ -78,6 +109,7 @@ def normalize_sec_facts(raw):
             row['grossProfitCalculated'] = True
         for key, value in [('grossMarginPercent', gross), ('operatingMarginPercent', row.get('operatingIncome')), ('netMarginPercent', row.get('netIncome'))]:
             row[key] = round(value / revenue * 100, 4) if revenue and value is not None else None
+        _exclude_one_time(row)
     durations = sorted(groups.values(), key=lambda row: (row['end'], row['start']))
     return {'source': 'SEC EDGAR companyfacts', 'cik': raw.get('cik'), 'company': raw.get('entityName'),
         **{kind: [row for row in durations if row['periodType'] == kind][-12:] for kind in ('quarterly', 'annual', 'cumulative')},
@@ -85,6 +117,8 @@ def normalize_sec_facts(raw):
         'notes': ['All monetary amounts are USD, not millions; EPS is USD/share.',
                   'Calendar end/start and fiscal fy/fp are retained; fiscal years may differ from calendar years.',
                   'Only explicitly reported quarterly durations are shown; missing fourth-quarter facts are not fabricated.',
+                  'netIncomeExcludingOneTime removes debt extinguishment, induced conversion, impairments and business '
+                  'disposals (oneTimeItems, pre-tax) and applies a 21% tax to that period; other periods are as reported.',
                   'Cash flow may be cumulative YTD and is kept in its own period group. No analyst consensus included.']}
 
 
