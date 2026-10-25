@@ -1,39 +1,44 @@
 {
- "name": "Lumentum",
- "market": "US",
- "asOf": "2026-10-18",
- "summary": "光通訊雷射與模組廠：EML / CW 雷射晶片、800G/1.6T 光模組與光路交換（OCS）。",
- "supplyChain": "flowchart LR\n  INP[\"InP 基板 / 磊晶 聯亞等\"] --> LITE[\"Lumentum 雷射晶片 + 模組\"]\n  LITE --> MOD[\"800G / 1.6T 光模組\"]\n  LITE --> CW[\"CPO / 矽光子 CW 光源\"]\n  LITE --> OCS[\"光路交換 OCS\"]\n  MOD --> CSP[\"雲端 AI 叢集\"]\n  OCS --> CSP",
- "technology": "flowchart LR\n  EML[\"200G/lane EML 量產\"] --> CWL[\"高功率 CW 雷射 量產\"]\n  CWL --> CPO[\"CPO 外部光源 驗證中\"]\n  OCS[\"OCS 光路交換 量產初期\"]",
- "assessment": {
-  "cycle": {
-   "view": "順風",
-   "note": "AI 叢集光互連由 800G 往 1.6T 升級。"
+  "name": "Lumentum",
+  "market": "US",
+  "asOf": "2026-10-25",
+  "summary": "可插拔光模組與外置 CW 光源／矽光子是可並存的架構。OFC 展示能證明測試情境，不能直接證明大量出貨與獲利。",
+  "supplyChain": "flowchart TB\n  N0[\"雷射材料與晶片製程\"]\n  N1[\"Lumentum EML／CW 光源 S1\"]\n  N0 -->|功能／需求傳導，非訂單證明| N1\n  N2[\"光引擎／模組整合｜架構選擇 S1\"]\n  N1 -->|功能／需求傳導，非訂單證明| N2\n  N3[\"資料中心交換器／連結｜需求推論\"]\n  N2 -->|功能／需求傳導，非訂單證明| N3",
+  "technology": "flowchart TB\n  R[\"讀圖：並行能力／驗證關卡；未標明者不是時程承諾\"]\n  subgraph G0[\"1.6T 展示的並行架構 S1\"]\n    T0_0[\"8×200G EML｜展示情境 S1\"]\n    T0_1[\"CW 光源＋SiPh｜展示情境 S1\"]\n  end\n  R -->|能力或待驗證項目| T0_0\n  R -->|能力或待驗證項目| T0_1\n  subgraph G1[\"量產驗證關卡\"]\n    T1_0[\"BER／功耗需保留測試條件\"]\n    T1_1[\"展示→可靠度→客戶驗證→出貨｜不可跳步\"]\n  end\n  R -->|能力或待驗證項目| T1_0\n  R -->|能力或待驗證項目| T1_1",
+  "assessment": {
+    "cycle": {
+      "view": "順風",
+      "note": "S1：公司展示兩種 AI 光連結架構；長期流量需求不等於短期供應商訂單。"
+    },
+    "technology": {
+      "view": "中性",
+      "note": "展示的 BER 僅適用其測試環境；未取得同條件競品、封裝壽命與成本比較。"
+    },
+    "delivery": {
+      "view": "中性",
+      "note": "S3：SEC 財務已入站；FY2026 年度截止 2026-06-27，季度陣列較舊，不能把該陣列末筆當最新全部披露。"
+    }
   },
-  "technology": {
-   "view": "順風",
-   "note": "高速 EML 與 CW 雷射屬少數供應商，OCS 為新產品線。"
-  },
-  "delivery": {
-   "view": "順風",
-   "note": "SEC 10-Q：2026-03 季營收 8.08 億美元（前季 6.66 億），毛利率 44.2%（前季 36.1%），交貨與組合同步改善。"
-  }
- },
- "lean": "買",
- "leanReason": "時機：5 日 -17%、跌破 MA20（869.5 vs 993.7），RSI 40.5；方向偏多，等站回 MA60（900）再分批。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
- "watch": [
-  "下季營收指引",
-  "1.6T 份額"
- ],
- "sources": [
-  {
-   "label": "本站 IB 日線／技術指標",
-   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/LITE?market=US"
-  },
-  {
-   "label": "SEC EDGAR",
-   "url": "https://www.sec.gov/edgar/search/"
-  }
- ],
- "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+  "lean": "中立",
+  "leanReason": "因果橋：光連結埠數 × 光源內容價值 × 供應份額 → 收入；良率、擴產與產品組合決定毛利，營運現金扣資本支出才是回收。\n比較：Coherent／其他光源業者與不同調變架構為替代；同距離、BER、功耗、可靠度和成本條件才可比較。\n反方：CW／EML 方案切換、客戶自行整合或供給增加可能壓低單價，技術展示未必提升利潤。\n情境（條件而非預測）：多頭＝高速光源放量且良率／內容價值提升。 基準＝流量成長但架構與價格互相抵銷。 空頭＝客戶延遲、供給增加或方案切換壓縮利潤。\n營運方向依三軸：至少兩項順風且無逆風為買、至少兩項逆風為賣，其餘中立。這不是估值／風險調整後的投資評級；未估市場隱含預期，不提供目標價。",
+  "watch": [
+    "階段—下次業績需確認展示方案的量產收入，不以合作新聞替代交貨。",
+    "經濟性—核對產品毛利與擴產現金支出，單價下跌快於成本是警訊。",
+    "驗證—比較 BER、距離、功耗與溫度條件相同的測試。"
+  ],
+  "sources": [
+    {
+      "label": "S1 Lumentum AI optical infrastructure｜2026-05，OFC 展示",
+      "url": "https://www.lumentum.com/en/blog/enabling-next-phase-ai-optical-infrastructure"
+    },
+    {
+      "label": "S2 Lumentum FY2026 annual report｜SEC 2026 年存檔",
+      "url": "https://www.sec.gov/Archives/edgar/data/1633978/000130817926000422/lite-ars.pdf"
+    },
+    {
+      "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+      "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/LITE?market=US"
+    }
+  ],
+  "basis": "研究草稿／2026-10-25 依研究品質指引重審。事實、公司規劃與推論已分開；圖的箭頭只表示標註的功能／需求關係，不證明交易、獨家供貨或因果已成立。S 編號對應下列來源。證據限制：沒有量產客戶份額及各架構的收入拆分；OFC 展示與 SEC 年報的日期、用途不同。 六項門檻詳見同版 evidence ledger；競品可比 KPI、估值與部分量產證據仍未齊備，因此不宣稱全部通過。"
 }

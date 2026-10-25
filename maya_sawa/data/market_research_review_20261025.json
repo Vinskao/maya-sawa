@@ -1,0 +1,2065 @@
+{
+  "reviewedAt": "2026-10-25",
+  "author": "Codex",
+  "guideline": "/research-guide.md",
+  "scope": "20 current instruments plus retained 000660-KR",
+  "publicReports": {
+    "claims": "code first, then industry segment; public only",
+    "semanticSearch": {
+      "status": 503,
+      "query": "CoWoS capacity",
+      "include_private": false
+    },
+    "limitation": "Only one public report surfaced; publisher and publication date missing. Claims are opinions, not independent verification."
+  },
+  "records": {
+    "2330": {
+      "identity": {
+        "code": "2330",
+        "market": "TW",
+        "name": "台積電"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S1：Q3 美元營收 467.2 億；Q4 指引 523–543 億美元是公司預期，不是已實現需求。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S2：N2 已量產為公司披露；未取得同條件競品良率／成本，不能由節點名稱推定全面領先。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S2"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S1：2026Q3 毛利率 66.4%、營益率 58.7%。本站季報仍到 Q2，這裡優先使用 Q3 官方資料。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        }
+      ],
+      "comparison": "Samsung／Intel 的替代能力應以同功耗效能、設計生態、良率與交期比較；本次沒有可比客戶良率資料。封裝也要與其他 2.5D／3D 方案比頻寬、功耗與總成本。",
+      "financialBridge": "有效晶圓出貨 × ASP／組合 → 營收 → 良率與產能利用率影響毛利 → 新廠折舊與資本支出決定自由現金流。N2 爬坡不能直接等同 EPS 增幅。",
+      "counterargument": "AI 客戶集中、擴產後折舊或需求正常化，可能令營收成長與股東現金回報脫鉤。",
+      "scenarios": {
+        "bull": "N2／封裝需求轉為高利用率且現金轉換維持。",
+        "base": "先進節點成長但新廠成本抵銷部分增益。",
+        "bear": "客戶下修或良率／擴產成本壓縮現金回收。"
+      },
+      "observableChecks": [
+        "N2 爬坡—下次法說核對量產與客戶採用，若只剩時程敘述而無進展，技術順風降級。",
+        "交貨—逐季比較實際美元營收與前季指引；低於下緣須重估需求。",
+        "資本效率—追蹤毛利、折舊、資本支出與營業現金流；營收升而現金轉換惡化需解釋。"
+      ],
+      "sources": [
+        {
+          "label": "S1 TSMC 2026Q3 results｜2026-10-15",
+          "url": "https://investor.tsmc.com/english/quarterly-results/2026/q3"
+        },
+        {
+          "label": "S2 TSMC 3Q26 transcript｜2026-10-15，p5 N2/A14",
+          "url": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2330"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "節點良率、各客戶封裝分配及同條件競品成本未披露；沒有估值與市場隱含成長假設。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "Samsung／Intel 的替代能力應以同功耗效能、設計生態、良率與交期比較；本次沒有可比客戶良率資料。封裝也要與其他 2.5D／3D 方案比頻寬、功耗與總成本。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "有效晶圓出貨 × ASP／組合 → 營收 → 良率與產能利用率影響毛利 → 新廠折舊與資本支出決定自由現金流。N2 爬坡不能直接等同 EPS 增幅。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "AI 客戶集中、擴產後折舊或需求正常化，可能令營收成長與股東現金回報脫鉤。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "節點良率、各客戶封裝分配及同條件競品成本未披露；沒有估值與市場隱含成長假設。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "節點良率、各客戶封裝分配及同條件競品成本未披露；沒有估值與市場隱含成長假設。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除未重新核實的 A16 2026H2 節點，以及 CoWoS→SoIC→CoPoS 的假線性；移除舊外資與均線進場條件。",
+      "publicationStatus": "研究草稿"
+    },
+    "3711": {
+      "identity": {
+        "code": "3711",
+        "market": "TW",
+        "name": "日月光投控"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月總營收年增 45.52%；包含不同事業，不能全歸因 AI 封裝。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1/S2 證實平台與面板能力；缺各平台產能利用率、良率與高階業務占比。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1",
+            "S2"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 營益率 11.04%；Q3 技術產品收入與現金回收尚未由本站季報驗證。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "與其他 OSAT 比較相同封裝面積／互連密度下的良率、測試涵蓋與交期；晶圓廠整合封裝同時是互補與競爭。未取得可比數值。",
+      "financialBridge": "先進封裝承接量 × 服務單價 → 封測營收；設備折舊、稼動率與良率決定單位利潤，投控總營收須拆封測與 EMS 後再分析。",
+      "counterargument": "新平台投資先發生、客戶認證延後，或高營收由低毛利 EMS 拉動，總營收會高估封測改善。",
+      "scenarios": {
+        "bull": "高階封裝放量並改善封測利潤。",
+        "base": "營收成長但折舊與 EMS 組合抵銷。",
+        "bear": "認證延遲、產能閒置導致投資回收拉長。"
+      },
+      "observableChecks": [
+        "產品組合—核對下一次法說封測／EMS 與先進封裝收入，無拆分則不得宣稱全面轉型。",
+        "面板量產—要求客戶認證、良率與出貨證據，發表不計作量產。",
+        "回收—追蹤資本支出、折舊和營業現金流；稼動率不足時下修方向。"
+      ],
+      "sources": [
+        {
+          "label": "S1 ASE VIPack 平台｜日期未標示，讀取 2026-10-25",
+          "url": "https://ase.aseglobal.com/VIPack/"
+        },
+        {
+          "label": "S2 ASE 310×310 面板封裝發表｜2026-05",
+          "url": "https://www.aseglobal.com/press-room/310x310/"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3711"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "平台頁沒有更新日；未取得面板封裝的客戶量產良率、收入與同條件競品數據。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "與其他 OSAT 比較相同封裝面積／互連密度下的良率、測試涵蓋與交期；晶圓廠整合封裝同時是互補與競爭。未取得可比數值。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "先進封裝承接量 × 服務單價 → 封測營收；設備折舊、稼動率與良率決定單位利潤，投控總營收須拆封測與 EMS 後再分析。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "新平台投資先發生、客戶認證延後，或高營收由低毛利 EMS 拉動，總營收會高估封測改善。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "平台頁沒有更新日；未取得面板封裝的客戶量產良率、收入與同條件競品數據。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "平台頁沒有更新日；未取得面板封裝的客戶量產良率、收入與同條件競品數據。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除將所有封裝技術串成升級階梯、未有來源的客戶分單與市場占有率。",
+      "publicationStatus": "研究草稿"
+    },
+    "6187": {
+      "identity": {
+        "code": "6187",
+        "market": "TW",
+        "name": "萬潤"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 109.24%；設備業須辨認認列批次與基期。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 支持精密自動化能力，但沒有客戶端 UPH／精度／良率的可比結果。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 毛利率 54.77%、營益率 33.27%；非各新設備個別獲利。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "對手設備與客戶自行整合是替代；比較同製程 UPH、定位誤差、良率及總持有成本，本次沒有同條件公開測試。",
+      "financialBridge": "客戶擴產瓶頸 → 設備需求 → 訂單／交機／驗收 → 營收；售後成本、良率與回款決定毛利和現金。",
+      "counterargument": "大客戶資本支出延後或驗收集中，可能造成季度高成長難以延續。",
+      "scenarios": {
+        "bull": "設備驗收與重複訂單同步增長。",
+        "base": "客戶擴產延續但認列起伏。",
+        "bear": "資本支出遞延或替代設備壓價。"
+      },
+      "observableChecks": [
+        "驗收—逐季核對交機與收入認列差異，長期遞延須降低交貨評價。",
+        "能力—下一次技術資料要求定位誤差、UPH、量產良率與測試條件。",
+        "現金—追蹤合約負債、應收與營業現金流，避免只看訂單。"
+      ],
+      "sources": [
+        {
+          "label": "S1 萬潤核心技術｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.allring-tech.com.tw/about3.htm"
+        },
+        {
+          "label": "S2 萬潤公司介紹｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.allring-tech.com.tw/about1.htm"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6187"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "沒有具名客戶導入證明、設備型號量產指標與訂單能見度拆分；不得把 CPO 能力稱為已大量出貨。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "對手設備與客戶自行整合是替代；比較同製程 UPH、定位誤差、良率及總持有成本，本次沒有同條件公開測試。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "客戶擴產瓶頸 → 設備需求 → 訂單／交機／驗收 → 營收；售後成本、良率與回款決定毛利和現金。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "大客戶資本支出延後或驗收集中，可能造成季度高成長難以延續。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "沒有具名客戶導入證明、設備型號量產指標與訂單能見度拆分；不得把 CPO 能力稱為已大量出貨。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "沒有具名客戶導入證明、設備型號量產指標與訂單能見度拆分；不得把 CPO 能力稱為已大量出貨。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除無來源的特定客戶綁定及技術→營收自動跳躍。",
+      "publicationStatus": "研究草稿"
+    },
+    "3443": {
+      "identity": {
+        "code": "3443",
+        "market": "TW",
+        "name": "創意電子"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 97.78%；成長是否由單一 turnkey 專案拉動須拆分。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 的 IP 速度為公司規格；沒有同功耗／面積測試及客戶良率，不能判定競品全面落後。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 營收年增 127.64%，毛利率 21.55%、年減 11.77pp，展示營收與利潤非等比例。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "Broadcom／Marvell 與客戶自研團隊為替代；比較時程、IP 完整度、功耗與整體量產成本，不能只比 pin 速率。",
+      "financialBridge": "設計 win → NRE／IP 收入；成功驗證後晶片量產才可能產生 turnkey 收入。晶圓轉售額與設計附加價值不同，須同看營業利益和回款。",
+      "counterargument": "turnkey 量增可稀釋毛利率；單一客戶延後或一次性 NRE 完成可造成高成長逆轉。",
+      "scenarios": {
+        "bull": "多客戶設計案轉量產且利潤額提高。",
+        "base": "turnkey 成長稀釋毛利率但利潤維持。",
+        "bear": "專案延遲與集中度造成收入／庫存壓力。"
+      },
+      "observableChecks": [
+        "組合—法說核對 NRE／turnkey／IP 占比；營收升但營業利益停滯須調整結論。",
+        "量產—專案須有驗證與量產證據，不能用 IP 新聞代替出貨。",
+        "風險—追蹤客戶集中、應收與存貨，量產庫存攀升而回款下降是警訊。"
+      ],
+      "sources": [
+        {
+          "label": "S1 GUC HBM IP portfolio｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.guc-asic.com/en/solutions/IPPortfolio/HBMIP"
+        },
+        {
+          "label": "S2 GUC 官方新聞索引｜讀取 2026-10-25，索引不是出貨證明",
+          "url": "https://www.guc-asic.com/en/news"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3443"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "新聞索引的較新標題未逐篇查證；本次只引用已讀 IP 頁的能力，不推定最新產品已量產。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "Broadcom／Marvell 與客戶自研團隊為替代；比較時程、IP 完整度、功耗與整體量產成本，不能只比 pin 速率。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "設計 win → NRE／IP 收入；成功驗證後晶片量產才可能產生 turnkey 收入。晶圓轉售額與設計附加價值不同，須同看營業利益和回款。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "turnkey 量增可稀釋毛利率；單一客戶延後或一次性 NRE 完成可造成高成長逆轉。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "新聞索引的較新標題未逐篇查證；本次只引用已讀 IP 頁的能力，不推定最新產品已量產。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "新聞索引的較新標題未逐篇查證；本次只引用已讀 IP 頁的能力，不推定最新產品已量產。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除每代 IP 必然轉成同代 ASIC 訂單、無來源的客戶量產進度。",
+      "publicationStatus": "研究草稿"
+    },
+    "6857-JP": {
+      "identity": {
+        "code": "6857-JP",
+        "market": "JP",
+        "name": "Advantest"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "AI 晶片複雜度增加測試機會為推論；不能將晶片營收增幅當 ATE 訂單增幅。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        },
+        {
+          "id": "C2",
+          "statement": "S1 支持產品分工；未取得同機種吞吐、良率與競品比較。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3 已有 J-Quants 財務，非無資料；站內年度截至 2026-03-31。S2 的 10-28 業績會尚未發生，不提前填當期數字。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S2",
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "Teradyne 與既有機台升級是替代；比較相同 DUT 的測試覆蓋、每小時產出與每顆測試成本，缺同條件數據。",
+      "financialBridge": "晶片量 × 測試秒數 ÷ 並測吞吐 → 所需測試產能 → 設備／服務收入；客戶利用率與設備交期決定新增訂單而非單看 AI 出貨。",
+      "counterargument": "並測效率提高或客戶既有機台閒置，可能讓晶片量增卻沒有等比例設備需求。",
+      "scenarios": {
+        "bull": "測試強度提升且新增機台需求增加。",
+        "base": "複雜度被並測效率部分抵銷。",
+        "bear": "客戶機台利用不足、資本支出下修。"
+      },
+      "observableChecks": [
+        "時點—10-28 後核對正式季度結果與訂單指引，未公布前保留交貨中性。",
+        "測試強度—要求同 DUT 測試時間／並測數／UPH，單獨 pin 速度不足以證明優勢。",
+        "週期—追蹤設備交期與客戶稼動率，交期縮短且訂單下修是反轉訊號。"
+      ],
+      "sources": [
+        {
+          "label": "S1 Advantest Investors Guide｜2025-04-25，測試流程／產品",
+          "url": "https://www.advantest.com/document/en/investors/ir-library/investors-guide/Investors_Guide_2504E.pdf"
+        },
+        {
+          "label": "S2 Advantest 官方新聞｜讀取 2026-10-25；下一次業績會 10-28",
+          "url": "https://www.advantest.com/en/news/2026/"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/6857?market=JP"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "產品流程引用 2025 指南，不宣稱為 2026 市占；本次未讀下一期財報。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "Teradyne 與既有機台升級是替代；比較相同 DUT 的測試覆蓋、每小時產出與每顆測試成本，缺同條件數據。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "晶片量 × 測試秒數 ÷ 並測吞吐 → 所需測試產能 → 設備／服務收入；客戶利用率與設備交期決定新增訂單而非單看 AI 出貨。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "並測效率提高或客戶既有機台閒置，可能讓晶片量增卻沒有等比例設備需求。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "產品流程引用 2025 指南，不宣稱為 2026 市占；本次未讀下一期財報。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "產品流程引用 2025 指南，不宣稱為 2026 市占；本次未讀下一期財報。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除缺 EDINET key 等同沒有財務資料的舊說法，以及平台必然逐代替代的箭頭。",
+      "publicationStatus": "研究草稿"
+    },
+    "3081": {
+      "identity": {
+        "code": "3081",
+        "market": "TW",
+        "name": "聯亞光電"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 190.16%，低基期與產品組合須一起解讀。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 支持磊晶類別，不支持特定 CPO 客戶、六吋良率與量產市占。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 毛利率 57.45%、營益率 46.89%；未拆分矽光子收入。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "IQE／其他磊晶供應商及客戶內製為比較對象；同波長、功率與可靠度下比缺陷密度、良率、成本，沒有可比公開值。",
+      "financialBridge": "可售磊晶面積 × 合格率 × 單價 → 收入；不同光源架構影響材料需求，客戶驗證和量產良率才將流量成長轉為毛利。",
+      "counterargument": "客戶集中與光源方案切換，可能令終端需求上升而磊晶份額下降。",
+      "scenarios": {
+        "bull": "新光源量產合格率提升且客戶放量。",
+        "base": "需求增長但產品與客戶分配未知。",
+        "bear": "認證延後或替代光源造成份額流失。"
+      },
+      "observableChecks": [
+        "採用—要求客戶驗證／量產收入證據，不把 Datacenter 產品頁當設計 win。",
+        "擴產—若再提六吋 InP，必須有官方時程、良率與產能資料。",
+        "獲利—核對下一季營收、毛利與現金流，成長但良率成本惡化須降級。"
+      ],
+      "sources": [
+        {
+          "label": "S1 聯亞 Datacenter 產品｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.lmoc.com.tw/index.php?id=16&index=2&lang=cht&option=module&task=pageinfo"
+        },
+        {
+          "label": "S2 聯亞法說資料索引｜2026-08-12 Q2 條目，未逐頁審閱簡報",
+          "url": "https://www.lmoc.com.tw/index.php?id=308&index=5&lang=cht&option=module&task=showlist"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3081"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "法說索引不代表已讀完整簡報；六吋 InP、CPO 收入與客戶認證未核實。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "IQE／其他磊晶供應商及客戶內製為比較對象；同波長、功率與可靠度下比缺陷密度、良率、成本，沒有可比公開值。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "可售磊晶面積 × 合格率 × 單價 → 收入；不同光源架構影響材料需求，客戶驗證和量產良率才將流量成長轉為毛利。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "客戶集中與光源方案切換，可能令終端需求上升而磊晶份額下降。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "法說索引不代表已讀完整簡報；六吋 InP、CPO 收入與客戶認證未核實。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "法說索引不代表已讀完整簡報；六吋 InP、CPO 收入與客戶認證未核實。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "刪除無一手支持的六吋 InP 量產時程與確定客戶連線。",
+      "publicationStatus": "研究草稿"
+    },
+    "LITE-US": {
+      "identity": {
+        "code": "LITE-US",
+        "market": "US",
+        "name": "Lumentum"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S1：公司展示兩種 AI 光連結架構；長期流量需求不等於短期供應商訂單。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "展示的 BER 僅適用其測試環境；未取得同條件競品、封裝壽命與成本比較。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        },
+        {
+          "id": "C3",
+          "statement": "S3：SEC 財務已入站；FY2026 年度截止 2026-06-27，季度陣列較舊，不能把該陣列末筆當最新全部披露。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "Coherent／其他光源業者與不同調變架構為替代；同距離、BER、功耗、可靠度和成本條件才可比較。",
+      "financialBridge": "光連結埠數 × 光源內容價值 × 供應份額 → 收入；良率、擴產與產品組合決定毛利，營運現金扣資本支出才是回收。",
+      "counterargument": "CW／EML 方案切換、客戶自行整合或供給增加可能壓低單價，技術展示未必提升利潤。",
+      "scenarios": {
+        "bull": "高速光源放量且良率／內容價值提升。",
+        "base": "流量成長但架構與價格互相抵銷。",
+        "bear": "客戶延遲、供給增加或方案切換壓縮利潤。"
+      },
+      "observableChecks": [
+        "階段—下次業績需確認展示方案的量產收入，不以合作新聞替代交貨。",
+        "經濟性—核對產品毛利與擴產現金支出，單價下跌快於成本是警訊。",
+        "驗證—比較 BER、距離、功耗與溫度條件相同的測試。"
+      ],
+      "sources": [
+        {
+          "label": "S1 Lumentum AI optical infrastructure｜2026-05，OFC 展示",
+          "url": "https://www.lumentum.com/en/blog/enabling-next-phase-ai-optical-infrastructure"
+        },
+        {
+          "label": "S2 Lumentum FY2026 annual report｜SEC 2026 年存檔",
+          "url": "https://www.sec.gov/Archives/edgar/data/1633978/000130817926000422/lite-ars.pdf"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/LITE?market=US"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "沒有量產客戶份額及各架構的收入拆分；OFC 展示與 SEC 年報的日期、用途不同。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "Coherent／其他光源業者與不同調變架構為替代；同距離、BER、功耗、可靠度和成本條件才可比較。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "光連結埠數 × 光源內容價值 × 供應份額 → 收入；良率、擴產與產品組合決定毛利，營運現金扣資本支出才是回收。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "CW／EML 方案切換、客戶自行整合或供給增加可能壓低單價，技術展示未必提升利潤。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "沒有量產客戶份額及各架構的收入拆分；OFC 展示與 SEC 年報的日期、用途不同。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "沒有量產客戶份額及各架構的收入拆分；OFC 展示與 SEC 年報的日期、用途不同。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除 800G→1.6T→CPO 必然單向替代及缺少美股財務的描述。",
+      "publicationStatus": "研究草稿"
+    },
+    "3105": {
+      "identity": {
+        "code": "3105",
+        "market": "TW",
+        "name": "穩懋"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 29.97%，但總營收無法識別 RF 與新光電貢獻。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 證實代工平台，缺同應用良率、成本與競品性能比較。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 存貨天數 183.44 天、季增 44.71 天；與營收回升並存，尚不足判定健康拉貨。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "其他化合物代工及客戶 IDM 是替代；GaAs、GaN 與矽系方案需按頻率、功率、效率和總成本比較，不能跨用途排名。",
+      "financialBridge": "客戶投片 × 晶圓單價 → 收入；稼動率／良率影響固定成本吸收，庫存與應收變化決定營收是否轉成現金。",
+      "counterargument": "營收復甦可能是補庫而非終端需求，庫存天數持續增加會壓低現金品質。",
+      "scenarios": {
+        "bull": "需求回升、稼動率改善且存貨轉快。",
+        "base": "溫和復甦與庫存消化同時發生。",
+        "bear": "終端不振／替代架構使庫存續升。"
+      },
+      "observableChecks": [
+        "存貨—下一季核對存貨天數，若營收升而天數續升，維持交貨中性。",
+        "組合—要求 RF／光電產品收入或稼動率，沒有拆分不歸因 CPO。",
+        "競爭—同頻率與功率下比效率、良率及成本，非只比材料名稱。"
+      ],
+      "sources": [
+        {
+          "label": "S1 WIN foundry services｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.winfoundry.com/en-US/Service/service_foundry"
+        },
+        {
+          "label": "S2 聯亞 Datacenter 產品｜供應鏈角色對照，非穩懋客戶證據",
+          "url": "https://www.lmoc.com.tw/index.php?id=16&index=2&lang=cht&option=module&task=pageinfo"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3105"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "S2 只供角色對照，不證明商業關係。新光電設計 win、量產時程與客戶占比未知。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "其他化合物代工及客戶 IDM 是替代；GaAs、GaN 與矽系方案需按頻率、功率、效率和總成本比較，不能跨用途排名。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "客戶投片 × 晶圓單價 → 收入；稼動率／良率影響固定成本吸收，庫存與應收變化決定營收是否轉成現金。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "營收復甦可能是補庫而非終端需求，庫存天數持續增加會壓低現金品質。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "S2 只供角色對照，不證明商業關係。新光電設計 win、量產時程與客戶占比未知。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "S2 只供角色對照，不證明商業關係。新光電設計 win、量產時程與客戶占比未知。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除 GaAs→GaN→InP 的假線性與未證實 CPO 放量連結。",
+      "publicationStatus": "研究草稿"
+    },
+    "6442": {
+      "identity": {
+        "code": "6442",
+        "market": "TW",
+        "name": "光聖"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 97.26%；尚無各終端或客戶收入拆分。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1/S2 支持產品範圍，未證明特定 FAU／CPO 的客戶驗證與份額。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1",
+            "S2"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 毛利率 62.51%；存貨天數 134.29 天、年增 53.30 天，需核實備貨與拉貨配合。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "其他精密連接／光模組供應商為替代；應比同介面損耗、溫循可靠度、密度與量產成本，未取得同條件比較。",
+      "financialBridge": "埠數 × 每埠連接內容 × 公司份額 → 收入；精密組裝良率與自動化影響毛利，庫存周轉驗證放量是否可持續。",
+      "counterargument": "高毛利可能集中於少數客戶或產品，方案變更與庫存去化會放大波動。",
+      "scenarios": {
+        "bull": "密度升級與客戶採用提高內容價值。",
+        "base": "營收成長但備貨占用現金。",
+        "bear": "客戶或介面切換造成庫存與價格壓力。"
+      },
+      "observableChecks": [
+        "資格—若稱 CPO 或 FAU 量產，必須補具名產品與驗證證據。",
+        "周轉—下一季比營收與存貨天數，存貨續增且收入減速是反證。",
+        "組合—要求 RF／光通訊與主要客戶集中度，避免將總成長全歸因 AI。"
+      ],
+      "sources": [
+        {
+          "label": "S1 EZconn 產品總覽｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.ezconn.com/index.php/en/product"
+        },
+        {
+          "label": "S2 EZconn 被動光纖產品｜日期未標示，讀取 2026-10-25",
+          "url": "https://ezconn.com/index.php/en/product/FiberOpticsProducts/Passive"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6442"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "產品頁無更新日，沒有客戶認證、量產損耗分布與收入拆分。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "其他精密連接／光模組供應商為替代；應比同介面損耗、溫循可靠度、密度與量產成本，未取得同條件比較。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "埠數 × 每埠連接內容 × 公司份額 → 收入；精密組裝良率與自動化影響毛利，庫存周轉驗證放量是否可持續。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "高毛利可能集中於少數客戶或產品，方案變更與庫存去化會放大波動。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "產品頁無更新日，沒有客戶認證、量產損耗分布與收入拆分。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "產品頁無更新日，沒有客戶認證、量產損耗分布與收入拆分。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除被動產品必然升級成 CPO 的路線與未證實客戶配對。",
+      "publicationStatus": "研究草稿"
+    },
+    "6524-JP": {
+      "identity": {
+        "code": "6524-JP",
+        "market": "JP",
+        "name": "湖北工業"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S2：光學業務主要關聯海纜；資料中心流量增加對海纜是間接需求，需觀察專案與元件訂單。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S2"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 支持隔離器／磁光元件能力，未取得不同應用同條件壽命、損耗與競品成本。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3 已有 J-Quants 財務；最新站內季度截至 2026-03-31，不能稱為最新 Q3，兩業務當期收入拆分待查。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "其他隔離器與光學元件商為替代；同波段、插損、隔離度、壽命及海纜資格才可比，公司自估市占不作獨立驗證。",
+      "financialBridge": "海纜／光放大設備專案 → 合格隔離元件量 × 單價 → 光學收入；導線端子需獨立估算，產品組合與材料良率決定利潤。",
+      "counterargument": "海纜建置周期與資料中心周期不同，AI 敘事可能高估當期訂單；材料投資也可能先侵蝕現金。",
+      "scenarios": {
+        "bull": "海纜交付增加且高可靠度元件組合改善。",
+        "base": "兩業務依各自周期波動。",
+        "bear": "專案延遲與材料投資拖累現金回收。"
+      },
+      "observableChecks": [
+        "拆分—核對下一次法說導線端子／光學營收，避免混算 AI 曝險。",
+        "訂單—追蹤海纜專案交付與可辨識元件需求，流量預測不能替代訂單。",
+        "可靠度—要求同波段損耗／隔離度及壽命資料，新應用需另外驗證。"
+      ],
+      "sources": [
+        {
+          "label": "S1 Kohoku optical devices｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.kohokukogyo.co.jp/en/product/optical-communication-part-and-device/"
+        },
+        {
+          "label": "S2 Kohoku IR FAQ｜更新 2026-04-14",
+          "url": "https://www.kohokukogyo.co.jp/en/ir/faq/"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/6524?market=JP"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "FAQ 是公司陳述；未核實自估市占、直接 AI 收入與最新季度財務。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "其他隔離器與光學元件商為替代；同波段、插損、隔離度、壽命及海纜資格才可比，公司自估市占不作獨立驗證。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "海纜／光放大設備專案 → 合格隔離元件量 × 單價 → 光學收入；導線端子需獨立估算，產品組合與材料良率決定利潤。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "海纜建置周期與資料中心周期不同，AI 敘事可能高估當期訂單；材料投資也可能先侵蝕現金。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "FAQ 是公司陳述；未核實自估市占、直接 AI 收入與最新季度財務。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "FAQ 是公司陳述；未核實自估市占、直接 AI 收入與最新季度財務。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除端子→隔離器→CPO 的假線性與需 EDINET key 的舊敘述。",
+      "publicationStatus": "研究草稿"
+    },
+    "3017": {
+      "identity": {
+        "code": "3017",
+        "market": "TW",
+        "name": "奇鋐"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 44.92%；總營收包含多類產品，尚不能歸因液冷。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 細節為圖片，未驗證熱阻、壓降、漏液率或指定平台資格；S2 只解釋一般架構。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1",
+            "S2"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 存貨天數 159.44 天、季增 24.40 天；備貨與客戶拉貨是否匹配尚待下一期核對。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "雙鴻及其他熱管理商／不同液冷架構為替代；同熱流、流量、壓降、可靠度與總持有成本比較，沒有完整同條件數據。",
+      "financialBridge": "每台伺服器散熱內容 × 出貨台數 × 份額 → 收入；熱設計良率、保固、組裝與材料成本決定毛利，不能只用瓦數推估利潤。",
+      "counterargument": "高內容價值可能伴隨低毛利系統整合和保固責任，客戶平台延後會使備貨變成現金壓力。",
+      "scenarios": {
+        "bull": "平台放量、良率穩定且存貨轉快。",
+        "base": "液冷成長但組合與成本抵銷利潤。",
+        "bear": "平台遞延或保固成本使高營收低現金。"
+      },
+      "observableChecks": [
+        "規格—取得可讀官方型號資料後比較熱阻／壓降／漏液與壽命，無數據不寫領先。",
+        "認列—核對液冷／其他業務拆分及客戶平台出貨，不把樣品當收入。",
+        "存貨—下一季營收減速且存貨天數續增時，交貨評價下修。"
+      ],
+      "sources": [
+        {
+          "label": "S1 AVC Cooling Solutions｜日期未標示，讀取 2026-10-25；細節為圖片",
+          "url": "https://www.avc.co/en-us/ProductTechnology/%E6%95%A3%E7%86%B1%E7%94%A2%E5%93%81/%E6%95%A3%E7%86%B1%E6%96%B9%E6%A1%88"
+        },
+        {
+          "label": "S2 OCP cold-plate project｜架構參考，不是奇鋐認證",
+          "url": "https://www.opencompute.org/projects/cooling-environments/cold-plate/"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3017"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "未讀到官網圖片的技術規格；沒有客戶認證、液冷收入占比、競品測試與最新 Q3 財務。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "雙鴻及其他熱管理商／不同液冷架構為替代；同熱流、流量、壓降、可靠度與總持有成本比較，沒有完整同條件數據。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "每台伺服器散熱內容 × 出貨台數 × 份額 → 收入；熱設計良率、保固、組裝與材料成本決定毛利，不能只用瓦數推估利潤。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "高內容價值可能伴隨低毛利系統整合和保固責任，客戶平台延後會使備貨變成現金壓力。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "未讀到官網圖片的技術規格；沒有客戶認證、液冷收入占比、競品測試與最新 Q3 財務。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "未讀到官網圖片的技術規格；沒有客戶認證、液冷收入占比、競品測試與最新 Q3 財務。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除風扇→熱管→冷板→浸沒的假線性與特定平台必然供貨。",
+      "publicationStatus": "研究草稿"
+    },
+    "3324": {
+      "identity": {
+        "code": "3324",
+        "market": "TW",
+        "name": "雙鴻"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 23.23%、月減 8.19%；不能只看 AI 敘事忽略短期動能。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 是較舊年報，支持產品存在，不證明 2026 系統規格與資格。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 營益率 15.98%、存貨天數 112.68 天；未取得新平台逐項驗收與收入。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "奇鋐／其他系統液冷商為替代；相同熱負載與設施條件下比熱阻、壓降、可靠度、維護與成本，未取得完整可比結果。",
+      "financialBridge": "散熱內容 × 平台出貨 × 公司份額 → 收入；子系統整合提高內容也增加材料、驗證與保固成本，需觀察利潤額與營運現金。",
+      "counterargument": "液冷收入放量若伴隨低毛利整合、客戶遞延或保固成本，收入成長可能沒有利潤成長。",
+      "scenarios": {
+        "bull": "平台放量且系統整合利潤改善。",
+        "base": "成長與成本／認列波動相抵。",
+        "bear": "平台延遲或保固成本造成營運槓桿反轉。"
+      },
+      "observableChecks": [
+        "新資料—下次更新優先取得 2026 官方簡報與出貨驗證，舊年報不直接沿用新平台規格。",
+        "動能—核對未來三個月營收與客戶平台節奏；持續減速則重估循環。",
+        "現金—同看存貨／應收／毛利及營運現金流，避免認列與回款混用。"
+      ],
+      "sources": [
+        {
+          "label": "S1 Auras 2024 年報｜刊印 2025-03-18，產品章節",
+          "url": "https://www.auras.com.tw/CMSFS/Shareholders/FinancialAnnualChinese/ed4475a3-db60-455c-9ce9-93699a2fe601.pdf"
+        },
+        {
+          "label": "S2 OCP cold-plate project｜通用架構參考",
+          "url": "https://www.opencompute.org/projects/cooling-environments/cold-plate/"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3324"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "已讀年報為 2024 年度，不能標成最新年報；2026 平台認證、收入拆分及競品規格待補。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "奇鋐／其他系統液冷商為替代；相同熱負載與設施條件下比熱阻、壓降、可靠度、維護與成本，未取得完整可比結果。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "散熱內容 × 平台出貨 × 公司份額 → 收入；子系統整合提高內容也增加材料、驗證與保固成本，需觀察利潤額與營運現金。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "液冷收入放量若伴隨低毛利整合、客戶遞延或保固成本，收入成長可能沒有利潤成長。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "已讀年報為 2024 年度，不能標成最新年報；2026 平台認證、收入拆分及競品規格待補。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "已讀年報為 2024 年度，不能標成最新年報；2026 平台認證、收入拆分及競品規格待補。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除不同冷卻方案的單一世代箭頭與未核實的整櫃客戶配對。",
+      "publicationStatus": "研究草稿"
+    },
+    "8996": {
+      "identity": {
+        "code": "8996",
+        "market": "TW",
+        "name": "高力"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 153.78%、月增 34.24%；需拆分液冷與其他業務。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 支持非對稱板式換熱用途，沒有客戶量產可靠度與系統認證。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 營益率 12.94%、年減 5.84pp；存貨天數季增 46.04 天至 116.83 天，收入與品質需分開。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "其他板式換熱器及替代換熱設計為比較；相同流體、流量、溫差、壓降與可靠度才有意義，未取得可比成本曲線。",
+      "financialBridge": "CDU 裝置量 × 每台 BPHE 用量 × 公司份額 → 元件收入；材料價格、釬焊良率、保固與備貨決定利潤和現金。",
+      "counterargument": "公司總營收可能由非 AI 業務拉動，急速備貨與毛利下降會削弱液冷需求故事。",
+      "scenarios": {
+        "bull": "液冷元件放量且良率改善。",
+        "base": "需求成長但成本與業務組合抵銷。",
+        "bear": "競爭壓價或備貨超出終端需求。"
+      },
+      "observableChecks": [
+        "角色—若稱整台 CDU 供應，必須另附產品與收入證據，不能用 BPHE 型錄替代。",
+        "效率—取得流量／壓降／換熱測試條件及客戶可靠度驗證。",
+        "利潤—下季核對毛利與存貨天數，營收升但利潤／現金續降須降級。"
+      ],
+      "sources": [
+        {
+          "label": "S1 Kaori B390｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.kaori.com.tw/tw/modules/nc_product/product/view/115-B390"
+        },
+        {
+          "label": "S2 Kaori 液冷／浸沒應用｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.kaori.com.tw/en/modules/immersion/about"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/8996"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "沒有 AI 業務占比、終端客戶份額、同條件競品結果；型錄不代表當期訂單。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "其他板式換熱器及替代換熱設計為比較；相同流體、流量、溫差、壓降與可靠度才有意義，未取得可比成本曲線。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "CDU 裝置量 × 每台 BPHE 用量 × 公司份額 → 元件收入；材料價格、釬焊良率、保固與備貨決定利潤和現金。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "公司總營收可能由非 AI 業務拉動，急速備貨與毛利下降會削弱液冷需求故事。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "沒有 AI 業務占比、終端客戶份額、同條件競品結果；型錄不代表當期訂單。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "沒有 AI 業務占比、終端客戶份額、同條件競品結果；型錄不代表當期訂單。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除把高力直接等同 CDU／整櫃製造商與只因營收暴增便認定獲利同步增長。",
+      "publicationStatus": "研究草稿"
+    },
+    "6213": {
+      "identity": {
+        "code": "6213",
+        "market": "TW",
+        "name": "聯茂"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 110.74%；低基期、價格與量的貢獻尚未拆開。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 全文未讀成功；不能據片段宣稱 M9 或 224G 已通過量產認證。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 毛利率 22.02%；存貨天數 73.70 天、年增 21.52 天，產品放量仍需驗收／周轉證據。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "台光電／台燿及其他 CCL 方案為替代；同頻率、厚度、含膠量、銅粗糙度及測試法下比 Dk／Df、損耗、CTE 與成本，缺可比新產品資料。",
+      "financialBridge": "合格板材面積 × 單價 × 產品組合 → 收入；樹脂／銅箔成本、良率與客戶認證決定毛利，庫存上升會占用現金。",
+      "counterargument": "材料等級升級若被價格競爭或低良率抵銷，營收增長不一定提高現金回報。",
+      "scenarios": {
+        "bull": "高階材料獲認證且組合改善。",
+        "base": "需求成長但原料／競爭壓縮增益。",
+        "bear": "認證延誤、價格競爭與庫存去化。"
+      },
+      "observableChecks": [
+        "技術—取得最新可讀官方規格與客戶認證；未取得前不宣稱 M9／224G 量產。",
+        "比較—所有 Dk／Df 數值必附頻率、含膠量與測試方法。",
+        "周轉—下一季核對存貨與營收，庫存增速持續超過收入需重估備貨。"
+      ],
+      "sources": [
+        {
+          "label": "S1 ITEQ IR 簡報原始連結｜2022-11；本次全文讀取逾時",
+          "url": "https://www.iteqcorp.com/wp-content/uploads/2022/11/2022-Nov_ITEQ_IR-Presentation-CHT.pdf"
+        },
+        {
+          "label": "S2 ITEQ 官網｜僅作後續取證入口",
+          "url": "https://www.iteqcorp.com/"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6213"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "研究草稿：技術硬門檻未過。S1 只保留原始追溯連結，並未聲稱已讀全文；S2 僅入口，不作性能證據。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "台光電／台燿及其他 CCL 方案為替代；同頻率、厚度、含膠量、銅粗糙度及測試法下比 Dk／Df、損耗、CTE 與成本，缺可比新產品資料。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "合格板材面積 × 單價 × 產品組合 → 收入；樹脂／銅箔成本、良率與客戶認證決定毛利，庫存上升會占用現金。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "材料等級升級若被價格競爭或低良率抵銷，營收增長不一定提高現金回報。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "研究草稿：技術硬門檻未過。S1 只保留原始追溯連結，並未聲稱已讀全文；S2 僅入口，不作性能證據。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "研究草稿：技術硬門檻未過。S1 只保留原始追溯連結，並未聲稱已讀全文；S2 僅入口，不作性能證據。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "撤回未有已讀一手資料支持的 M9／224G／CPO 量產確定語氣。",
+      "publicationStatus": "研究草稿"
+    },
+    "3167": {
+      "identity": {
+        "code": "3167",
+        "market": "TW",
+        "name": "大量"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年增 172.33%；設備驗收批次與基期效應需留意。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "官方產品全文無法讀取，沒有微米精度／UPH／先進封裝客戶認證的可靠證據。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 存貨天數 212.91 天、年增 51.15 天；存貨年增 170.31% 高於同期營收年增 125.04%，交付現金品質待驗。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "其他鑽孔／成型設備及客戶既有機台升級為替代；同材料與孔徑比精度、UPH、刀具耗用與良率，尚無可比公開測試。",
+      "financialBridge": "客戶新增或替換設備 → 訂單 → 交機／驗收 → 營收；不同加工設備的單價和售後成本不同，應收與存貨決定回款。",
+      "counterargument": "客戶資本支出延後或設備驗收遞延，可能使高收入成長同時伴隨長庫存與現金壓力。",
+      "scenarios": {
+        "bull": "設備驗收加速且存貨轉快。",
+        "base": "擴產需求存在但認列分批。",
+        "bear": "客戶遞延導致設備／存貨／回款壓力。"
+      },
+      "observableChecks": [
+        "證據—補可讀官方型號規格與客戶認證，不能以分類摘要證明先進封裝能力。",
+        "驗收—核對下一季交機、認列與應收差異，長期落差須下修交貨。",
+        "存貨—存貨天數續升且營收減速時，檢查備料與在製設備是否滯留。"
+      ],
+      "sources": [
+        {
+          "label": "S1 大量科技官網｜公開搜尋摘要可見分類，全文受限",
+          "url": "https://www.tlhome.com.tw/"
+        },
+        {
+          "label": "S2 大量成型機產品頁｜本次回應 403，未讀完整規格",
+          "url": "https://www.tlhome.com.tw/category/5?sub=20"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3167"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "研究草稿：官方產品頁本次 403；分類僅由公開搜尋摘要取得，不宣稱讀到完整技術文件。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "其他鑽孔／成型設備及客戶既有機台升級為替代；同材料與孔徑比精度、UPH、刀具耗用與良率，尚無可比公開測試。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "客戶新增或替換設備 → 訂單 → 交機／驗收 → 營收；不同加工設備的單價和售後成本不同，應收與存貨決定回款。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "客戶資本支出延後或設備驗收遞延，可能使高收入成長同時伴隨長庫存與現金壓力。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "研究草稿：官方產品頁本次 403；分類僅由公開搜尋摘要取得，不宣稱讀到完整技術文件。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "研究草稿：官方產品頁本次 403；分類僅由公開搜尋摘要取得，不宣稱讀到完整技術文件。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "撤回未核實的 CoWoS 加工精度、平台綁定與交貨保證。",
+      "publicationStatus": "研究草稿"
+    },
+    "2408": {
+      "identity": {
+        "code": "2408",
+        "market": "TW",
+        "name": "南亞科"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S1：2026Q3 ASP 季增逾 60%，bit 出貨反而中個位數下滑；價格上升是當季主要驅動。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1：1C 客戶驗證為 2027Q1 規劃，不能提前當成量產；沒有 HBM 大量供貨證據。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S1：2026Q3 自結營收新台幣 1,336.49 億元、毛利率 85.7%。S3 季報仍到 Q2，優先採官方 Q3 並標明自結。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1",
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "Samsung／SK hynix／Micron 的商品 DRAM 與 HBM 資源配置會影響供給；需同產品／同規格比較 ASP 和成本，不能把 HBM 溢價直接套用南亞科。",
+      "financialBridge": "bit 出貨 × 每 bit ASP → 營收；製程良率／成本決定毛利，擴廠支出與庫存價格風險決定周期後段現金回收。",
+      "counterargument": "供給恢復或客戶補庫結束會令 ASP 回落；高點利潤年化可能大幅高估可持續獲利。",
+      "scenarios": {
+        "bull": "供給受限延續且製程成本改善。",
+        "base": "ASP 高檔但量與資本支出限制現金增益。",
+        "bear": "供給回補／補庫結束造成 ASP 與毛利快速回落。"
+      },
+      "observableChecks": [
+        "量價—下次法說同看 bit 出貨與 ASP，價格轉跌而量不增即為周期反證。",
+        "製程—2027Q1 核對 1C 客戶驗證，不把公司規劃提前寫成量產。",
+        "現金—追蹤新廠資本支出與營業現金，避免以高點 EPS 直接判斷便宜。"
+      ],
+      "sources": [
+        {
+          "label": "S1 南亞科 2026Q3 自結業績｜2026-10-12",
+          "url": "https://www.nanya.com/tw/IR/16?IRId=14188"
+        },
+        {
+          "label": "S2 全球 AI 供應鏈完整解析｜公開 memory claims p10–12；日期／出版者未提供",
+          "url": "https://peoplesystem.tatdvsonorth.com/maya-sawa/market/reports/claims?segment=memory"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2408"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "Q3 為公司自結；S2 報告是觀點，沒有日期／出版者，LTA 條件未經一手核實。缺周期正常化估值。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "Samsung／SK hynix／Micron 的商品 DRAM 與 HBM 資源配置會影響供給；需同產品／同規格比較 ASP 和成本，不能把 HBM 溢價直接套用南亞科。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "bit 出貨 × 每 bit ASP → 營收；製程良率／成本決定毛利，擴廠支出與庫存價格風險決定周期後段現金回收。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "供給恢復或客戶補庫結束會令 ASP 回落；高點利潤年化可能大幅高估可持續獲利。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "Q3 為公司自結；S2 報告是觀點，沒有日期／出版者，LTA 條件未經一手核實。缺周期正常化估值。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "Q3 為公司自結；S2 報告是觀點，沒有日期／出版者，LTA 條件未經一手核實。缺周期正常化估值。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "撤回舊虧損／低毛利基調、無來源 1B 量產階段與把 DRAM 世代當 HBM 升級路線。",
+      "publicationStatus": "研究草稿"
+    },
+    "000660-KR": {
+      "identity": {
+        "code": "000660-KR",
+        "market": "KR",
+        "name": "SK hynix"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S1：Q2 公司稱 AI／記憶體需求強；量價與客戶集中風險仍需分開。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1：HBM4 量產交付與 HBM4E 樣品分階段披露；競品同條件良率沒有公開可比值。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S1：已讀結果為 Q2，營收 79.3187 兆韓元、營業利益 60.5426 兆韓元；不能標為 Q3。S3 DART 財務已入站。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1",
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "Samsung／Micron 是 HBM 與商品記憶體競爭者；同客戶規格比頻寬、功耗、良率與總成本，沒有足以獨立驗證的全套比較。",
+      "financialBridge": "合格 HBM 堆疊量 × ASP → 收入；晶粒／堆疊良率、封裝瓶頸及資本支出決定現金。商品 DRAM／NAND 需另估量價，不能合併成同一溢價。",
+      "counterargument": "競品通過客戶驗證或大型買家自研方案改變供應分配，會降低稀缺溢價；高資本支出加重回落風險。",
+      "scenarios": {
+        "bull": "HBM 驗證與產能瓶頸支持較高內容價值。",
+        "base": "HBM 成長但商品周期與投資互相抵銷。",
+        "bear": "供給增加或客戶分單壓低溢價。"
+      },
+      "observableChecks": [
+        "新結果—下一次更新先讀正式 Q3 結果，不用活動邀請或二手預告補數字。",
+        "階段—HBM4E 必須分樣品、驗證與量產出貨，缺證據不升級狀態。",
+        "現金—核對商品記憶體量價與 HBM 利潤、資本支出和回款，不年化高點。"
+      ],
+      "sources": [
+        {
+          "label": "S1 SK hynix Q2 2026 results｜2026-07-29",
+          "url": "https://news.skhynix.com/en/q2-2026-business-results/"
+        },
+        {
+          "label": "S2 全球 AI 供應鏈完整解析｜memory claims p10–12；日期／出版者未提供",
+          "url": "https://peoplesystem.tatdvsonorth.com/maya-sawa/market/reports/claims?segment=memory"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/000660?market=KR"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "本次已讀官方結果僅 Q2；S2 的 LTA 比例與價格條件未經一手核實，不當事實。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "Samsung／Micron 是 HBM 與商品記憶體競爭者；同客戶規格比頻寬、功耗、良率與總成本，沒有足以獨立驗證的全套比較。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "合格 HBM 堆疊量 × ASP → 收入；晶粒／堆疊良率、封裝瓶頸及資本支出決定現金。商品 DRAM／NAND 需另估量價，不能合併成同一溢價。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "競品通過客戶驗證或大型買家自研方案改變供應分配，會降低稀缺溢價；高資本支出加重回落風險。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "本次已讀官方結果僅 Q2；S2 的 LTA 比例與價格條件未經一手核實，不當事實。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "本次已讀官方結果僅 Q2；S2 的 LTA 比例與價格條件未經一手核實，不當事實。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除記憶體產品單一路線與對最新季度的不當推定；保留歷史標的，不刪資料。",
+      "publicationStatus": "研究草稿"
+    },
+    "3008": {
+      "identity": {
+        "code": "3008",
+        "market": "TW",
+        "name": "大立光"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S3：9 月營收年減 7.31%，年累計年增 2.09%；規格升級未必抵銷終端量與價格。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S3"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "S1 支持多種產品類別，沒有可比 MTF、模組厚度、良率及新應用量產收入。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "S3：Q2 毛利率 49.42%、年減 4.21pp；S2 索引不是已讀 Q3，最新季度需補正式資料。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S2",
+            "S3"
+          ]
+        }
+      ],
+      "comparison": "舜宇／其他光學供應商及不同相機模組設計為替代；同畫質、尺寸、焦段與可靠度比良率和總成本，缺同條件數據。",
+      "financialBridge": "終端台數 × 每機鏡頭內容 × 公司份額 → 收入；高規格的良率、製造成本與客戶議價決定毛利，不能只比鏡片片數。",
+      "counterargument": "高階鏡頭內容增加若被終端量下滑、議價或初期低良率抵銷，獲利仍可能下降。",
+      "scenarios": {
+        "bull": "規格與良率改善抵銷終端疲弱。",
+        "base": "內容增加與價格／台數抵銷。",
+        "bear": "客戶議價與低良率使毛利續降。"
+      },
+      "observableChecks": [
+        "財報—補最新正式季度簡報；站內 Q2 不標成完整最新結果。",
+        "組合—核對高規格鏡頭與新用途實際收入，產品頁不作量產證明。",
+        "品質—同看毛利、良率與營收動能；營收減且毛利續降須調整循環。"
+      ],
+      "sources": [
+        {
+          "label": "S1 Largan 產品範圍｜日期未標示，讀取 2026-10-25",
+          "url": "https://www.largan.com.tw/cn/product"
+        },
+        {
+          "label": "S2 Largan 財務資料索引｜讀取 2026-10-25，未完整審閱最新簡報",
+          "url": "https://www.largan.com.tw/cn/investor/finance"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3008"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "沒有新應用收入、客戶份額與最新季度完整簡報；不以產品目錄推定 CPO 商業貢獻。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "舜宇／其他光學供應商及不同相機模組設計為替代；同畫質、尺寸、焦段與可靠度比良率和總成本，缺同條件數據。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "終端台數 × 每機鏡頭內容 × 公司份額 → 收入；高規格的良率、製造成本與客戶議價決定毛利，不能只比鏡片片數。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "高階鏡頭內容增加若被終端量下滑、議價或初期低良率抵銷，獲利仍可能下降。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "沒有新應用收入、客戶份額與最新季度完整簡報；不以產品目錄推定 CPO 商業貢獻。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "沒有新應用收入、客戶份額與最新季度完整簡報；不以產品目錄推定 CPO 商業貢獻。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除 7P→潛望→玻塑混合等混合維度的單一路線與確定新客戶推定。",
+      "publicationStatus": "研究草稿"
+    },
+    "META-US": {
+      "identity": {
+        "code": "META-US",
+        "market": "US",
+        "name": "Meta Platforms"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "S1：2026Q3 營收 646.01 億美元、年增 26%；廣告曝光量增 10%、均價增 14%，不能全歸因單一模型。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1"
+          ]
+        },
+        {
+          "id": "C2",
+          "statement": "業務 KPI 可支持變現改善，但無同條件模型評測／增量 ROI，不能把模型名稱當護城河強度。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        },
+        {
+          "id": "C3",
+          "statement": "S1/S2：2026Q3 OCF 327.9 億、資本支出含融資租賃 349.1 億美元，FCF −21.2 億；營益率 20% 含 99 億訴訟費用，不視為全屬常態成本。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S1",
+            "S2"
+          ]
+        }
+      ],
+      "comparison": "Alphabet／TikTok／其他廣告平台為競爭；以同目標客群的廣告 ROI、用戶時長與增量收益比較，模型 benchmark 本身不等於商業回報。",
+      "financialBridge": "用戶 × 廣告曝光 × 價格 → 收入；AI 對增量轉換率的貢獻須用對照／業務 KPI 證明。OCF 扣含融資租賃的資本支出 → FCF，折舊與一次性費用另行辨識。",
+      "counterargument": "更高資本支出與折舊可能超過廣告增益，訴訟／監管成本也會削弱現金回收。",
+      "scenarios": {
+        "bull": "AI 變現增益超過投資與折舊。",
+        "base": "收入成長但現金被高 capex 吸收。",
+        "bear": "廣告放緩、監管與投資成本共同侵蝕現金。"
+      },
+      "observableChecks": [
+        "回收—逐季同看 OCF、capex 與 FCF；收入升而 FCF 持續為負須降低交貨評價。",
+        "費用—區分 99 億美元訴訟費與經常成本，避免直接年化 Q3 營益率。",
+        "變現—核對曝光量／均價／用戶增長與廣告 ROI，不能把全部成長歸給 AI。"
+      ],
+      "sources": [
+        {
+          "label": "S1 Meta 2026Q3 results｜2026-10-21",
+          "url": "https://investor.atmeta.com/investor-news/press-release-details/2026/Meta-Reports-Third-Quarter-2026-Results/default.aspx"
+        },
+        {
+          "label": "S2 Meta 2026Q3 results 財務表｜同一官方披露，現金流／費用口徑",
+          "url": "https://investor.atmeta.com/investor-news/press-release-details/2026/Meta-Reports-Third-Quarter-2026-Results/default.aspx"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/META?market=US"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "S1/S2 是同一披露，不算兩個獨立來源。缺增量 AI ROI 與可比模型評測；公開報告觀點不能取代財務。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "Alphabet／TikTok／其他廣告平台為競爭；以同目標客群的廣告 ROI、用戶時長與增量收益比較，模型 benchmark 本身不等於商業回報。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "用戶 × 廣告曝光 × 價格 → 收入；AI 對增量轉換率的貢獻須用對照／業務 KPI 證明。OCF 扣含融資租賃的資本支出 → FCF，折舊與一次性費用另行辨識。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "更高資本支出與折舊可能超過廣告增益，訴訟／監管成本也會削弱現金回收。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "S1/S2 是同一披露，不算兩個獨立來源。缺增量 AI ROI 與可比模型評測；公開報告觀點不能取代財務。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "S1/S2 是同一披露，不算兩個獨立來源。缺增量 AI ROI 與可比模型評測；公開報告觀點不能取代財務。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除舊 Llama 名稱串成商業化階梯與收入上升便等於自由現金流改善。",
+      "publicationStatus": "研究草稿"
+    },
+    "009811": {
+      "identity": {
+        "code": "009811",
+        "market": "TW",
+        "name": "統一美國50 ETF"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "美國大型股盈利與美元匯率是風險來源；本次未取得同日成分／權重與一致估值，不判斷便宜昂貴。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        },
+        {
+          "id": "C2",
+          "statement": "技術力改解釋為複製機制；S2 為上市介紹，現行方法論與基金文件未完整取得，資訊不足編碼中性。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": [
+            "S2"
+          ]
+        },
+        {
+          "id": "C3",
+          "statement": "交貨改解釋為追蹤品質；未取得同基準同幣別 NAV 總報酬、費用與追蹤差異，不以成交價報酬替代。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        }
+      ],
+      "comparison": "與 S&P 500／其他美國大型股 ETF 比較同期間同幣別含息 NAV 總報酬、集中度、追蹤差異及總持有成本；目前沒有可比資料，不作勝負排名。",
+      "financialBridge": "成分股盈利／估值 → 美元指數總報酬 → 匯率換算與股息稅務／費用 → 基金 NAV；市價再受折溢價與流動性影響。",
+      "counterargument": "50 檔並不代表充分分散；大型科技集中、台幣升值、費用或折溢價可抵銷美元股價上升。",
+      "scenarios": {
+        "bull": "盈利成長且匯率／成本影響有限。",
+        "base": "股市報酬被費用與匯率部分抵銷。",
+        "bear": "集中股回檔、台幣升值或追蹤／交易成本放大損失。"
+      },
+      "observableChecks": [
+        "文件—取得現行指數方法論與公開說明書，核對選樣／權重／費率，歷史上市資料不代替。",
+        "曝險—每次更新保存同日成分權重、前十大與產業集中度；未知時不能稱分散充分。",
+        "追蹤—同幣別同期間比較含息 NAV 與基準，另列折溢價、費用和匯率。"
+      ],
+      "sources": [
+        {
+          "label": "S1 TWSE ETF 商品資訊 009811｜讀取 2026-10-25",
+          "url": "https://www.twse.com.tw/zh/ETFortune/etfInfo/009811"
+        },
+        {
+          "label": "S2 TWSE 上市介紹｜2025-07-28，歷史資料非現行公開說明書",
+          "url": "https://www.twse.com.tw/zh/ETFortune/newsDetail/8a8216d697fc438f0198501a56c00154"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "新增研究草稿。ICE 方法論原連結 404，發行人 DM 本次無法讀取；現行費率、完整持股、追蹤差異與估值未核實。S3 只核對本站標的身分。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "與 S&P 500／其他美國大型股 ETF 比較同期間同幣別含息 NAV 總報酬、集中度、追蹤差異及總持有成本；目前沒有可比資料，不作勝負排名。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "成分股盈利／估值 → 美元指數總報酬 → 匯率換算與股息稅務／費用 → 基金 NAV；市價再受折溢價與流動性影響。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "50 檔並不代表充分分散；大型科技集中、台幣升值、費用或折溢價可抵銷美元股價上升。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "新增研究草稿。ICE 方法論原連結 404，發行人 DM 本次無法讀取；現行費率、完整持股、追蹤差異與估值未核實。S3 只核對本站標的身分。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "新增研究草稿。ICE 方法論原連結 404，發行人 DM 本次無法讀取；現行費率、完整持股、追蹤差異與估值未核實。S3 只核對本站標的身分。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "首次新增；不把 ETF 寫成晶片公司，不編造現行費率與成分權重。",
+      "publicationStatus": "研究草稿"
+    },
+    "TXF": {
+      "identity": {
+        "code": "TXF",
+        "market": "TW",
+        "name": "臺股期貨（近月）"
+      },
+      "claims": [
+        {
+          "id": "C1",
+          "statement": "指數成分獲利、估值與市場寬度未完成同日加權，不能由單一 AI 公司替整個指數評分。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        },
+        {
+          "id": "C2",
+          "statement": "技術力改為契約與曝險辨識；近月連續資料的轉倉方法未知，不當成單一持有契約報酬。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        },
+        {
+          "id": "C3",
+          "statement": "交貨改為流動性／基差與結算；未取得同時點現貨／期貨、逐月轉倉成本與完整部位，資訊不足為中性。",
+          "kind": "Evidence and inference explicitly qualified in statement",
+          "sourceIds": []
+        }
+      ],
+      "comparison": "與現貨 ETF／微型小型期貨比較等名目曝險的成本、流動性、保證金與尾端風險；不同乘數和現金流不能直接比價格。",
+      "financialBridge": "成分股盈利／折現率 → 現貨指數；利率／股息／到期影響理論基差；實際月份變動 × 200 元 × 口數，加轉倉與成本 → 損益。",
+      "counterargument": "槓桿、跳空、追繳保證金與換月價差可讓方向判斷正確仍出現流動性問題。",
+      "scenarios": {
+        "bull": "成分盈利改善且基差／轉倉成本可控。",
+        "base": "指數震盪，成本與槓桿決定持有體驗。",
+        "bear": "盈利下修或跳空導致損失及資金追繳。"
+      },
+      "observableChecks": [
+        "月份—每次交易前核對實際契約與到期日，近月代碼不能代替合約識別。",
+        "基差—同時點比現貨與期貨並記錄股息／到期天數，不能拼接不同時間價格。",
+        "風險—按名目曝險與壓力情境計算損益／資金需求，保證金不當最大損失。"
+      ],
+      "sources": [
+        {
+          "label": "S1 TAIFEX 臺股期貨契約｜讀取 2026-10-25",
+          "url": "https://www.taifex.com.tw/cht/2/tX?menuid1=12"
+        },
+        {
+          "label": "S2 TAIFEX 期貨問答｜讀取 2026-10-25",
+          "url": "https://www.taifex.com.tw/cht/9/futuresQA"
+        },
+        {
+          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard"
+        }
+      ],
+      "qualityGates": [
+        {
+          "gate": "來源與關鍵主張",
+          "status": "partial",
+          "reason": "缺同日加權獲利、估值、現貨／期貨基差與轉倉規則；S3 僅本站月份辨識快照，不支持宏觀方向。"
+        },
+        {
+          "gate": "有意義的替代比較",
+          "status": "partial",
+          "reason": "與現貨 ETF／微型小型期貨比較等名目曝險的成本、流動性、保證金與尾端風險；不同乘數和現金流不能直接比價格。"
+        },
+        {
+          "gate": "技術到營收／利潤／現金",
+          "status": "pass-framework",
+          "reason": "成分股盈利／折現率 → 現貨指數；利率／股息／到期影響理論基差；實際月份變動 × 200 元 × 口數，加轉倉與成本 → 損益。"
+        },
+        {
+          "gate": "反方與可觀察條件",
+          "status": "pass-framework",
+          "reason": "槓桿、跳空、追繳保證金與換月價差可讓方向判斷正確仍出現流動性問題。"
+        },
+        {
+          "gate": "身分／時點／資料缺口",
+          "status": "pass-disclosure",
+          "reason": "缺同日加權獲利、估值、現貨／期貨基差與轉倉規則；S3 僅本站月份辨識快照，不支持宏觀方向。"
+        },
+        {
+          "gate": "圖形語意一致",
+          "status": "pass-structure",
+          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+        }
+      ],
+      "sourceLimitations": [
+        "缺同日加權獲利、估值、現貨／期貨基差與轉倉規則；S3 僅本站月份辨識快照，不支持宏觀方向。",
+        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+      ],
+      "withdrawnOrCorrected": "移除未更新利率敘事、舊均線進場建議及將指數當單一公司技術路線。",
+      "publicationStatus": "研究草稿"
+    }
+  }
+}

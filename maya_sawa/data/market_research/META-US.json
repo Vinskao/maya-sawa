@@ -1,43 +1,44 @@
 {
- "name": "Meta Platforms",
- "market": "US",
- "asOf": "2026-10-18",
- "summary": "社群與廣告平台，AI 推薦與廣告排序驅動營收；同時是最大 AI 資本支出方之一（GPU 與自研 MTIA 晶片）。",
- "supplyChain": "flowchart LR\n  NV[\"NVIDIA GPU\"] --> META[\"Meta 資料中心\"]\n  MTIA[\"自研 MTIA（與 ASIC 夥伴）\"] --> META\n  NET[\"交換器 / 光模組\"] --> META\n  META --> APPS[\"Facebook / Instagram / WhatsApp\"]\n  APPS --> ADS[\"廣告主\"]\n  META --> RL[\"Reality Labs 眼鏡 / VR\"]",
- "technology": "flowchart LR\n  RANK[\"AI 推薦 / 廣告排序 量產\"] --> GENAI[\"Llama 生成式模型 量產\"]\n  GENAI --> AGENT[\"AI 助理 / 商家代理 擴展中\"]\n  MTIA[\"MTIA 推論晶片 量產 / 訓練版 驗證中（推論）\"]\n  GLASS[\"AI 眼鏡 量產\"]",
- "assessment": {
-  "cycle": {
-   "view": "順風",
-   "note": "數位廣告景氣與 AI 推薦提升轉換率，同時資本支出循環向上。"
+  "name": "Meta Platforms",
+  "market": "US",
+  "asOf": "2026-10-25",
+  "summary": "AI 推薦／廣告變現與 AI 基礎建設投資是兩條鏈。2026Q3 收入成長同時出現負自由現金流，必須檢查投資回收與一次性費用。",
+  "supplyChain": "flowchart TB\n  N0[\"用戶內容／互動與廣告客戶\"]\n  N1[\"推薦／廣告投放系統｜變現機制推論\"]\n  N0 -->|功能／需求傳導，非訂單證明| N1\n  N2[\"廣告曝光量 × 價格｜官方拆分 S1\"]\n  N1 -->|功能／需求傳導，非訂單證明| N2\n  N3[\"收入與營運現金 S1\"]\n  N2 -->|功能／需求傳導，非訂單證明| N3",
+  "technology": "flowchart TB\n  R[\"讀圖：並行能力／驗證關卡；未標明者不是時程承諾\"]\n  subgraph G0[\"變現與投入並行 S1\"]\n    T0_0[\"推薦／廣告 AI｜效果需用業務 KPI 驗證\"]\n    T0_1[\"GPU／資料中心／模型｜資本投入非當期回報\"]\n  end\n  R -->|能力或待驗證項目| T0_0\n  R -->|能力或待驗證項目| T0_1\n  subgraph G1[\"財務驗證 S1 S2\"]\n    T1_0[\"曝光量／價格／用戶｜收入驅動\"]\n    T1_1[\"OCF 減 capex｜投資回收檢驗\"]\n  end\n  R -->|能力或待驗證項目| T1_0\n  R -->|能力或待驗證項目| T1_1",
+  "assessment": {
+    "cycle": {
+      "view": "順風",
+      "note": "S1：2026Q3 營收 646.01 億美元、年增 26%；廣告曝光量增 10%、均價增 14%，不能全歸因單一模型。"
+    },
+    "technology": {
+      "view": "中性",
+      "note": "業務 KPI 可支持變現改善，但無同條件模型評測／增量 ROI，不能把模型名稱當護城河強度。"
+    },
+    "delivery": {
+      "view": "逆風",
+      "note": "S1/S2：2026Q3 OCF 327.9 億、資本支出含融資租賃 349.1 億美元，FCF −21.2 億；營益率 20% 含 99 億訴訟費用，不視為全屬常態成本。"
+    }
   },
-  "technology": {
-   "view": "順風",
-   "note": "自有大型模型、推薦系統與自研推論晶片垂直整合。"
-  },
-  "delivery": {
-   "view": "順風",
-   "note": "SEC 10-Q：2026Q2 營收 608.0 億美元，季增 8.0%、年增 28.0%；營業利益率 30.9%（Q1 40.6%），資本支出折舊壓縮利潤率。"
-  }
- },
- "lean": "買",
- "leanReason": "時機：股價 736.7 在 MA20（733.6）與 MA60（641.3）之上，RSI 58；10 月下旬財報前不追高，財報後確認資本支出指引。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
- "watch": [
-  "Q3 財報 資本支出指引",
-  "營業利益率"
- ],
- "sources": [
-  {
-   "label": "本站 IB 日線／技術指標",
-   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/META?market=US"
-  },
-  {
-   "label": "SEC EDGAR",
-   "url": "https://www.sec.gov/edgar/search/"
-  },
-  {
-   "label": "Meta Investor Relations",
-   "url": "https://investor.atmeta.com/"
-  }
- ],
- "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+  "lean": "中立",
+  "leanReason": "因果橋：用戶 × 廣告曝光 × 價格 → 收入；AI 對增量轉換率的貢獻須用對照／業務 KPI 證明。OCF 扣含融資租賃的資本支出 → FCF，折舊與一次性費用另行辨識。\n比較：Alphabet／TikTok／其他廣告平台為競爭；以同目標客群的廣告 ROI、用戶時長與增量收益比較，模型 benchmark 本身不等於商業回報。\n反方：更高資本支出與折舊可能超過廣告增益，訴訟／監管成本也會削弱現金回收。\n情境（條件而非預測）：多頭＝AI 變現增益超過投資與折舊。 基準＝收入成長但現金被高 capex 吸收。 空頭＝廣告放緩、監管與投資成本共同侵蝕現金。\n營運方向依三軸：至少兩項順風且無逆風為買、至少兩項逆風為賣，其餘中立。這不是估值／風險調整後的投資評級；未估市場隱含預期，不提供目標價。",
+  "watch": [
+    "回收—逐季同看 OCF、capex 與 FCF；收入升而 FCF 持續為負須降低交貨評價。",
+    "費用—區分 99 億美元訴訟費與經常成本，避免直接年化 Q3 營益率。",
+    "變現—核對曝光量／均價／用戶增長與廣告 ROI，不能把全部成長歸給 AI。"
+  ],
+  "sources": [
+    {
+      "label": "S1 Meta 2026Q3 results｜2026-10-21",
+      "url": "https://investor.atmeta.com/investor-news/press-release-details/2026/Meta-Reports-Third-Quarter-2026-Results/default.aspx"
+    },
+    {
+      "label": "S2 Meta 2026Q3 results 財務表｜同一官方披露，現金流／費用口徑",
+      "url": "https://investor.atmeta.com/investor-news/press-release-details/2026/Meta-Reports-Third-Quarter-2026-Results/default.aspx"
+    },
+    {
+      "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+      "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/META?market=US"
+    }
+  ],
+  "basis": "研究草稿／2026-10-25 依研究品質指引重審。事實、公司規劃與推論已分開；圖的箭頭只表示標註的功能／需求關係，不證明交易、獨家供貨或因果已成立。S 編號對應下列來源。證據限制：S1/S2 是同一披露，不算兩個獨立來源。缺增量 AI ROI 與可比模型評測；公開報告觀點不能取代財務。 六項門檻詳見同版 evidence ledger；競品可比 KPI、估值與部分量產證據仍未齊備，因此不宣稱全部通過。"
 }

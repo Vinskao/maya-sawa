@@ -1,39 +1,44 @@
 {
- "name": "Advantest（愛德萬測試）",
- "market": "JP",
- "asOf": "2026-10-18",
- "summary": "半導體測試機龍頭，SoC 測試（V93000）與記憶體測試（含 HBM），AI GPU 測試時間拉長為主要成長來源。",
- "supplyChain": "flowchart LR\n  PARTS[\"精密量測模組 / 自有晶片\"] --> ADV[\"Advantest 測試機\"]\n  ADV --> OSAT[\"封測 / 測試廠\"]\n  ADV --> IDM[\"IDM / 記憶體廠\"]\n  OSAT --> GPU[\"AI GPU / ASIC 最終測試\"]\n  IDM --> HBM[\"HBM 測試\"]\n  TER[\"Teradyne 競爭\"] -. 份額 .-> OSAT",
- "technology": "flowchart LR\n  V93[\"V93000 SoC 測試 量產\"] --> EXA[\"高功率 AI 晶片測試 量產\"]\n  T58[\"記憶體測試機 量產\"] --> HBMT[\"HBM 測試 量產\"]\n  EXA --> SLT[\"系統級測試 擴展中\"]",
- "assessment": {
-  "cycle": {
-   "view": "順風",
-   "note": "AI 晶片複雜度提高，測試時間與測試機需求同步增加。"
+  "name": "Advantest",
+  "market": "JP",
+  "asOf": "2026-10-25",
+  "summary": "SoC／記憶體 ATE 與 system-level test 解決不同測試關卡，不能把平台名稱串成統一世代。測試時間與並測效率共同決定需求。",
+  "supplyChain": "flowchart TB\n  N0[\"晶片設計／製造複雜度｜需求推論\"]\n  N1[\"Advantest ATE 平台 S1\"]\n  N0 -->|功能／需求傳導，非訂單證明| N1\n  N2[\"晶圓／封裝測試｜不同測試關卡 S1\"]\n  N1 -->|功能／需求傳導，非訂單證明| N2\n  N3[\"客戶篩選良品｜良率與成本目標\"]\n  N2 -->|功能／需求傳導，非訂單證明| N3",
+  "technology": "flowchart TB\n  R[\"讀圖：並行能力／驗證關卡；未標明者不是時程承諾\"]\n  subgraph G0[\"並行測試領域 S1\"]\n    T0_0[\"SoC ATE／V93000｜邏輯晶片\"]\n    T0_1[\"Memory ATE｜記憶體測試\"]\n    T0_2[\"System-level test｜系統條件驗證\"]\n  end\n  R -->|能力或待驗證項目| T0_0\n  R -->|能力或待驗證項目| T0_1\n  R -->|能力或待驗證項目| T0_2\n  subgraph G1[\"需求機制｜推論\"]\n    T1_0[\"pin／功耗／頻寬複雜度增加測試需求\"]\n    T1_1[\"並測與吞吐改善可抵銷測試秒數\"]\n  end\n  R -->|能力或待驗證項目| T1_0\n  R -->|能力或待驗證項目| T1_1",
+  "assessment": {
+    "cycle": {
+      "view": "順風",
+      "note": "AI 晶片複雜度增加測試機會為推論；不能將晶片營收增幅當 ATE 訂單增幅。"
+    },
+    "technology": {
+      "view": "中性",
+      "note": "S1 支持產品分工；未取得同機種吞吐、良率與競品比較。"
+    },
+    "delivery": {
+      "view": "中性",
+      "note": "S3 已有 J-Quants 財務，非無資料；站內年度截至 2026-03-31。S2 的 10-28 業績會尚未發生，不提前填當期數字。"
+    }
   },
-  "technology": {
-   "view": "順風",
-   "note": "高階 SoC 測試與 HBM 測試均居領先。"
-  },
-  "delivery": {
-   "view": "中性",
-   "note": "本站尚無日本財報（需 EDINET key），交貨無法用本站資料驗證。"
-  }
- },
- "lean": "買",
- "leanReason": "時機：5 日 -17%、跌破 20 日線（34,550 vs MA20 36,419），RSI 44.5；方向偏多但等止穩。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
- "watch": [
-  "10 月下旬財報與接單",
-  "AI 晶片測試時間"
- ],
- "sources": [
-  {
-   "label": "本站 IB 日線／技術指標",
-   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/6857?market=JP"
-  },
-  {
-   "label": "EDINET (Japan filings)",
-   "url": "https://disclosure2.edinet-fsa.go.jp/"
-  }
- ],
- "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+  "lean": "中立",
+  "leanReason": "因果橋：晶片量 × 測試秒數 ÷ 並測吞吐 → 所需測試產能 → 設備／服務收入；客戶利用率與設備交期決定新增訂單而非單看 AI 出貨。\n比較：Teradyne 與既有機台升級是替代；比較相同 DUT 的測試覆蓋、每小時產出與每顆測試成本，缺同條件數據。\n反方：並測效率提高或客戶既有機台閒置，可能讓晶片量增卻沒有等比例設備需求。\n情境（條件而非預測）：多頭＝測試強度提升且新增機台需求增加。 基準＝複雜度被並測效率部分抵銷。 空頭＝客戶機台利用不足、資本支出下修。\n營運方向依三軸：至少兩項順風且無逆風為買、至少兩項逆風為賣，其餘中立。這不是估值／風險調整後的投資評級；未估市場隱含預期，不提供目標價。",
+  "watch": [
+    "時點—10-28 後核對正式季度結果與訂單指引，未公布前保留交貨中性。",
+    "測試強度—要求同 DUT 測試時間／並測數／UPH，單獨 pin 速度不足以證明優勢。",
+    "週期—追蹤設備交期與客戶稼動率，交期縮短且訂單下修是反轉訊號。"
+  ],
+  "sources": [
+    {
+      "label": "S1 Advantest Investors Guide｜2025-04-25，測試流程／產品",
+      "url": "https://www.advantest.com/document/en/investors/ir-library/investors-guide/Investors_Guide_2504E.pdf"
+    },
+    {
+      "label": "S2 Advantest 官方新聞｜讀取 2026-10-25；下一次業績會 10-28",
+      "url": "https://www.advantest.com/en/news/2026/"
+    },
+    {
+      "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+      "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/overseas/6857?market=JP"
+    }
+  ],
+  "basis": "研究草稿／2026-10-25 依研究品質指引重審。事實、公司規劃與推論已分開；圖的箭頭只表示標註的功能／需求關係，不證明交易、獨家供貨或因果已成立。S 編號對應下列來源。證據限制：產品流程引用 2025 指南，不宣稱為 2026 市占；本次未讀下一期財報。 六項門檻詳見同版 evidence ledger；競品可比 KPI、估值與部分量產證據仍未齊備，因此不宣稱全部通過。"
 }

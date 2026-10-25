@@ -1,48 +1,44 @@
 {
- "name": "台積電",
- "market": "TW",
- "asOf": "2026-10-18",
- "summary": "全球晶圓代工與先進封裝（CoWoS / SoIC）龍頭，AI 加速器幾乎全數在此投片與封裝。",
- "supplyChain": "flowchart LR\n  ASML[\"ASML EUV 曝光機\"] --> TSMC\n  AMAT[\"應材 / 科林 / TEL 製程設備\"] --> TSMC\n  SUMCO[\"矽晶圓 / 化學品 / 光罩\"] --> TSMC\n  TSMC[\"台積電 前段晶圓 + CoWoS\"] --> NV[\"NVIDIA GPU\"]\n  TSMC --> AMD[\"AMD MI 系列\"]\n  TSMC --> ASIC[\"Broadcom / Marvell / 創意 ASIC\"]\n  TSMC --> APL[\"Apple 手機 / PC SoC\"]\n  NV --> CSP[\"雲端資料中心\"]\n  ASIC --> CSP",
- "technology": "flowchart LR\n  N3[\"N3 家族 量產\"] --> N2[\"N2 GAA 2025 底量產 爬坡中\"]\n  N2 --> A16[\"A16 背面供電 規劃 2026 下半\"]\n  A16 --> A14[\"A14 規劃\"]\n  COWOS[\"CoWoS-S/L 量產 持續擴產\"] --> SOIC[\"SoIC 3D 堆疊 量產初期\"]\n  SOIC --> COPOS[\"面板級封裝 CoPoS 規劃\"]\n  SIPH[\"矽光子 COUPE 驗證中\"]",
- "assessment": {
-  "cycle": {
-   "view": "順風",
-   "note": "AI 加速器需求仍處擴張段，2026Q2 營收年增 36.1%、EPS 年增 77.4%。"
+  "name": "台積電",
+  "market": "TW",
+  "asOf": "2026-10-25",
+  "summary": "投資問題是先進製程與封裝的稀缺產能，能否在擴產折舊之前轉成可持續現金流；不能把各封裝方案畫成彼此取代的單一路線。",
+  "supplyChain": "flowchart TB\n  N0[\"設備與材料供應商｜投入範圍 S2\"]\n  N1[\"台積電晶圓製造｜產出晶粒 S2\"]\n  N0 -->|功能／需求傳導，非訂單證明| N1\n  N2[\"封裝與系統整合｜需共同驗證 S2\"]\n  N1 -->|功能／需求傳導，非訂單證明| N2\n  N3[\"設計客戶的終端產品｜需求傳導推論\"]\n  N2 -->|功能／需求傳導，非訂單證明| N3",
+  "technology": "flowchart TB\n  R[\"讀圖：並行能力／驗證關卡；未標明者不是時程承諾\"]\n  subgraph G0[\"製程時程｜公司披露 S2\"]\n    T0_0[\"N2｜公司稱 4Q25 已量產；2026 爬坡 S2\"]\n    T0_1[\"A14｜2027 風險試產／2028 量產為規劃 S2\"]\n  end\n  R -->|能力或待驗證項目| T0_0\n  R -->|能力或待驗證項目| T0_1\n  subgraph G1[\"整合選擇｜互補而非必然替代 S2\"]\n    T1_0[\"先進封裝｜與前段製程共同設計 S2\"]\n    T1_1[\"需求與良率共同決定採用｜推論\"]\n  end\n  R -->|能力或待驗證項目| T1_0\n  R -->|能力或待驗證項目| T1_1",
+  "assessment": {
+    "cycle": {
+      "view": "順風",
+      "note": "S1：Q3 美元營收 467.2 億；Q4 指引 523–543 億美元是公司預期，不是已實現需求。"
+    },
+    "technology": {
+      "view": "順風",
+      "note": "S2：N2 已量產為公司披露；未取得同條件競品良率／成本，不能由節點名稱推定全面領先。"
+    },
+    "delivery": {
+      "view": "順風",
+      "note": "S1：2026Q3 毛利率 66.4%、營益率 58.7%。本站季報仍到 Q2，這裡優先使用 Q3 官方資料。"
+    }
   },
-  "technology": {
-   "view": "順風",
-   "note": "N2 GAA 領先同業量產、A16 背面供電在後；CoWoS / SoIC 先進封裝為 AI GPU 必經環節，競爭者尚無同等量產規模。"
-  },
-  "delivery": {
-   "view": "順風",
-   "note": "2026-09 營收年增 54.6%（月減 0.6%），年累計年增 41.1%；Q2 毛利率 67.7%（年增 9.1 pp），交貨與產品組合同步改善。"
-  }
- },
- "lean": "買",
- "leanReason": "時機：外資連 8 日賣超、5 日 -5.1%，收在 60 日線附近；守 60 日線分批，跌破則等待。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
- "watch": [
-  "外資賣超是否止步",
-  "N2 營收占比",
-  "CoWoS 擴產進度"
- ],
- "sources": [
-  {
-   "label": "本站基本面（月營收／季報）",
-   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2330"
-  },
-  {
-   "label": "本站日線與籌碼",
-   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/2330"
-  },
-  {
-   "label": "公開資訊觀測站 MOPS",
-   "url": "https://mops.twse.com.tw/"
-  },
-  {
-   "label": "TSMC Investor Relations",
-   "url": "https://investor.tsmc.com/"
-  }
- ],
- "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+  "lean": "買",
+  "leanReason": "因果橋：有效晶圓出貨 × ASP／組合 → 營收 → 良率與產能利用率影響毛利 → 新廠折舊與資本支出決定自由現金流。N2 爬坡不能直接等同 EPS 增幅。\n比較：Samsung／Intel 的替代能力應以同功耗效能、設計生態、良率與交期比較；本次沒有可比客戶良率資料。封裝也要與其他 2.5D／3D 方案比頻寬、功耗與總成本。\n反方：AI 客戶集中、擴產後折舊或需求正常化，可能令營收成長與股東現金回報脫鉤。\n情境（條件而非預測）：多頭＝N2／封裝需求轉為高利用率且現金轉換維持。 基準＝先進節點成長但新廠成本抵銷部分增益。 空頭＝客戶下修或良率／擴產成本壓縮現金回收。\n營運方向依三軸：至少兩項順風且無逆風為買、至少兩項逆風為賣，其餘中立。這不是估值／風險調整後的投資評級；未估市場隱含預期，不提供目標價。",
+  "watch": [
+    "N2 爬坡—下次法說核對量產與客戶採用，若只剩時程敘述而無進展，技術順風降級。",
+    "交貨—逐季比較實際美元營收與前季指引；低於下緣須重估需求。",
+    "資本效率—追蹤毛利、折舊、資本支出與營業現金流；營收升而現金轉換惡化需解釋。"
+  ],
+  "sources": [
+    {
+      "label": "S1 TSMC 2026Q3 results｜2026-10-15",
+      "url": "https://investor.tsmc.com/english/quarterly-results/2026/q3"
+    },
+    {
+      "label": "S2 TSMC 3Q26 transcript｜2026-10-15，p5 N2/A14",
+      "url": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf"
+    },
+    {
+      "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+      "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2330"
+    }
+  ],
+  "basis": "研究草稿／2026-10-25 依研究品質指引重審。事實、公司規劃與推論已分開；圖的箭頭只表示標註的功能／需求關係，不證明交易、獨家供貨或因果已成立。S 編號對應下列來源。證據限制：節點良率、各客戶封裝分配及同條件競品成本未披露；沒有估值與市場隱含成長假設。 六項門檻詳見同版 evidence ledger；競品可比 KPI、估值與部分量產證據仍未齊備，因此不宣稱全部通過。"
 }

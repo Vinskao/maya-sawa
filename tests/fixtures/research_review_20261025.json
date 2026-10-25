@@ -1,0 +1,819 @@
+{
+  "retrievedAt": "2026-10-25",
+  "financials": {
+    "2330": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2330",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 54.64861207105231,
+          "momPercent": -0.5726315925897248,
+          "ytdYoyPercent": 41.11,
+          "publishedAt": "2026-10-08"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 12.02,
+          "revenueYoY": 36.05,
+          "epsQoQ": 23.41,
+          "epsYoY": 77.41,
+          "grossMargin": 67.72,
+          "grossMarginQoQ": 1.47,
+          "grossMarginYoY": 9.1,
+          "operatingMargin": 60.34,
+          "operatingMarginQoQ": 2.24,
+          "operatingMarginYoY": 10.71,
+          "netMargin": 55.64,
+          "netMarginQoQ": 5.13,
+          "netMarginYoY": 13.07
+        }
+      ]
+    },
+    "3711": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3711",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 45.52228936841058,
+          "momPercent": 7.15245935997908,
+          "ytdYoyPercent": 30.25,
+          "publishedAt": "2026-10-13"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 10.02,
+          "revenueYoY": 26.74,
+          "epsQoQ": 48.15,
+          "epsYoY": 175.86,
+          "grossMargin": 21.0,
+          "grossMarginQoQ": 0.93,
+          "grossMarginYoY": 3.96,
+          "operatingMargin": 11.04,
+          "operatingMarginQoQ": 0.94,
+          "operatingMarginYoY": 4.28,
+          "netMargin": 11.25,
+          "netMarginQoQ": 2.86,
+          "netMarginYoY": 6.16
+        }
+      ]
+    },
+    "6187": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6187",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 109.23757499905321,
+          "momPercent": 4.644924810843329,
+          "ytdYoyPercent": 58.31,
+          "publishedAt": "2026-10-09"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 66.82,
+          "revenueYoY": 54.54,
+          "epsQoQ": 152.23,
+          "epsYoY": 104.33,
+          "grossMargin": 54.77,
+          "grossMarginQoQ": 2.99,
+          "grossMarginYoY": 2.82,
+          "operatingMargin": 33.27,
+          "operatingMarginQoQ": 10.05,
+          "operatingMarginYoY": 2.83,
+          "netMargin": 34.65,
+          "netMarginQoQ": 11.98,
+          "netMarginYoY": 8.44
+        }
+      ]
+    },
+    "3443": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3443",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 97.77847715325761,
+          "momPercent": 22.34796220745762,
+          "ytdYoyPercent": 102.83,
+          "publishedAt": "2026-10-05"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 21.39,
+          "revenueYoY": 127.64,
+          "epsQoQ": -5.46,
+          "epsYoY": 98.8,
+          "grossMargin": 21.55,
+          "grossMarginQoQ": -5.65,
+          "grossMarginYoY": -11.77,
+          "operatingMargin": 12.06,
+          "operatingMarginQoQ": -3.87,
+          "operatingMarginYoY": -3.4,
+          "netMargin": 11.19,
+          "netMarginQoQ": -3.19,
+          "netMarginYoY": -1.61
+        }
+      ]
+    },
+    "3081": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3081",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 190.16277271946402,
+          "momPercent": 3.8471071283784433,
+          "ytdYoyPercent": 136.33,
+          "publishedAt": "2026-10-05"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 35.03,
+          "revenueYoY": 120.79,
+          "epsQoQ": 34.3,
+          "epsYoY": 340.0,
+          "grossMargin": 57.45,
+          "grossMarginQoQ": 2.69,
+          "grossMarginYoY": 14.12,
+          "operatingMargin": 46.89,
+          "operatingMarginQoQ": 5.62,
+          "operatingMarginYoY": 19.94,
+          "netMargin": 38.36,
+          "netMarginQoQ": 3.25,
+          "netMarginYoY": 20.86
+        }
+      ]
+    },
+    "3105": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3105",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 29.97216172201555,
+          "momPercent": 4.7560205781262175,
+          "ytdYoyPercent": 32.62,
+          "publishedAt": "2026-10-05"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 14.54,
+          "revenueYoY": 39.07,
+          "epsQoQ": 82.54,
+          "epsYoY": null,
+          "grossMargin": 28.24,
+          "grossMarginQoQ": 1.9,
+          "grossMarginYoY": 9.78,
+          "operatingMargin": 14.11,
+          "operatingMarginQoQ": 4.72,
+          "operatingMarginYoY": 17.26,
+          "netMargin": 17.21,
+          "netMarginQoQ": 7.44,
+          "netMarginYoY": 30.18
+        }
+      ]
+    },
+    "6442": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6442",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 97.25981511982566,
+          "momPercent": 26.59274759439545,
+          "ytdYoyPercent": 50.2,
+          "publishedAt": "2026-10-08"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 36.05,
+          "revenueYoY": 26.55,
+          "epsQoQ": 43.35,
+          "epsYoY": 331.15,
+          "grossMargin": 62.51,
+          "grossMarginQoQ": 7.1,
+          "grossMarginYoY": 0.84,
+          "operatingMargin": 32.06,
+          "operatingMarginQoQ": 5.66,
+          "operatingMarginYoY": 4.76,
+          "netMargin": 24.19,
+          "netMarginQoQ": 1.78,
+          "netMarginYoY": 17.48
+        }
+      ]
+    },
+    "3017": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3017",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 44.91953525916051,
+          "momPercent": 7.890019171433517,
+          "ytdYoyPercent": 71.17,
+          "publishedAt": "2026-10-07"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 0.17,
+          "revenueYoY": 65.98,
+          "epsQoQ": 20.82,
+          "epsYoY": 136.6,
+          "grossMargin": 32.57,
+          "grossMarginQoQ": 2.8,
+          "grossMarginYoY": 8.16,
+          "operatingMargin": 27.44,
+          "operatingMarginQoQ": 2.93,
+          "operatingMarginYoY": 10.23,
+          "netMargin": 20.92,
+          "netMarginQoQ": 3.23,
+          "netMarginYoY": 6.49
+        }
+      ]
+    },
+    "3324": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3324",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 23.226930582064025,
+          "momPercent": -8.187443911641516,
+          "ytdYoyPercent": 72.39,
+          "publishedAt": "2026-10-08"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 1.74,
+          "revenueYoY": 63.96,
+          "epsQoQ": -17.45,
+          "epsYoY": 494.86,
+          "grossMargin": 28.42,
+          "grossMarginQoQ": -1.24,
+          "grossMarginYoY": 2.29,
+          "operatingMargin": 15.98,
+          "operatingMarginQoQ": -1.79,
+          "operatingMarginYoY": 4.04,
+          "netMargin": 11.94,
+          "netMarginQoQ": -2.86,
+          "netMarginYoY": 8.86
+        }
+      ]
+    },
+    "8996": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/8996",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 153.7797417150323,
+          "momPercent": 34.23587525219427,
+          "ytdYoyPercent": 120.78,
+          "publishedAt": "2026-10-06"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": -32.65,
+          "revenueYoY": 54.92,
+          "epsQoQ": -66.97,
+          "epsYoY": 61.19,
+          "grossMargin": 26.0,
+          "grossMarginQoQ": -3.02,
+          "grossMarginYoY": -3.35,
+          "operatingMargin": 12.94,
+          "operatingMarginQoQ": -7.77,
+          "operatingMarginYoY": -5.84,
+          "netMargin": 8.71,
+          "netMarginQoQ": -8.98,
+          "netMarginYoY": 0.52
+        }
+      ]
+    },
+    "6213": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6213",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 110.7353905337519,
+          "momPercent": 15.467342210619517,
+          "ytdYoyPercent": 50.07,
+          "publishedAt": "2026-10-05"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 26.11,
+          "revenueYoY": 29.88,
+          "epsQoQ": 304.6,
+          "epsYoY": 203.45,
+          "grossMargin": 22.02,
+          "grossMarginQoQ": 10.6,
+          "grossMarginYoY": 6.43,
+          "operatingMargin": 16.03,
+          "operatingMarginQoQ": 11.39,
+          "operatingMarginYoY": 7.15,
+          "netMargin": 11.1,
+          "netMarginQoQ": 7.66,
+          "netMarginYoY": 6.36
+        }
+      ]
+    },
+    "3167": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3167",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 172.33254972044645,
+          "momPercent": 6.920675878824442,
+          "ytdYoyPercent": 140.2,
+          "publishedAt": "2026-10-06"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 46.91,
+          "revenueYoY": 125.04,
+          "epsQoQ": 91.22,
+          "epsYoY": 206.53,
+          "grossMargin": 44.2,
+          "grossMarginQoQ": 1.86,
+          "grossMarginYoY": 5.34,
+          "operatingMargin": 26.82,
+          "operatingMarginQoQ": 5.79,
+          "operatingMarginYoY": 7.39,
+          "netMargin": 19.0,
+          "netMarginQoQ": 4.51,
+          "netMarginYoY": 5.22
+        }
+      ]
+    },
+    "2408": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2408",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": 576.622775031737,
+          "momPercent": 0.8968865436206379,
+          "ytdYoyPercent": 626.95,
+          "publishedAt": "2026-10-06"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": 68.17,
+          "revenueYoY": 684.23,
+          "epsQoQ": 74.32,
+          "epsYoY": null,
+          "grossMargin": 79.49,
+          "grossMarginQoQ": 11.6,
+          "grossMarginYoY": 100.05,
+          "operatingMargin": 73.68,
+          "operatingMarginQoQ": 12.34,
+          "operatingMarginYoY": 116.44,
+          "netMargin": 60.8,
+          "netMarginQoQ": 7.71,
+          "netMarginYoY": 99.77
+        }
+      ]
+    },
+    "3008": {
+      "status": 200,
+      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3008",
+      "monthly": [
+        {
+          "period": "2026-09",
+          "yoyPercent": -7.314368249667054,
+          "momPercent": 15.308177947789499,
+          "ytdYoyPercent": 2.09,
+          "publishedAt": "2026-10-06"
+        }
+      ],
+      "quarterly": [
+        {
+          "period": "2026Q2",
+          "revenueQoQ": -12.09,
+          "revenueYoY": 17.07,
+          "epsQoQ": -23.44,
+          "epsYoY": 361.84,
+          "grossMargin": 49.42,
+          "grossMarginQoQ": 0.01,
+          "grossMarginYoY": -4.21,
+          "operatingMargin": 37.67,
+          "operatingMarginQoQ": 0.28,
+          "operatingMarginYoY": -4.13,
+          "netMargin": 34.59,
+          "netMarginQoQ": -5.14,
+          "netMarginYoY": 25.54
+        }
+      ]
+    }
+  },
+  "publicReportClaims": {
+    "2330:claims": {
+      "status": 200,
+      "data": {
+        "claims": [
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 7,
+            "segment": "foundry",
+            "codes": [
+              "2330"
+            ],
+            "dimension": "cycle",
+            "direction": "tailwind",
+            "claim": "報告指出台積電26Q2三率同步創歷史新高，AI需求正轉化為晶圓代工與先進封裝的漲價紅利。",
+            "evidence": "台積電26Q2毛利率、營業利益率、淨利率同步創歷史新高；先進製程產能稀缺。",
+            "as_of": "2026-06-30"
+          },
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 7,
+            "segment": "foundry",
+            "codes": [
+              "2330"
+            ],
+            "dimension": "cycle",
+            "direction": "tailwind",
+            "claim": "台積電26Q3營收財測446~458億美元並將2026全年美元營收成長指引上調至略高於40%，報告認為反映晶圓代工的強勁議價能力。",
+            "evidence": "26Q3營收財測446~458億美元（7、8月已公布營收約307億美元）；2026全年美元營收年增指引由「超過30%」上調至「略高於40%」。",
+            "as_of": "2026-08-31"
+          },
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 16,
+            "segment": "packaging",
+            "codes": [
+              "2330"
+            ],
+            "dimension": "technology",
+            "direction": "tailwind",
+            "claim": "報告認為先進封裝已成為AI供應鏈的核心瓶頸與受惠環節，封測業者因台積電部分下放CoWoS-oS而往高附加價值製程延伸，毛利率攀升。",
+            "evidence": "CoWoS面積擴大、HBM堆疊增加與FOPLP發展；台積電部分下放CoWoS「oS」環節；需求強勁、產能偏緊下封測毛利率攀升。報告亦指出FOPLP目前尚無標準化方案，材料與面板規格仍在研發。",
+            "as_of": null
+          }
+        ]
+      }
+    },
+    "3711:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "6187:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "3443:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "6857-JP:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "3081:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "LITE-US:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "3105:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "6442:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "6524-JP:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "3017:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "3324:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "8996:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "6213:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "3167:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "2408:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "000660-KR:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "3008:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "META-US:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "009811:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "TXF:claims": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "segment:cooling": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "segment:asic": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "segment:optics": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "segment:pcb": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "segment:macro": {
+      "status": 200,
+      "data": {
+        "claims": [
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 29,
+            "segment": "macro",
+            "codes": [],
+            "dimension": "macro",
+            "direction": "tailwind",
+            "claim": "報告引述高盛預估2030年Token消耗量將成長24倍，並指出AI Agent已開始進入企業工作流、轉換為生產力。",
+            "evidence": "高盛預估2030年Token消耗量成長24倍；全球Token使用量持續爆發。",
+            "as_of": null
+          }
+        ]
+      }
+    },
+    "segment:test": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "segment:semiconductor": {
+      "status": 200,
+      "data": {
+        "claims": []
+      }
+    },
+    "segment:csp": {
+      "status": 200,
+      "data": {
+        "claims": [
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 29,
+            "segment": "csp",
+            "codes": [],
+            "dimension": "macro",
+            "direction": "neutral",
+            "claim": "報告指出科技巨頭與新雲端資本支出將於2026年突破8,000億美元，關鍵在於大量剩餘履約義務(RPO)能否順利取代資本支出並落地變現。",
+            "evidence": "2026年CSP與Neocloud資本支出預估突破8,000億美元，表外融資持續擴大；RPO大量堆積。",
+            "as_of": null
+          }
+        ]
+      }
+    },
+    "segment:packaging": {
+      "status": 200,
+      "data": {
+        "claims": [
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 16,
+            "segment": "packaging",
+            "codes": [
+              "2330"
+            ],
+            "dimension": "technology",
+            "direction": "tailwind",
+            "claim": "報告認為先進封裝已成為AI供應鏈的核心瓶頸與受惠環節，封測業者因台積電部分下放CoWoS-oS而往高附加價值製程延伸，毛利率攀升。",
+            "evidence": "CoWoS面積擴大、HBM堆疊增加與FOPLP發展；台積電部分下放CoWoS「oS」環節；需求強勁、產能偏緊下封測毛利率攀升。報告亦指出FOPLP目前尚無標準化方案，材料與面板規格仍在研發。",
+            "as_of": null
+          }
+        ]
+      }
+    },
+    "segment:memory": {
+      "status": 200,
+      "data": {
+        "claims": [
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 10,
+            "segment": "memory",
+            "codes": [],
+            "dimension": "cycle",
+            "direction": "tailwind",
+            "claim": "報告認為記憶體產業進入新一輪超級週期，龍頭廠自25H2起營收與獲利創高，是漲價效應下最大受惠者。",
+            "evidence": "主要廠商產能轉向HBM、DDR5並縮減EOL DDR4供給，新舊世代同步供給收斂與漲價；自25H2起龍頭營收絕對值與年增率創歷史新高，毛利率達80%。",
+            "as_of": null
+          },
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 11,
+            "segment": "memory",
+            "codes": [
+              "005930",
+              "000660",
+              "MU"
+            ],
+            "dimension": "delivery",
+            "direction": "tailwind",
+            "claim": "三星、SK海力士、美光首度簽署長期供應協議以鎖定未來需求與現金流，報告認為旨在避免再陷過去的景氣循環。",
+            "evidence": "三星：5年期滾動LTA、設價格下限並需高額預付款，前五大資料中心客戶已簽署，長期將佔60~70%中長期規劃產能；SK海力士：3~5年LTA、10%~30%保證金，長期預估25~30%營收來自四大超大規模雲端業者；美光：SCA含照付不議條款，已簽16項協議涵蓋其期間20% DRAM與33% NAND出貨，長期50%營收受SCA保護。",
+            "as_of": null
+          },
+          {
+            "report_id": "83c3ca86-f9c7-49f3-bd30-81060c4c24a0",
+            "title": "全球 AI 供應鏈完整解析",
+            "publisher": "",
+            "published_at": null,
+            "page": 12,
+            "segment": "memory",
+            "codes": [],
+            "dimension": "technology",
+            "direction": "tailwind",
+            "claim": "報告認為AI系統效能瓶頸由算力轉向記憶體容量，記憶體架構將往xPU/ASIC上方垂直堆疊、向運算核心靠近。",
+            "evidence": "決定Token/$、Token/W的已不是運算速度而是「能算多少」；記憶體產業一、二線產品同步漲價帶動營收與毛利率創高（未附具體數字）。",
+            "as_of": null
+          }
+        ]
+      }
+    }
+  },
+  "semanticSearchStatus": 503,
+  "previousResearch2330": {
+    "name": "台積電",
+    "market": "TW",
+    "asOf": "2026-10-18",
+    "summary": "全球晶圓代工與先進封裝（CoWoS / SoIC）龍頭，AI 加速器幾乎全數在此投片與封裝。",
+    "supplyChain": "flowchart LR\n  ASML[\"ASML EUV 曝光機\"] --> TSMC\n  AMAT[\"應材 / 科林 / TEL 製程設備\"] --> TSMC\n  SUMCO[\"矽晶圓 / 化學品 / 光罩\"] --> TSMC\n  TSMC[\"台積電 前段晶圓 + CoWoS\"] --> NV[\"NVIDIA GPU\"]\n  TSMC --> AMD[\"AMD MI 系列\"]\n  TSMC --> ASIC[\"Broadcom / Marvell / 創意 ASIC\"]\n  TSMC --> APL[\"Apple 手機 / PC SoC\"]\n  NV --> CSP[\"雲端資料中心\"]\n  ASIC --> CSP",
+    "technology": "flowchart LR\n  N3[\"N3 家族 量產\"] --> N2[\"N2 GAA 2025 底量產 爬坡中\"]\n  N2 --> A16[\"A16 背面供電 規劃 2026 下半\"]\n  A16 --> A14[\"A14 規劃\"]\n  COWOS[\"CoWoS-S/L 量產 持續擴產\"] --> SOIC[\"SoIC 3D 堆疊 量產初期\"]\n  SOIC --> COPOS[\"面板級封裝 CoPoS 規劃\"]\n  SIPH[\"矽光子 COUPE 驗證中\"]",
+    "assessment": {
+      "cycle": {
+        "view": "順風",
+        "note": "AI 加速器需求仍處擴張段，2026Q2 營收年增 36.1%、EPS 年增 77.4%。"
+      },
+      "technology": {
+        "view": "順風",
+        "note": "N2 GAA 領先同業量產、A16 背面供電在後；CoWoS / SoIC 先進封裝為 AI GPU 必經環節，競爭者尚無同等量產規模。"
+      },
+      "delivery": {
+        "view": "順風",
+        "note": "2026-09 營收年增 54.6%（月減 0.6%），年累計年增 41.1%；Q2 毛利率 67.7%（年增 9.1 pp），交貨與產品組合同步改善。"
+      }
+    },
+    "lean": "買",
+    "leanReason": "時機：外資連 8 日賣超、5 日 -5.1%，收在 60 日線附近；守 60 日線分批，跌破則等待。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
+    "watch": [
+      "外資賣超是否止步",
+      "N2 營收占比",
+      "CoWoS 擴產進度"
+    ],
+    "sources": [
+      {
+        "label": "本站基本面（月營收／季報）",
+        "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2330"
+      },
+      {
+        "label": "本站日線與籌碼",
+        "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/2330"
+      },
+      {
+        "label": "公開資訊觀測站 MOPS",
+        "url": "https://mops.twse.com.tw/"
+      },
+      {
+        "label": "TSMC Investor Relations",
+        "url": "https://investor.tsmc.com/"
+      }
+    ],
+    "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+  }
+}

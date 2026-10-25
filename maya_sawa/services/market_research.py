@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 PRODUCT_TYPE = "research"
 SEED_EDITOR = "seed"
-SEED_MODEL = "Claude Opus 5.5 (Claude Code) · seed"
+SEED_MODEL = "Codex · research review 2026-10-25 · seed"
 SEED_DIR = Path(__file__).resolve().parent.parent / "data" / "market_research"
 VIEWS = {"順風", "中性", "逆風"}
 LEANS = {"買", "中立", "賣"}

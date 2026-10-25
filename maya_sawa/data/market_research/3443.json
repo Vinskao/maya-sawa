@@ -1,43 +1,44 @@
 {
- "name": "創意",
- "market": "TW",
- "asOf": "2026-10-18",
- "summary": "台積電體系 ASIC 設計服務公司，提供先進製程 ASIC、HBM 與 2.5D 封裝介面 IP。",
- "supplyChain": "flowchart LR\n  CSP[\"雲端 / 系統客戶 自研晶片\"] --> GUC[\"創意 ASIC 設計服務\"]\n  IP[\"HBM / UCIe / SerDes IP\"] --> GUC\n  GUC --> TSMC[\"台積電 投片 + CoWoS\"]\n  TSMC --> CHIP[\"AI ASIC / 網通晶片\"]\n  CHIP --> CSP",
- "technology": "flowchart LR\n  N5[\"N5 / N3 ASIC 量產\"] --> N2[\"N2 ASIC 設計定案中（推論）\"]\n  HBM3E[\"HBM3E 介面 量產\"] --> HBM4[\"HBM4 PHY 驗證中\"]\n  UCIE[\"UCIe 小晶片介面 量產\"]",
- "assessment": {
-  "cycle": {
-   "view": "順風",
-   "note": "雲端自研 AI ASIC 進入量產期。"
+  "name": "創意電子",
+  "market": "TW",
+  "asOf": "2026-10-25",
+  "summary": "ASIC 設計服務的技術門檻與營收品質須分開看：NRE、量產 turnkey 與 IP 會有不同認列與毛利結構。",
+  "supplyChain": "flowchart TB\n  N0[\"客戶 ASIC 需求與設計規格\"]\n  N1[\"GUC 設計服務／HBM IP S1\"]\n  N0 -->|功能／需求傳導，非訂單證明| N1\n  N2[\"晶圓／封裝合作製造｜量產關卡\"]\n  N1 -->|功能／需求傳導，非訂單證明| N2\n  N3[\"客戶驗證後系統部署｜收入傳導推論\"]\n  N2 -->|功能／需求傳導，非訂單證明| N3",
+  "technology": "flowchart TB\n  R[\"讀圖：並行能力／驗證關卡；未標明者不是時程承諾\"]\n  subgraph G0[\"IP 家族而非晶片量產時程 S1\"]\n    T0_0[\"HBM3／3E 9.4Gbps pin｜公司規格 S1\"]\n    T0_1[\"HBM4／4E 12Gbps pin｜公司規格 S1\"]\n  end\n  R -->|能力或待驗證項目| T0_0\n  R -->|能力或待驗證項目| T0_1\n  subgraph G1[\"專案生命週期｜框架\"]\n    T1_0[\"設計導入→tape-out→驗證→量產\"]\n    T1_1[\"規格與 tape-out 不等於終端採用\"]\n  end\n  R -->|能力或待驗證項目| T1_0\n  R -->|能力或待驗證項目| T1_1",
+  "assessment": {
+    "cycle": {
+      "view": "順風",
+      "note": "S3：9 月營收年增 97.78%；成長是否由單一 turnkey 專案拉動須拆分。"
+    },
+    "technology": {
+      "view": "中性",
+      "note": "S1 的 IP 速度為公司規格；沒有同功耗／面積測試及客戶良率，不能判定競品全面落後。"
+    },
+    "delivery": {
+      "view": "順風",
+      "note": "S3：Q2 營收年增 127.64%，毛利率 21.55%、年減 11.77pp，展示營收與利潤非等比例。"
+    }
   },
-  "technology": {
-   "view": "順風",
-   "note": "與台積電先進製程、CoWoS 緊密整合，HBM4 介面為門檻。"
-  },
-  "delivery": {
-   "view": "順風",
-   "note": "2026-09 營收年增 97.8%、月增 22.3%，年累計年增 102.8%；惟 turnkey 量產比重升高，Q2 毛利率年減 11.8 pp。"
-  }
- },
- "lean": "買",
- "leanReason": "時機：跌破 20 日線（5 日 -10.5%），等止穩；營收強、毛利率稀釋屬組合變化。 方向規則：循環／技術力／交貨三項中 ≥2 項順風且無逆風＝買；≥2 項逆風＝賣；其餘＝中立。價格與籌碼只決定進場時機。",
- "watch": [
-  "NRE 與 turnkey 比重",
-  "HBM4 案"
- ],
- "sources": [
-  {
-   "label": "本站基本面（月營收／季報）",
-   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3443"
-  },
-  {
-   "label": "本站日線與籌碼",
-   "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/3443"
-  },
-  {
-   "label": "公開資訊觀測站 MOPS",
-   "url": "https://mops.twse.com.tw/"
-  }
- ],
- "basis": "結構與技術環節依公開資料整理（模型知識截至 2026-06，需以最新法說／年報覆核）；數字取自本站 2026-10-16 收盤與最新已公布月營收／季報。標示『推論』者為未經本站資料直接驗證。"
+  "lean": "買",
+  "leanReason": "因果橋：設計 win → NRE／IP 收入；成功驗證後晶片量產才可能產生 turnkey 收入。晶圓轉售額與設計附加價值不同，須同看營業利益和回款。\n比較：Broadcom／Marvell 與客戶自研團隊為替代；比較時程、IP 完整度、功耗與整體量產成本，不能只比 pin 速率。\n反方：turnkey 量增可稀釋毛利率；單一客戶延後或一次性 NRE 完成可造成高成長逆轉。\n情境（條件而非預測）：多頭＝多客戶設計案轉量產且利潤額提高。 基準＝turnkey 成長稀釋毛利率但利潤維持。 空頭＝專案延遲與集中度造成收入／庫存壓力。\n營運方向依三軸：至少兩項順風且無逆風為買、至少兩項逆風為賣，其餘中立。這不是估值／風險調整後的投資評級；未估市場隱含預期，不提供目標價。",
+  "watch": [
+    "組合—法說核對 NRE／turnkey／IP 占比；營收升但營業利益停滯須調整結論。",
+    "量產—專案須有驗證與量產證據，不能用 IP 新聞代替出貨。",
+    "風險—追蹤客戶集中、應收與存貨，量產庫存攀升而回款下降是警訊。"
+  ],
+  "sources": [
+    {
+      "label": "S1 GUC HBM IP portfolio｜日期未標示，讀取 2026-10-25",
+      "url": "https://www.guc-asic.com/en/solutions/IPPortfolio/HBMIP"
+    },
+    {
+      "label": "S2 GUC 官方新聞索引｜讀取 2026-10-25，索引不是出貨證明",
+      "url": "https://www.guc-asic.com/en/news"
+    },
+    {
+      "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
+      "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3443"
+    }
+  ],
+  "basis": "研究草稿／2026-10-25 依研究品質指引重審。事實、公司規劃與推論已分開；圖的箭頭只表示標註的功能／需求關係，不證明交易、獨家供貨或因果已成立。S 編號對應下列來源。證據限制：新聞索引的較新標題未逐篇查證；本次只引用已讀 IP 頁的能力，不推定最新產品已量產。 六項門檻詳見同版 evidence ledger；競品可比 KPI、估值與部分量產證據仍未齊備，因此不宣稱全部通過。"
 }
