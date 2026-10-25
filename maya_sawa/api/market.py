@@ -417,6 +417,8 @@ async def put_market_dashboard_custom(body: DashboardCustomSelection,
     if len(normalized) > 5:
         raise HTTPException(status_code=422, detail="At most five custom instruments are allowed")
     try:
+        previous = {(item["code"].upper(), item.get("productType")) for item in market_dashboard_db.custom_symbols()}
+        added = [item for item in normalized if (item["code"], item["productType"]) not in previous]
         market_dashboard_db.save_custom_symbols(normalized)
         await market_history_collector.enqueue_codes(
             [item["code"] for item in normalized if item["productType"] == "stock"]
@@ -427,7 +429,33 @@ async def put_market_dashboard_custom(body: DashboardCustomSelection,
     except Exception as exc:
         logger.exception("Failed to save market dashboard settings")
         raise HTTPException(status_code=503, detail="Market dashboard settings unavailable") from exc
-    return {"symbols": market_dashboard_db.custom_symbols(), "limit": 5}
+    if added:
+        start_added_analysis(added)
+    return {"symbols": market_dashboard_db.custom_symbols(), "limit": 5, "added": [item["code"] for item in added]}
+
+
+_added_tasks: set[asyncio.Task] = set()
+
+
+def start_added_analysis(items: list[dict]) -> None:
+    """Fill a new pick's data and start its first AI analysis now, instead of at the next scheduled run."""
+    async def run():
+        result = await market_automation.analyze_added(market_automation.automation_store(), items, _collect_added)
+        logger.info("Added instruments %s: analysis %s", result["codes"], result["state"])
+
+    task = asyncio.create_task(run())
+    _added_tasks.add(task)  # keep a reference until it finishes
+    task.add_done_callback(_added_tasks.discard)
+
+
+async def _collect_added(items: list[dict]) -> None:
+    stocks = [item["code"] for item in items if item["productType"] == "stock"]
+    futures = [item for item in items if item["productType"] == "futures"]
+    if stocks:
+        market_fundamentals_service.request_history(stocks)  # FinMind statements, queued ahead of the daily pass
+        await market_history_collector.collect_codes(stocks)
+    if futures:
+        await asyncio.to_thread(market_history_collector.collect_futures_codes, futures)
 
 
 async def _portfolio_with_ibkr() -> dict:

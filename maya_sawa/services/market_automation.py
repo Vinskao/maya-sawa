@@ -12,6 +12,7 @@ from the environment (MARKET_ROUTINE_TAIWAN_TOKEN, MARKET_ROUTINE_US_TOKEN). Wit
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -51,6 +52,8 @@ RUNS = (
                time(5, 30), time(5, 30), time(7, 30)),
 )
 MISSED = ":missed"  # AutomationFire.run suffix marking a session whose scheduled run had stale bars
+ADDED = "added:"  # AutomationFire.run prefix: a newly added instrument's first analysis, once per code per day
+ADDED_COLLECT_TIMEOUT = timedelta(minutes=15)  # a 92-day backfill of every Taiwan source takes a few minutes
 
 
 def session_date(run: RoutineRun, now: datetime) -> date | None:
@@ -262,3 +265,44 @@ async def fire_routine(run: RoutineRun, text: str) -> str:
             "anthropic-version": "2023-06-01", "Content-Type": "application/json"})
     response.raise_for_status()
     return str(response.json().get("claude_code_session_url", ""))
+
+
+async def analyze_added(store: AutomationStore, items: list[dict], collect, now: datetime | None = None) -> dict:
+    """Fill newly added instruments' data, then fire the Taiwan routine for just those codes.
+
+    Custom picks come from the Taiwan contract search, so the Taiwan routine covers them. Without this the first
+    analysis waited for the next 21:15 run. Each code is fired at most once per Taipei day; a failed fire is released
+    so saving the list again retries. Collection errors do not block the fire: the routine reports missing data.
+    """
+    now = now or datetime.now(timezone.utc)
+    run = RUNS[0]
+    if not items:
+        return {"state": "nothing-added", "codes": []}
+    codes = [item["code"] for item in items]
+    if not os.environ.get(run.token_env, "").strip():
+        await _collect(collect, items)
+        return {"state": "not-configured", "codes": codes}
+    day = now.astimezone(TAIPEI).date()
+    claimed = [item for item in items if store.record(f"{ADDED}{item['productType']}:{item['code']}", day, "")]
+    if not claimed:
+        return {"state": "done", "codes": codes}
+    await _collect(collect, claimed)
+    listed = "、".join(f"{item['code']} {item.get('name', '')}（{item['productType']}）" for item in claimed)
+    try:
+        url = await fire_routine(run, (
+            f"新增標的：使用者剛把 {listed} 加入看盤清單（{now.astimezone(TAIPEI):%Y-%m-%d %H:%M} 台北），"
+            "這些標的的歷史價量、籌碼與財報資料剛補抓。這次只為這些標的寫第一份 AI 分析，照原本規則與格式；"
+            "不要重跑其他標的，也不要寫總經。若某項資料仍缺，照實寫明缺什麼。"))
+    except Exception as exc:  # token revoked, routine API down: the next save retries
+        for item in claimed:
+            store.release(f"{ADDED}{item['productType']}:{item['code']}", day)
+        logger.warning("Routine for added instruments not fired: %s", type(exc).__name__)
+        return {"state": "error", "codes": codes}
+    return {"state": "fired", "codes": [item["code"] for item in claimed], "sessionUrl": url}
+
+
+async def _collect(collect, items: list[dict]) -> None:
+    try:
+        await asyncio.wait_for(collect(items), ADDED_COLLECT_TIMEOUT.total_seconds())
+    except Exception as exc:
+        logger.warning("Data for added instruments is incomplete: %s", type(exc).__name__)
