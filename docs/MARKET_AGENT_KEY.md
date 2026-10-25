@@ -75,5 +75,11 @@ Flow (asynchronous, human in the loop):
 - **Fire tokens:** routine API trigger tokens, held in the optional Jenkins credentials `MARKET_ROUTINE_TAIWAN_TOKEN` and
   `MARKET_ROUTINE_US_TOKEN`. Jenkins puts them in the k8s Secret `market-routine-fire`. Without them, nothing is fired
   and runs report `not-configured`. As of 2026-10-23 neither is set in production.
+- **New custom picks (since 2026-10-25):** saving the custom list (`PUT /market/dashboard/custom`) finds the picks that
+  were not saved before. It backfills their history and futures bars, queues their FinMind statements first, and then
+  fires the Taiwan routine for just those codes, so the first analysis doesn't wait for 21:15. Each code fires at most
+  once per Taipei day (`AutomationFire.run` = `added:<productType>:<code>`); a failed fire is released and the next save
+  retries. Without `MARKET_ROUTINE_TAIWAN_TOKEN` the data is still filled and only the analysis waits for the schedule.
+  Code: `market_automation.analyze_added`; tests: `tests/test_market_custom_added.py`.
 - **States reported:** `no-session`, `scheduled` (the cron run covers it), `waiting-ib` (missed, waiting for the
   login and bars), `fired`, `done`, `not-configured`, `error` (released and retried on the next check).
