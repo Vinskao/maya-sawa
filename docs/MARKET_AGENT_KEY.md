@@ -9,6 +9,11 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
   report-library routine endpoints `GET /market/reports/pending`, `PUT /market/reports/{id}/claims`, and
   `GET /market/reports/search` (public reports by default; private reports only with `include_private=true`). The
   semantic search endpoint requires this key for `include_private=true`. Published analyses must use public reports only.
+  Since 2026-10-26 it can also call `PUT /market/dashboard/targets/{code}?market=TW|JP|US|KR|HK` to add broker target
+  prices found in news (`actions[]` of firm, date, target, rating?, previousTarget?, sourceUrl; every row needs the
+  article URL, a past date and a positive target; same firm and date replaces). Yahoo Finance fills US per-broker
+  targets and every market's consensus automatically each day at 08:30 Taipei, so the routine only adds Taiwan/Japan
+  brokers. Code: `services/market_price_targets.py`.
   It cannot upload, download, list, or delete reports, change
   visibility, or edit research maps. Every other endpoint still requires a login.
 - **Edit history:** saves are recorded with editor `agent:scheduled-analysis` and keep the normal revision history.

@@ -259,6 +259,12 @@ async def _startup_event():
             logger.error(f"Failed to start low-frequency fundamentals collection: {e}")
 
         try:
+            from .services.market_price_targets import price_target_collector
+            await price_target_collector.start()
+        except Exception as e:
+            logger.error(f"Failed to start broker target price collection: {e}")
+
+        try:
             from .services.market_macro import market_macro_service
             await market_macro_service.start()
         except Exception as e:
@@ -351,6 +357,11 @@ async def _shutdown_event():
         await ibkr_market_service.close()
         await market_history_collector.close()
         await market_fundamentals_service.close()
+        try:
+            from .services.market_price_targets import price_target_collector
+            await price_target_collector.close()
+        except Exception as e:
+            logger.error(f"Error stopping broker target price collection: {e}")
         try:
             from .services.market_macro import market_macro_service
             await market_macro_service.close()

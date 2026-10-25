@@ -1,0 +1,42 @@
+{
+ "quoteSummary": {
+  "result": [
+   {
+    "financialData": {
+     "currentPrice": {
+      "raw": 2385.0,
+      "fmt": "2,385.00"
+     },
+     "targetHighPrice": {
+      "raw": 5000.0,
+      "fmt": "5,000.00"
+     },
+     "targetLowPrice": {
+      "raw": 2650.0,
+      "fmt": "2,650.00"
+     },
+     "targetMeanPrice": {
+      "raw": 3390.4285,
+      "fmt": "3,390.43"
+     },
+     "targetMedianPrice": {
+      "raw": 3300.0,
+      "fmt": "3,300.00"
+     },
+     "recommendationMean": {
+      "raw": 1.31429,
+      "fmt": "1.31"
+     },
+     "recommendationKey": "strong_buy",
+     "numberOfAnalystOpinions": {
+      "raw": 35,
+      "fmt": "35",
+      "longFmt": "35"
+     },
+     "financialCurrency": "TWD"
+    }
+   }
+  ],
+  "error": null
+ }
+}

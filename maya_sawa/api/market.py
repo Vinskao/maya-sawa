@@ -32,6 +32,8 @@ from ..databases.portfolio_history_db import portfolio_history_db
 from ..databases.market_dashboard_db import market_dashboard_db, market_for_currency
 from ..databases.market_history_db import market_history_db
 from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
+from ..databases.market_price_target_db import market_price_target_db
+from ..services import market_price_targets
 from ..services.market_research import validate_research_content, list_research
 from ..databases.market_industry_db import market_industry_db, validate_group
 from ..services.market_selection import attach_underlying
@@ -145,6 +147,50 @@ async def put_market_ai_analysis(code: str, body: MarketAiAnalysisUpdate, produc
     except Exception as exc:
         logger.exception("AI analysis save failed")
         raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
+
+
+class PriceTargetUpdate(BaseModel):
+    actions: list[dict] = Field(min_length=1, max_length=50)
+
+
+def price_target_identity(code: str, market: str) -> tuple[str, str]:
+    code, market = code.strip().upper(), market.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9.-]{1,24}", code) or market not in market_price_targets.MARKET_CURRENCY:
+        raise HTTPException(status_code=422, detail="Invalid instrument identity")
+    return code, market
+
+
+@router.get("/dashboard/targets/{code}")
+async def get_price_targets(code: str, market: str = "TW"):
+    """Broker target prices (per broker and consensus) from Yahoo Finance and the AI routine's sourced news."""
+    code, market = price_target_identity(code, market)
+    try:
+        data = await asyncio.to_thread(market_price_target_db.read, code, market)
+    except Exception as exc:
+        logger.exception("Price target read failed")
+        raise HTTPException(status_code=503, detail="Price target database unavailable") from exc
+    return {"code": code, "market": market, "currency": market_price_targets.MARKET_CURRENCY[market], **data,
+            "writeMethod": "PUT", "writeAccess": "owner or X-Market-Agent-Key",
+            "instructions": "Add broker targets found in news: actions[] of {firm, date YYYY-MM-DD, target, rating?, "
+                "previousTarget?, sourceUrl}. Only targets stated in the article; same firm and date replaces."}
+
+
+@router.put("/dashboard/targets/{code}")
+async def put_price_targets(code: str, body: PriceTargetUpdate, market: str = "TW",
+                            editor: str = Depends(analysis_editor)):
+    code, market = price_target_identity(code, market)
+    try:
+        actions = market_price_targets.validate_routine_actions(body.actions, datetime.now(ZoneInfo("Asia/Taipei")).date())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        saved = await asyncio.to_thread(market_price_target_db.save_actions, code, market,
+                                        market_price_targets.MARKET_CURRENCY[market], actions, source="ai-routine")
+    except Exception as exc:
+        logger.exception("Price target save failed")
+        raise HTTPException(status_code=503, detail="Price target database unavailable") from exc
+    logger.info("Price targets for %s %s written by %s: %d", code, market, editor, saved)
+    return {"saved": saved}
 
 
 @router.get("/dashboard/research")
@@ -454,6 +500,8 @@ async def _collect_added(items: list[dict]) -> None:
     if stocks:
         market_fundamentals_service.request_history(stocks)  # FinMind statements, queued ahead of the daily pass
         await market_history_collector.collect_codes(stocks)
+        from ..services.market_price_targets import price_target_collector
+        await price_target_collector.collect_now([{**item, "market": "TW"} for item in items if item["productType"] == "stock"])
     if futures:
         await asyncio.to_thread(market_history_collector.collect_futures_codes, futures)
 

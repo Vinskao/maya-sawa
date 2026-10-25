@@ -1,0 +1,117 @@
+{
+ "quoteSummary": {
+  "result": [
+   {
+    "financialData": {
+     "currentPrice": {
+      "raw": 756.17,
+      "fmt": "756.17"
+     },
+     "targetHighPrice": {
+      "raw": 1500.0,
+      "fmt": "1,500.00"
+     },
+     "targetLowPrice": {
+      "raw": 750.0,
+      "fmt": "750.00"
+     },
+     "targetMeanPrice": {
+      "raw": 1165.0314,
+      "fmt": "1,165.03"
+     },
+     "targetMedianPrice": {
+      "raw": 1200.0,
+      "fmt": "1,200.00"
+     },
+     "recommendationMean": {
+      "raw": 1.55556,
+      "fmt": "1.56"
+     },
+     "recommendationKey": "buy",
+     "numberOfAnalystOpinions": {
+      "raw": 27,
+      "fmt": "27",
+      "longFmt": "27"
+     },
+     "financialCurrency": "USD"
+    },
+    "upgradeDowngradeHistory": {
+     "history": [
+      {
+       "epochGradeDate": 1792599480,
+       "firm": "Jefferies",
+       "toGrade": "Buy",
+       "fromGrade": "Buy",
+       "action": "main",
+       "priceTargetAction": "Raises",
+       "currentPriceTarget": 1250.0,
+       "priorPriceTarget": 1200.0
+      },
+      {
+       "epochGradeDate": 1791202701,
+       "firm": "Rosenblatt",
+       "toGrade": "Buy",
+       "fromGrade": "Buy",
+       "action": "main",
+       "priceTargetAction": "Maintains",
+       "currentPriceTarget": 1300.0,
+       "priorPriceTarget": 1300.0
+      },
+      {
+       "epochGradeDate": 1791198753,
+       "firm": "Stifel",
+       "toGrade": "Buy",
+       "fromGrade": "Buy",
+       "action": "main",
+       "priceTargetAction": "Raises",
+       "currentPriceTarget": 1232.0,
+       "priorPriceTarget": 1100.0
+      },
+      {
+       "epochGradeDate": 1790765108,
+       "firm": "Bernstein",
+       "toGrade": "Outperform",
+       "fromGrade": "",
+       "action": "init",
+       "priceTargetAction": "Announces",
+       "currentPriceTarget": 1220.0,
+       "priorPriceTarget": 0.0
+      },
+      {
+       "epochGradeDate": 1790609353,
+       "firm": "Citigroup",
+       "toGrade": "Buy",
+       "fromGrade": "Buy",
+       "action": "main",
+       "priceTargetAction": "Raises",
+       "currentPriceTarget": 1400.0,
+       "priorPriceTarget": 1200.0
+      },
+      {
+       "epochGradeDate": 1790163926,
+       "firm": "Rosenblatt",
+       "toGrade": "Buy",
+       "fromGrade": "Buy",
+       "action": "main",
+       "priceTargetAction": "Maintains",
+       "currentPriceTarget": 1300.0,
+       "priorPriceTarget": 1300.0
+      },
+      {
+       "epochGradeDate": 1751991034,
+       "firm": "Wolfe Research",
+       "toGrade": "Outperform",
+       "fromGrade": "",
+       "action": "init",
+       "priceTargetAction": "",
+       "currentPriceTarget": 0.0,
+       "priorPriceTarget": 0.0
+      }
+     ],
+     "maxAge": 86400
+    }
+   }
+  ],
+  "error": null
+ }
+}
