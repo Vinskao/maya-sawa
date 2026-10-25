@@ -16,7 +16,7 @@ def test_all_current_targets_and_retained_research_are_reviewed():
     assert 'Codex' in SEED_MODEL  # do not attribute this review to the former seed model
     for code in CURRENT | {'000660-KR'}:
         data = seeds[code]
-        assert data['asOf'] == '2026-10-25', code
+        assert data['asOf'] == ('2026-10-26' if code == '3008' else '2026-10-25'), code
         assert len(json.dumps(data, ensure_ascii=False)) <= 20000
         validate_research_content(json.dumps(data, ensure_ascii=False))
         # General ETFs now use the explicitly requested allocation-only contract.

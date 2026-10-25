@@ -1,0 +1,26 @@
+{
+  "retrievedAt": "2026-10-26",
+  "article": {
+    "sourceId": "S4",
+    "contentUpdatedAt": "2026-04-28",
+    "retrieval": "Browser-rendered public article: five sections readable; web text extraction had only introduction",
+    "evidenceType": "secondary-commentary",
+    "independentlyVerifiedSupplierRelationships": false,
+    "tableDetailsComplete": false
+  },
+  "officialCatalogue": {
+    "sourceId": "S1",
+    "url": "https://www.largan.com.tw/tw/product",
+    "section": "CPO應用",
+    "productNames": ["稜鏡微透鏡陣列", "光纖陣列 (1D & 2D)"],
+    "publishedAt": null,
+    "commercialShipmentOrCustomerEvidence": false
+  },
+  "architectureReference": {
+    "sourceId": "S5",
+    "publishedAt": "2025-08-26",
+    "url": "https://developer.nvidia.com/blog/how-industry-collaboration-fosters-nvidia-co-packaged-optics/",
+    "roles": ["External laser source", "Silicon photonics modulation", "Micro-lens and fiber integration"],
+    "larganQualificationEvidence": false
+  }
+}
