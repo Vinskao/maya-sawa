@@ -8,6 +8,8 @@ import json
 import logging
 import re
 from pathlib import Path
+from datetime import date
+from maya_sawa.services.market_research_allocation import validate_allocations
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +47,31 @@ def validate_research_content(content: str) -> dict:
         raise ValueError("Research content must be JSON") from exc
     if not isinstance(data, dict):
         raise ValueError("Research content must be a JSON object")
-    for field in ("name", "market", "asOf", "summary", "leanReason"):
+    for field in ("name", "market", "asOf", "summary"):
         _text(data.get(field), field)
+    if data.get('kind') == 'etf':
+        try:
+            if date.fromisoformat(data['asOf']).isoformat() != data['asOf']:
+                raise ValueError('invalid ETF review date')
+        except ValueError:
+            raise ValueError('ETF asOf must be an ISO calendar date') from None
+        validate_allocations(data.get('allocations'))
+        theme = data.get('theme')
+        theme_research = data.get('themeResearch')
+        if theme or theme_research is not None:
+            _text(theme, 'theme')
+            if not isinstance(theme_research, dict):
+                raise ValueError('thematic ETFs require themeResearch')
+            validate_research_content(json.dumps({**theme_research, 'kind': 'company',
+                **{key: data[key] for key in ('name', 'market', 'asOf')}}, ensure_ascii=False))
+        for source in data.get('sources') or []:
+            if not isinstance(source, dict) or not str(source.get('url', '')).startswith('https://'):
+                raise ValueError('sources need an https url')
+            _text(source.get('label'), 'sources.label')
+        return data
+    if data.get('kind') not in (None, 'company'):
+        raise ValueError('research kind must be company or etf')
+    _text(data.get('leanReason'), 'leanReason')
     _mermaid(data.get("supplyChain"), "supplyChain")
     _mermaid(data.get("technology"), "technology")
     assessment = data.get("assessment")

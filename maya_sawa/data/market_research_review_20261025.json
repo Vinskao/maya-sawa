@@ -1876,98 +1876,112 @@
       "publicationStatus": "研究草稿"
     },
     "009811": {
+      "kind": "etf",
+      "publicationStatus": "allocation-only",
       "identity": {
         "code": "009811",
         "market": "TW",
         "name": "統一美國50 ETF"
       },
-      "claims": [
+      "allocations": [
         {
-          "id": "C1",
-          "statement": "美國大型股盈利與美元匯率是風險來源；本次未取得同日成分／權重與一致估值，不判斷便宜昂貴。",
-          "kind": "Evidence and inference explicitly qualified in statement",
-          "sourceIds": []
-        },
-        {
-          "id": "C2",
-          "statement": "技術力改解釋為複製機制；S2 為上市介紹，現行方法論與基金文件未完整取得，資訊不足編碼中性。",
-          "kind": "Evidence and inference explicitly qualified in statement",
-          "sourceIds": [
-            "S2"
+          "dimension": "holdings",
+          "asOf": "2026-10-14",
+          "coverage": "partial",
+          "denominator": "來源投資比例；未明示分母，未重新正規化",
+          "sourceLabel": "MoneyDJ 持股明細（次級來源）",
+          "sourceUrl": "https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=009811.tw",
+          "items": [
+            {
+              "name": "NVIDIA (NVDA)",
+              "weightPercent": 11.52
+            },
+            {
+              "name": "Apple (AAPL)",
+              "weightPercent": 11.23
+            },
+            {
+              "name": "Microsoft (MSFT)",
+              "weightPercent": 8.76
+            },
+            {
+              "name": "Amazon (AMZN)",
+              "weightPercent": 5.6
+            },
+            {
+              "name": "Alphabet A (GOOGL)",
+              "weightPercent": 4.57
+            },
+            {
+              "name": "Alphabet C (GOOG)",
+              "weightPercent": 3.96
+            },
+            {
+              "name": "Meta (META)",
+              "weightPercent": 3.65
+            },
+            {
+              "name": "Broadcom (AVGO)",
+              "weightPercent": 3.63
+            },
+            {
+              "name": "Tesla (TSLA)",
+              "weightPercent": 2.68
+            }
           ]
         },
         {
-          "id": "C3",
-          "statement": "交貨改解釋為追蹤品質；未取得同基準同幣別 NAV 總報酬、費用與追蹤差異，不以成交價報酬替代。",
-          "kind": "Evidence and inference explicitly qualified in statement",
-          "sourceIds": []
-        }
-      ],
-      "comparison": "與 S&P 500／其他美國大型股 ETF 比較同期間同幣別含息 NAV 總報酬、集中度、追蹤差異及總持有成本；目前沒有可比資料，不作勝負排名。",
-      "financialBridge": "成分股盈利／估值 → 美元指數總報酬 → 匯率換算與股息稅務／費用 → 基金 NAV；市價再受折溢價與流動性影響。",
-      "counterargument": "50 檔並不代表充分分散；大型科技集中、台幣升值、費用或折溢價可抵銷美元股價上升。",
-      "scenarios": {
-        "bull": "盈利成長且匯率／成本影響有限。",
-        "base": "股市報酬被費用與匯率部分抵銷。",
-        "bear": "集中股回檔、台幣升值或追蹤／交易成本放大損失。"
-      },
-      "observableChecks": [
-        "文件—取得現行指數方法論與公開說明書，核對選樣／權重／費率，歷史上市資料不代替。",
-        "曝險—每次更新保存同日成分權重、前十大與產業集中度；未知時不能稱分散充分。",
-        "追蹤—同幣別同期間比較含息 NAV 與基準，另列折溢價、費用和匯率。"
-      ],
-      "sources": [
-        {
-          "label": "S1 TWSE ETF 商品資訊 009811｜讀取 2026-10-25",
-          "url": "https://www.twse.com.tw/zh/ETFortune/etfInfo/009811"
+          "dimension": "regions",
+          "asOf": "2026-08-31",
+          "coverage": "partial",
+          "denominator": "來源地區投資比例；未明示分母，未重新正規化",
+          "sourceLabel": "MoneyDJ 區域分布（次級來源）",
+          "sourceUrl": "https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=009811.tw",
+          "items": [
+            {
+              "name": "美國 / United States",
+              "weightPercent": 95.05
+            }
+          ]
         },
         {
-          "label": "S2 TWSE 上市介紹｜2025-07-28，歷史資料非現行公開說明書",
-          "url": "https://www.twse.com.tw/zh/ETFortune/newsDetail/8a8216d697fc438f0198501a56c00154"
+          "dimension": "derivatives",
+          "asOf": "2026-10-14",
+          "coverage": "partial",
+          "denominator": "來源投資比例；非已驗證的保證金比重或名目曝險",
+          "sourceLabel": "MoneyDJ 持股明細中的期貨項目（次級來源）",
+          "sourceUrl": "https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=009811.tw",
+          "items": [
+            {
+              "name": "小型那斯達克指數 2026/12",
+              "weightPercent": 3.05
+            }
+          ]
         },
         {
-          "label": "S3 本站資料快照｜讀取 2026-10-25；聚合資料非新技術證據",
-          "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard"
-        }
-      ],
-      "qualityGates": [
-        {
-          "gate": "來源與關鍵主張",
-          "status": "partial",
-          "reason": "新增研究草稿。ICE 方法論原連結 404，發行人 DM 本次無法讀取；現行費率、完整持股、追蹤差異與估值未核實。S3 只核對本站標的身分。"
-        },
-        {
-          "gate": "有意義的替代比較",
-          "status": "partial",
-          "reason": "與 S&P 500／其他美國大型股 ETF 比較同期間同幣別含息 NAV 總報酬、集中度、追蹤差異及總持有成本；目前沒有可比資料，不作勝負排名。"
-        },
-        {
-          "gate": "技術到營收／利潤／現金",
-          "status": "pass-framework",
-          "reason": "成分股盈利／估值 → 美元指數總報酬 → 匯率換算與股息稅務／費用 → 基金 NAV；市價再受折溢價與流動性影響。"
-        },
-        {
-          "gate": "反方與可觀察條件",
-          "status": "pass-framework",
-          "reason": "50 檔並不代表充分分散；大型科技集中、台幣升值、費用或折溢價可抵銷美元股價上升。"
-        },
-        {
-          "gate": "身分／時點／資料缺口",
-          "status": "pass-disclosure",
-          "reason": "新增研究草稿。ICE 方法論原連結 404，發行人 DM 本次無法讀取；現行費率、完整持股、追蹤差異與估值未核實。S3 只核對本站標的身分。"
-        },
-        {
-          "gate": "圖形語意一致",
-          "status": "pass-structure",
-          "reason": "並行能力用 subgraph，箭頭註明功能而非假定供貨；技術與需求推論不充當量產證明。"
+          "dimension": "sectors",
+          "asOf": null,
+          "coverage": "unavailable",
+          "denominator": "尚未取得可核實的產業分類與比重",
+          "sourceLabel": "發行人資料入口（本次無法讀取）",
+          "sourceUrl": "https://www.ezmoney.com.tw/ETF/Fund/Info",
+          "items": []
         }
       ],
       "sourceLimitations": [
-        "新增研究草稿。ICE 方法論原連結 404，發行人 DM 本次無法讀取；現行費率、完整持股、追蹤差異與估值未核實。S3 只核對本站標的身分。",
-        "未建立同日估值與市場隱含假設；營運方向不等於投資報酬預測。"
+        "2026-10-25 查閱公開頁面。發行人網站本次無法讀取，採明示日期的次級來源快照，尚未與發行人完整持股核對。這不是即時配置；沒有將部分持股補成 100%，沒有把未知差額當成現金，也沒有合併不同日期的比例或把期貨當股票。產業配置待取得可靠來源後補入。"
       ],
-      "withdrawnOrCorrected": "首次新增；不把 ETF 寫成晶片公司，不編造現行費率與成分權重。",
-      "publicationStatus": "研究草稿"
+      "sources": [
+        {
+          "label": "MoneyDJ 配置明細：各表日期不同，僅部分披露",
+          "url": "https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=009811.tw"
+        },
+        {
+          "label": "TWSE 009811：國外股票 ETF 身分",
+          "url": "https://www.twse.com.tw/zh/ETFortune/etfInfo/009811"
+        }
+      ],
+      "supersedes": "Previous company-style analysis; general ETFs now show allocation ratios only."
     },
     "TXF": {
       "identity": {

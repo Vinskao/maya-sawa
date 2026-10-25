@@ -19,6 +19,13 @@ def test_all_current_targets_and_retained_research_are_reviewed():
         assert data['asOf'] == '2026-10-25', code
         assert len(json.dumps(data, ensure_ascii=False)) <= 20000
         validate_research_content(json.dumps(data, ensure_ascii=False))
+        # General ETFs now use the explicitly requested allocation-only contract.
+        if data.get('kind') == 'etf':
+            assert code == '009811'
+            assert data['allocations']
+            assert 'lean' not in data and 'assessment' not in data
+            assert 'supplyChain' not in data and 'technology' not in data
+            continue
         assert '反方' in data['leanReason'], code
         assert '因果橋' in data['leanReason'], code
         assert '研究草稿' in data['basis'] or '六項' in data['basis'], code
@@ -50,6 +57,11 @@ def test_companion_evidence_ledger_covers_the_published_records():
     ledger = json.loads((ROOT / 'maya_sawa/data/market_research_review_20261025.json').read_text(encoding='utf-8'))
     assert CURRENT | {'000660-KR'} <= ledger['records'].keys()
     for code, item in ledger['records'].items():
+        if item.get('kind') == 'etf':
+            assert item['publicationStatus'] == 'allocation-only'
+            assert item['allocations'] == load_seed_records()[code]['allocations']
+            assert item['sourceLimitations']
+            continue
         assert item['claims'] and item['comparison'] and item['counterargument'], code
         assert set(item['scenarios']) == {'bull', 'base', 'bear'}
         assert len(item['qualityGates']) == 6
@@ -58,6 +70,9 @@ def test_companion_evidence_ledger_covers_the_published_records():
 
 def test_operational_direction_follows_existing_rule_and_discloses_valuation_gap():
     for code, data in load_seed_records().items():
+        if data.get('kind') == 'etf':
+            assert 'lean' not in data
+            continue
         views = [item['view'] for item in data['assessment'].values()]
         expected = '買' if views.count('順風') >= 2 and '逆風' not in views else '賣' if views.count('逆風') >= 2 else '中立'
         assert data['lean'] == expected, code

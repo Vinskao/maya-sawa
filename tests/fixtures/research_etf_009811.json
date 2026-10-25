@@ -1,0 +1,60 @@
+{
+  "kind": "etf",
+  "name": "統一美國50 ETF",
+  "market": "TW",
+  "asOf": "2026-10-25",
+  "summary": "一般 ETF 配置比例快照；持股、地區與衍生品分開顯示，各表日期不同。",
+  "allocations": [
+    {
+      "dimension": "holdings",
+      "asOf": "2026-10-14",
+      "coverage": "partial",
+      "denominator": "來源投資比例；未明示分母，未重新正規化",
+      "sourceLabel": "MoneyDJ 持股明細（次級來源）",
+      "sourceUrl": "https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=009811.tw",
+      "items": [
+        { "name": "NVIDIA (NVDA)", "weightPercent": 11.52 },
+        { "name": "Apple (AAPL)", "weightPercent": 11.23 },
+        { "name": "Microsoft (MSFT)", "weightPercent": 8.76 },
+        { "name": "Amazon (AMZN)", "weightPercent": 5.60 },
+        { "name": "Alphabet A (GOOGL)", "weightPercent": 4.57 },
+        { "name": "Alphabet C (GOOG)", "weightPercent": 3.96 },
+        { "name": "Meta (META)", "weightPercent": 3.65 },
+        { "name": "Broadcom (AVGO)", "weightPercent": 3.63 },
+        { "name": "Tesla (TSLA)", "weightPercent": 2.68 }
+      ]
+    },
+    {
+      "dimension": "regions",
+      "asOf": "2026-08-31",
+      "coverage": "partial",
+      "denominator": "來源地區投資比例；未明示分母，未重新正規化",
+      "sourceLabel": "MoneyDJ 區域分布（次級來源）",
+      "sourceUrl": "https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=009811.tw",
+      "items": [{ "name": "美國 / United States", "weightPercent": 95.05 }]
+    },
+    {
+      "dimension": "derivatives",
+      "asOf": "2026-10-14",
+      "coverage": "partial",
+      "denominator": "來源投資比例；非已驗證的保證金比重或名目曝險",
+      "sourceLabel": "MoneyDJ 持股明細中的期貨項目（次級來源）",
+      "sourceUrl": "https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=009811.tw",
+      "items": [{ "name": "小型那斯達克指數 2026/12", "weightPercent": 3.05 }]
+    },
+    {
+      "dimension": "sectors",
+      "asOf": null,
+      "coverage": "unavailable",
+      "denominator": "尚未取得可核實的產業分類與比重",
+      "sourceLabel": "發行人資料入口（本次無法讀取）",
+      "sourceUrl": "https://www.ezmoney.com.tw/ETF/Fund/Info",
+      "items": []
+    }
+  ],
+  "sources": [
+    { "label": "MoneyDJ 配置明細：各表日期不同，僅部分披露", "url": "https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=009811.tw" },
+    { "label": "TWSE 009811：國外股票 ETF 身分", "url": "https://www.twse.com.tw/zh/ETFortune/etfInfo/009811" }
+  ],
+  "basis": "2026-10-25 查閱公開頁面。發行人網站本次無法讀取，採明示日期的次級來源快照，尚未與發行人完整持股核對。這不是即時配置；沒有將部分持股補成 100%，沒有把未知差額當成現金，也沒有合併不同日期的比例或把期貨當股票。產業配置待取得可靠來源後補入。"
+}
