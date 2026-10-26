@@ -13,7 +13,10 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
   prices found in news (`actions[]` of firm, date, target, rating?, previousTarget?, sourceUrl; every row needs the
   article URL, a past date and a positive target; same firm and date replaces). Yahoo Finance fills US per-broker
   targets and every market's consensus automatically each day at 08:30 Taipei, so the routine only adds Taiwan/Japan
-  brokers. Code: `services/market_price_targets.py`.
+  brokers. Code: `services/market_price_targets.py`. Since 2026-10-26 the Taiwan routine's prompt has a section 7 for
+  this: read the stored targets, search the last 30 days of news (TW, JP, KR), write only targets an article states
+  with the broker, number and date, use one fixed name per broker so the chart joins a broker's targets, and list what
+  was added in the final report. Codes are bare (`6857` with `market=JP`, not `6857-JP`).
   It cannot upload, download, list, or delete reports, change
   visibility, or edit research maps. Every other endpoint still requires a login.
 - **Edit history:** saves are recorded with editor `agent:scheduled-analysis` and keep the normal revision history.
