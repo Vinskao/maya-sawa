@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from ..databases.article_db import get_article_db
 from ..core.auth.keycloak import require_manage_users
+from ..services.blog_legacy import reject_legacy_article_write
 from ..core.errors.errors import (
     ErrorCode,
     AppException,
@@ -40,7 +41,7 @@ from ..core.services.ai_rate_limiter import enforce_ai_rate_limit
 logger = logging.getLogger(__name__)
 
 # Create router with paprika prefix
-router = APIRouter(prefix="/paprika", tags=["Paprika Articles"])
+router = APIRouter(prefix="/paprika", tags=["Paprika Articles"], dependencies=[Depends(reject_legacy_article_write)])
 
 
 # ==================== Request/Response Models ====================

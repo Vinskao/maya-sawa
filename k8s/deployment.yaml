@@ -40,6 +40,12 @@ spec:
         ports:
         - containerPort: 8000
         env:
+        - name: BLOG_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: blog-workflow-config
+              key: BLOG_ENABLED
+              optional: true
         - name: OPENAI_API_KEY
           value: "${OPENAI_API_KEY}"
         - name: OPENAI_ORGANIZATION

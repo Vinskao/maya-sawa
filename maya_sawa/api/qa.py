@@ -19,6 +19,7 @@ Markdown Q&A System - API 路由模組
 
 # 標準庫導入
 import os
+from ..services.blog_legacy import legacy_sync_guard
 import logging
 import asyncio
 from typing import List, Dict, Any, Optional
@@ -266,6 +267,7 @@ class ConvertToVectorRequest(BaseModel):
 # ==================== API 端點定義 ====================
 
 @router.post("/sync-from-api")
+@legacy_sync_guard
 async def sync_articles_from_api(request: SyncFromAPIRequest, http_request: Request = None):
     """
     從遠端 API 同步文章並使用預計算的 embedding
@@ -391,6 +393,7 @@ async def sync_articles_from_api(request: SyncFromAPIRequest, http_request: Requ
         raise HTTPException(status_code=500, detail=f"同步失敗: {str(e)}")
 
 @router.post("/sync-articles")
+@legacy_sync_guard
 async def sync_articles_from_remote(request: SyncRequest, http_request: Request = None):
     """
     從遠端 API 同步文章並生成 embedding（保留原有方法以向後兼容）

@@ -347,10 +347,11 @@ class QAVectorDatabase:
                     file_path,
                     content,
                     file_date,
-                    1 - (embedding <=> %s::vector) as similarity
+                    1 - (embedding::vector <=> %s::vector) as similarity
                 FROM articles
-                WHERE 1 - (embedding <=> %s::vector) > %s
-                ORDER BY embedding <=> %s::vector
+                WHERE deleted_at IS NULL AND embedding IS NOT NULL
+                    AND 1 - (embedding::vector <=> %s::vector) > %s
+                ORDER BY embedding::vector <=> %s::vector
                 LIMIT %s
                 """,
                 (embedding_str, embedding_str, threshold, embedding_str, k)

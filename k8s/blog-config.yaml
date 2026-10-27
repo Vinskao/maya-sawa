@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blog-workflow-config
+data:
+  # Enable only after initializing the main DB and verifying the article import.
+  BLOG_ENABLED: "false"

@@ -5,6 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: maya-sawa-sync
 spec:
+  suspend: true  # Article ingestion is handled directly by the blog DB workflow.
   schedule: "0 3 */3 * *"  # 每3天的凌晨3點執行
   concurrencyPolicy: Forbid  # 防止重複執行
   successfulJobsHistoryLimit: 1  # 只保留最近1個成功的Job
@@ -80,4 +81,4 @@ spec:
               limits:
                 memory: "512Mi"
                 cpu: "200m"
-          restartPolicy: OnFailure 
+          restartPolicy: OnFailure

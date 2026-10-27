@@ -46,6 +46,8 @@ load_dotenv(env_path, override=True)
 # 本地模組導入
 from .api.qa import router as qa_router
 from .api.articles import router as articles_router
+from .api.blog import router as blog_router
+from .services.blog_worker import blog_worker
 from .api.ai_models import router as ai_models_router
 from .api.conversations import router as conversations_router, legacy_router as legacy_chat_router
 from .api.ask import router as ask_router
@@ -99,7 +101,8 @@ async def lifespan(app: FastAPI):
     get_research_pipeline_container().startup()
     try:
         await _startup_event()
-        yield
+        async with blog_worker():
+            yield
     finally:
         await _shutdown_event()
         get_research_pipeline_container().shutdown()
@@ -153,6 +156,7 @@ app.include_router(qa_router)
 
 # 註冊 Paprika 文章 API 路由 (從 Laravel 移植)
 app.include_router(articles_router)
+app.include_router(blog_router)
 
 # 註冊 Maya-v2 AI 模型管理 API 路由 (從 Django 移植)
 app.include_router(ai_models_router)
