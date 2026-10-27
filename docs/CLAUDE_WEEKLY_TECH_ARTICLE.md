@@ -4,9 +4,9 @@
 
 - 名稱：TY Multiverse｜每週技術探討文
 - 建議時間：每週一 09:00，Asia/Taipei；UTC cron `0 1 * * 1`。
-- 使用 Claude Code 訂閱的排程環境，沿用可讀取專案的環境與網路設定。
+- 使用 Claude Code 訂閱的專用環境 `TY Blog Weekly`，僅連結技術來源 repo；不沿用含私人日記或市場報告存取權限的環境。
 - 啟用條件：文章 CRUD 正式 API 可用、原文接管完成、管理者權限已驗證。先完成 CRUD，再建立／啟用此排程。
-- 發文認證：使用環境已核准的管理者 Bearer 認證；不得將密鑰放在 prompt、Markdown、repo、URL 或輸出。既有市場分析專用 key 沒有文章寫入權限，不能拿來呼叫 blog API。若環境尚無可用認證，只產出草稿與缺少認證的報告，不建立長效人員 token，也不擴張市場 key 權限。
+- 發文認證：專用 network secret `ty-blog-weekly-writer`，代理對 `peoplesystem.tatdvsonorth.com` 注入 `X-Blog-Agent-Key`，不加 Bearer 前綴。後端僅存 SHA-256（`BLOG_WEEKLY_AGENT_KEY_SHA256`），明文不進 prompt、Markdown、repo、URL 或輸出。此 key 只能建立當週 `weekly-tech-YYYY-wWW` 的 Engineering 文章、讀自己文章的狀態，不能更新、刪除或取得管理者 CRUD 權限。既有市場 key 不擴權。建立持續性的雲端寫入憑證須先完成使用者確認。
 - 文章發布與向量化是不同結果。API 入庫成功後由背景流程向量化；若額度不足，保留發布文章與 pending／failed 工作，不宣稱 QA 已可檢索。
 
 ## 可直接貼入 Claude Routine 的提示詞
@@ -37,18 +37,17 @@ category 使用 Engineering；tags 選實際涉及的 3–6 個技術；publishD
 
 四、去重、入庫與發布
 1. 先 GET /blog/articles/<slug>。已存在就讀內容並回報本週已發，不新增第二篇，也不覆蓋人工編輯。
-2. 只有以管理者認證查詢確認該 slug 也無草稿時，才建立新文。草稿已存在則報告其狀態，避免同週重跑覆蓋他人。
-3. 使用新的 Markdown 入口：
-   POST /maya-sawa/blog/admin/upload
-   Authorization: Bearer <由已核准環境注入>
-   multipart file=@article.md, operation=create, publish=true
-   或 POST /blog/admin/import，JSON 為 {markdown:完整內容, operation:"create", publish:true}。
+2. 若公開頁 404，再 GET /blog/weekly/articles/<slug> 查看自己的草稿／處理狀態；已有草稿就回報，不覆蓋。404 時才建立。
+3. 使用每週排程專用的 Markdown 入口：
+   POST /maya-sawa/blog/weekly/import
+   JSON 為 {markdown:完整內容, operation:"create", publish:true}。
+   環境代理會自動注入 X-Blog-Agent-Key；不要讀取、輸出或手動設定 key。
 4. 不呼叫 /paprika/articles/batch、/articles/sync、/qa/sync-from-api、/md-exporter、purge 或任何前端同步入口。不把文章加回前端 src/content/work。
 5. 409 視為可能重複建立或版本衝突：重新讀取並回報，不能強制覆蓋。401／403 回報缺少合法認證。5xx／網路逾時先 GET 核對是否已建立，避免盲目重送。
-6. 更新已核准的既有草稿時，必須先 GET /blog/admin/articles/<slug>，以 etag 帶 If-Match，operation=update；不得改寫不屬於本排程的文章。
+6. 排程 key 不可更新或刪除任何文章。需要修訂時回報管理者，由管理頁或管理者 Bearer + If-Match 流程處理。
 
 五、驗證與回報
-1. 發布後 GET /blog/articles/<slug>，核對標題、技術標籤與正文；再核對管理狀態的 published revision 及 indexStatus。
+1. 發布後 GET /blog/articles/<slug>，核對標題、技術標籤與正文；再 GET /blog/weekly/articles/<slug> 核對自己的 published revision 及 indexStatus。
 2. 向量化 pending／failed 時說明文章已發布但 QA 索引尚未完成。額度不足不重複建立文章、不改模型、不購買額度；沿用後端重試流程。
 3. 最終報告：公開文章連結、主題、使用的開發／研究依據、文章 revision、發布狀態、向量狀態，以及未完成項目。不得輸出 token 或原始敏感錯誤。
 ```

@@ -40,6 +40,12 @@ spec:
         ports:
         - containerPort: 8000
         env:
+        - name: BLOG_WEEKLY_AGENT_KEY_SHA256
+          valueFrom:
+            configMapKeyRef:
+              name: blog-workflow-config
+              key: BLOG_WEEKLY_AGENT_KEY_SHA256
+              optional: true
         - name: BLOG_ENABLED
           valueFrom:
             configMapKeyRef:
