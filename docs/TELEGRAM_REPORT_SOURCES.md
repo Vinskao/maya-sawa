@@ -12,16 +12,19 @@ working or a private channel is needed.
 - **What the channels contain:** neither posts broker PDFs. `ieobserve` writes short earnings commentary (Micron, SpaceX,
   Tesla) with a chart image and Patreon links; `Gooaye` announces podcast episodes and sells products. So each post with
   at least 15 characters of text is recorded; photo-only posts are skipped, and images are not downloaded.
-- **How:** one **private** library report per post (no PDF), `publisher` = the channel's display name, `published_at` =
-  the post's Taipei date, `source_url` = `https://t.me/<channel>/<id>`, deduplicated by channel and post id. The
-  claim-extraction routine (20:30 daily) tags stocks in them, and those claims reach the target timeline as views.
-- **When:** the backend reads both channels 2 minutes after it starts, then every 30 minutes. The first run walks back
-  2 pages (about 40 posts per channel) so the extraction routine is not flooded; later runs stop at the first page that
-  already has recorded posts. `BACKFILL_PAGES` raises the first-run depth (5 pages reached 2025-07 for ieobserve).
+- **How:** one library report per post (no PDF), `publisher` = the channel's display name, `published_at` = the post's
+  Taipei date, `source_url` = `https://t.me/<channel>/<id>`, deduplicated by channel and post id. **Public**, with the
+  source named (the owner decided 2026-10-27 that naming the source is enough). They are kept out of the PDF report list
+  (`uploaded_by = telegram-collector`) so the list is not flooded. The claim-extraction routine (20:30 daily) tags stocks
+  in them; their claims reach the target timeline as views that name the channel and link to the post (`sourceUrl`).
+- **History and schedule:** the first run reads each channel's whole history (one request a second, about 100 pages for
+  ieobserve); a run cut short resumes below the oldest recorded post; after that the backend reads one page a day (first
+  pass 2 minutes after start). Posts from the last 14 days are queued for claim extraction at once; older ones wait in a
+  backlog (`status = backlog`) that is released 30 a day, newest first, so the routine, which reads every pending report
+  in one go, is not flooded.
 - **Dates:** every report and view shows the day it was recorded in the database; a report without a publication date is
   marked as such ("發布日未填 · 入庫 <date>"), and timeline views fall back to the recording day (`dateKind: recorded`).
-- **Still open:** claims of private reports are not public. Showing them needs the decision below (public claims in our
-  own words with a timestamped link, or a flag for claims from private sources). Expect few claims from Gooaye.
+- **Note:** Gooaye's posts are mostly podcast announcements and ads, so expect few claims from it.
 
 ## Which Telegram API
 
