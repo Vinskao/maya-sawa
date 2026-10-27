@@ -17,6 +17,7 @@ from sqlalchemy import (
     LargeBinary,
     Text,
     UniqueConstraint,
+    text as sql_text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import IntegrityError
@@ -42,6 +43,7 @@ class MarketReport(Base):
     status = Column(Text, nullable=False, default="extracted")
     failure_reason = Column(Text)
     pdf = Column(LargeBinary, nullable=False)
+    source_url = Column(Text)  # where a non-PDF source (a Telegram post) can be read, e.g. https://t.me/ieobserve/2312
     chunks = relationship(
         "MarketReportChunk", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -104,6 +106,9 @@ class MarketReportsDatabase:
         if engine:
             # pgvector is preinstalled in production; create tables after enabling its SQLAlchemy type.
             Base.metadata.create_all(engine)
+            if engine.dialect.name == "postgresql":  # create_all does not add columns to an existing table
+                with engine.begin() as connection:
+                    connection.execute(sql_text("ALTER TABLE maya_sawa_market_reports ADD COLUMN IF NOT EXISTS source_url text"))
 
     def ingest(
         self,
@@ -179,6 +184,7 @@ class MarketReportsDatabase:
         digest,
         pdf,
         pages,
+        source_url=None,
     ):
         """Persist readable source text before optional vectorization can fail."""
         if not self.sessions:
@@ -203,6 +209,7 @@ class MarketReportsDatabase:
                     visibility=visibility,
                     status="claims_pending",
                     pdf=pdf,
+                    source_url=source_url,
                 )
                 session.add(report)
                 session.flush()
@@ -378,6 +385,7 @@ class MarketReportsDatabase:
                     "claim": claim.claim,
                     "evidence": claim.evidence,
                     "as_of": claim.as_of.isoformat() if claim.as_of else None,
+                    "received_at": report.received_at.isoformat(),
                 }
                 for claim, report in query.order_by(MarketReport.received_at.desc())
                 .limit(500)
@@ -474,6 +482,7 @@ class MarketReportsDatabase:
                 report.published_at.isoformat() if report.published_at else None
             ),
             "received_at": report.received_at.isoformat(),
+            "source_url": report.source_url,
             "page_count": report.page_count,
             "visibility": report.visibility,
             "status": report.status,

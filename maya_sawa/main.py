@@ -269,6 +269,12 @@ async def _startup_event():
             logger.error(f"Failed to start broker target price collection: {e}")
 
         try:
+            from .services.telegram_posts import telegram_post_collector
+            await telegram_post_collector.start()
+        except Exception as e:
+            logger.error(f"Failed to start Telegram post collection: {e}")
+
+        try:
             from .services.market_macro import market_macro_service
             await market_macro_service.start()
         except Exception as e:
@@ -366,6 +372,11 @@ async def _shutdown_event():
             await price_target_collector.close()
         except Exception as e:
             logger.error(f"Error stopping broker target price collection: {e}")
+        try:
+            from .services.telegram_posts import telegram_post_collector
+            await telegram_post_collector.close()
+        except Exception as e:
+            logger.error(f"Error stopping Telegram post collection: {e}")
         try:
             from .services.market_macro import market_macro_service
             await market_macro_service.close()

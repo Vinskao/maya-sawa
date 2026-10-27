@@ -192,8 +192,11 @@ def report_views(code: str, market: str) -> list[dict]:
                 if key in seen:
                     continue
                 seen.add(key)
+                # Date of the view: the publication date, else the claim's data cut-off, else the day it was recorded here.
+                date, kind = next(((value, name) for value, name in ((claim["published_at"], "published"), (claim["as_of"], "data"),
+                                                                     ((claim.get("received_at") or "")[:10] or None, "recorded")) if value), (None, None))
                 views.append({"reportId": claim["report_id"], "title": claim["title"], "publisher": claim["publisher"],
-                              "date": claim["published_at"] or claim["as_of"], "page": claim["page"],
+                              "date": date, "dateKind": kind, "page": claim["page"],
                               "dimension": claim["dimension"], "direction": claim["direction"],
                               "claim": claim["claim"], "evidence": claim["evidence"]})
     except Exception:
