@@ -530,14 +530,14 @@ class MarketReportsDatabase:
                 .filter(
                     MarketReport.uploaded_by == COLLECTOR_UPLOADER,
                     MarketReport.visibility == "public",
-                    MarketReport.status == "ready",
+                    MarketReport.status != "failed",
                 )
                 .order_by(MarketReport.published_at.desc(), MarketReport.received_at.desc())
                 .all()
             )
             taken: dict[str, int] = {}
-            for row in posts:  # newest first; posts without any claim (ads, chatter) are not worth listing
-                if not row.claims or taken.get(row.publisher, 0) >= COLLECTOR_LISTED_PER_CHANNEL:
+            for row in posts:  # newest first, whatever their status or claim count, so a channel is never silently absent
+                if taken.get(row.publisher, 0) >= COLLECTOR_LISTED_PER_CHANNEL:
                     continue
                 taken[row.publisher] = taken.get(row.publisher, 0) + 1
                 listed.append({**self.public_report(row), "uploaded_by": row.uploaded_by})

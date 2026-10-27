@@ -42,11 +42,11 @@ def db(tmp_path):
     return MarketReportsDatabase(create_engine(f"sqlite:///{tmp_path / 'reports.db'}"))
 
 
-def test_each_post_becomes_one_report_naming_its_source_and_staying_out_of_the_pdf_report_list(db):
+def test_each_post_becomes_one_report_naming_its_source(db):
     posts = tg.parse_channel_html(page("telegram_ieobserve.html"), "ieobserve")["posts"]
     now = datetime(2026, 10, 5, tzinfo=timezone.utc)
     assert tg.record_posts(db, posts, channel_title="IEObserve 國際經濟觀察", now=now) == {"new": 3, "known": 0}
-    assert db.list_reports(owner=None) == []  # public, but the PDF report list is not flooded with posts
+    assert len(db.list_reports(owner=None)) == 3  # public and listed (capped per channel, see the list test below)
     pending = db.pending_claims()  # the claim-extraction routine reads this queue
     assert len(pending) == 3
     micron = next(row for row in pending if "美光" in row["title"])
@@ -116,9 +116,10 @@ def post(post_id):
             "url": f"https://t.me/chan/{post_id}"}
 
 
-def test_the_report_list_shows_the_latest_ten_posts_per_channel_that_produced_claims(db):
-    """2026-10-27: the owner expected the collected channels in the report list. Only posts that yielded claims count
-    (ads do not), and only the latest ten per channel so 200 backlog posts do not bury the PDF reports."""
+def test_the_report_list_shows_the_latest_ten_posts_of_every_channel_whatever_their_status(db):
+    """2026-10-27: the owner expected both channels in the report list, so a channel whose posts yielded no claims yet
+    (or are still queued) must not vanish. Only the latest ten per channel are listed, so 200 backlog posts do not
+    bury the PDF reports; older ones stay as data."""
     now = datetime(2026, 9, 14, tzinfo=timezone.utc)  # every post is recent, so all go to the extraction queue
     claim = {"page": 1, "segment": "memory", "codes": ["MU-US"], "dimension": "cycle", "direction": "tailwind",
              "claim": "DRAM 供需偏緊", "evidence": "營收年增", "as_of": "2026-10-01"}
@@ -127,11 +128,14 @@ def test_the_report_list_shows_the_latest_ten_posts_per_channel_that_produced_cl
                   "posted_at": datetime(2026, 9, 1, tzinfo=timezone.utc) + timedelta(days=number)} for number in range(1, 13)]
         tg.record_posts(db, posts, channel_title=title, now=now)
     for row in db.pending_claims():
-        if "第 6 則" not in row["title"]:  # one post per channel is an ad: no claims
+        if row["publisher"] == "股癌" and "第 6 則" not in row["title"]:  # IEObserve is not extracted yet
             db.replace_claims(row["id"], [claim], "routine")
     listed = db.list_reports(owner=None)
+    assert len(listed) == 20
     for title in ("股癌", "IEObserve"):
         mine = [row for row in listed if row["publisher"] == title]
-        assert [row["title"].split("] ")[1].split("：")[0] for row in mine] == [f"第 {n} 則" for n in (12, 11, 10, 9, 8, 7, 5, 4, 3, 2)]
-        assert all(row["source_url"].startswith("https://t.me/") and row["claim_count"] == 1 for row in mine)
-    assert len(listed) == 20
+        assert [row["title"].split("] ")[1].split("：")[0] for row in mine] == [f"第 {n} 則" for n in range(12, 2, -1)]
+        assert all(row["source_url"].startswith("https://t.me/") for row in mine)
+    assert {row["status"] for row in listed if row["publisher"] == "IEObserve"} == {"claims_pending"}
+    assert [row["claim_count"] for row in listed if row["publisher"] == "股癌"][:4] == [1, 1, 1, 1]
+    assert next(row for row in listed if row["title"].startswith("[股癌] 第 6 則"))["claim_count"] == 0

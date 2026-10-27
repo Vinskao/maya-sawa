@@ -185,18 +185,29 @@ async def list_reports(claims: dict | None = Depends(_optional_owner)):
         ) from exc
 
 
+MARKET_SUFFIXES = ("-US", "-JP", "-KR")
+
+
+def claim_code_variants(code: str) -> list[str]:
+    """Claims carry plain tickers (MU, 000660); the dashboard and the routines use MU-US / 000660-KR, so try both."""
+    code = code.strip().upper()
+    plain = code[: -3] if code.endswith(MARKET_SUFFIXES) else code
+    return [code] if plain == code else [code, plain]
+
+
 @router.get("/claims")
 async def list_report_claims(
     code: str | None = None, segment: str | None = None, since: date | None = None
 ):
     try:
-        return {
-            "claims": market_reports_db.list_claims(
-                code=code.strip().upper() if code else None,
-                segment=segment,
-                since=since,
-            )
-        }
+        claims, seen = [], set()
+        for variant in claim_code_variants(code) if code else [None]:
+            for claim in market_reports_db.list_claims(code=variant, segment=segment, since=since):
+                key = (claim.get("report_id"), claim.get("page"), claim.get("claim"))
+                if key not in seen:
+                    seen.add(key)
+                    claims.append(claim)
+        return {"claims": claims}
     except Exception as exc:
         logger.exception("Market report claims unavailable")
         raise HTTPException(
