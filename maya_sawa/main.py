@@ -38,10 +38,10 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 # ==================== 環境變數配置 ====================
-# 載入環境變數，override=True 表示強制覆蓋已存在的環境變數
+# 本機 dotenv 僅補缺值；部署注入的設定始終優先。
 env_path = pathlib.Path(__file__).parent.parent / '.env'
 logger.debug(f"Loading .env file from: {env_path}")
-load_dotenv(env_path, override=True)
+load_dotenv(env_path, override=False)
 
 # 本地模組導入
 from .api.qa import router as qa_router
@@ -78,7 +78,7 @@ api_key = os.getenv("OPENAI_API_KEY")
 api_base = os.getenv("OPENAI_API_BASE")
 
 # 記錄 API 配置信息（隱藏敏感信息）
-logger.debug(f"API Key loaded: {api_key[:8]}...{api_key[-4:] if api_key else 'None'}")
+logger.debug("OpenAI API credential configured: %s", bool(api_key))
 logger.debug(f"API Base URL: {api_base}")
 logger.debug(f"PUBLIC_API_BASE_URL: {Config.PUBLIC_API_BASE_URL}")
 
