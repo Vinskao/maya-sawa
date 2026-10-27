@@ -34,6 +34,7 @@ from ..databases.market_history_db import market_history_db
 from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
 from ..databases.market_price_target_db import market_price_target_db
 from ..databases.market_notification_db import market_notification_db
+from ..databases.market_watch_db import market_watch_db
 from ..databases.market_reports_db import market_reports_db
 from ..services import market_price_targets
 from ..services.market_research import validate_research_content, list_research
@@ -44,7 +45,7 @@ from ..services.market_fundamentals import market_fundamentals_service
 from ..services.market_company_events import market_company_events_service
 from ..services.market_brief import brief_markdown, market_brief_service
 from ..services.market_macro import market_macro_service, MACRO_ENABLED
-from ..services import market_automation, telegram_notify
+from ..services import market_automation, market_watch, telegram_notify
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -162,10 +163,7 @@ class NotifyBody(BaseModel):
 async def notify_owner(body: NotifyBody, request: Request):
     """A scheduled routine tells the owner something over Telegram: 'update' (work saved) or 'attention' (it needs a
     login or is stuck). Agent key only; the bot token and chat id stay in the deployment environment."""
-    key = request.headers.get("x-market-agent-key")
-    expected = os.environ.get("MARKET_AGENT_KEY_SHA256", "").strip().lower()
-    if not key or not expected or not hmac.compare_digest(hashlib.sha256(key.encode()).hexdigest(), expected):
-        raise HTTPException(status_code=401, detail="Invalid agent key")
+    _verify_agent_key(request)
     try:  # keep a copy for the site's bell; a storage failure must not stop the Telegram message
         await asyncio.to_thread(market_notification_db.add, body.kind, telegram_notify.mask(body.title),
                                 telegram_notify.mask(body.body))
@@ -182,6 +180,72 @@ async def list_notifications(limit: int = 100, _claims: dict = Depends(require_m
     except Exception as exc:
         logger.exception("Notification history read failed")
         raise HTTPException(status_code=503, detail="Notification database unavailable") from exc
+
+
+def _verify_agent_key(request: Request) -> None:
+    key = request.headers.get("x-market-agent-key")
+    expected = os.environ.get("MARKET_AGENT_KEY_SHA256", "").strip().lower()
+    if not key or not expected or not hmac.compare_digest(hashlib.sha256(key.encode()).hexdigest(), expected):
+        raise HTTPException(status_code=401, detail="Invalid agent key")
+
+
+class WatchNomination(BaseModel):
+    code: str = Field(pattern=r"^\d{4}$")  # Taiwan stocks only: the custom area's data, history and analysis flow is Taiwan's
+    name: str | None = Field(default=None, max_length=40)
+    reason: str = Field(min_length=10, max_length=300)
+    reportIds: list[str] = Field(min_length=1, max_length=10)
+    conviction: str = Field(default="normal", pattern="^(normal|high)$")
+
+
+def _held_stock_codes() -> set[str]:
+    return {str(item.get("code", "")).upper() for item in market_dashboard_db.latest_auto().get("positions", [])}
+
+
+@router.post("/watch")
+async def nominate_watch(body: WatchNomination, request: Request):
+    """The analyst, after reading research reports, nominates a stock for the custom area. Agent key only.
+    Entry needs two different reports (or conviction 'high'); see services/market_watch.py for how long it stays."""
+    _verify_agent_key(request)
+    held = _held_stock_codes()
+    if body.code in held:
+        raise HTTPException(status_code=422, detail=f"{body.code} is already a holding")
+    for report_id in dict.fromkeys(body.reportIds):
+        found = await asyncio.to_thread(market_reports_db.get_report, report_id)
+        if not found or found[0].get("visibility") != "public" or found[0].get("status") != "ready":
+            raise HTTPException(status_code=422, detail=f"Report {report_id} is not a public, ready report")
+    name = (body.name or "").strip()
+    try:
+        matches = await shioaji_market_service.search_contracts(body.code, "stock")
+    except Exception:
+        matches = []
+    match = next((item for item in matches if item["code"].upper() == body.code), None) or await asyncio.to_thread(
+        market_dashboard_db.find_candidate, "stock", body.code)
+    if not match:
+        raise HTTPException(status_code=422, detail=f"Unknown Taiwan stock: {body.code}")
+    now = datetime.now(ZoneInfo("UTC"))
+    mentions = [{"at": now.isoformat(), "source": report_id, "conviction": body.conviction, "reason": body.reason.strip()}
+                for report_id in dict.fromkeys(body.reportIds)]
+    try:
+        rows, promoted = await asyncio.to_thread(market_watch_db.nominate, body.code, "TW", match["name"] or name, mentions, now, held)
+    except Exception as exc:
+        logger.exception("Watch list save failed")
+        raise HTTPException(status_code=503, detail="Watch list unavailable") from exc
+    if promoted:  # new in the custom area: fetch its history and write its first analysis now, not at the next scheduled run
+        await market_history_collector.enqueue_codes(promoted)
+        start_added_analysis([{"code": code, "name": match["name"], "productType": "stock"} for code in promoted])
+    status = next(row["status"] for row in rows if row["code"] == body.code)
+    return {"code": body.code, "status": status, "promoted": body.code in promoted}
+
+
+@router.get("/watch")
+async def get_watch():
+    """Public: the stocks in the custom area because of the analyst's reading, and the candidates still waiting."""
+    try:
+        return {"watching": await asyncio.to_thread(market_watch_db.current, None, _held_stock_codes()),
+                "candidates": await asyncio.to_thread(market_watch_db.candidates)}
+    except Exception as exc:
+        logger.exception("Watch list read failed")
+        raise HTTPException(status_code=503, detail="Watch list unavailable") from exc
 
 
 class PriceTargetUpdate(BaseModel):
@@ -334,6 +398,9 @@ async def get_market_dashboard():
         if key not in seen:
             seen.add(key)
             custom_rows.append(item)
+    # Stocks the analyst found in research reports sit in the custom area until the reports move on (see market_watch).
+    watched = await asyncio.to_thread(market_dashboard_db.watch_symbols)
+    custom_rows = market_watch.merge_into_custom(custom_rows, watched, taken={("stock", item["code"].upper()) for item in auto_rows})
     # Quotes are keyed by (productType, code, market): Shioaji only quotes Taiwan instruments.
     quotes: dict[tuple[str, str, str], dict] = {}
     try:
@@ -380,7 +447,7 @@ async def get_market_dashboard():
 async def get_market_dashboard_events():
     """Recent revenue/report releases and upcoming investor conferences for selected stock targets."""
     auto = market_dashboard_db.latest_auto()
-    symbols = [*auto.get("positions", []), *market_dashboard_db.custom_symbols()]
+    symbols = [*auto.get("positions", []), *market_dashboard_db.custom_symbols(), *market_dashboard_db.watch_symbols()]
     try:
         quote_rows = await shioaji_market_service.get_dashboard_quotes(symbols)
         await asyncio.to_thread(attach_underlying, symbols, quote_rows)

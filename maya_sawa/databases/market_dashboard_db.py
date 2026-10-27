@@ -177,6 +177,16 @@ class MarketDashboardDatabase:
             row = session.get(MarketDashboardSetting, 1)
             return json.loads(row.custom_symbols) if row else []
 
+    def watch_symbols(self) -> list[dict[str, str]]:
+        """Stocks the analyst found in research reports (see services/market_watch.py); empty when the list is unavailable."""
+        try:
+            from .market_watch_db import market_watch_db
+            held = {str(item.get("code", "")).upper() for item in self.latest_auto().get("positions", [])}
+            return market_watch_db.current(held=held)
+        except Exception:
+            logger.exception("Watch list unavailable")
+            return []
+
     def latest_futures_selections(self) -> list[dict[str, str]]:
         """Return fixed TXF and selected futures with stable month metadata."""
         items = [{"code": "TXF", "name": "TAIEX Futures", "productType": "futures", "deliveryMonth": ""}]

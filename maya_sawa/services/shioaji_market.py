@@ -251,7 +251,7 @@ class ShioajiMarketService:
         try:
             from ..databases.market_dashboard_db import market_dashboard_db
             from ..databases.market_fundamentals_db import market_fundamentals_db
-            selected = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols()
+            selected = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols() + market_dashboard_db.watch_symbols()
             selected = list({(item.get("productType"), item.get("code", "").upper()): item for item in selected}.values())
             if selected:
                 rows = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, selected))

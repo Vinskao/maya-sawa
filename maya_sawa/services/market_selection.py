@@ -41,7 +41,7 @@ def attach_underlying(instruments: list[dict], live_quotes: list[dict] | None = 
 def current_selection() -> tuple[dict[str, Any], list[dict]]:
     auto = market_dashboard_db.latest_auto()
     instruments, seen = [], set()
-    for group, rows in (("automatic", auto.get("positions", [])), ("custom", market_dashboard_db.custom_symbols())):
+    for group, rows in (("automatic", auto.get("positions", [])), ("custom", [*market_dashboard_db.custom_symbols(), *market_dashboard_db.watch_symbols()])):
         for item in rows:
             key = (item.get("productType"), str(item.get("code", "")).upper())
             if key not in seen:
