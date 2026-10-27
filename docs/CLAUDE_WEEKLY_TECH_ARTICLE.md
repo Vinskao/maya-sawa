@@ -16,7 +16,8 @@
 - 時間：`CRON_TZ=Asia/Taipei 0 9 * * 1`（每週一 09:00 台北）；環境「TY Blog Weekly」；模型 Claude Sonnet 5.5。
 - 來源 repo：Vinskao/maya-sawa、Vinskao/ty-multiverse。沒有掛任何 MCP connector。
 - 認證：沒有設定任何發文認證，也沒有新增 network secret。admin API 回 401／403 時，排程只在回報附上完整 Markdown，供管理頁上傳。
-- 啟用條件：文章 CRUD 正式驗收完成後，由使用者在 routine 頁面啟用。實際使用的提示以 routine 內的版本為準。它依下方提示改寫，並加上：文章 API 未上線就停止、草稿已存在就停止、不自行加 Authorization 標頭。
+- 後端重啟時的處理（2026-10-27 加入）：部署期間整個 maya-sawa 會短暫回 nginx 503。2026-10-27 第一次手動執行就因此在服務檢查停下，當時後端約 3 分鐘後恢復。現在遇到 502／503／504、連線失敗或逾時，會等 10 分鐘再試，整輪最多重試 6 次（約 1 小時），並回報每次的時間與狀態碼；404／410 等 4xx 不重試。POST 遇到 5xx 一律先 GET 確認是否已建立，再決定是否重送。
+- 2026-10-27 已依使用者指示啟用。啟用條件原為：文章 CRUD 正式驗收完成後，由使用者在 routine 頁面啟用。實際使用的提示以 routine 內的版本為準。它依下方提示改寫，並加上：文章 API 未上線就停止、草稿已存在就停止、不自行加 Authorization 標頭。
 
 ## 可直接貼入 Claude Routine 的提示詞
 
