@@ -33,6 +33,7 @@ from ..databases.market_dashboard_db import market_dashboard_db, market_for_curr
 from ..databases.market_history_db import market_history_db
 from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
 from ..databases.market_price_target_db import market_price_target_db
+from ..databases.market_reports_db import market_reports_db
 from ..services import market_price_targets
 from ..services.market_research import validate_research_content, list_research
 from ..databases.market_industry_db import market_industry_db, validate_group
@@ -171,9 +172,34 @@ async def get_price_targets(code: str, market: str = "TW"):
         logger.exception("Price target read failed")
         raise HTTPException(status_code=503, detail="Price target database unavailable") from exc
     return {"code": code, "market": market, "currency": market_price_targets.MARKET_CURRENCY[market], **data,
+            "views": await asyncio.to_thread(report_views, code, market),
             "writeMethod": "PUT", "writeAccess": "owner or X-Market-Agent-Key",
             "instructions": "Add broker targets found in news: actions[] of {firm, date YYYY-MM-DD, target, rating?, "
-                "previousTarget?, sourceUrl}. Only targets stated in the article; same firm and date replaces."}
+                "previousTarget?, sourceUrl, thesis? (the broker's reasoning, max 300 chars), reportId? (library report)}. "
+                "Only targets stated in the article; same firm and date replaces."}
+
+
+def report_views(code: str, market: str) -> list[dict]:
+    """Public report claims about this stock, dated by the report's publication (or the claim's data date), newest first.
+
+    Claims name Taiwan stocks by number and others as CODE-MARKET (LITE-US); some reports use the bare ticker."""
+    aliases = [code] if market == "TW" else [f"{code}-{market}", code]
+    views, seen = [], set()
+    try:
+        for alias in aliases:
+            for claim in market_reports_db.list_claims(code=alias):
+                key = (claim["report_id"], claim["page"], claim["claim"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                views.append({"reportId": claim["report_id"], "title": claim["title"], "publisher": claim["publisher"],
+                              "date": claim["published_at"] or claim["as_of"], "page": claim["page"],
+                              "dimension": claim["dimension"], "direction": claim["direction"],
+                              "claim": claim["claim"], "evidence": claim["evidence"]})
+    except Exception:
+        logger.exception("Report views for %s %s unavailable", code, market)
+        return []
+    return sorted(views, key=lambda view: view["date"] or "", reverse=True)
 
 
 @router.put("/dashboard/targets/{code}")

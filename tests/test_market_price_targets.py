@@ -91,7 +91,7 @@ def test_ai_routine_records_need_a_source_and_a_real_target(db):
     row = {"firm": "凱基投顧", "date": "2026-10-20", "rating": "買進", "target": 3600, "sourceUrl": "https://news.cnyes.com/x"}
     assert targets.validate_routine_actions([row], today=date(2026, 10, 25)) == [
         {"firm": "凱基投顧", "date": "2026-10-20", "action": None, "rating": "買進", "previousRating": None,
-         "target": 3600.0, "previousTarget": None, "sourceUrl": "https://news.cnyes.com/x"}]
+         "target": 3600.0, "previousTarget": None, "sourceUrl": "https://news.cnyes.com/x", "thesis": None, "reportId": None}]
     for bad in [{**row, "sourceUrl": ""}, {**row, "sourceUrl": "ftp://x"}, {**row, "target": 0}, {**row, "target": "高"},
                 {**row, "date": "2026-10-26"}, {**row, "date": "20261020"}, {**row, "firm": " "}]:
         with pytest.raises(ValueError):
@@ -116,3 +116,61 @@ def test_api_reads_targets_and_only_the_owner_or_agent_key_writes(db, monkeypatc
     assert data["actions"][0]["firm"] == "元大投顧" and data["actions"][0]["source"] == "ai-routine"
     assert data["actions"][0]["currency"] == "TWD" and data["actions"][0]["sourceUrl"] == "https://money.udn.com/x"
     assert client.get("/market/dashboard/targets/2330?market=XX").status_code == 422
+
+
+# 2026-10-27: views linked to the target timeline. A target row can carry the broker's reasoning (thesis) and the
+# report it came from (reportId); GET adds the public report claims for the stock as dated "views".
+REPORT_ID = "83c3ca86-f9c7-49f3-bd30-81060c4c24a0"
+
+
+def test_routine_targets_may_carry_the_reasoning_and_the_source_report(db):
+    row = {"firm": "凱基投顧", "date": "2026-10-20", "target": 3600, "sourceUrl": "https://news.cnyes.com/x",
+           "thesis": "  800G 光收發訂單能見度到 2027 年上半，上修 2026 年 EPS。 ", "reportId": REPORT_ID}
+    clean = targets.validate_routine_actions([row], today=date(2026, 10, 25))[0]
+    assert clean["thesis"] == "800G 光收發訂單能見度到 2027 年上半，上修 2026 年 EPS。" and clean["reportId"] == REPORT_ID
+    assert targets.validate_routine_actions([{**row, "thesis": " ", "reportId": None}], today=date(2026, 10, 25))[0]["thesis"] is None
+    for bad in [{**row, "thesis": "x" * 301}, {**row, "reportId": "../etc/passwd"}]:
+        with pytest.raises(ValueError):
+            targets.validate_routine_actions([bad], today=date(2026, 10, 25))
+    db.save_actions("3081", "TW", "TWD", [clean], source="ai-routine")
+    stored = db.read("3081", "TW")["actions"][0]
+    assert stored["thesis"].startswith("800G") and stored["reportId"] == REPORT_ID
+
+
+class StubReports:
+    def __init__(self, claims, fail=False):
+        self.claims, self.fail, self.asked = claims, fail, []
+
+    def list_claims(self, code=None, segment=None, since=None):
+        self.asked.append(code)
+        if self.fail:
+            raise RuntimeError("Market reports database unavailable")
+        return [claim for claim in self.claims if code in claim["codes"]]
+
+
+def claim(codes, page, published_at=None, as_of=None, direction="tailwind"):
+    return {"report_id": REPORT_ID, "title": "光通訊產業報告", "publisher": "凱基投顧", "published_at": published_at,
+            "page": page, "segment": "optics", "codes": codes, "dimension": "delivery", "direction": direction,
+            "claim": f"第 {page} 頁主張", "evidence": "出貨季增 30%", "as_of": as_of}
+
+
+def test_get_targets_adds_public_report_views_dated_and_deduplicated(db, monkeypatch):
+    from maya_sawa.api import market
+    monkeypatch.setattr(market, "market_price_target_db", db)
+    reports = StubReports([claim(["LITE-US"], 3, published_at="2026-10-21"), claim(["LITE", "LITE-US"], 5, as_of="2026-10-15"),
+                           claim(["3081"], 7, published_at="2026-10-01")])
+    monkeypatch.setattr(market, "market_reports_db", reports)
+    app = FastAPI()
+    app.include_router(market.router)
+    client = TestClient(app)
+    views = client.get("/market/dashboard/targets/lite?market=US").json()["views"]
+    assert reports.asked == ["LITE-US", "LITE"]  # overseas claims use CODE-MARKET, some reports use the bare ticker
+    assert [(view["page"], view["date"]) for view in views] == [(3, "2026-10-21"), (5, "2026-10-15")]  # newest first, once each
+    assert views[0] == {"reportId": REPORT_ID, "title": "光通訊產業報告", "publisher": "凱基投顧", "date": "2026-10-21",
+                        "page": 3, "dimension": "delivery", "direction": "tailwind", "claim": "第 3 頁主張", "evidence": "出貨季增 30%"}
+    reports.asked.clear()
+    assert [view["page"] for view in client.get("/market/dashboard/targets/3081?market=TW").json()["views"]] == [7]
+    assert reports.asked == ["3081"]
+    monkeypatch.setattr(market, "market_reports_db", StubReports([], fail=True))
+    response = client.get("/market/dashboard/targets/3081?market=TW")
+    assert response.status_code == 200 and response.json()["views"] == []  # targets still load without the report library

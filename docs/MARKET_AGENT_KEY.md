@@ -12,7 +12,8 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
   `GET /market/reports/search` (public reports by default; private reports only with `include_private=true`). The
   semantic search endpoint requires this key for `include_private=true`. Published analyses must use public reports only.
   Since 2026-10-26 it can also call `PUT /market/dashboard/targets/{code}?market=TW|JP|US|KR|HK` to add broker target
-  prices found in news (`actions[]` of firm, date, target, rating?, previousTarget?, sourceUrl; every row needs the
+  prices found in news (`actions[]` of firm, date, target, rating?, previousTarget?, thesis? (the broker's reasoning,
+  at most 300 characters, since 2026-10-27), reportId? (a library report it came from), sourceUrl; every row needs the
   article URL, a past date and a positive target; same firm and date replaces). Yahoo Finance fills US per-broker
   targets and every market's consensus automatically each day at 08:30 Taipei, so the routine only adds Taiwan/Japan
   brokers. Code: `services/market_price_targets.py`. Since 2026-10-26 the Taiwan routine's prompt has a section 7 for

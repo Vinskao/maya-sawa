@@ -105,10 +105,17 @@ def validate_routine_actions(rows: list[dict], today: date) -> list[dict]:
         if not re.match(r"https?://", url):
             raise ValueError("sourceUrl must be the article's http(s) URL")
         previous = row.get("previousTarget")
+        # Why the broker made the call, in one or two sentences, and the report it came from (if it is in the library).
+        thesis = str(row.get("thesis") or "").strip() or None
+        if thesis and len(thesis) > 300:
+            raise ValueError("thesis must be at most 300 characters")
+        report_id = row.get("reportId") or None
+        if report_id is not None and not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", str(report_id)):
+            raise ValueError("reportId must be a report id from the library")
         clean.append({"firm": firm, "date": day, "action": row.get("action") or None, "rating": row.get("rating") or None,
                       "previousRating": row.get("previousRating") or None, "target": float(target),
                       "previousTarget": float(previous) if isinstance(previous, (int, float)) and previous > 0 else None,
-                      "sourceUrl": url})
+                      "sourceUrl": url, "thesis": thesis, "reportId": report_id})
     return clean
 
 
