@@ -174,3 +174,23 @@ def test_get_targets_adds_public_report_views_dated_and_deduplicated(db, monkeyp
     monkeypatch.setattr(market, "market_reports_db", StubReports([], fail=True))
     response = client.get("/market/dashboard/targets/3081?market=TW")
     assert response.status_code == 200 and response.json()["views"] == []  # targets still load without the report library
+
+
+def test_stock_futures_are_collected_through_their_underlying_stock_once(db):
+    # 2026-10-27: 2330, 3008, 3017, 3105 and 3324 are held as stock futures (QFFK6, OLFK6, ...), whose rows carry
+    # underlyingCode; the collector skipped every futures row, so those stocks had no consensus at all.
+    calls = []
+
+    def fetch(symbol):
+        calls.append(symbol)
+        return fixture("yahoo_targets_2330TW.json")
+
+    instruments = [{"code": "QFFK6", "market": "TW", "productType": "futures", "underlyingCode": "2330"},
+                   {"code": "2330", "market": "TW", "productType": "stock"},  # also held directly: fetched once
+                   {"code": "OLFK6", "market": "TW", "productType": "futures", "underlyingCode": "3008"},
+                   {"code": "TXFK6", "market": "TW", "productType": "futures"}]  # index futures: no stock, skipped
+    result = targets.collect(db, instruments, fetch, date(2026, 10, 27))
+    assert calls == ["2330.TW", "3008.TW"]
+    assert result == {"2330": "ok", "3008": "ok"}
+    assert db.read("2330", "TW")["consensus"] and db.read("3008", "TW")["consensus"]
+    assert db.read("QFFK6", "TW")["consensus"] == []

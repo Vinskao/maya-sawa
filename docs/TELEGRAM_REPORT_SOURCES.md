@@ -1,4 +1,4 @@
-# Telegram channels as a report source (analysis, 2026-10-27)
+# Telegram and YouTube as view sources (analysis, 2026-10-27)
 
 Status: **not implemented.** The views-to-target-timeline link it depends on is done (below). Channels the owner
 named: `t.me/Gooaye` and `t.me/ieobserve`.
@@ -48,3 +48,32 @@ posts as HTML but not reliably the files; usable for text-only posts.
   table row shows that call's reasoning, its source, and the claims from the same report (by `reportId`, else the same
   publisher on the same day). All views are listed below the broker table.
 - Tests: `tests/test_market_price_targets.py`; frontend `tests/market/priceTargets.test.ts`.
+
+## YouTube transcripts (analysis, 2026-10-27; not implemented)
+
+Asked for: Bloomberg Technology (youtube.com/c/BloombergTech) interviews as dated views.
+
+- **Listing videos is easy:** each channel has an RSS feed, `https://www.youtube.com/feeds/videos.xml?channel_id=<id>`
+  (no key, latest ~15 uploads). Alternatively the YouTube Data API v3 (`playlistItems` of the uploads playlist) with an
+  API key and the free daily quota.
+- **Transcripts are the hard part:** the official `captions.download` only works for videos you are allowed to edit,
+  so it cannot read a third party's captions. Libraries such as `youtube-transcript-api` read the captions the web
+  player loads; they are unofficial, can break, and YouTube often blocks requests from cloud-provider IPs (our OKE
+  nodes), so a collector may have to run from the owner's machine like the IB gateway. Not yet tested here.
+- **Fallback:** download the audio and transcribe it (Whisper). This needs the OpenAI quota, which is currently used up,
+  and downloading may conflict with YouTube's terms. Not recommended.
+- **Copyright:** transcripts are the publisher's text. Store them private; publish only short claims in our own words
+  with the speaker, date and a timestamped link (`watch?v=<id>&t=<seconds>s`).
+- **Fit with what exists:** a video becomes a private library "report" (`source_kind=youtube`, publisher = channel,
+  speaker in the claim, `published_at` = upload date), with transcript minutes in place of pages. The claim-extraction
+  routine tags codes (`LITE-US`, `2330`), and the views then appear on the target timeline with no new UI. One gap:
+  `list_claims` serves public reports only, so private-source views need a decision (publish the extracted claims,
+  or add a "public claim from a private source" flag).
+
+## Status of the target timeline (2026-10-27 check)
+
+- Yahoo collection works for US per-broker actions (LITE 352, META 526) and consensus (3081, 6857, ...).
+- Bug fixed 2026-10-27: stocks held only as stock futures (2330 via QFFK6, 3008, 3017, 3105, 3324) were skipped, so they
+  had no consensus. The collector now follows `underlyingCode`.
+- The Taiwan routine's run on 2026-10-26 searched only the two Japanese stocks and wrote no targets, because it skipped
+  §7 together with §3 for stocks without a new trading day. Its prompt now runs §7 for every TW/JP/KR stock.

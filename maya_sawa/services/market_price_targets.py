@@ -67,11 +67,17 @@ def yahoo_symbols(code: str, market: str) -> list[str]:
 
 def collect(db, instruments: list[dict], fetch, today: date) -> dict[str, str]:
     """Store each stock's consensus snapshot and broker actions; a failed instrument is skipped, not fatal."""
-    results = {}
+    results, seen = {}, set()
     for item in instruments:
-        code, market = str(item.get("code") or "").upper(), str(item.get("market") or "TW").upper()
-        if item.get("productType", "stock") != "stock" or not (symbols := yahoo_symbols(code, market)):
+        market = str(item.get("market") or "TW").upper()
+        # A stock future is collected as its underlying stock (QFFK6 -> 2330); index futures have none and are skipped.
+        if item.get("productType", "stock") == "stock":
+            code = str(item.get("code") or "").upper()
+        else:
+            code = str(item.get("underlyingCode") or "").upper()
+        if not code or (code, market) in seen or not (symbols := yahoo_symbols(code, market)):
             continue
+        seen.add((code, market))
         try:
             for symbol in symbols:
                 parsed = parse_yahoo_targets(fetch(symbol))
@@ -150,7 +156,7 @@ class YahooTargets:
 
 def watched_instruments() -> list[dict]:
     from .market_selection import current_selection
-    return [item for item in current_selection()[1] if item.get("productType") == "stock"]
+    return [item for item in current_selection()[1] if item.get("productType") == "stock" or item.get("underlyingCode")]
 
 
 class PriceTargetCollector:
