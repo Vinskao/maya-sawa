@@ -334,6 +334,27 @@ pipeline {
             }
         }
 
+        stage('Configure Telegram Notifications') {
+            // Owner-only bot for routine updates; a missing credential must not block deploys (notifications just stay off).
+            steps {
+                container('kubectl') {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'TELEGRAM credentials unavailable; notifications stay off') {
+                        withCredentials([
+                            string(credentialsId: 'TELEGRAM_BOT_TOKEN', variable: 'TELEGRAM_BOT_TOKEN'),
+                            string(credentialsId: 'TELEGRAM_CHAT_ID', variable: 'TELEGRAM_CHAT_ID')
+                        ]) {
+                            sh '''
+                                set -e
+                                printf 'TELEGRAM_BOT_TOKEN=%s
+TELEGRAM_CHAT_ID=%s
+' "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | kubectl create secret generic telegram-notify                                   --from-env-file=/dev/stdin                                   -n default                                   --dry-run=client -o yaml | kubectl apply -f -
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Configure J-Quants Key') {
             // JPX J-Quants key for the Japan holdings' financial history; a missing credential must not block deploys.
             steps {

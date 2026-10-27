@@ -136,3 +136,22 @@ def test_macro_chain_nodes_each_keep_their_own_analysis(database, monkeypatch):
     assert [row["code"] for row in listed] == ["CORE-INFLATION", "FOCUS-DISCOUNT-RATE"]
     assert listed[0]["content"].startswith("【判讀】逆風")
     assert database.last_editor("macro-node", "CORE-INFLATION") == "agent:scheduled-analysis"
+
+
+def test_notify_endpoint_requires_agent_key_and_relays(monkeypatch):
+    import hashlib
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market
+    app = FastAPI()
+    app.include_router(market.router)
+    monkeypatch.setenv("MARKET_AGENT_KEY_SHA256", hashlib.sha256(b"k").hexdigest())
+    sent = []
+    monkeypatch.setattr(market.telegram_notify, "send", lambda kind, title, body="": sent.append((kind, title, body)) or {"sent": True})
+    client = TestClient(app)
+    body = {"kind": "attention", "title": "週報文章", "body": "需要登入"}
+    assert client.post("/market/notify", json=body).status_code == 401
+    assert client.post("/market/notify", json=body, headers={"x-market-agent-key": "wrong"}).status_code == 401
+    assert client.post("/market/notify", json={**body, "kind": "spam"}, headers={"x-market-agent-key": "k"}).status_code == 422
+    ok = client.post("/market/notify", json=body, headers={"x-market-agent-key": "k"})
+    assert ok.status_code == 200 and ok.json() == {"sent": True} and sent == [("attention", "週報文章", "需要登入")]

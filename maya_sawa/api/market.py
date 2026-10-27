@@ -43,7 +43,7 @@ from ..services.market_fundamentals import market_fundamentals_service
 from ..services.market_company_events import market_company_events_service
 from ..services.market_brief import brief_markdown, market_brief_service
 from ..services.market_macro import market_macro_service, MACRO_ENABLED
-from ..services import market_automation
+from ..services import market_automation, telegram_notify
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -149,6 +149,23 @@ async def put_market_ai_analysis(code: str, body: MarketAiAnalysisUpdate, produc
     except Exception as exc:
         logger.exception("AI analysis save failed")
         raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
+
+
+class NotifyBody(BaseModel):
+    kind: str = Field(pattern="^(update|attention)$")
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(default="", max_length=3000)
+
+
+@router.post("/notify")
+async def notify_owner(body: NotifyBody, request: Request):
+    """A scheduled routine tells the owner something over Telegram: 'update' (work saved) or 'attention' (it needs a
+    login or is stuck). Agent key only; the bot token and chat id stay in the deployment environment."""
+    key = request.headers.get("x-market-agent-key")
+    expected = os.environ.get("MARKET_AGENT_KEY_SHA256", "").strip().lower()
+    if not key or not expected or not hmac.compare_digest(hashlib.sha256(key.encode()).hexdigest(), expected):
+        raise HTTPException(status_code=401, detail="Invalid agent key")
+    return await asyncio.to_thread(telegram_notify.send, body.kind, body.title, body.body)
 
 
 class PriceTargetUpdate(BaseModel):
