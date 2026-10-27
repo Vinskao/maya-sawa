@@ -110,3 +110,29 @@ def test_scheduled_agent_key_writes_daily_analyses_only(database, monkeypatch):
     assert database.last_editor("stock", "2330") == "agent:scheduled-analysis"
     assert client.put("/market/dashboard/industries/ai-optics", json={},
                       headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 401  # the key is not a login
+
+
+def test_macro_chain_nodes_each_keep_their_own_analysis(database, monkeypatch):
+    # 2026-10-27: the macro dashboard became logic chains; every node (a chart) carries its own analysis that the
+    # scheduled routine rewrites. Node ids come from the frontend graph (src/storages/macroLogicGraph.json).
+    import hashlib
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market
+    monkeypatch.setattr(market, "market_ai_analysis_db", database)
+    app = FastAPI()
+    app.include_router(market.router)
+    client = TestClient(app)
+    monkeypatch.setenv("MARKET_AGENT_KEY_SHA256", hashlib.sha256(AGENT_KEY.encode()).hexdigest())
+    agent = {"X-Market-Agent-Key": AGENT_KEY}
+    body = {"model": "Claude (scheduled)", "content": "【判讀】逆風\n核心通膨 2026-09 年增 3.1%", "expectedRevision": 0}
+    assert client.put("/market/dashboard/analysis/core-inflation?productType=macro-node", json=body,
+                      headers=agent).json()["analysis"]["revision"] == 1
+    assert client.put("/market/dashboard/analysis/FOCUS-DISCOUNT-RATE?productType=macro-node", json=body,
+                      headers=agent).status_code == 200
+    assert client.put("/market/dashboard/analysis/bad_id!?productType=macro-node", json=body, headers=agent).status_code == 422
+    assert client.get("/market/dashboard/analysis/US?productType=macro").json()["analysis"] is None  # shared commentary untouched
+    listed = client.get("/market/dashboard/macro/nodes").json()["analyses"]
+    assert [row["code"] for row in listed] == ["CORE-INFLATION", "FOCUS-DISCOUNT-RATE"]
+    assert listed[0]["content"].startswith("【判讀】逆風")
+    assert database.last_editor("macro-node", "CORE-INFLATION") == "agent:scheduled-analysis"

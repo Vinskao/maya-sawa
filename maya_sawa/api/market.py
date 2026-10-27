@@ -82,11 +82,12 @@ class MarketAiAnalysisUpdate(BaseModel):
 
 def analysis_target(code: str, product_type: str):
     normalized = code.strip().upper()
-    if product_type not in {"stock", "futures", "macro", "research"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
+    if product_type not in {"stock", "futures", "macro", "macro-node", "research"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
         raise HTTPException(status_code=422, detail="Invalid instrument code or productType")
     # One shared macro commentary that every instrument analysis reads instead of restating.
     if product_type == "macro" and normalized != "US":
         raise HTTPException(status_code=422, detail="Macro commentary code must be US")
+    # "macro-node": one analysis per node of the macro logic chains; the code is the node id from the frontend graph.
     return product_type, normalized
 
 
@@ -106,7 +107,7 @@ async def get_market_ai_analysis(code: str, productType: str = "stock"):
 
 
 AGENT_EDITOR = "agent:scheduled-analysis"
-AGENT_PRODUCT_TYPES = {"stock", "futures", "macro"}
+AGENT_PRODUCT_TYPES = {"stock", "futures", "macro", "macro-node"}
 
 
 async def analysis_editor(request: Request) -> str:
@@ -191,6 +192,16 @@ async def put_price_targets(code: str, body: PriceTargetUpdate, market: str = "T
         raise HTTPException(status_code=503, detail="Price target database unavailable") from exc
     logger.info("Price targets for %s %s written by %s: %d", code, market, editor, saved)
     return {"saved": saved}
+
+
+@router.get("/dashboard/macro/nodes")
+async def list_macro_node_analyses():
+    """Every macro logic-chain node's current analysis, so the dashboard loads them in one request."""
+    try:
+        return {"analyses": await asyncio.to_thread(market_ai_analysis_db.list, "macro-node")}
+    except Exception as exc:
+        logger.exception("Macro node analysis list failed")
+        raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
 
 
 @router.get("/dashboard/research")

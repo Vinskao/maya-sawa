@@ -5,7 +5,9 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
 
 - **Server side:** `MARKET_AGENT_KEY_SHA256` in `k8s/deployment.yaml` holds only the key's SHA-256. The repository
   and the deployment config never contain a usable secret.
-- **Scope:** the key can call `PUT /market/dashboard/analysis/{code}` for `productType` stock, futures or macro, and the
+- **Scope:** the key can call `PUT /market/dashboard/analysis/{code}` for `productType` stock, futures, macro or
+  macro-node (one analysis per macro logic-chain node, code = the node id upper-cased; all of them are read with
+  `GET /market/dashboard/macro/nodes`, see the frontend `docs/MACRO_LOGIC_CHAINS.md`), and the
   report-library routine endpoints `GET /market/reports/pending`, `PUT /market/reports/{id}/claims`, and
   `GET /market/reports/search` (public reports by default; private reports only with `include_private=true`). The
   semantic search endpoint requires this key for `include_private=true`. Published analyses must use public reports only.
