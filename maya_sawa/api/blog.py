@@ -9,7 +9,6 @@ from ..core.auth.keycloak import require_manage_users
 from ..services.blog_postgres import get_postgres_store
 from ..services.blog import BlogService, Missing, Conflict, Unavailable, index_article
 from ..services.blog_markdown import parse_markdown
-from ..services import blog_weekly
 
 router = APIRouter(prefix='/blog', tags=['Blog'])
 Slug = Annotated[str, Path(pattern=r'^[a-z0-9]+(?:-[a-z0-9]+)*$', max_length=120)]
@@ -77,27 +76,6 @@ class MarkdownImport(BaseModel):
     slug: str | None = None
     operation: Literal['create', 'update'] = 'create'
     publish: bool = False
-
-
-@router.post('/weekly/import')
-def weekly_import(payload: MarkdownImport, claims=Depends(blog_weekly.require_weekly_agent), service=Depends(get_blog)):
-    try:
-        slug, draft = parse_markdown(payload.markdown, payload.slug)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
-    if payload.operation != 'create' or slug != blog_weekly.weekly_slug() or draft['category'] != 'Engineering':
-        raise HTTPException(422, 'Weekly writer can only create this week’s Engineering article')
-    return import_markdown(payload, None, claims, service)
-
-
-@router.get('/weekly/articles/{slug}')
-def weekly_status(slug: Slug, claims=Depends(blog_weekly.require_weekly_agent), service=Depends(get_blog)):
-    if not slug.startswith('weekly-tech-'):
-        raise HTTPException(404, 'Article not found')
-    state = run(lambda: service.read(slug, admin=True))
-    if state['editor'] != claims['sub']:
-        raise HTTPException(404, 'Article not found')
-    return state
 
 
 def import_markdown(payload, expected, claims, service):
