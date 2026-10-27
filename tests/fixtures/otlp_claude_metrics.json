@@ -1,0 +1,10 @@
+{"resourceMetrics": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "claude-code"}}]},
+ "scopeMetrics": [{"scope": {"name": "com.anthropic.claude_code"}, "metrics": [
+  {"name": "claude_code.token.usage", "sum": {"dataPoints": [
+    {"attributes": [{"key": "type", "value": {"stringValue": "input"}}, {"key": "model", "value": {"stringValue": "claude-sonnet-5-5"}}, {"key": "session.id", "value": {"stringValue": "s-1"}}], "asInt": "156"},
+    {"attributes": [{"key": "type", "value": {"stringValue": "output"}}, {"key": "model", "value": {"stringValue": "claude-sonnet-5-5"}}, {"key": "session.id", "value": {"stringValue": "s-1"}}], "asInt": "32969"},
+    {"attributes": [{"key": "type", "value": {"stringValue": "cacheRead"}}, {"key": "model", "value": {"stringValue": "claude-sonnet-5-5"}}, {"key": "session.id", "value": {"stringValue": "s-1"}}], "asInt": "5563217"},
+    {"attributes": [{"key": "type", "value": {"stringValue": "cacheCreation"}}, {"key": "model", "value": {"stringValue": "claude-sonnet-5-5"}}, {"key": "session.id", "value": {"stringValue": "s-1"}}], "asInt": "370004"}]}},
+  {"name": "claude_code.cost.usage", "sum": {"dataPoints": [
+    {"attributes": [{"key": "model", "value": {"stringValue": "claude-sonnet-5-5"}}, {"key": "session.id", "value": {"stringValue": "s-1"}}], "asDouble": 2.3663397}]}}
+ ]}]}]}

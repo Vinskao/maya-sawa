@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import logging
 import os
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/otel", tags=["OTel Usage"])
 CLAUDE_TOKEN_METRIC = "claude_code.token.usage"
 CLAUDE_COST_METRIC = "claude_code.cost.usage"
 GEMINI_TOKEN_METRIC = "gemini_cli.token.usage"
+ROUTINE_PROVIDER = "claude-routine"  # usage exported by the scheduled cloud routines, kept apart from local Claude Code
 
 
 def _header_token(request: Request) -> Optional[str]:
@@ -38,6 +40,19 @@ def _require_otel_token(request: Request) -> None:
     provided = _header_token(request) or ""
     if not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized OTel ingest")
+
+
+def _authorize(request: Request) -> str:
+    """Who is exporting metrics. A scheduled routine's network proxy adds X-Market-Agent-Key (the same key that writes
+    analyses), so its usage needs no extra secret in the routine; everything else needs the ingest token."""
+    agent_key = request.headers.get("x-market-agent-key")
+    if agent_key:
+        expected = os.environ.get("MARKET_AGENT_KEY_SHA256", "").strip().lower()
+        if not expected or not hmac.compare_digest(hashlib.sha256(agent_key.encode()).hexdigest(), expected):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized OTel ingest")
+        return ROUTINE_PROVIDER
+    _require_otel_token(request)
+    return "claude"
 
 
 def _attr_value(value: Dict[str, Any]) -> Any:
@@ -145,11 +160,12 @@ async def _report_cost_metric(
     attrs: Dict[str, Any],
     resource_attrs: Dict[str, Any],
     value: float,
+    provider: str = "claude",
 ) -> None:
     if value <= 0:
         return
     await report_token_usage_async(
-        ai_provider="claude",
+        ai_provider=provider,
         model_name=_model(attrs),
         input_tokens=0,
         output_tokens=0,
@@ -162,7 +178,7 @@ async def _report_cost_metric(
 
 @router.post("/v1/metrics")
 async def ingest_otlp_metrics(request: Request) -> Dict[str, Any]:
-    _require_otel_token(request)
+    claude_provider = _authorize(request)
 
     content_type = request.headers.get("content-type", "")
     if "json" not in content_type:
@@ -181,10 +197,10 @@ async def ingest_otlp_metrics(request: Request) -> Dict[str, Any]:
         resource_attrs = metric.get("_resourceAttrs", {})
         for attrs, value in _metric_points(metric):
             if name == CLAUDE_TOKEN_METRIC:
-                await _report_token_metric("claude", name, attrs, resource_attrs, value)
+                await _report_token_metric(claude_provider, name, attrs, resource_attrs, value)
                 forwarded += 1
             elif name == CLAUDE_COST_METRIC:
-                await _report_cost_metric(attrs, resource_attrs, value)
+                await _report_cost_metric(attrs, resource_attrs, value, claude_provider)
                 forwarded += 1
             elif name == GEMINI_TOKEN_METRIC:
                 await _report_token_metric("gemini", name, attrs, resource_attrs, value)
