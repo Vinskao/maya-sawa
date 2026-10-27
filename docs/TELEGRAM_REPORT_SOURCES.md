@@ -1,7 +1,27 @@
 # Telegram and YouTube as view sources (analysis, 2026-10-27)
 
-Status: **not implemented.** The views-to-target-timeline link it depends on is done (below). Channels the owner
-named: `t.me/Gooaye` and `t.me/ieobserve`.
+Status (2026-10-27): **implemented without a login, for `t.me/ieobserve` and `t.me/Gooaye`** (`services/telegram_posts.py`,
+tests `tests/test_telegram_posts.py`). The MTProto analysis below stays as the fallback if the public preview ever stops
+working or a private channel is needed.
+
+## What is recorded (implemented)
+
+- **Source:** the public preview `https://t.me/s/<channel>` needs no account, no API key and no session secret. It lists
+  about 20 posts per page with the exact UTC time, and `?before=<id>` pages back through older posts. A trimmed real page of
+  each channel is the test fixture.
+- **What the channels contain:** neither posts broker PDFs. `ieobserve` writes short earnings commentary (Micron, SpaceX,
+  Tesla) with a chart image and Patreon links; `Gooaye` announces podcast episodes and sells products. So each post with
+  at least 15 characters of text is recorded; photo-only posts are skipped, and images are not downloaded.
+- **How:** one **private** library report per post (no PDF), `publisher` = the channel's display name, `published_at` =
+  the post's Taipei date, `source_url` = `https://t.me/<channel>/<id>`, deduplicated by channel and post id. The
+  claim-extraction routine (20:30 daily) tags stocks in them, and those claims reach the target timeline as views.
+- **When:** the backend reads both channels 2 minutes after it starts, then every 30 minutes. The first run walks back
+  2 pages (about 40 posts per channel) so the extraction routine is not flooded; later runs stop at the first page that
+  already has recorded posts. `BACKFILL_PAGES` raises the first-run depth (5 pages reached 2025-07 for ieobserve).
+- **Dates:** every report and view shows the day it was recorded in the database; a report without a publication date is
+  marked as such ("發布日未填 · 入庫 <date>"), and timeline views fall back to the recording day (`dateKind: recorded`).
+- **Still open:** claims of private reports are not public. Showing them needs the decision below (public claims in our
+  own words with a timestamped link, or a flag for claims from private sources). Expect few claims from Gooaye.
 
 ## Which Telegram API
 
