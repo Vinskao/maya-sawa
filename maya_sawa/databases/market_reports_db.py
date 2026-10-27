@@ -568,6 +568,22 @@ class MarketReportsDatabase:
         ids = [int(url[len(prefix):]) for url in urls if url[len(prefix):].isdigit()]
         return min(ids) if ids else None
 
+    def promote_latest_per_channel(self, per_channel: int) -> int:
+        """Queue the newest `per_channel` backlog posts of every channel: those are the ones the report list shows."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            rows = (session.query(MarketReport).filter(MarketReport.uploaded_by == COLLECTOR_UPLOADER, MarketReport.status != "failed")
+                    .order_by(MarketReport.published_at.desc(), MarketReport.received_at.desc()).all())
+            seen: dict[str, int] = {}
+            released = 0
+            for row in rows:
+                seen[row.publisher] = seen.get(row.publisher, 0) + 1
+                if seen[row.publisher] <= per_channel and row.status == "backlog":
+                    row.status = "claims_pending"
+                    released += 1
+            return released
+
     def promote_backlog(self, limit: int) -> int:
         """Queue up to `limit` backlog reports (newest first) for the claim-extraction routine."""
         if not self.sessions:

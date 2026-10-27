@@ -70,3 +70,18 @@ def test_only_the_owner_reads_the_history(db, monkeypatch):
     assert client_for(db, monkeypatch, owner=False).get("/market/notifications").status_code == 401
     data = client_for(db, monkeypatch).get("/market/notifications?limit=5").json()
     assert [row["title"] for row in data["notifications"]] == ["台股收盤後"]
+
+
+def test_messages_sent_before_history_was_kept_are_backfilled_once(db):
+    """2026-10-28: the two Telegram messages the owner had already read (the test message and the first 台股收盤後 summary)
+    were sent before notifications were stored, so the bell said "no notifications"."""
+    from maya_sawa.databases.market_notification_db import HISTORY_BEFORE_STORAGE
+    assert db.seed_if_empty(HISTORY_BEFORE_STORAGE) == 2
+    rows = db.recent()
+    assert [row["title"] for row in rows] == ["市場 AI 分析｜台股收盤後", "Telegram 通知測試"]
+    assert rows[0]["createdAt"] == "2026-10-27T13:25:00+00:00" and rows[1]["createdAt"] == "2026-10-27T12:17:00+00:00"
+    assert "更新 17 檔" in rows[0]["body"] and "日月光 美銀 900" in rows[0]["body"]
+    assert db.seed_if_empty(HISTORY_BEFORE_STORAGE) == 0            # a second start adds nothing
+    other = MarketNotificationDatabase(db.sessions.kw["bind"])
+    other.add("update", "新的", "")
+    assert other.seed_if_empty(HISTORY_BEFORE_STORAGE) == 0         # nor does it touch a table that already has rows

@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 import hashlib
 import hmac
 import os
@@ -46,6 +47,8 @@ from ..services.market_company_events import market_company_events_service
 from ..services.market_brief import brief_markdown, market_brief_service
 from ..services.market_macro import market_macro_service, MACRO_ENABLED
 from ..services import market_automation, market_watch, telegram_notify
+from ..services.routine_cost import estimate_cost
+from ..services.token_reporter import report_token_usage_async
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -180,6 +183,40 @@ async def list_notifications(limit: int = 100, _claims: dict = Depends(require_m
     except Exception as exc:
         logger.exception("Notification history read failed")
         raise HTTPException(status_code=503, detail="Notification database unavailable") from exc
+
+
+class RoutineModelUsage(BaseModel):
+    model: str = Field(min_length=1, max_length=80)
+    input: int = Field(ge=0, le=10**10)
+    output: int = Field(ge=0, le=10**10)
+    cacheCreation: int = Field(default=0, ge=0, le=10**10)
+    cacheRead: int = Field(default=0, ge=0, le=10**10)
+
+
+class RoutineUsage(BaseModel):
+    sessionId: str = Field(min_length=1, max_length=80)
+    label: str = Field(default="routine", max_length=100)
+    models: list[RoutineModelUsage] = Field(min_length=1, max_length=8)
+
+
+@router.post("/routine-usage")
+async def record_routine_usage(body: RoutineUsage, request: Request):
+    """A scheduled cloud routine reports the tokens its own session used (agent key only). Recorded as provider
+    claude-routine, which the portfolio chart plots as its cost line."""
+    _verify_agent_key(request)
+    for item in body.models:
+        await report_token_usage_async(
+            ai_provider="claude-routine", model_name=item.model, input_tokens=item.input, output_tokens=item.output,
+            cache_creation_input_tokens=item.cacheCreation, cache_read_input_tokens=item.cacheRead,
+            estimated_cost_usd=estimate_cost(item.model, item.input, item.output, item.cacheCreation, item.cacheRead),
+            session_id=body.sessionId, endpoint=f"/market/routine-usage/{body.label}")
+    return {"recorded": len(body.models)}
+
+
+@router.get("/routine-usage.py", response_class=PlainTextResponse)
+async def routine_usage_script():
+    """The reporting script, so a routine without a repository checkout can run `curl … | python3 - label`."""
+    return PlainTextResponse((Path(__file__).resolve().parents[2] / "scripts" / "report_routine_usage.py").read_text(encoding="utf-8"))
 
 
 def _verify_agent_key(request: Request) -> None:

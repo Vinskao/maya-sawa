@@ -139,3 +139,20 @@ def test_the_report_list_shows_the_latest_ten_posts_of_every_channel_whatever_th
     assert {row["status"] for row in listed if row["publisher"] == "IEObserve"} == {"claims_pending"}
     assert [row["claim_count"] for row in listed if row["publisher"] == "股癌"][:4] == [1, 1, 1, 1]
     assert next(row for row in listed if row["title"].startswith("[股癌] 第 6 則"))["claim_count"] == 0
+
+
+def test_the_latest_ten_posts_of_every_channel_are_released_to_extraction_even_when_another_channel_is_newer(db):
+    """2026-10-28: the list shows each channel's latest ten posts, but the daily backlog release is newest-first across
+    all channels, so a channel with older posts (IEObserve) sat at "0 claims" for weeks behind a busier one."""
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    for channel, title, start in [("Gooaye", "股癌", datetime(2026, 9, 1, tzinfo=timezone.utc)), ("ieobserve", "IEObserve", datetime(2026, 2, 1, tzinfo=timezone.utc))]:
+        posts = [{"channel": channel, "id": number, "url": f"https://t.me/{channel}/{number}", "text": f"第 {number} 則：" + "內容" * 40,
+                  "posted_at": start + timedelta(days=number)} for number in range(1, 16)]
+        tg.record_posts(db, posts, channel_title=title, now=now)
+    assert db.pending_claims() == []                                       # all 30 are older than 14 days: backlog
+    assert db.promote_latest_per_channel(10) == 20
+    queued = db.pending_claims()
+    for title in ("股癌", "IEObserve"):
+        mine = sorted(int(row["title"].split("第 ")[1].split(" 則")[0]) for row in queued if row["publisher"] == title)
+        assert mine == list(range(6, 16))                                  # the newest ten, not the oldest
+    assert db.promote_latest_per_channel(10) == 0                          # nothing left to release for the list

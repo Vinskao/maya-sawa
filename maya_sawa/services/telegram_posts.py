@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from ..databases.market_reports_db import COLLECTOR_UPLOADER
+from ..databases.market_reports_db import COLLECTOR_LISTED_PER_CHANNEL, COLLECTOR_UPLOADER
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,9 @@ class TelegramPostCollector:
         if not market_reports_db.sessions:
             return {}
         counts = await asyncio.to_thread(collect, market_reports_db, CHANNELS, fetch_page)
-        counts["released"] = await asyncio.to_thread(market_reports_db.promote_backlog, BACKLOG_PER_DAY)
+        # The report list shows each channel's latest posts, so those are extracted first; the rest drain daily.
+        counts["released"] = (await asyncio.to_thread(market_reports_db.promote_latest_per_channel, COLLECTOR_LISTED_PER_CHANNEL)
+                              + await asyncio.to_thread(market_reports_db.promote_backlog, BACKLOG_PER_DAY))
         return counts
 
     async def _loop(self):
