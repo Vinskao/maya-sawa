@@ -29,3 +29,15 @@
 - 排程要設的環境變數（非機密）：`CLAUDE_CODE_ENABLE_TELEMETRY=1`、`OTEL_METRICS_EXPORTER=otlp`、`OTEL_EXPORTER_OTLP_PROTOCOL=http/json`、`OTEL_EXPORTER_OTLP_ENDPOINT=https://peoplesystem.tatdvsonorth.com/maya-sawa/otel`。
 - 首頁報酬率圖的第二軸只加總 `claude-routine`。
 - 測試：`tests/test_otel_usage.py`。
+
+## 通知歷史（網站鈴鐺）與頻道貼文清單（2026-10-27）
+
+**通知歷史。** `POST /market/notify` 除了送 Telegram，也會把同一則（已遮蔽疑似金鑰的字串）存進 `maya_sawa_market_notification`，
+只保留最新 500 則。即使 Telegram 沒設定，也會存；存失敗只記 log，不影響 Telegram。
+`GET /market/notifications?limit=100`（`limit` 最多 200）回傳最新在前的清單，需要擁有者角色（同 `/market/auth-status`），
+網站導覽列的鈴鐺用它顯示「全部／未讀」，已讀的訊息仍留在清單裡可以重讀。已讀狀態存在瀏覽器 localStorage，
+不會寫回後端。
+
+**頻道貼文出現在研究報告清單。** `list_reports` 會附上每個 Telegram 頻道最新 10 則「已有主張」的貼文
+（`COLLECTOR_LISTED_PER_CHANNEL`）；沒有主張的貼文（廣告、閒聊）不列，更舊的貼文仍在資料庫，主張照常供分析引用。
+這些貼文沒有 PDF，卡片改顯示「頻道貼文」與原貼文連結。

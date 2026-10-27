@@ -33,6 +33,7 @@ from ..databases.market_dashboard_db import market_dashboard_db, market_for_curr
 from ..databases.market_history_db import market_history_db
 from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
 from ..databases.market_price_target_db import market_price_target_db
+from ..databases.market_notification_db import market_notification_db
 from ..databases.market_reports_db import market_reports_db
 from ..services import market_price_targets
 from ..services.market_research import validate_research_content, list_research
@@ -165,7 +166,22 @@ async def notify_owner(body: NotifyBody, request: Request):
     expected = os.environ.get("MARKET_AGENT_KEY_SHA256", "").strip().lower()
     if not key or not expected or not hmac.compare_digest(hashlib.sha256(key.encode()).hexdigest(), expected):
         raise HTTPException(status_code=401, detail="Invalid agent key")
+    try:  # keep a copy for the site's bell; a storage failure must not stop the Telegram message
+        await asyncio.to_thread(market_notification_db.add, body.kind, telegram_notify.mask(body.title),
+                                telegram_notify.mask(body.body))
+    except Exception:
+        logger.exception("Notification history save failed")
     return await asyncio.to_thread(telegram_notify.send, body.kind, body.title, body.body)
+
+
+@router.get("/notifications")
+async def list_notifications(limit: int = 100, _claims: dict = Depends(require_manage_users_request)):
+    """The owner's notification history (newest first), shown in the site's bell."""
+    try:
+        return {"notifications": await asyncio.to_thread(market_notification_db.recent, max(1, min(limit, 200)))}
+    except Exception as exc:
+        logger.exception("Notification history read failed")
+        raise HTTPException(status_code=503, detail="Notification database unavailable") from exc
 
 
 class PriceTargetUpdate(BaseModel):

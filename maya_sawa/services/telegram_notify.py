@@ -21,6 +21,9 @@ def _mask(text: str) -> str:
     return _SECRET.sub("［已遮蔽］", text)
 
 
+mask = _mask  # public: the stored copy of a notification is masked the same way
+
+
 def format_message(kind: str, title: str, body: str = "") -> str:
     if kind not in PREFIX:
         raise ValueError("kind must be 'update' or 'attention'")

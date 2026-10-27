@@ -27,7 +27,8 @@ from .market_dashboard_db import market_dashboard_db
 
 Base = declarative_base()
 
-COLLECTOR_UPLOADER = "telegram-collector"  # reports made from public Telegram posts; kept out of the PDF report list
+COLLECTOR_UPLOADER = "telegram-collector"  # reports made from public Telegram posts
+COLLECTOR_LISTED_PER_CHANNEL = 10  # the report list shows only the latest posts of each channel; the rest stay data
 
 
 class MarketReport(Base):
@@ -520,10 +521,27 @@ class MarketReportsDatabase:
                 )
             else:
                 query = query.filter(MarketReport.visibility == "public")
-            return [
+            listed = [
                 {**self.public_report(row), "uploaded_by": row.uploaded_by}
                 for row in query.order_by(MarketReport.received_at.desc()).all()
             ]
+            posts = (
+                session.query(MarketReport)
+                .filter(
+                    MarketReport.uploaded_by == COLLECTOR_UPLOADER,
+                    MarketReport.visibility == "public",
+                    MarketReport.status == "ready",
+                )
+                .order_by(MarketReport.published_at.desc(), MarketReport.received_at.desc())
+                .all()
+            )
+            taken: dict[str, int] = {}
+            for row in posts:  # newest first; posts without any claim (ads, chatter) are not worth listing
+                if not row.claims or taken.get(row.publisher, 0) >= COLLECTOR_LISTED_PER_CHANNEL:
+                    continue
+                taken[row.publisher] = taken.get(row.publisher, 0) + 1
+                listed.append({**self.public_report(row), "uploaded_by": row.uploaded_by})
+            return listed
 
     def get_report(self, report_id: str, *, include_pdf=False):
         if not self.sessions:

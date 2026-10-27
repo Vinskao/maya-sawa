@@ -1,5 +1,5 @@
 """Public Telegram channels (t.me/s/<channel>) recorded as library reports, one per post, with the source named."""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -114,3 +114,24 @@ def post(post_id):
     return {"id": post_id, "channel": "chan", "posted_at": datetime(2026, 10, 20, 12, 0, tzinfo=timezone.utc),
             "text": f"第 {post_id} 則：台積電法說會提到先進製程需求，毛利率維持高檔。", "media": [], "links": [],
             "url": f"https://t.me/chan/{post_id}"}
+
+
+def test_the_report_list_shows_the_latest_ten_posts_per_channel_that_produced_claims(db):
+    """2026-10-27: the owner expected the collected channels in the report list. Only posts that yielded claims count
+    (ads do not), and only the latest ten per channel so 200 backlog posts do not bury the PDF reports."""
+    now = datetime(2026, 9, 14, tzinfo=timezone.utc)  # every post is recent, so all go to the extraction queue
+    claim = {"page": 1, "segment": "memory", "codes": ["MU-US"], "dimension": "cycle", "direction": "tailwind",
+             "claim": "DRAM 供需偏緊", "evidence": "營收年增", "as_of": "2026-10-01"}
+    for channel, title in [("Gooaye", "股癌"), ("ieobserve", "IEObserve")]:
+        posts = [{"channel": channel, "id": number, "url": f"https://t.me/{channel}/{number}", "text": f"第 {number} 則：" + "內容" * 40,
+                  "posted_at": datetime(2026, 9, 1, tzinfo=timezone.utc) + timedelta(days=number)} for number in range(1, 13)]
+        tg.record_posts(db, posts, channel_title=title, now=now)
+    for row in db.pending_claims():
+        if "第 6 則" not in row["title"]:  # one post per channel is an ad: no claims
+            db.replace_claims(row["id"], [claim], "routine")
+    listed = db.list_reports(owner=None)
+    for title in ("股癌", "IEObserve"):
+        mine = [row for row in listed if row["publisher"] == title]
+        assert [row["title"].split("] ")[1].split("：")[0] for row in mine] == [f"第 {n} 則" for n in (12, 11, 10, 9, 8, 7, 5, 4, 3, 2)]
+        assert all(row["source_url"].startswith("https://t.me/") and row["claim_count"] == 1 for row in mine)
+    assert len(listed) == 20
