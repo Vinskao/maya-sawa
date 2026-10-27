@@ -1,0 +1,276 @@
+{
+ "code": "LITE",
+ "market": "US",
+ "daily": [
+  {
+   "date": "2026-09-21",
+   "close": 954.49
+  },
+  {
+   "date": "2026-09-22",
+   "close": 945.67
+  },
+  {
+   "date": "2026-09-23",
+   "close": 937.0
+  },
+  {
+   "date": "2026-09-24",
+   "close": 929.04
+  },
+  {
+   "date": "2026-09-25",
+   "close": 941.65
+  },
+  {
+   "date": "2026-09-28",
+   "close": 921.32
+  },
+  {
+   "date": "2026-09-29",
+   "close": 973.49
+  },
+  {
+   "date": "2026-09-30",
+   "close": 971.26
+  },
+  {
+   "date": "2026-10-01",
+   "close": 1045.78
+  },
+  {
+   "date": "2026-10-02",
+   "close": 1085.42
+  },
+  {
+   "date": "2026-10-05",
+   "close": 1091.67
+  },
+  {
+   "date": "2026-10-06",
+   "close": 1133.4
+  },
+  {
+   "date": "2026-10-07",
+   "close": 1111.07
+  },
+  {
+   "date": "2026-10-08",
+   "close": 1048.6
+  },
+  {
+   "date": "2026-10-09",
+   "close": 1103.36
+  },
+  {
+   "date": "2026-10-12",
+   "close": 995.41
+  },
+  {
+   "date": "2026-10-13",
+   "close": 987.99
+  },
+  {
+   "date": "2026-10-14",
+   "close": 896.33
+  },
+  {
+   "date": "2026-10-15",
+   "close": 869.54
+  },
+  {
+   "date": "2026-10-19",
+   "close": 834.51
+  },
+  {
+   "date": "2026-10-20",
+   "close": 822.51
+  },
+  {
+   "date": "2026-10-21",
+   "close": 850.7
+  },
+  {
+   "date": "2026-10-22",
+   "close": 752.54
+  },
+  {
+   "date": "2026-10-23",
+   "close": 756.17
+  },
+  {
+   "date": "2026-10-26",
+   "close": 818.1
+  }
+ ],
+ "technical": {
+  "ma5": 800.004,
+  "ma10": 858.38,
+  "ma20": 953.4585,
+  "ma60": 910.0117,
+  "asOf": "2026-10-26",
+  "sessions": 256,
+  "rsi14Wilder": 41.3073,
+  "rangeHigh": 1143.0,
+  "rangeLow": 152.54,
+  "change5dPercent": -1.9664,
+  "change20dPercent": -13.1206
+ },
+ "financials": {
+  "quarterly": [
+   {
+    "start": "2023-04-02",
+    "end": "2023-07-01",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "grossMarginPercent": null,
+    "operatingMarginPercent": null,
+    "netMarginPercent": null
+   },
+   {
+    "start": "2023-07-02",
+    "end": "2023-09-30",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 317600000,
+    "grossProfit": 76700000,
+    "operatingIncome": -80800000,
+    "netIncome": -67900000,
+    "epsDiluted": -1.02,
+    "grossMarginPercent": 24.1499,
+    "operatingMarginPercent": -25.4408,
+    "netMarginPercent": -21.3791
+   },
+   {
+    "start": "2023-10-01",
+    "end": "2023-12-30",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 366800000,
+    "grossProfit": 64000000,
+    "operatingIncome": -105200000,
+    "netIncome": -99100000,
+    "epsDiluted": -1.47,
+    "grossMarginPercent": 17.4482,
+    "operatingMarginPercent": -28.6805,
+    "netMarginPercent": -27.0174
+   },
+   {
+    "start": "2023-12-31",
+    "end": "2024-03-30",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 366500000,
+    "grossProfit": 59500000,
+    "operatingIncome": -114600000,
+    "netIncome": -127000000,
+    "epsDiluted": -1.88,
+    "grossMarginPercent": 16.2347,
+    "operatingMarginPercent": -31.2688,
+    "netMarginPercent": -34.6521
+   },
+   {
+    "start": "2024-03-31",
+    "end": "2024-06-29",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "grossMarginPercent": null,
+    "operatingMarginPercent": null,
+    "netMarginPercent": null
+   },
+   {
+    "start": "2024-06-30",
+    "end": "2024-09-28",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 336900000,
+    "grossProfit": 77900000,
+    "operatingIncome": -82400000,
+    "netIncome": -82400000,
+    "epsDiluted": -1.21,
+    "grossMarginPercent": 23.1226,
+    "operatingMarginPercent": -24.4583,
+    "netMarginPercent": -24.4583
+   },
+   {
+    "start": "2024-09-29",
+    "end": "2024-12-28",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 402200000,
+    "grossProfit": 99600000,
+    "operatingIncome": -51600000,
+    "netIncome": -60900000,
+    "epsDiluted": -0.88,
+    "grossMarginPercent": 24.7638,
+    "operatingMarginPercent": -12.8294,
+    "netMarginPercent": -15.1417
+   },
+   {
+    "start": "2024-12-29",
+    "end": "2025-03-29",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 425200000,
+    "grossProfit": 122500000,
+    "operatingIncome": -37700000,
+    "netIncome": -44100000,
+    "epsDiluted": -0.64,
+    "grossMarginPercent": 28.81,
+    "operatingMarginPercent": -8.8664,
+    "netMarginPercent": -10.3716
+   },
+   {
+    "start": "2025-03-30",
+    "end": "2025-06-28",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "grossMarginPercent": null,
+    "operatingMarginPercent": null,
+    "netMarginPercent": null
+   },
+   {
+    "start": "2025-06-29",
+    "end": "2025-09-27",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 533800000,
+    "grossProfit": 181500000,
+    "operatingIncome": 6700000,
+    "netIncome": 4200000,
+    "epsDiluted": 0.05,
+    "grossMarginPercent": 34.0015,
+    "operatingMarginPercent": 1.2552,
+    "netMarginPercent": 0.7868
+   },
+   {
+    "start": "2025-09-28",
+    "end": "2025-12-27",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 665500000,
+    "grossProfit": 240100000,
+    "operatingIncome": 64300000,
+    "netIncome": 78200000,
+    "epsDiluted": 0.89,
+    "grossMarginPercent": 36.0781,
+    "operatingMarginPercent": 9.6619,
+    "netMarginPercent": 11.7506
+   },
+   {
+    "start": "2025-12-28",
+    "end": "2026-03-28",
+    "currency": "USD",
+    "periodType": "quarterly",
+    "revenue": 808400000,
+    "grossProfit": 357000000,
+    "operatingIncome": 174500000,
+    "netIncome": 144200000,
+    "epsDiluted": 1.5,
+    "grossMarginPercent": 44.1613,
+    "operatingMarginPercent": 21.5858,
+    "netMarginPercent": 17.8377
+   }
+  ]
+ }
+}

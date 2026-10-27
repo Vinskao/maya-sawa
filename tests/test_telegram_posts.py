@@ -1,4 +1,4 @@
-"""Public Telegram channels (t.me/s/<channel>) recorded as private library reports, one per post."""
+"""Public Telegram channels (t.me/s/<channel>) recorded as library reports, one per post, with the source named."""
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -42,12 +42,11 @@ def db(tmp_path):
     return MarketReportsDatabase(create_engine(f"sqlite:///{tmp_path / 'reports.db'}"))
 
 
-def test_each_post_becomes_one_private_report_dated_by_the_post_and_the_recording(db):
+def test_each_post_becomes_one_report_naming_its_source_and_staying_out_of_the_pdf_report_list(db):
     posts = tg.parse_channel_html(page("telegram_ieobserve.html"), "ieobserve")["posts"]
-    result = tg.record_posts(db, posts, channel_title="IEObserve 國際經濟觀察")
-    assert result == {"new": 3, "known": 0}
-    reports = db.list_reports(owner=None)
-    assert reports == []  # private: not in the public list
+    now = datetime(2026, 10, 5, tzinfo=timezone.utc)
+    assert tg.record_posts(db, posts, channel_title="IEObserve 國際經濟觀察", now=now) == {"new": 3, "known": 0}
+    assert db.list_reports(owner=None) == []  # public, but the PDF report list is not flooded with posts
     pending = db.pending_claims()  # the claim-extraction routine reads this queue
     assert len(pending) == 3
     micron = next(row for row in pending if "美光" in row["title"])
@@ -57,31 +56,61 @@ def test_each_post_becomes_one_private_report_dated_by_the_post_and_the_recordin
     assert micron["page_count"] == 1
     assert "來源：https://t.me/ieobserve/2312" in micron["text"] and "EPS $33.42" in micron["text"]
     full = db.get_report(micron["id"])[0]
-    assert full["visibility"] == "private" and full["received_at"] and full["source_url"] == "https://t.me/ieobserve/2312"
-    assert tg.record_posts(db, posts, channel_title="IEObserve 國際經濟觀察") == {"new": 0, "known": 3}  # re-reading adds nothing
+    assert full["visibility"] == "public" and full["received_at"] and full["source_url"] == "https://t.me/ieobserve/2312"
+    assert tg.record_posts(db, posts, channel_title="IEObserve 國際經濟觀察", now=now) == {"new": 0, "known": 3}  # re-reading adds nothing
+    # Once the routine has extracted a claim, it is public with the channel and the post named as its source.
+    db.replace_claims(micron["id"], [{"page": 1, "segment": "memory", "codes": ["MU-US"], "dimension": "cycle", "direction": "tailwind",
+                                      "claim": "美光預期 2027、2028 年 DRAM 與 NAND 供需都比 2026 年更緊", "evidence": "營收年增 379%、毛利率 87%", "as_of": "2026-10-01"}], "routine")
+    claims = db.list_claims()  # (the code filter uses a Postgres array operator, which SQLite lacks)
+    assert [(c["publisher"], c["source_url"], c["published_at"]) for c in claims] == [("IEObserve 國際經濟觀察", "https://t.me/ieobserve/2312", "2026-10-01")]
 
 
-def test_first_run_walks_back_through_older_pages_and_later_runs_stop_at_known_posts(db):
-    pages = {None: {"before": 20, "posts": [post(i) for i in (21, 22, 23)]},
-             20: {"before": 10, "posts": [post(i) for i in (11, 12, 13)]},
-             10: {"before": None, "posts": [post(i) for i in (1, 2)]}}
-    asked = []
+def test_old_posts_wait_in_a_backlog_and_are_released_newest_first_in_daily_batches(db):
+    posts = tg.parse_channel_html(page("telegram_ieobserve.html"), "ieobserve")["posts"]
+    tg.record_posts(db, posts, channel_title="IEObserve", now=datetime(2026, 10, 16, tzinfo=timezone.utc))
+    assert [row["published_at"] for row in db.pending_claims()] == ["2026-10-03"]  # only the post of the last 14 days is queued now
+    assert db.promote_backlog(limit=1) == 1
+    assert sorted(row["published_at"] for row in db.pending_claims()) == ["2026-10-01", "2026-10-03"]  # newest backlog post first
+    assert db.promote_backlog(limit=10) == 1 and db.promote_backlog(limit=10) == 0
 
-    def fetch(channel, before=None):
-        asked.append(before)
-        return {"title": "Chan", **pages[before]}
 
-    first = tg.collect(db, ["chan"], fetch, max_pages=5)
-    assert first == {"chan": {"new": 8, "known": 0}} and asked == [None, 20, 10]
-    asked.clear()
-    pages[None] = {"before": 20, "posts": [post(i) for i in (21, 22, 23, 24)]}  # one new post since
-    again = tg.collect(db, ["chan"], fetch, max_pages=5)
-    assert again == {"chan": {"new": 1, "known": 3}} and asked == [None]  # stops: the page already had known posts
-    asked.clear()
-    assert tg.collect(db, ["chan"], lambda c, before=None: (_ for _ in ()).throw(TimeoutError("t.me slow")), max_pages=5) == {"chan": "error"}
+class FakeChannel:
+    """A channel of three pages (ids 21-23, 11-13, 1-2) as t.me/s serves them: `?before=N` shows posts older than N."""
+
+    def __init__(self):
+        self.asked, self.fail_at = [], -1  # -1: never fails
+        self.pages = {None: {"before": 20, "posts": [post(i) for i in (21, 22, 23)]},
+                      20: {"before": 10, "posts": [post(i) for i in (11, 12, 13)]},
+                      10: {"before": None, "posts": [post(i) for i in (1, 2)]}}
+        self.pages[11] = self.pages[10]  # before=11 and before=10 both show ids 1-10 (there are no posts 3-10)
+
+    def __call__(self, channel, before=None):
+        self.asked.append(before)
+        if before == self.fail_at:
+            raise TimeoutError("t.me slow")
+        return {"title": "Chan", **self.pages.get(before, {"before": None, "posts": []})}
+
+
+def test_first_run_reads_the_whole_history_and_later_runs_read_one_page(db):
+    fetch, now = FakeChannel(), datetime(2026, 10, 21, tzinfo=timezone.utc)
+    assert tg.collect(db, ["chan"], fetch, now=now) == {"chan": {"new": 8, "known": 0}}
+    assert fetch.asked == [None, 20, 10, 1]  # newest to oldest, then one look below the oldest recorded post
+    fetch.asked.clear()
+    fetch.pages[None] = {"before": 20, "posts": [post(i) for i in (21, 22, 23, 24)]}  # one new post since
+    assert tg.collect(db, ["chan"], fetch, now=now) == {"chan": {"new": 1, "known": 3}}
+    assert fetch.asked == [None, 1]  # stops at the first page that already holds recorded posts
+
+
+def test_a_run_cut_short_resumes_below_the_oldest_recorded_post(db):
+    fetch, now = FakeChannel(), datetime(2026, 10, 21, tzinfo=timezone.utc)
+    fetch.fail_at = 10
+    assert tg.collect(db, ["chan"], fetch, now=now) == {"chan": "error"}  # ids 11-13 and 21-23 are stored, 1-2 are not
+    fetch.fail_at, fetch.asked = -1, []
+    assert tg.collect(db, ["chan"], fetch, now=now) == {"chan": {"new": 2, "known": 3}}
+    assert fetch.asked == [None, 11]  # newest page is all known, so it goes straight to the missing older posts
 
 
 def post(post_id):
     return {"id": post_id, "channel": "chan", "posted_at": datetime(2026, 10, 20, 12, 0, tzinfo=timezone.utc),
-            "text": f"第 {post_id} 則：台積電法說會提到先進製程需求，毛利率維持高檔。" , "media": [], "links": [],
+            "text": f"第 {post_id} 則：台積電法說會提到先進製程需求，毛利率維持高檔。", "media": [], "links": [],
             "url": f"https://t.me/chan/{post_id}"}

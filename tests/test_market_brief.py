@@ -144,3 +144,52 @@ def test_brief_carries_the_latest_inventory_quarter():
     inventory = summarize_stock("2408", [], [], metrics)["fundamentals"]["latestInventory"]
     assert inventory == {"period": "2026Q2", "inventoryDays": 116.03, "inventoryDaysQoQ": None, "inventoryDaysYoY": None,
                          "inventoryQoQ": None, "inventoryYoY": -39.4, "inventoryVsRevenueYoY": -723.6}
+
+
+# 2026-10-27: holdings that come from IBKR (Japan, Korea, US) were missing from the chip summary. They have no TWSE chip
+# data, so the summary shows what is stored for them: price, technicals and the latest quarter's growth and margins.
+import json
+from pathlib import Path
+
+from maya_sawa.services.market_brief import summarize_overseas
+
+
+def overseas(code):
+    return json.loads((Path(__file__).parent / "fixtures" / f"overseas_brief_{code}.json").read_text(encoding="utf-8"))
+
+
+def test_japanese_holding_uses_operating_margin_when_the_filing_has_no_gross_profit():
+    s = summarize_overseas("6857", "JP", overseas("6857"), name="ADVANTEST CORP")
+    assert (s["code"], s["market"], s["name"], s["asOf"], s["currency"]) == ("6857", "JP", "ADVANTEST CORP", "2026-10-26", "JPY")
+    assert s["price"] == {"close": 33330.0, "change1dPct": 7.27, "change5dPct": -1.59, "change20dPct": -1.19}
+    assert s["technical"] == {"rsi14": 44.56, "vsMa20Pct": -8.92, "vsMa60Pct": -3.0}
+    quarter = s["fundamentals"]["latestQuarter"]
+    assert (quarter["period"], quarter["revenueYoYPercent"], quarter["grossMarginPercent"]) == ("2026-06-30", 39.31, None)
+    assert (quarter["operatingMarginPercent"], quarter["operatingMarginYoYPp"]) == (51.7, 4.71)  # 51.7018 vs 46.9914 a year earlier
+    assert [signal["zh"] for signal in s["signals"]] == ["收盤低於 20 日均線 8.92%", "2026-06-30 季營收年增 +39.31%"]
+
+
+def test_us_holding_compares_with_the_same_quarter_a_year_earlier_and_skips_quarters_without_revenue():
+    s = summarize_overseas("LITE", "US", overseas("LITE"), name="Lumentum")
+    assert s["currency"] == "USD" and s["price"]["change20dPct"] == -13.12
+    quarter = s["fundamentals"]["latestQuarter"]
+    assert (quarter["period"], quarter["revenueYoYPercent"]) == ("2026-03-28", 90.12)  # 808.4M vs 425.2M of 2025-03-29
+    assert (quarter["grossMarginPercent"], quarter["grossMarginYoYPp"]) == (44.16, 15.35)  # 2025-06-28 has no revenue and is not a base
+    assert "Close is 14.20% below the 20-day average" in [signal["en"] for signal in s["signals"]]
+
+
+def test_a_holding_with_no_stored_data_is_listed_without_numbers():
+    s = summarize_overseas("000660", "KR", {"daily": [], "technical": None, "financials": {"quarterly": []}}, name="SK Hynix")
+    assert s["asOf"] is None and s.get("price") is None and s["signals"] == []
+
+
+def test_markdown_lists_overseas_holdings_with_the_chip_data_they_do_not_have():
+    jp = summarize_overseas("6857", "JP", overseas("6857"), name="ADVANTEST CORP")
+    brief = {"generatedAt": "2026-10-27T08:00:00+08:00", "holdingsSnapshotAt": None, "stocks": {}, "notes": [],
+             "instruments": [{"code": "6857", "name": "ADVANTEST CORP", "productType": "stock", "group": "automatic", "spotCode": None}],
+             "overseas": {"6857-JP": jp}}
+    markdown = brief_markdown(brief)
+    assert "## 6857 ADVANTEST CORP（日本）" in markdown
+    assert "收盤 / 1日 / 5日 / 20日" in markdown and "33,330.00 / +7.27% / -1.59% / -1.19%" in markdown
+    assert "RSI(14)" in markdown and "營益率" in markdown and "季營收年增" in markdown
+    assert "沒有外資、投信、融資與集保籌碼資料" in markdown

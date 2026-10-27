@@ -151,7 +151,7 @@ class StubReports:
 def claim(codes, page, published_at=None, as_of=None, direction="tailwind"):
     return {"report_id": REPORT_ID, "title": "光通訊產業報告", "publisher": "凱基投顧", "published_at": published_at,
             "page": page, "segment": "optics", "codes": codes, "dimension": "delivery", "direction": direction,
-            "claim": f"第 {page} 頁主張", "evidence": "出貨季增 30%", "as_of": as_of, "received_at": "2026-10-20T05:35:13.559+00:00"}
+            "claim": f"第 {page} 頁主張", "evidence": "出貨季增 30%", "as_of": as_of, "received_at": "2026-10-20T05:35:13.559+00:00", "source_url": f"https://t.me/chan/{page}"}
 
 
 def test_get_targets_adds_public_report_views_dated_and_deduplicated(db, monkeypatch):
@@ -166,7 +166,7 @@ def test_get_targets_adds_public_report_views_dated_and_deduplicated(db, monkeyp
     views = client.get("/market/dashboard/targets/lite?market=US").json()["views"]
     assert reports.asked == ["LITE-US", "LITE"]  # overseas claims use CODE-MARKET, some reports use the bare ticker
     assert [(view["page"], view["date"]) for view in views] == [(3, "2026-10-21"), (5, "2026-10-15")]  # newest first, once each
-    assert views[0] == {"reportId": REPORT_ID, "title": "光通訊產業報告", "publisher": "凱基投顧", "date": "2026-10-21", "dateKind": "published",
+    assert views[0] == {"reportId": REPORT_ID, "title": "光通訊產業報告", "publisher": "凱基投顧", "date": "2026-10-21", "dateKind": "published", "sourceUrl": "https://t.me/chan/3",
                         "page": 3, "dimension": "delivery", "direction": "tailwind", "claim": "第 3 頁主張", "evidence": "出貨季增 30%"}
     assert views[1]["dateKind"] == "data"  # no publication date: the claim's data cut-off date
     reports.asked.clear()

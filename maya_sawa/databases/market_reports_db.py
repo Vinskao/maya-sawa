@@ -27,6 +27,8 @@ from .market_dashboard_db import market_dashboard_db
 
 Base = declarative_base()
 
+COLLECTOR_UPLOADER = "telegram-collector"  # reports made from public Telegram posts; kept out of the PDF report list
+
 
 class MarketReport(Base):
     __tablename__ = "maya_sawa_market_reports"
@@ -185,6 +187,7 @@ class MarketReportsDatabase:
         pdf,
         pages,
         source_url=None,
+        status="claims_pending",
     ):
         """Persist readable source text before optional vectorization can fail."""
         if not self.sessions:
@@ -207,7 +210,7 @@ class MarketReportsDatabase:
                     page_count=len(pages),
                     text=self._page_text(pages),
                     visibility=visibility,
-                    status="claims_pending",
+                    status=status,
                     pdf=pdf,
                     source_url=source_url,
                 )
@@ -386,6 +389,7 @@ class MarketReportsDatabase:
                     "evidence": claim.evidence,
                     "as_of": claim.as_of.isoformat() if claim.as_of else None,
                     "received_at": report.received_at.isoformat(),
+                    "source_url": report.source_url,
                 }
                 for claim, report in query.order_by(MarketReport.received_at.desc())
                 .limit(500)
@@ -508,7 +512,7 @@ class MarketReportsDatabase:
         if not self.sessions:
             raise RuntimeError("Market reports database unavailable")
         with self.sessions() as session:
-            query = session.query(MarketReport)
+            query = session.query(MarketReport).filter(MarketReport.uploaded_by != COLLECTOR_UPLOADER)
             if owner:
                 query = query.filter(
                     (MarketReport.visibility == "public")
@@ -535,6 +539,27 @@ class MarketReportsDatabase:
                 if report
                 else None
             )
+
+    def oldest_post_id(self, channel: str):
+        """Smallest Telegram post id recorded for a channel, or None."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        prefix = f"https://t.me/{channel}/"
+        with self.sessions() as session:
+            urls = [row[0] for row in session.query(MarketReport.source_url).filter(MarketReport.source_url.like(f"{prefix}%")).all()]
+        ids = [int(url[len(prefix):]) for url in urls if url[len(prefix):].isdigit()]
+        return min(ids) if ids else None
+
+    def promote_backlog(self, limit: int) -> int:
+        """Queue up to `limit` backlog reports (newest first) for the claim-extraction routine."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            rows = (session.query(MarketReport).filter(MarketReport.status == "backlog")
+                    .order_by(MarketReport.published_at.desc(), MarketReport.received_at.desc()).limit(limit).all())
+            for row in rows:
+                row.status = "claims_pending"
+            return len(rows)
 
     def delete(self, report_id: str):
         if not self.sessions:

@@ -143,6 +143,69 @@ def summarize_stock(code: str, daily: list[dict], ownership: list[dict], metrics
     return result
 
 
+OVERSEAS_CURRENCY = {"US": "USD", "JP": "JPY", "KR": "KRW", "HK": "HKD"}
+OVERSEAS_LABEL = {"US": ("美國", "US"), "JP": ("日本", "Japan"), "KR": ("韓國", "Korea"), "HK": ("香港", "Hong Kong")}
+
+
+def _round(value: Any, digits: int = 2) -> float | None:
+    return round(value, digits) if isinstance(value, (int, float)) else None
+
+
+def _year_earlier(quarters: list[dict], latest: dict) -> dict | None:
+    end = datetime.fromisoformat(latest["end"]).date()
+    for row in quarters:
+        if abs((end - datetime.fromisoformat(row["end"]).date()).days - 365) <= 15:
+            return row
+    return None
+
+
+def summarize_overseas(code: str, market: str, payload: dict, name: str | None = None) -> dict[str, Any]:
+    """Holdings that come from IBKR (Japan, Korea, US, Hong Kong) have no TWSE chip data. Summarise what is stored for
+    them: daily bars, technicals, and the latest quarter's revenue growth and margins (against the same quarter a year
+    earlier; a quarter without revenue is never a base)."""
+    daily = [bar for bar in payload.get("daily") or [] if isinstance(bar.get("close"), (int, float))]
+    closes = [bar["close"] for bar in daily]
+    result: dict[str, Any] = {"code": code, "market": market, "name": name, "asOf": daily[-1]["date"] if daily else None,
+                              "currency": OVERSEAS_CURRENCY.get(market)}
+    signals: list[dict[str, str]] = []
+    if closes:
+        result["price"] = {"close": closes[-1], "change1dPct": _pct(closes[-1], closes[-2] if len(closes) > 1 else None),
+                           "change5dPct": _pct(closes[-1], closes[-6] if len(closes) > 5 else None),
+                           "change20dPct": _pct(closes[-1], closes[-21] if len(closes) > 20 else None)}
+        tech = payload.get("technical") or {}
+        if tech:
+            result["technical"] = {"rsi14": _round(tech.get("rsi14Wilder")), "vsMa20Pct": _pct(closes[-1], tech.get("ma20")),
+                                   "vsMa60Pct": _pct(closes[-1], tech.get("ma60"))}
+            rsi, vs20 = result["technical"]["rsi14"], result["technical"]["vsMa20Pct"]
+            if rsi is not None and rsi >= 70:
+                signals.append({"zh": f"RSI(14) {rsi:.1f}，超買區", "en": f"RSI(14) {rsi:.1f}, overbought"})
+            elif rsi is not None and rsi <= 30:
+                signals.append({"zh": f"RSI(14) {rsi:.1f}，超賣區", "en": f"RSI(14) {rsi:.1f}, oversold"})
+            if vs20 is not None and abs(vs20) >= 5:
+                below = vs20 < 0
+                signals.append({"zh": f"收盤{'低於' if below else '高於'} 20 日均線 {abs(vs20):.2f}%",
+                                "en": f"Close is {abs(vs20):.2f}% {'below' if below else 'above'} the 20-day average"})
+    quarters = sorted((row for row in (payload.get("financials") or {}).get("quarterly") or []
+                       if isinstance(row.get("revenue"), (int, float)) and row["revenue"] > 0 and row.get("end")), key=lambda row: row["end"])
+    if quarters:
+        latest = quarters[-1]
+        before = _year_earlier(quarters[:-1], latest)
+
+        def margin_change(key: str) -> float | None:
+            a, b = latest.get(key), (before or {}).get(key)
+            return round(a - b, 2) if isinstance(a, (int, float)) and isinstance(b, (int, float)) else None
+        quarter = {"period": latest["end"], "revenueYoYPercent": _pct(latest["revenue"], before["revenue"]) if before else None,
+                   "grossMarginPercent": _round(latest.get("grossMarginPercent")), "grossMarginYoYPp": margin_change("grossMarginPercent"),
+                   "operatingMarginPercent": _round(latest.get("operatingMarginPercent")), "operatingMarginYoYPp": margin_change("operatingMarginPercent"),
+                   "netMarginPercent": _round(latest.get("netMarginPercent")), "netMarginYoYPp": margin_change("netMarginPercent")}
+        result["fundamentals"] = {"latestQuarter": quarter}
+        yoy = quarter["revenueYoYPercent"]
+        if yoy is not None and abs(yoy) >= 20:
+            signals.append({"zh": f"{quarter['period']} 季營收年增 {yoy:+.2f}%", "en": f"{quarter['period']} quarterly revenue {yoy:+.2f}% YoY"})
+    result["signals"] = signals
+    return result
+
+
 def _signals(s: dict) -> list[dict[str, str]]:
     """Plain-language facts derived from the numbers above, in both languages; no buy/sell advice."""
     out = []
@@ -248,6 +311,20 @@ def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None,
             missing_history.append(code)
         if not history.get("TaiwanStockFinancialStatements") or not history.get("TaiwanStockMonthRevenue"):
             missing_fundamentals.append(code)
+    overseas: dict[str, dict] = {}
+    for item in instruments:
+        market = str(item.get("market") or "").upper()
+        if item.get("productType") != "stock" or market not in OVERSEAS_CURRENCY:
+            continue
+        code = str(item.get("code") or "").upper()
+        if not code or f"{code}-{market}" in overseas:
+            continue
+        try:
+            from .ibkr_research import ibkr_research_collector
+            payload = ibkr_research_collector.read(code, market)
+        except Exception:
+            payload = {}  # listed without numbers until its data is stored
+        overseas[f"{code}-{market}"] = {**summarize_overseas(code, market, payload, name=item.get("name")), "group": item["group"]}
     for item in instruments:
         code = _spot_code(item)
         if code in stocks:
@@ -258,6 +335,7 @@ def build_brief(selection: tuple[dict[str, Any], list[dict]] | None = None,
         "instruments": [{"code": item.get("code"), "name": item.get("name"), "productType": item.get("productType"),
                          "group": item["group"], "spotCode": _spot_code(item)} for item in instruments],
         "stocks": stocks,
+        "overseas": overseas,
         "collecting": {"history": missing_history, "fundamentals": missing_fundamentals},
         "notes": ["Holdings list only; no quantities, cost, P/L or account values.",
                   "Lots = 1,000 shares. pp = percentage points. TDCC large holders = 400 lots and above; retail = 10 lots and below.",
@@ -350,6 +428,28 @@ def brief_markdown(brief: dict, lang: str = "zh") -> str:
             for key, zh_label, en_label in (("grossMargin", "毛利率", "Gross margin"), ("operatingMargin", "營益率", "Operating margin"), ("netMargin", "淨利率", "Net margin")):
                 lines.append(f"| {quarter['period']} {t(zh_label + ' · 季 / 年變化', en_label + ' · QoQ / YoY change')} | {_fmt(quarter.get(key), '%')} · {_fmt(quarter.get(key + 'QoQ'), ' pp', True)} / {_fmt(quarter.get(key + 'YoY'), ' pp', True)} |")
             lines.append(f"| {quarter['period']} EPS {t('年增', 'YoY')} | {_fmt(quarter.get('epsYoY'), '%', True)} |")
+    group_of = {str(i["code"]).upper(): i.get("group") for i in brief["instruments"]}
+    for s in (brief.get("overseas") or {}).values():
+        market_zh, market_en = OVERSEAS_LABEL.get(s["market"], (s["market"], s["market"]))
+        held = t("持有", "held") if (s.get("group") or group_of.get(s["code"])) == "automatic" else t("自選", "watchlist")
+        lines += ["", f"## {s['code']} {s.get('name') or ''}（{market_zh}）".replace("  ", " ") if zh else f"## {s['code']} {s.get('name') or ''} ({market_en})".replace("  ", " "), "",
+                  f"{t('來源', 'From')}: {held} · {t('資料日', 'As of')}: {s.get('asOf') or '—'} · IBKR", ""]
+        if s.get("signals"):
+            lines += [f"{t('重點', 'Highlights')}: " + ("；" if zh else "; ").join(signal[lang] for signal in s["signals"]), ""]
+        lines += [f"| {t('指標', 'Metric')} | {t('數值', 'Value')} |", "|---|---|"]
+        price = s.get("price") or {}
+        if price:
+            lines.append(f"| {t('收盤 / 1日 / 5日 / 20日', 'Close / 1d / 5d / 20d')} ({s.get('currency') or ''}) | {_fmt(price.get('close'))} / {_fmt(price.get('change1dPct'), '%', True)} / {_fmt(price.get('change5dPct'), '%', True)} / {_fmt(price.get('change20dPct'), '%', True)} |")
+        tech = s.get("technical") or {}
+        if tech:
+            lines.append(f"| RSI(14) · {t('相對 20 / 60 日均線', 'vs 20 / 60-day average')} | {_fmt(tech.get('rsi14'))} · {_fmt(tech.get('vsMa20Pct'), '%', True)} / {_fmt(tech.get('vsMa60Pct'), '%', True)} |")
+        quarter = (s.get("fundamentals") or {}).get("latestQuarter") or {}
+        if quarter:
+            lines.append(f"| {quarter['period']} {t('季營收年增', 'quarterly revenue YoY')} | {_fmt(quarter.get('revenueYoYPercent'), '%', True)} |")
+            for key, zh_label, en_label in (("grossMargin", "毛利率", "Gross margin"), ("operatingMargin", "營益率", "Operating margin"), ("netMargin", "淨利率", "Net margin")):
+                if quarter.get(key + "Percent") is not None:
+                    lines.append(f"| {quarter['period']} {t(zh_label + ' · 年變化', en_label + ' · YoY change')} | {_fmt(quarter.get(key + 'Percent'), '%')} · {_fmt(quarter.get(key + 'YoYPp'), ' pp', True)} |")
+        lines += ["", t("沒有外資、投信、融資與集保籌碼資料（這些只涵蓋台股）。", "No foreign/trust flows, margin or TDCC data (those cover Taiwan stocks only).")]
     collecting = brief.get("collecting") or {}
     pending = sorted(set(collecting.get("history", [])) | set(collecting.get("fundamentals", [])))
     if pending:

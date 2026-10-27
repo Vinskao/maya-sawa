@@ -1,0 +1,249 @@
+{
+ "code": "6857",
+ "market": "JP",
+ "daily": [
+  {
+   "date": "2026-09-16",
+   "close": 30240.0
+  },
+  {
+   "date": "2026-09-17",
+   "close": 32050.0
+  },
+  {
+   "date": "2026-09-18",
+   "close": 33060.0
+  },
+  {
+   "date": "2026-09-24",
+   "close": 34000.0
+  },
+  {
+   "date": "2026-09-25",
+   "close": 33730.0
+  },
+  {
+   "date": "2026-09-28",
+   "close": 33910.0
+  },
+  {
+   "date": "2026-09-29",
+   "close": 34260.0
+  },
+  {
+   "date": "2026-09-30",
+   "close": 37610.0
+  },
+  {
+   "date": "2026-10-01",
+   "close": 38630.0
+  },
+  {
+   "date": "2026-10-02",
+   "close": 40300.0
+  },
+  {
+   "date": "2026-10-05",
+   "close": 41850.0
+  },
+  {
+   "date": "2026-10-06",
+   "close": 41290.0
+  },
+  {
+   "date": "2026-10-07",
+   "close": 40930.0
+  },
+  {
+   "date": "2026-10-08",
+   "close": 41610.0
+  },
+  {
+   "date": "2026-10-09",
+   "close": 40400.0
+  },
+  {
+   "date": "2026-10-13",
+   "close": 40380.0
+  },
+  {
+   "date": "2026-10-14",
+   "close": 34340.0
+  },
+  {
+   "date": "2026-10-15",
+   "close": 34530.0
+  },
+  {
+   "date": "2026-10-16",
+   "close": 34450.0
+  },
+  {
+   "date": "2026-10-19",
+   "close": 33870.0
+  },
+  {
+   "date": "2026-10-20",
+   "close": 34440.0
+  },
+  {
+   "date": "2026-10-21",
+   "close": 32370.0
+  },
+  {
+   "date": "2026-10-22",
+   "close": 32340.0
+  },
+  {
+   "date": "2026-10-23",
+   "close": 31070.0
+  },
+  {
+   "date": "2026-10-26",
+   "close": 33330.0
+  }
+ ],
+ "technical": {
+  "ma5": 32710.0,
+  "ma10": 34112.0,
+  "ma20": 36595.5,
+  "ma60": 34360.75,
+  "asOf": "2026-10-26",
+  "sessions": 248,
+  "rsi14Wilder": 44.561,
+  "rangeHigh": 42800.0,
+  "rangeLow": 16325.0,
+  "change5dPercent": -1.5943,
+  "change20dPercent": -1.1859
+ },
+ "financials": {
+  "quarterly": [
+   {
+    "start": "2024-04-01",
+    "end": "2024-06-30",
+    "revenue": 138725000000.0,
+    "grossProfit": null,
+    "operatingIncome": 31325000000.0,
+    "netIncome": 23873000000.0,
+    "epsDiluted": 32.25,
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 22.5806,
+    "netMarginPercent": 17.2089
+   },
+   {
+    "start": "2024-07-01",
+    "end": "2024-09-30",
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "epsDiluted": null,
+    "revenue": 190481000000.0,
+    "grossProfit": null,
+    "operatingIncome": 63534000000.0,
+    "netIncome": 45470000000.0,
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 33.3545,
+    "netMarginPercent": 23.8711
+   },
+   {
+    "start": "2024-10-01",
+    "end": "2024-12-31",
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "epsDiluted": null,
+    "revenue": 218152000000.0,
+    "grossProfit": null,
+    "operatingIncome": 69267000000.0,
+    "netIncome": 51867000000.0,
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 31.7517,
+    "netMarginPercent": 23.7756
+   },
+   {
+    "start": "2025-01-01",
+    "end": "2025-03-31",
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "epsDiluted": null,
+    "revenue": 232349000000.0,
+    "grossProfit": null,
+    "operatingIncome": 64035000000.0,
+    "netIncome": 39967000000.0,
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 27.5598,
+    "netMarginPercent": 17.2013
+   },
+   {
+    "start": "2025-04-01",
+    "end": "2025-06-30",
+    "revenue": 263776000000.0,
+    "grossProfit": null,
+    "operatingIncome": 123952000000.0,
+    "netIncome": 90180000000.0,
+    "epsDiluted": 122.8,
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 46.9914,
+    "netMarginPercent": 34.1881
+   },
+   {
+    "start": "2025-07-01",
+    "end": "2025-09-30",
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "epsDiluted": null,
+    "revenue": 262957000000.0,
+    "grossProfit": null,
+    "operatingIncome": 108483000000.0,
+    "netIncome": 79633000000.0,
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 41.255,
+    "netMarginPercent": 30.2837
+   },
+   {
+    "start": "2025-10-01",
+    "end": "2025-12-31",
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "epsDiluted": null,
+    "revenue": 273804000000.0,
+    "grossProfit": null,
+    "operatingIncome": 113571000000.0,
+    "netIncome": 78713000000.0,
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 41.4789,
+    "netMarginPercent": 28.7479
+   },
+   {
+    "start": "2026-01-01",
+    "end": "2026-03-31",
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "epsDiluted": null,
+    "revenue": 328073000000.0,
+    "grossProfit": null,
+    "operatingIncome": 153114000000.0,
+    "netIncome": 126827000000.0,
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 46.6707,
+    "netMarginPercent": 38.6582
+   },
+   {
+    "start": "2026-04-01",
+    "end": "2026-06-30",
+    "revenue": 367473000000.0,
+    "grossProfit": null,
+    "operatingIncome": 189990000000.0,
+    "netIncome": 174780000000.0,
+    "epsDiluted": 239.89,
+    "currency": "JPY",
+    "periodType": "quarterly",
+    "grossMarginPercent": null,
+    "operatingMarginPercent": 51.7018,
+    "netMarginPercent": 47.5627
+   }
+  ]
+ }
+}

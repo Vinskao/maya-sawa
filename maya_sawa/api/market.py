@@ -196,7 +196,7 @@ def report_views(code: str, market: str) -> list[dict]:
                 date, kind = next(((value, name) for value, name in ((claim["published_at"], "published"), (claim["as_of"], "data"),
                                                                      ((claim.get("received_at") or "")[:10] or None, "recorded")) if value), (None, None))
                 views.append({"reportId": claim["report_id"], "title": claim["title"], "publisher": claim["publisher"],
-                              "date": date, "dateKind": kind, "page": claim["page"],
+                              "date": date, "dateKind": kind, "sourceUrl": claim.get("source_url"), "page": claim["page"],
                               "dimension": claim["dimension"], "direction": claim["direction"],
                               "claim": claim["claim"], "evidence": claim["evidence"]})
     except Exception:
