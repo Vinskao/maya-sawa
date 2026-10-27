@@ -10,6 +10,14 @@
 - 發文認證：只使用已核准、仍有效的管理者 Bearer 認證，不建立新的長效 token、network secret 或擴張既有市場 key 權限。若執行環境沒有可用認證，保存完整 Markdown 草稿供使用者從管理頁上傳，並回報尚未入庫。明文認證不得進 prompt、Markdown、repo、URL 或輸出。
 - 文章發布與向量化是不同結果。API 入庫成功後由背景流程向量化；若額度不足，保留發布文章與 pending／failed 工作，不宣稱 QA 已可檢索。
 
+## 已建立的排程（2026-10-27）
+
+- Routine：`trig_01FtMQHUTxGJZtX6vwYHT3pY`（https://claude.ai/code/routines/trig_01FtMQHUTxGJZtX6vwYHT3pY），**暫停中**。
+- 時間：`CRON_TZ=Asia/Taipei 0 9 * * 1`（每週一 09:00 台北）；環境「TY Blog Weekly」；模型 Claude Sonnet 5.5。
+- 來源 repo：Vinskao/maya-sawa、Vinskao/ty-multiverse。沒有掛任何 MCP connector。
+- 認證：沒有設定任何發文認證，也沒有新增 network secret。admin API 回 401／403 時，排程只在回報附上完整 Markdown，供管理頁上傳。
+- 啟用條件：文章 CRUD 正式驗收完成後，由使用者在 routine 頁面啟用。實際使用的提示以 routine 內的版本為準。它依下方提示改寫，並加上：文章 API 未上線就停止、草稿已存在就停止、不自行加 Authorization 標頭。
+
 ## 可直接貼入 Claude Routine 的提示詞
 
 ```text
