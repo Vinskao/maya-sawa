@@ -11,11 +11,13 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import httpx
 
 from ..core.auth.keycloak import require_manage_users_request
 from ..core.config.config import Config
 from ..databases.market_reports_db import market_reports_db
+from ..services import sec_filings
 from ..services.embedding_service import get_embedding_service
 from ..services.market_reports import (
     MAX_REPORT_BYTES,
@@ -193,6 +195,26 @@ def claim_code_variants(code: str) -> list[str]:
     code = code.strip().upper()
     plain = code[: -3] if code.endswith(MARKET_SUFFIXES) else code
     return [code] if plain == code else [code, plain]
+
+
+class WebReportRequest(BaseModel):
+    url: str = Field(min_length=10, max_length=500)
+
+
+@router.post("/web")
+async def add_report_from_url(body: WebReportRequest, claims: dict = Depends(require_manage_users_request)):
+    """Owner only: add an SEC EDGAR filing (a https://www.sec.gov/Archives/edgar/data/... page) as reports, one per chosen section."""
+    owner = _owner(claims)
+    url = body.url.strip()
+    if not sec_filings.allowed_filing_url(url):
+        raise HTTPException(status_code=422, detail="Only https://www.sec.gov/Archives/edgar/data/... .htm pages are allowed")
+    try:
+        return await asyncio.to_thread(sec_filings.import_filing, market_reports_db, url, owner)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        logger.warning("SEC filing fetch failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="Could not fetch the filing from sec.gov") from exc
 
 
 @router.get("/collector")
