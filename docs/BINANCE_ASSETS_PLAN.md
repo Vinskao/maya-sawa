@@ -1,4 +1,4 @@
-# Binance 資產與報價（規劃，尚未實作）
+# Binance 資產與報價（第一階段已完成，第二階段待做）
 
 目標：像台股（永豐）與海外（IBKR）一樣，在持股頁看到 Binance 的資產、即時報價與日線圖。2026-10-28 規劃。
 
@@ -33,8 +33,20 @@
 2. **用量**：Binance 以權重限流（每分鐘 6000 權重）；餘額每 5 分鐘、報價每分鐘抓一次，遠低於上限。
 3. **使用者要做的**：建立唯讀 key、設 IP 白名單、把 key 存進 Jenkins。
 
+## 第一階段現況（2026-10-28 完成）
+
+- `maya_sawa/services/binance_market.py`：背景每 60 秒檢查一次；報價（`/api/v3/ticker/24hr`，一次批次查全部幣）每分鐘、日線（`/api/v3/klines`）每 6 小時。第一次回補 1000 天，之後每次只抓最近 5 根。
+- 資料存進 IBKR 同一張表 `maya_sawa_ibkr_datasets`（`market=CRYPTO`、`conid=0`，kind 為 `quote`、`daily`、`history_raw`）。API 只讀資料庫，不會打 Binance。
+- 失敗（含 HTTP 451／403 地區限制）記成 `unavailable`，原因只存分類，不存原始錯誤文字；上次成功的資料保留。失敗後最多一小時內重試。
+- 公開端點：`/market/dashboard` 新增 `crypto` 清單；`/market/dashboard/overseas/{code}?market=CRYPTO` 回日線、報價與資料狀態（未收集的幣回 404）。AI 分析可用 `productType=crypto`、代碼 `BTC-CRYPTO`。
+- 前端：持股頁新增「加密貨幣 · Binance 現貨（USDT）」清單，詳情只開價格、研究、AI 分析分頁；成交量單位是幣本身，不疊加本益比和券商目標價。
+- 環境變數：`BINANCE_SYMBOLS`（預設 `BTC,ETH`）、`BINANCE_MARKET_ENABLED`（預設 `true`）、`BINANCE_API_BASE`（預設 `https://api.binance.com`）。
+- 測試：`tests/test_binance_market.py`、`tests/test_market_dashboard.py`（crypto 部分）；前端 `tests/market/priceChart.test.ts`、`overseasResearch.test.ts`、`instrumentIdentity.test.ts`。
+- 唯讀 key 已存進 Jenkins credential `BINANCE_API_KEY`、`BINANCE_API_SECRET`（第二階段才接進部署）。尚未設定 IP 白名單。
+- **還沒確認**：pod（OCI 新加坡）能不能連到 Binance。部署後看 `/market/dashboard/overseas/BTC?market=CRYPTO` 的 `coverage.quote`：`status=unavailable` 且 `reason=BinanceRegionRestricted` 就是被地區限制擋了。
+
 ## 分階段
 
-1. 公開報價與日線（不需要 key）：先讓 `BTC`、`ETH` 出現在行情圖。
+1. ✅ 公開報價與日線（不需要 key）：`BTC`、`ETH` 出現在行情圖。
 2. 唯讀 key 接餘額，併進持股頁與持股歷史。
 3. 視需要：理財、合約、成本與損益（Binance 的成交紀錄要逐交易對查，較耗權重，最後再做）。

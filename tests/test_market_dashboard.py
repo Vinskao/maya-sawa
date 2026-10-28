@@ -98,6 +98,7 @@ def test_dashboard_quotes_overseas_codes_from_ibkr_not_from_a_taiwan_stock_with_
     monkeypatch.setattr(market.shioaji_market_service, "get_taiex_futures_quote", no_txf)
     monkeypatch.setattr(market.ibkr_market_service, "get_snapshot", ibkr_snapshot)
     monkeypatch.setattr(market, "attach_underlying", lambda *args, **kwargs: None)
+    monkeypatch.setenv("BINANCE_SYMBOLS", "")  # no crypto rows, so no database read
     payload = asyncio.run(market.get_market_dashboard())
     rows = {row["code"]: row for row in payload["automatic"]["positions"]}
     assert asked == ["2330"]
@@ -121,3 +122,63 @@ def test_taiwan_collectors_skip_overseas_holdings(monkeypatch):
     assert market_selection.selected_stock_codes() == ["2330"]
     rows = {row["code"]: row for row in market_selection.current_selection()[1]}
     assert "underlyingCode" not in rows["6857"]  # a Taiwan quote for the same digits must not attach
+
+
+def _crypto_collector(monkeypatch):
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import StaticPool
+    from maya_sawa.databases.ibkr_research_db import IbkrResearchDatabase
+    from maya_sawa.services import binance_market
+    db = IbkrResearchDatabase(create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool))
+    collector = binance_market.BinanceMarketCollector(db=db)
+    monkeypatch.setattr(binance_market, "binance_market_collector", collector)
+    monkeypatch.setenv("BINANCE_SYMBOLS", "BTC,ETH")
+    db.save("BTC", "CRYPTO", 0, "quote", {"close": 80724.72, "change": 508.08, "changePercent": 0.633,
+                                          "sourceUpdatedAt": 1793192840013}, period="2026-10-28T13")
+    db.save("BTC", "CRYPTO", 0, "daily", {"date": "2026-10-28", "open": 80909.77, "high": 81823.0,
+                                          "low": 80621.22, "close": 80724.72, "volume": 5652.61}, period="2026-10-28")
+    return collector
+
+
+def test_dashboard_lists_configured_crypto_with_persisted_binance_quotes(monkeypatch):
+    import asyncio
+    from maya_sawa.api import market
+    _crypto_collector(monkeypatch)
+
+    async def nothing(*_args):
+        return []
+
+    async def no_snapshot():
+        return {}
+
+    monkeypatch.setattr(market.market_dashboard_db, "latest_auto", lambda: {"snapshotAt": None, "positions": []})
+    monkeypatch.setattr(market.market_dashboard_db, "custom_symbols", lambda: [])
+    monkeypatch.setattr(market.market_dashboard_db, "watch_symbols", lambda: [])
+    monkeypatch.setattr(market.shioaji_market_service, "get_dashboard_quotes", nothing)
+    monkeypatch.setattr(market.shioaji_market_service, "get_taiex_futures_quote", no_snapshot)
+    monkeypatch.setattr(market.ibkr_market_service, "get_snapshot", no_snapshot)
+    monkeypatch.setattr(market, "attach_underlying", lambda *args, **kwargs: None)
+    payload = asyncio.run(market.get_market_dashboard())
+    rows = {row["code"]: row for row in payload["crypto"]}
+    assert list(rows) == ["BTC", "ETH"]
+    assert rows["BTC"]["market"] == "CRYPTO" and rows["BTC"]["productType"] == "crypto"
+    assert rows["BTC"]["quote"]["close"] == 80724.72 and rows["BTC"]["quote"]["currency"] == "USDT"
+    assert rows["ETH"]["quote"] is None  # not collected yet: no quote, never a zero price
+
+
+def test_overseas_endpoint_serves_crypto_from_binance_and_rejects_unknown_symbols(monkeypatch):
+    import asyncio
+    import pytest
+    from fastapi import HTTPException
+    from maya_sawa.api import market
+    _crypto_collector(monkeypatch)
+    result = asyncio.run(market.get_overseas_research("btc", "crypto"))
+    assert result["source"] == "Binance" and result["daily"][0]["close"] == 80724.72
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(market.get_overseas_research("DOGE", "CRYPTO"))
+    assert error.value.status_code == 404
+
+
+def test_crypto_instruments_can_carry_an_ai_analysis():
+    from maya_sawa.api.market import analysis_target
+    assert analysis_target("btc-crypto", "crypto") == ("crypto", "BTC-CRYPTO")

@@ -56,13 +56,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
 
 
-@router.get("/dashboard/overseas/{code}", **public_data("海外標的（美、日、韓）日線、財報與資料狀態", "行情與標的"))
+@router.get("/dashboard/overseas/{code}", **public_data("海外標的（美、日、韓）與加密貨幣（CRYPTO）日線、報價與資料狀態", "行情與標的"))
 async def get_overseas_research(code: str, market: str):
     """Public contract/market data from PostgreSQL only; no broker or account access."""
     from ..services.ibkr_research import ibkr_research_collector
     code, market = code.strip().upper(), market.strip().upper()
-    if not re.fullmatch(r'[A-Z0-9.-]{1,24}', code) or market not in {'US', 'JP', 'KR', 'HK'}:
+    if not re.fullmatch(r'[A-Z0-9.-]{1,24}', code) or market not in {'US', 'JP', 'KR', 'HK', 'CRYPTO'}:
         raise HTTPException(status_code=422, detail='Invalid overseas instrument identity')
+    if market == 'CRYPTO':
+        from ..services import binance_market
+        if code not in binance_market.configured_symbols():
+            raise HTTPException(status_code=404, detail='Crypto symbol is not collected')
+        try:
+            return await asyncio.to_thread(binance_market.binance_market_collector.read, code)
+        except Exception:
+            logger.exception('Persisted Binance data unavailable')
+            raise HTTPException(status_code=503, detail='Persisted crypto data temporarily unavailable')
     try:
         return await asyncio.to_thread(ibkr_research_collector.read, code, market)
     except Exception:
@@ -90,7 +99,7 @@ class MarketAiAnalysisUpdate(BaseModel):
 
 def analysis_target(code: str, product_type: str):
     normalized = code.strip().upper()
-    if product_type not in {"stock", "futures", "macro", "macro-node", "research"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
+    if product_type not in {"stock", "futures", "crypto", "macro", "macro-node", "research"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
         raise HTTPException(status_code=422, detail="Invalid instrument code or productType")
     # One shared macro commentary that every instrument analysis reads instead of restating.
     if product_type == "macro" and normalized != "US":
@@ -526,7 +535,23 @@ async def get_market_dashboard():
         "automatic": {"snapshotAt": auto["snapshotAt"], "positions": [expose(item) for item in auto_rows]},
         "custom": [expose(item) for item in custom_rows],
         "customLimit": 5,
+        "crypto": await asyncio.to_thread(crypto_dashboard_rows),
     }
+
+
+def crypto_dashboard_rows() -> list[dict]:
+    """Public Binance spot quotes the background collector persisted; never calls Binance."""
+    from ..services import binance_market
+    rows = []
+    for code in binance_market.configured_symbols():
+        try:
+            persisted = binance_market.binance_market_collector.db.latest(code, binance_market.MARKET, "quote")
+        except Exception:
+            logger.warning("Persisted Binance quote unavailable")
+            persisted = None
+        rows.append({"code": code, "name": binance_market.NAMES.get(code, code), "productType": "crypto",
+                     "market": binance_market.MARKET, "quote": binance_market.dashboard_quote(code, persisted)})
+    return rows
 
 
 @router.get("/dashboard/events", **public_data("近期營收／財報發布與法說會", "行情與標的"))

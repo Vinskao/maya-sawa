@@ -243,6 +243,10 @@ status = result.status
   - `kubectl logs deploy/maya-sawa` 是否還在吐舊的 `503` 或 `401`
 - 如果前端還顯示舊值，問題可能在前端 fallback cache，而不是後端 endpoint 本身。
 
+## Binance 加密貨幣（CRYPTO 市場）
+
+Phase 1 (public quotes and daily candles, no key) is live in `services/binance_market.py`; status, endpoints, env vars and the phase 2 plan are in `docs/BINANCE_ASSETS_PLAN.md`. Data shares the IBKR dataset table under `market=CRYPTO`. Never route around a Binance region block (HTTP 451) with a proxy.
+
 ## IBKR Client Portal API 整合（海外資產）
 
 Current durable overseas/SEC collection, cache, source gaps and verification: read `docs/IBKR_OVERSEAS_DATA.md`. AI agents must read the current `/market/dashboard/overseas/{code}?market=...` response, especially financial filing periods, coverage and gaps, before updating a research note. `fetchedAt` is not a publication date. Never map a Japan/Korea numeric ticker to a Taiwan data source.
