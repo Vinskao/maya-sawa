@@ -173,3 +173,8 @@ def test_collector_summary_shows_per_channel_counts_statuses_dates_and_claims(db
     summary = db.collector_summary()
     assert summary == [{"publisher": "IEObserve", "posts": 3, "statuses": {"claims_pending": 2, "ready": 1}, "withClaims": 1,
                         "oldest": "2026-10-01", "newest": "2026-10-11"}]
+
+
+def test_the_collector_reads_these_public_channels():
+    """2026-10-28: TechNews (technews_tw) and Bloomberg were added next to IEObserve and Gooaye."""
+    assert tg.CHANNELS == ["ieobserve", "Gooaye", "technews_tw", "bloomberg"]

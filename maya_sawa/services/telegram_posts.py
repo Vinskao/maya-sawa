@@ -22,7 +22,7 @@ from ..databases.market_reports_db import COLLECTOR_LISTED_PER_CHANNEL, COLLECTO
 logger = logging.getLogger(__name__)
 
 TAIPEI = ZoneInfo("Asia/Taipei")
-CHANNELS = ["ieobserve", "Gooaye"]
+CHANNELS = ["ieobserve", "Gooaye", "technews_tw", "bloomberg"]
 MAX_PAGES = 500  # per direction; a channel of a few thousand posts is under 400 pages
 PAGE_DELAY = 1.0
 RECENT_DAYS = 14  # newer posts are queued for claim extraction at once, older ones wait in the backlog

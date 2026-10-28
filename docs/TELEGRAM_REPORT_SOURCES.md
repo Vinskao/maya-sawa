@@ -100,3 +100,12 @@ Asked for: Bloomberg Technology (youtube.com/c/BloombergTech) interviews as date
   had no consensus. The collector now follows `underlyingCode`.
 - The Taiwan routine's run on 2026-10-26 searched only the two Japanese stocks and wrote no targets, because it skipped
   §7 together with §3 for stocks without a new trading day. Its prompt now runs §7 for every TW/JP/KR stock.
+
+## 2026-10-28：新增 TechNews 與 Bloomberg 頻道
+
+`CHANNELS` 現在是 `ieobserve`、`Gooaye`、`technews_tw`（TechNews 科技新報）、`bloomberg`。兩個新頻道都有公開的網頁預覽，不需要登入，
+流程與前兩個完全相同（每則貼文一份報告、最新 10 則列在研究報告清單、舊貼文每天分批萃取主張）。
+
+- **TechNews** 多半是「熱門精選」的標題彙整，每則 200–250 字，可萃取的主張以產業新聞（記憶體、AI 伺服器、半導體）為主。
+- **Bloomberg** 是英文新聞標題與摘要（約 150–400 字）；貼文內容會存進資料庫供主張萃取使用，網站只顯示主張與原貼文連結，不顯示全文。
+- 每多一個頻道，歷史貼文就多一批待萃取（排程用 Opus 額度）：新頻道的舊貼文同樣每天最多放行 30 則（各頻道最新 10 則優先）。
