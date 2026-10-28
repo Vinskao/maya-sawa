@@ -42,6 +42,13 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 | Market report claim extraction `trig_018MeBwwU74WvydGHRaRt6Wd` | Daily 20:30 | `30 12 * * *` | Extract report claims without OpenAI; subscription Claude Code routine |
 | 市場 AI 分析｜台股收盤後 `trig_01ECP68tWfgM749sJa3gBiN9` | Mon–Fri 21:15 | `15 13 * * 1-5` | Taiwan holdings, TXF, JP/KR holdings |
 | 市場 AI 分析｜美股與總經 `trig_01NETQT5DCSHj4TKwv45nbJR` | Tue–Sat 07:30 | `30 23 * * 1-5` | macro commentary first, then US holdings |
+| 每週維護｜ty-multiverse-backend `trig_01JEDibagHGmSFZ7D7nTLhLz` | Wed 01:00 | `0 17 * * 2` | Dependency/framework updates, small refactors; opens a PR to `main` |
+| 每週維護｜ty-multiverse-consumer `trig_01CsCHXk4X7zPkjb1EPf4xBL` | Thu 01:00 | `0 17 * * 3` | Same, PR to `main` |
+| 每週維護｜ty-multiverse-gateway `trig_018TNJoPunQ8N7PcgdbtCEqE` | Fri 01:00 | `0 17 * * 4` | Same, PR to `main` |
+| 每週維護｜maya-sawa `trig_01LRDWjEdkEH5PKjSpfW8YfN` | Sat 01:00 | `0 17 * * 5` | Same, PR to `main` (the one exception to "main only, no branches") |
+| 每週維護｜ty-multiverse-frontend `trig_01RbWXpne4jvHA1B737V6PSw` | Sun 01:00 | `0 17 * * 6` | Same plus small UI fixes, PR to `dev` |
+
+- **Weekly maintenance (added 2026-10-28):** each run only opens a PR (never merges or pushes the base branch, which would deploy through Jenkins), then sends one Telegram note with the PR link via `/market/notify` and reports token usage. The Java runs also clone `ty-multiverse-common` and `mvn install` it locally, because the cloud has no GitHub Packages token. Connectors (Gmail, Drive, etc.) are removed from these routines on purpose: they read external changelogs and need no account access.
 
 - **Taiwan run timing (changed 2026-10-19):** margin balances and securities lending (TWSE MI_MARGN/TWT93U and the TPEx
   equivalents) were first seen at 20:51 on 2026-10-19 by a 10-minute poll, so they publish around 20:45. Prices are out by
