@@ -221,6 +221,18 @@ spec:
               name: jquants-credentials
               key: JQUANTS_API_KEY
               optional: true
+        - name: BINANCE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: binance-credentials
+              key: BINANCE_API_KEY
+              optional: true
+        - name: BINANCE_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: binance-credentials
+              key: BINANCE_API_SECRET
+              optional: true
         - name: MACRO_ENABLED
           value: "${MACRO_ENABLED}"
         - name: MACRO_BLS_DAILY_BUDGET

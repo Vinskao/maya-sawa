@@ -30,6 +30,7 @@ from ..services.ibkr_market import (
     ibkr_market_service,
     merge_ibkr_into_portfolio,
 )
+from ..services.binance_account import binance_account_service, merge_binance_into_portfolio
 from ..databases.portfolio_history_db import portfolio_history_db
 from ..databases.market_dashboard_db import market_dashboard_db, market_for_currency
 from ..databases.market_history_db import market_history_db
@@ -791,6 +792,14 @@ async def _portfolio_with_ibkr() -> dict:
         except Exception:
             logger.exception("Unexpected error merging IBKR portfolio")
             merged = attach_taiwan_only_regions(portfolio)
+
+    # Crypto is its own region; a missing key or failed refresh never breaks the brokerage portfolio.
+    try:
+        binance_snapshot = await binance_account_service.get_snapshot()
+        if binance_snapshot:
+            merged = merge_binance_into_portfolio(merged, binance_snapshot)
+    except Exception:
+        logger.exception("Skipping Binance merge")
 
     try:
         await asyncio.to_thread(market_dashboard_db.record_portfolio, merged,

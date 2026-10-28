@@ -1,4 +1,4 @@
-# Binance 資產與報價（第一階段已完成，第二階段待做）
+# Binance 資產與報價（第一、二階段已完成）
 
 目標：像台股（永豐）與海外（IBKR）一樣，在持股頁看到 Binance 的資產、即時報價與日線圖。2026-10-28 規劃。
 
@@ -43,10 +43,25 @@
 - 環境變數：`BINANCE_SYMBOLS`（預設 `BTC,ETH`）、`BINANCE_MARKET_ENABLED`（預設 `true`）、`BINANCE_API_BASE`（預設 `https://api.binance.com`）。
 - 測試：`tests/test_binance_market.py`、`tests/test_market_dashboard.py`（crypto 部分）；前端 `tests/market/priceChart.test.ts`、`overseasResearch.test.ts`、`instrumentIdentity.test.ts`。
 - 唯讀 key 已存進 Jenkins credential `BINANCE_API_KEY`、`BINANCE_API_SECRET`（第二階段才接進部署）。尚未設定 IP 白名單。
-- **還沒確認**：pod（OCI 新加坡）能不能連到 Binance。部署後看 `/market/dashboard/overseas/BTC?market=CRYPTO` 的 `coverage.quote`：`status=unavailable` 且 `reason=BinanceRegionRestricted` 就是被地區限制擋了。
+- 連線：2026-10-28 部署後確認 pod（OCI 新加坡）連得到 Binance，`coverage.quote` 與 `coverage.history_raw` 都是 `ok`。日後若出現 `status=unavailable`、`reason=BinanceRegionRestricted`，就是被地區限制擋了。
+
+## 第二階段現況（2026-10-28 完成，待部署驗證）
+
+- `maya_sawa/services/binance_account.py`：`BINANCE_API_KEY` 與 `BINANCE_API_SECRET` 都有值才啟動；每 5 分鐘讀一次：
+  - `GET /api/v3/account?omitZeroBalances=true`：現貨，`LD*` 資產視為 Simple Earn 活期（例如 `LDUSDT` 算 USDT／Earn）。
+  - `POST /sapi/v1/asset/get-funding-asset`：資金錢包。
+  - `GET /sapi/v1/asset/wallet/balance?quoteAsset=USDT`：各錢包 USDT 總額，總資產以它為準；它和逐項持倉的差額記為 `otherWallets`（例如定期理財、合約）。
+  - `GET /api/v3/ticker/price`（公開）：USDT 價格，沒有 USDT 交易對的走 BTC 換算；穩定幣算 1；都沒有的列進 `unpriced`。
+  - 匯率：`USD_TWD_RATE` 覆寫 → IBKR 用的 open.er-api → 31.5 備援（`fxSource` 記來源）。USDT 視為 1 美元。
+- 簽章：HMAC-SHA256，先取 `/api/v3/time` 校正時鐘，`recvWindow=10000`。錯誤 log 只留 HTTP 狀態與 Binance 錯誤碼，不留網址（含簽章）。
+- 快照存在 `maya_sawa_ibkr_datasets`（`code=BINANCE`、`market=PRIVATE`、kind `portfolio`，每 15 分鐘一筆歷史），沒有公開 API；不存 uid、權限等帳戶識別。
+- `/market/portfolio`（只有 owner）：`totalAssetsEstimated` 加上 Binance 台幣總額，新增 `regions.crypto` 與 `binance` 區塊；現金與損益不動（穩定幣不算銀行現金，成本與損益是第三階段）。Binance 讀取失敗不影響台股持股；持股歷史快照自動包含。
+- 前端：總資產下方的區域小字變成「台 · 外 · 幣」（`src/scripts/market/portfolioRegions.ts`），總資產 tooltip 多一段 `+ Binance N`。海外與合併圓餅圖目前是暫停狀態，所以沒有另外加加密貨幣圓餅圖。
+- Jenkins：`Configure Binance Key` stage 把兩個 credential 寫進 k8s secret `binance-credentials`（缺少時 stage 標 UNSTABLE，不擋部署），deployment 以 `optional: true` 注入。
+- IP 白名單：尚未設定。唯讀 key 不綁 IP 也能用；之後查到 OKE 對外 IP 再到 Binance 設。
 
 ## 分階段
 
 1. ✅ 公開報價與日線（不需要 key）：`BTC`、`ETH` 出現在行情圖。
-2. 唯讀 key 接餘額，併進持股頁與持股歷史。
+2. ✅ 唯讀 key 接餘額，併進持股頁與持股歷史。
 3. 視需要：理財、合約、成本與損益（Binance 的成交紀錄要逐交易對查，較耗權重，最後再做）。

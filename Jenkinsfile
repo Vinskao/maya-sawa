@@ -372,6 +372,24 @@ TELEGRAM_CHAT_ID=%s
             }
         }
 
+        stage('Configure Binance Key') {
+            // Read-only Binance key (Enable Reading only) for crypto balances; a missing credential must not block deploys.
+            steps {
+                container('kubectl') {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'BINANCE_API_KEY/BINANCE_API_SECRET unavailable; crypto balances stay off') {
+                        withCredentials([string(credentialsId: 'BINANCE_API_KEY', variable: 'BINANCE_API_KEY'),
+                                         string(credentialsId: 'BINANCE_API_SECRET', variable: 'BINANCE_API_SECRET')]) {
+                            sh '''
+                                set -e
+                                printf 'BINANCE_API_KEY=%s\nBINANCE_API_SECRET=%s\n' "$BINANCE_API_KEY" "$BINANCE_API_SECRET" | kubectl create secret generic binance-credentials \
+                                  --from-env-file=/dev/stdin -n default --dry-run=client -o yaml | kubectl apply -f -
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {
