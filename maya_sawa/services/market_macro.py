@@ -236,6 +236,13 @@ LONG_HISTORY_START = "2019-01"
 LONG_HISTORY_CODES = {"M2SL", "WALCL", "WTREGEN", "RRPONTSYD", "ECBASSETSW", "JPNASSETS", "US_NET_LIQUIDITY"} | set(WORLD_MONEY_SERIES)
 
 
+def fred_fetch_order(codes, fetched_at: dict) -> list:
+    """Series never stored come first, then the stalest; a budget that runs out mid-refresh then skips the freshest
+    instead of always starving the series declared last (Korea/Japan trade on 2026-10-28)."""
+    position = {code: i for i, code in enumerate(codes)}
+    return sorted(codes, key=lambda code: (code in fetched_at, fetched_at.get(code, ''), position[code]))
+
+
 def fred_observation_start(code: str, frequency: str, today: date) -> str:
     """First FRED observation date requested: 2019 for liquidity, two years for daily/weekly, six years otherwise."""
     if code in LONG_HISTORY_CODES:
@@ -654,10 +661,13 @@ class MarketMacroService:
                     session.merge(MacroSeries(code=code, name=name, unit=unit, frequency=frequency, source="FRED"))
         failures = 0
         attempted = 0
-        for code in FRED_SERIES:
+        cache = {code: _macro_local_cache.get(f"series:{code}") if code in FREE_CACHE_CODES else None for code in FRED_SERIES}
+        # Persisted series already have rows in PostgreSQL, so they never jump ahead of a series with no data at all.
+        for code in fred_fetch_order(list(FRED_SERIES),
+                {**{code: "" for code in FRED_PERSISTED}, **{code: entry["fetchedAt"] for code, entry in cache.items() if entry}}):
             # Weekly/monthly/quarterly series change at most once a day; refetching them every 6 hours would
             # spend the FRED budget for nothing. Daily series and persisted series refresh every run.
-            cached = _macro_local_cache.get(f"series:{code}") if code in FREE_CACHE_CODES else None
+            cached = cache[code]
             if cached and FRED_SERIES[code][2] != "daily" and \
                     (datetime.now(UTC) - datetime.fromisoformat(cached["fetchedAt"])).total_seconds() < 24 * 3600:
                 continue
