@@ -182,3 +182,14 @@ def test_overseas_endpoint_serves_crypto_from_binance_and_rejects_unknown_symbol
 def test_crypto_instruments_can_carry_an_ai_analysis():
     from maya_sawa.api.market import analysis_target
     assert analysis_target("btc-crypto", "crypto") == ("crypto", "BTC-CRYPTO")
+
+
+def test_instrument_names_skip_codes_shared_by_two_companies(monkeypatch):
+    from maya_sawa.api import market
+    monkeypatch.setattr(market.market_dashboard_db, "latest_auto", lambda: {"snapshotAt": None, "positions": [
+        {"code": "3008", "name": "大立光", "productType": "stock", "market": "TW"},
+        {"code": "6857", "name": "ADVANTEST", "productType": "stock", "market": "JP"}]})
+    monkeypatch.setattr(market.market_dashboard_db, "custom_symbols", lambda: [
+        {"code": "6857", "name": "宏碁智醫", "productType": "stock"}, {"code": "TXF", "name": "TXF", "productType": "futures"}])
+    monkeypatch.setattr(market.market_dashboard_db, "watch_symbols", lambda: [{"code": "3008", "name": "大立光"}])
+    assert market.instrument_names() == {"3008": "大立光"}

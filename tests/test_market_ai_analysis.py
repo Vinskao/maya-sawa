@@ -148,6 +148,7 @@ def test_notify_endpoint_requires_agent_key_and_relays(monkeypatch):
     monkeypatch.setenv("MARKET_AGENT_KEY_SHA256", hashlib.sha256(b"k").hexdigest())
     sent = []
     monkeypatch.setattr(market.telegram_notify, "send", lambda kind, title, body="": sent.append((kind, title, body)) or {"sent": True})
+    monkeypatch.setattr(market, "instrument_names", lambda: {})
     client = TestClient(app)
     body = {"kind": "attention", "title": "週報文章", "body": "需要登入"}
     assert client.post("/market/notify", json=body).status_code == 401
@@ -155,3 +156,8 @@ def test_notify_endpoint_requires_agent_key_and_relays(monkeypatch):
     assert client.post("/market/notify", json={**body, "kind": "spam"}, headers={"x-market-agent-key": "k"}).status_code == 422
     ok = client.post("/market/notify", json=body, headers={"x-market-agent-key": "k"})
     assert ok.status_code == 200 and ok.json() == {"sent": True} and sent == [("attention", "週報文章", "需要登入")]
+    # Bare codes from a routine get their names before the message is sent.
+    monkeypatch.setattr(market, "instrument_names", lambda: {"3008": "大立光"})
+    sent.clear()
+    client.post("/market/notify", json={"kind": "update", "title": "台股", "body": "3008 賣→中立"}, headers={"x-market-agent-key": "k"})
+    assert sent == [("update", "台股", "3008 大立光 賣→中立")]

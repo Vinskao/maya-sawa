@@ -223,12 +223,34 @@ async def notify_owner(body: NotifyBody, request: Request):
     """A scheduled routine tells the owner something over Telegram: 'update' (work saved) or 'attention' (it needs a
     login or is stuck). Agent key only; the bot token and chat id stay in the deployment environment."""
     _verify_agent_key(request)
+    try:  # routines often write bare codes; add the instrument names the owner reads by
+        names = await asyncio.to_thread(instrument_names)
+        body = body.model_copy(update={"title": telegram_notify.name_codes(body.title, names),
+                                       "body": telegram_notify.name_codes(body.body, names)})
+    except Exception:
+        logger.exception("Instrument names unavailable; sending the notification as written")
     try:  # keep a copy for the site's bell; a storage failure must not stop the Telegram message
         await asyncio.to_thread(market_notification_db.add, body.kind, telegram_notify.mask(body.title),
                                 telegram_notify.mask(body.body))
     except Exception:
         logger.exception("Notification history save failed")
     return await asyncio.to_thread(telegram_notify.send, body.kind, body.title, body.body)
+
+
+def instrument_names() -> dict[str, str]:
+    """Code -> name for the instruments the routines analyze (holdings, custom, AI watch). A code shared by two
+    different names (e.g. Tokyo 6857 vs Taiwan 6857) is left out rather than guessed."""
+    rows = market_dashboard_db.latest_auto()["positions"] + market_dashboard_db.custom_symbols() + market_dashboard_db.watch_symbols()
+    names: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for row in rows:
+        code, name = str(row.get("code") or "").upper(), str(row.get("name") or "").strip()
+        if not code or not name or name.upper() == code:
+            continue
+        if names.get(code, name) != name:
+            ambiguous.add(code)
+        names[code] = name
+    return {code: name for code, name in names.items() if code not in ambiguous}
 
 
 @router.get("/notifications")

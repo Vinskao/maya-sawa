@@ -23,6 +23,21 @@ def _mask(text: str) -> str:
 
 mask = _mask  # public: the stored copy of a notification is masked the same way
 
+# A whole instrument code: not part of a word, number, date or "BTC-CRYPTO"-style identity.
+_CODE = re.compile(r"(?<![\w.\-/])([A-Z0-9]{2,8})(?![\w.\-/])")
+
+
+def name_codes(text: str, names: dict[str, str]) -> str:
+    """Write "3008 大立光" where a routine wrote only "3008". Unknown codes and codes already named stay as they are."""
+    def replace(match: re.Match) -> str:
+        code = match.group(1)
+        name = names.get(code)
+        if not name:
+            return code
+        nearby = text[max(0, match.start() - len(name) - 2):match.end() + len(name) + 2]
+        return code if name in nearby else f"{code} {name}"
+    return _CODE.sub(replace, text) if names else text
+
 
 def format_message(kind: str, title: str, body: str = "") -> str:
     if kind not in PREFIX:
