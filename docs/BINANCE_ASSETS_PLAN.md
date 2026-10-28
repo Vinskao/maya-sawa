@@ -1,4 +1,4 @@
-# Binance 資產與報價（第一、二階段已完成）
+# Binance 資產與報價（第一、二、三階段已完成）
 
 目標：像台股（永豐）與海外（IBKR）一樣，在持股頁看到 Binance 的資產、即時報價與日線圖。2026-10-28 規劃。
 
@@ -60,8 +60,20 @@
 - Jenkins：`Configure Binance Key` stage 把兩個 credential 寫進 k8s secret `binance-credentials`（缺少時 stage 標 UNSTABLE，不擋部署），deployment 以 `optional: true` 注入。
 - IP 白名單：尚未設定。唯讀 key 不綁 IP 也能用；之後查到 OKE 對外 IP 再到 Binance 設。
 
+## 第三階段現況（2026-10-28 完成，待部署驗證）
+
+- `maya_sawa/services/binance_costs.py`：移動加權平均成本。來源：
+  - 現貨成交 `GET /api/v3/myTrades`（weight 20），只查持有中非穩定幣、以 USDT／FDUSD／USDC 計價且存在的交易對。依 `fromId` 增量抓，每頁 1000 筆，每次最多 20 頁。
+  - 閃兌 `GET /sapi/v1/convert/tradeFlow`（weight 3000），第一次回補 365 天（每次最多 30 天一段），之後從上次結束時間接著抓；每段存一次進度。
+  - 每小時更新一次歷史，存在 `maya_sawa_ibkr_datasets`（`code=BINANCE`、`market=PRIVATE`、kind `trades:<pair>` 與 `converts`，period `all`）。成本每 5 分鐘隨餘額重新計算。
+- 手續費：扣在幣本身就減少數量；扣在計價幣就加進成本（買）或扣掉賣出金額（賣）；扣 BNB 的不計入成本。
+- **沒有成本的部分不算損益**：外部轉入、理財利息、法幣直接買、幣換幣閃兌。快照的 `costBasis.<asset>` 列出持有數量、有成本數量（`coveredQuantity`）、無成本數量（`uncoveredQuantity`）、平均成本、未實現與已實現損益。沒有任何成本紀錄的幣，平均成本與損益是 `null`，不會當成零。
+- 已實現損益只算持有中的幣；已經全部賣光的幣不在追蹤範圍。
+- `/market/portfolio`：`totalPnl` 加上有成本部分的未實現損益（台幣），`regions.crypto.totalPnl` 同步。前端損益 tooltip 多一行「加密貨幣（有成本者）」。
+- 成交或閃兌紀錄讀取失敗時，用上次存的歷史計算，餘額照常更新。
+
 ## 分階段
 
 1. ✅ 公開報價與日線（不需要 key）：`BTC`、`ETH` 出現在行情圖。
 2. ✅ 唯讀 key 接餘額，併進持股頁與持股歷史。
-3. 視需要：理財、合約、成本與損益（Binance 的成交紀錄要逐交易對查，較耗權重，最後再做）。
+3. ✅ 成本與損益（現貨成交＋閃兌）。合約（`/fapi`）、法幣買幣紀錄、幣換幣閃兌的成本仍未接。

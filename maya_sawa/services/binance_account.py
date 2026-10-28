@@ -6,7 +6,7 @@ flexible, shown as LD* assets) and funding balances in USDT, takes per-wallet
 totals from /sapi/v1/asset/wallet/balance, converts to NT$, and persists one
 private snapshot (code BINANCE, market PRIVATE) that has no public API.
 Account identifiers (uid, permissions) are never stored. Cost basis and P/L
-are phase 3, so crypto P/L stays unknown rather than zero.
+come from binance_costs (phase 3); P/L covers only coins with a known cost.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
 
+from .binance_costs import apply_cost_basis, average_cost, cost_events, tracked_pairs
 from .binance_market import API_BASE, BinanceRegionRestricted
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,10 @@ STABLECOINS = {'USDT': 1.0, 'USDC': 1.0, 'FDUSD': 1.0, 'TUSD': 1.0, 'USDP': 1.0,
 NAMES = {'BTC': 'Bitcoin', 'ETH': 'Ethereum', 'SOL': 'Solana', 'BNB': 'BNB', 'XRP': 'XRP', 'USDT': 'Tether',
          'USDC': 'USD Coin'}
 REFRESH_SECONDS = 300
+COST_REFRESH_SECONDS = 3600
+CONVERT_WINDOW_MS = 30 * 86400 * 1000  # tradeFlow accepts at most 30 days per request
+CONVERT_BACKFILL_DAYS = 365
+MAX_TRADE_PAGES = 20
 RECV_WINDOW = 10000
 _FX_FALLBACK_USD_TWD = 31.5
 
@@ -107,12 +112,16 @@ def build_snapshot(spot: dict, funding: list[dict], wallets: list[dict], prices:
 def merge_binance_into_portfolio(portfolio: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
     """Add Binance (NT$) to total assets and a `crypto` region; cash and P/L stay as they are."""
     crypto_twd = snapshot['twd']['total']
+    crypto_pnl = snapshot['twd'].get('unrealizedPnl')  # covered quantity only; None when no cost is known
     if portfolio.get('totalAssetsEstimated') is not None:
         portfolio['totalAssetsEstimated'] = round(portfolio['totalAssetsEstimated'] + crypto_twd, 2)
+    if crypto_pnl is not None:
+        portfolio['totalPnl'] = round(portfolio.get('totalPnl', 0) + crypto_pnl, 2)
     regions = portfolio.setdefault('regions', {})
-    regions['crypto'] = {'cash': None, 'totalAssets': crypto_twd, 'totalPnl': None, 'leverage': None}
+    regions['crypto'] = {'cash': None, 'totalAssets': crypto_twd, 'totalPnl': crypto_pnl, 'leverage': None}
     if 'total' in regions:
-        regions['total'] = {**regions['total'], 'totalAssets': portfolio.get('totalAssetsEstimated')}
+        regions['total'] = {**regions['total'], 'totalAssets': portfolio.get('totalAssetsEstimated'),
+                            'totalPnl': portfolio.get('totalPnl')}
     formulas = portfolio.setdefault('summaryFormulas', {})
     if formulas.get('totalAssetsEstimated'):
         formulas['totalAssetsEstimated'] = f"{formulas['totalAssetsEstimated']} + Binance {int(crypto_twd):,}"
@@ -123,12 +132,18 @@ def merge_binance_into_portfolio(portfolio: dict[str, Any], snapshot: dict[str, 
     return portfolio
 
 
+def _safe_detail(exc: Exception) -> str:
+    # Our own HTTP errors carry status, Binance code and path only; anything else may contain a signed URL.
+    return str(exc) if str(exc).startswith('binance_http_') else type(exc).__name__
+
+
 class BinanceAccountService:
     def __init__(self, db=None, request=None):
         self._db = db
         self._request = request or self._http_request
         self._task: asyncio.Task | None = None
         self._time_offset = 0
+        self._costs_checked = 0.0
 
     @property
     def enabled(self) -> bool:
@@ -187,18 +202,83 @@ class BinanceAccountService:
             spot = await self._request('GET', '/api/v3/account', {'omitZeroBalances': 'true'}, True)
             funding = await self._request('POST', '/sapi/v1/asset/get-funding-asset', {}, True)
             wallets = await self._request('GET', '/sapi/v1/asset/wallet/balance', {'quoteAsset': 'USDT'}, True)
-            prices = usdt_prices(await self._request('GET', '/api/v3/ticker/price', {}, False))
+            tickers = await self._request('GET', '/api/v3/ticker/price', {}, False)
             usd_twd, fx_source = await self._usd_twd()
-            snapshot = build_snapshot(spot, funding, wallets, prices, usd_twd, fx_source,
+            snapshot = build_snapshot(spot, funding, wallets, usdt_prices(tickers), usd_twd, fx_source,
                                       datetime.now(timezone.utc).isoformat())
         except Exception as exc:
-            detail = str(exc) if str(exc).startswith('binance_http_') else type(exc).__name__
-            logger.warning('Binance balance refresh failed: %s', detail)
+            logger.warning('Binance balance refresh failed: %s', _safe_detail(exc))
             return False
+        snapshot = await self._attach_costs(snapshot, {row.get('symbol') for row in tickers if isinstance(row, dict)})
         stamp = datetime.now(timezone.utc)
         period = stamp.strftime('%Y-%m-%dT%H:') + str(stamp.minute // 15 * 15).zfill(2)
         await asyncio.to_thread(self.db.save, 'BINANCE', 'PRIVATE', 0, 'portfolio', snapshot, period=period)
         return True
+
+    def _stored(self, kind: str) -> dict:
+        saved = self.db.latest('BINANCE', 'PRIVATE', kind)
+        return saved['payload'] if saved else {}
+
+    def _store(self, kind: str, payload: dict):
+        self.db.save('BINANCE', 'PRIVATE', 0, kind, payload, period='all')
+
+    async def _refresh_trades(self, pairs: list[str]):
+        for pair in pairs:
+            state = await asyncio.to_thread(self._stored, f'trades:{pair}')
+            trades = state.get('trades', [])
+            for _ in range(MAX_TRADE_PAGES):
+                from_id = trades[-1]['id'] + 1 if trades else 0
+                page = await self._request('GET', '/api/v3/myTrades', {'symbol': pair, 'fromId': from_id, 'limit': 1000}, True)
+                known = {row['id'] for row in trades}
+                trades += [{key: row.get(key) for key in ('id', 'price', 'qty', 'quoteQty', 'commission', 'commissionAsset', 'time', 'isBuyer')}
+                           for row in page if row.get('id') not in known]
+                if len(page) < 1000:
+                    break
+            await asyncio.to_thread(self._store, f'trades:{pair}', {'trades': trades})
+
+    async def _refresh_converts(self):
+        state = await asyncio.to_thread(self._stored, 'converts')
+        rows = state.get('rows', [])
+        now = int(time.time() * 1000) + self._time_offset
+        start = state.get('lastEnd') or now - CONVERT_BACKFILL_DAYS * 86400 * 1000
+        known = {row.get('orderId') for row in rows}
+        while start < now:
+            end = min(start + CONVERT_WINDOW_MS, now)
+            page = await self._request('GET', '/sapi/v1/convert/tradeFlow',
+                                       {'startTime': start, 'endTime': end, 'limit': 1000}, True)
+            for row in page.get('list', []):
+                if row.get('orderStatus') == 'SUCCESS' and row.get('orderId') not in known:
+                    known.add(row.get('orderId'))
+                    rows.append({key: row.get(key) for key in ('orderId', 'orderStatus', 'fromAsset', 'fromAmount',
+                                                               'toAsset', 'toAmount', 'createTime')})
+            # Save progress per window: tradeFlow is weight 3000, so a failure must not redo a year.
+            await asyncio.to_thread(self._store, 'converts', {'rows': rows, 'lastEnd': end})
+            start = end
+            if start < now and self._request == self._http_request:
+                await asyncio.sleep(1)
+
+    async def _attach_costs(self, snapshot: dict, symbols: set) -> dict:
+        assets = sorted({p['asset'] for p in snapshot.get('positions', [])})
+        pairs = tracked_pairs(assets, symbols)
+        if time.monotonic() - self._costs_checked >= COST_REFRESH_SECONDS:
+            self._costs_checked = time.monotonic()
+            try:
+                await self._refresh_trades(pairs)
+                await self._refresh_converts()
+            except Exception as exc:
+                logger.warning('Binance trade history refresh failed: %s', _safe_detail(exc))
+        try:
+            trades = {pair: (await asyncio.to_thread(self._stored, f'trades:{pair}')).get('trades', []) for pair in pairs}
+            converts = (await asyncio.to_thread(self._stored, 'converts')).get('rows', [])
+            bases = {}
+            for asset in assets:
+                events = cost_events(asset, trades, converts)
+                if events:
+                    bases[asset] = average_cost(events)
+            return apply_cost_basis(snapshot, bases, datetime.now(timezone.utc).isoformat())
+        except Exception as exc:
+            logger.warning('Binance cost basis unavailable: %s', _safe_detail(exc))
+            return snapshot
 
     async def get_snapshot(self) -> dict | None:
         if not self.enabled:

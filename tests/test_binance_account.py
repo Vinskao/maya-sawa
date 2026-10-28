@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import hmac
+import time
 from urllib.parse import parse_qsl
 
 import pytest
@@ -98,7 +99,7 @@ def fake_request(calls, fail=None):
         calls.append((method, path, signed))
         if fail and path == fail:
             raise RuntimeError('boom https://api.binance.com/?signature=abc')
-        return {'/api/v3/time': {'serverTime': 1793200000000}, '/api/v3/account': SPOT,
+        return {'/api/v3/time': {'serverTime': int(time.time() * 1000)}, '/api/v3/account': SPOT,
                 '/sapi/v1/asset/get-funding-asset': FUNDING, '/sapi/v1/asset/wallet/balance': WALLETS,
                 '/api/v3/ticker/price': PRICES}[path]
     return request
@@ -135,3 +136,76 @@ def test_service_is_off_without_both_credentials(monkeypatch):
     service = BinanceAccountService(db=memory_db(), request=fake_request([]))
     assert service.enabled is False
     assert asyncio.run(service.get_snapshot()) is None
+
+
+TRADE_PAGE = [{"symbol": "BTCUSDT", "id": 5, "price": "70000", "qty": "0.015", "quoteQty": "1050", "commission": "0",
+               "commissionAsset": "USDT", "time": 1790000000000, "isBuyer": True}]
+
+
+def cost_request(calls, trades=TRADE_PAGE, converts=None):
+    base = fake_request(calls)
+
+    async def request(method, path, params, signed):
+        if path == '/api/v3/myTrades':
+            calls.append((method, path, dict(params)))
+            return [row for row in trades if row['id'] >= params['fromId']]
+        if path == '/sapi/v1/convert/tradeFlow':
+            calls.append((method, path, dict(params)))
+            return {'list': converts or [], 'moreData': False}
+        return await base(method, path, params, signed)
+    return request
+
+
+def test_refresh_adds_cost_basis_from_trades_and_fetches_incrementally(monkeypatch):
+    monkeypatch.setenv('BINANCE_API_KEY', 'k')
+    monkeypatch.setenv('BINANCE_API_SECRET', 's')
+    monkeypatch.setenv('USD_TWD_RATE', '32')
+    calls = []
+    db = memory_db()
+    service = BinanceAccountService(db=db, request=cost_request(calls))
+    assert asyncio.run(service.refresh_once()) is True
+    trade_calls = [c for c in calls if c[1] == '/api/v3/myTrades']
+    assert trade_calls == [('GET', '/api/v3/myTrades', {'symbol': 'BTCUSDT', 'fromId': 0, 'limit': 1000})]
+    assert len([c for c in calls if c[1] == '/sapi/v1/convert/tradeFlow']) == 13  # one year in 30-day windows
+    snap = asyncio.run(service.get_snapshot())
+    btc = snap['costBasis']['BTC']
+    assert btc['averageCostUsdt'] == 70000.0 and btc['coveredQuantity'] == 0.015
+    assert btc['unrealizedPnlUsdt'] == 150.0 and snap['twd']['unrealizedPnl'] == 4800.0
+
+    # Within the hour the stored history is reused; later, only trades after the last id are requested.
+    calls.clear()
+    asyncio.run(service.refresh_once())
+    assert not [c for c in calls if c[1] in ('/api/v3/myTrades', '/sapi/v1/convert/tradeFlow')]
+    service._costs_checked = 0.0
+    time.sleep(0.01)  # the next convert window must start after the stored end
+    asyncio.run(service.refresh_once())
+    assert ('GET', '/api/v3/myTrades', {'symbol': 'BTCUSDT', 'fromId': 6, 'limit': 1000}) in calls
+    assert len([c for c in calls if c[1] == '/sapi/v1/convert/tradeFlow']) == 1
+    assert asyncio.run(service.get_snapshot())['costBasis']['BTC']['events'] == 1  # no duplicate trades
+
+
+def test_cost_history_failure_keeps_balances(monkeypatch):
+    monkeypatch.setenv('BINANCE_API_KEY', 'k')
+    monkeypatch.setenv('BINANCE_API_SECRET', 's')
+    monkeypatch.setenv('USD_TWD_RATE', '32')
+    base = fake_request([])
+
+    async def request(method, path, params, signed):
+        if path in ('/api/v3/myTrades', '/sapi/v1/convert/tradeFlow'):
+            raise RuntimeError('binance_http_429:-1003:' + path)
+        return await base(method, path, params, signed)
+    service = BinanceAccountService(db=memory_db(), request=request)
+    assert asyncio.run(service.refresh_once()) is True
+    snap = asyncio.run(service.get_snapshot())
+    assert snap['twd']['total'] == 54400.0
+    assert snap['twd']['unrealizedPnl'] is None
+
+
+def test_merge_adds_known_crypto_pnl_to_total_pnl():
+    from maya_sawa.services.binance_costs import apply_cost_basis
+    snap = build_snapshot(SPOT, FUNDING, WALLETS, usdt_prices(PRICES), 32.0, 'live', '2026-10-28T15:00:00+00:00')
+    snap = apply_cost_basis(snap, {'BTC': {'quantity': 0.015, 'costUsdt': 1050.0, 'realizedPnlUsdt': 0.0, 'events': 1}}, 'now')
+    merged = merge_binance_into_portfolio(portfolio(), snap)
+    assert merged['totalPnl'] == 2000.0 + 4800.0
+    assert merged['regions']['crypto']['totalPnl'] == 4800.0
+    assert merged['regions']['total']['totalPnl'] == 6800.0
