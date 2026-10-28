@@ -8,6 +8,7 @@ from copy import deepcopy
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -87,10 +88,30 @@ FRED_SERIES = {
     "STLFSI4": ("St. Louis Fed Financial Stress Index (0 = normal)", "index points", "weekly"),
     "NFCI": ("Chicago Fed National Financial Conditions Index (0 = average)", "index points", "weekly"),
 }
+ASIA_FRED_SERIES = {
+    'LRUNTTTTJPM156S': ('Japan unemployment rate, age 15+, seasonally adjusted', 'percent', 'monthly'),
+    'LRUNTTTTKRM156S': ('Korea unemployment rate, age 15+, seasonally adjusted', 'percent', 'monthly'),
+    'IRSTCI01KRM156N': ('Korea overnight call rate (OECD)', 'percent', 'monthly'),
+    'DEXKOUS': ('South Korean won per U.S. dollar', 'KRW/USD', 'daily'),
+    'JPNSLRTTO01GPSAM': ('Japan retail sales volume, month over month', 'percent', 'monthly'),
+    'JPNSLRTTO01GYSAM': ('Japan retail sales volume, year over year', 'percent', 'monthly'),
+    'KORSLRTTO01GPSAM': ('Korea retail sales volume, month over month', 'percent', 'monthly'),
+    'KORSLRTTO01GYSAM': ('Korea retail sales volume, year over year', 'percent', 'monthly'),
+    'XTEXVA01JPM667S': ('Japan merchandise exports, USD, seasonally adjusted', 'USD', 'monthly'),
+    'XTIMVA01JPM667S': ('Japan merchandise imports, USD, seasonally adjusted', 'USD', 'monthly'),
+    'XTEXVA01KRM667S': ('Korea merchandise exports, USD, seasonally adjusted', 'USD', 'monthly'),
+    'XTIMVA01KRM667S': ('Korea merchandise imports, USD, seasonally adjusted', 'USD', 'monthly'),
+}
+FRED_SERIES.update(ASIA_FRED_SERIES)
+ASIA_CPI_SERIES = {
+    'JP_CPI': ('Japan consumer price index (BIS long series)', 'index 2010=100', 'monthly'),
+    'KR_CPI': ('Korea consumer price index (BIS long series)', 'index 2010=100', 'monthly'),
+}
 # Source units converted to the units declared above: millions -> billions, 100 million yen -> trillion yen.
 FRED_SCALE = {"WALCL": 1 / 1000, "WTREGEN": 1 / 1000, "ECBASSETSW": 1 / 1000, "JPNASSETS": 1 / 10000}
 FRED_SOURCE_LABELS = {"GBRSLRTTO01GPSAM": "OECD (via FRED)", "GBRSLRTTO01GYSAM": "OECD (via FRED)",
     "IRSTCI01JPM156N": "OECD (via FRED)", "BAMLH0A0HYM2": "ICE BofA (via FRED)", "BAMLC0A0CM": "ICE BofA (via FRED)"}
+FRED_SOURCE_LABELS.update({code: 'Federal Reserve (via FRED)' if code == 'DEXKOUS' else 'OECD (via FRED)' for code in ASIA_FRED_SERIES})
 # Series written to PostgreSQL before section 22; everything newer stays in process memory (postgres has 100m CPU).
 FRED_PERSISTED = {"DFEDTARL", "DFEDTARU", "RSAFS", "DGS10", "DCOILWTICO", "ICSA"}
 WORLD_MONEY_SERIES = {
@@ -194,7 +215,19 @@ FREE_SERIES_FALLBACK_SECONDS = 30 * 24 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
-    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES))
+    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES))
+
+
+def parse_bis_cpi_csv(raw: bytes) -> list[dict]:
+    rows = []
+    for item in csv.DictReader(io.StringIO(raw.decode('utf-8-sig'))):
+        country, period, value = item.get('REF_AREA'), item.get('TIME_PERIOD', ''), item.get('OBS_VALUE', '')
+        if country not in {'JP', 'KR'} or item.get('FREQ') != 'M' or item.get('UNIT_MEASURE') != '628' or not re.fullmatch(r'\d{4}-\d{2}', period):
+            continue
+        try: valid = math.isfinite(float(value)) and float(value) > 0
+        except (TypeError, ValueError): valid = False
+        if valid: rows.append({'code': f'{country}_CPI', 'period': period, 'value': value})
+    return rows
 
 
 # Money and central-bank liquidity series keep history since 2019, so charts show the 2020 expansion, the 2022-23
@@ -353,6 +386,8 @@ def _request_free_cached(cache_key: str, url: str, ttl_seconds: int = FREE_HTTP_
 
 
 def _record_run(source: str, status: str, count: int = 0, detail: str = "", http_status: int | None = None) -> None:
+    # Summary diagnostics are not provider requests; the reserved request already records its own failure.
+    if status == "error": status = "diagnostic_error"
     if not market_macro_db.sessions:
         return
     now = datetime.now(UTC)
@@ -506,7 +541,7 @@ class MarketMacroService:
                 ("WorldBank", self._fetch_world_bank_gold),
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series),
-                ("WorldMoney", self._fetch_world_money)):
+                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi)):
                 try: output["sources"][source_name] = fetch()
                 except Exception as exc:
                     logger.warning("%s refresh failed: %s", source_name, str(exc)[:80])
@@ -661,6 +696,25 @@ class MarketMacroService:
             count += self._cache_free_series(net_liquidity_rows(*histories), DERIVED_SERIES, "FRED (derived)",
                 "https://fred.stlouisfed.org/series/WALCL", fresh_for_seconds=48 * 3600)
         return count
+
+    def _fetch_asia_cpi(self) -> int:
+        cached = [_macro_local_cache.get(f'series:{code}') for code in ASIA_CPI_SERIES]
+        if all(item and (datetime.now(UTC) - datetime.fromisoformat(item['fetchedAt'])).total_seconds() < 24 * 3600 for item in cached):
+            return 0
+        run_id = market_macro_db.reserve_source_call('BISCPI', daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError('bis_cpi_daily_budget_exhausted')
+        try:
+            url = 'https://stats.bis.org/api/v2/data/dataflow/BIS/WS_LONG_CPI/1.0/M.JP+KR.628?format=csv&startPeriod=' + LONG_HISTORY_START[:7]
+            status, raw = _request_free_cached('bis:asia-cpi', url, ttl_seconds=12 * 3600)
+            rows = parse_bis_cpi_csv(raw)
+            if {row['code'] for row in rows} != set(ASIA_CPI_SERIES): raise RuntimeError('bis_cpi_response_incomplete')
+            saved = self._cache_free_series(rows, ASIA_CPI_SERIES, 'BIS (national statistical sources)',
+                'https://data.bis.org/topics/CPI', fresh_for_seconds=48 * 3600)
+            market_macro_db.finish_source_call(run_id, 'success', saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, 'error', detail=str(exc))
+            raise
 
     def _fetch_world_money(self) -> int:
         """Cache euro-area (ECB), Japan (BoJ) and Taiwan (CBC) money supply; FRED's OECD copies stopped in 2023."""
@@ -1073,6 +1127,10 @@ class MarketMacroService:
                     title = str(item.get("title") or item.get("name") or "")
                     lowered = title.lower()
                     country = str(item.get("country") or item.get("country_code") or item.get("region") or "").strip().lower()
+                    international_label = {'jp': 'Japan', 'jpn': 'Japan', 'japan': 'Japan',
+                        'kr': 'Korea', 'kor': 'Korea', 'korea': 'Korea', 'south korea': 'Korea',
+                        'eu': 'Euro area', 'ea': 'Euro area', 'euro area': 'Euro area', 'eurozone': 'Euro area',
+                        'gb': 'UK', 'uk': 'UK', 'gbr': 'UK', 'united kingdom': 'UK'}.get(country)
                     is_us = country in {"us", "usa", "united states", "united states of america"} or bool(re.search(r"(?:\bu\.s\.\s|\bus\s|\bunited states\b)", lowered))
                     is_uk = country in {"gb", "uk", "gbr", "united kingdom", "great britain"} or bool(re.match(r"\s*(?:uk\s|u\.k\.\s)", lowered))
                     group = None
@@ -1095,6 +1153,10 @@ class MarketMacroService:
                         "business inventories", "factory orders", "consumer credit", "leading indicators", "ism manufacturing",
                         "ism services", " ism pmi", "jobless claims", "initial claims", "weekly claims")):
                         group = "other"
+                    if not group and international_label and str(item.get('impact') or '').lower() in {'medium', 'high'} and any(
+                        term in lowered for term in ('cpi', 'inflation', 'unemployment', 'employment', 'interest rate',
+                            'rate decision', 'retail sales', 'retail trade', 'exports', 'imports', 'trade balance', 'gdp', 'industrial production')):
+                        group = 'other'
                     if not group:
                         continue
                     try:
@@ -1111,6 +1173,8 @@ class MarketMacroService:
                     # Multiple countries and multiple releases can share a calendar date.
                     # Keep their identities distinct so one event cannot overwrite another.
                     event_title = f"UK {title}" if group == "retail_sales" and is_uk and not lowered.startswith(("uk ", "u.k.")) else title
+                    if group == 'other' and international_label and not lowered.startswith(international_label.lower()):
+                        event_title = f'{international_label} {title}'
                     title_key = hashlib.sha256(f"{country}:{title}".casefold().encode("utf-8")).hexdigest()[:12]
                     use_title_key = group == "other" or (group == "retail_sales" and is_uk)
                     identity = f"{scheduled.isoformat()}:{title_key}" if use_title_key else scheduled.isoformat()

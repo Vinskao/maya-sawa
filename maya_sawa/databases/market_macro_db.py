@@ -175,8 +175,10 @@ class MarketMacroDatabase:
         with self.sessions.begin() as session:
             session.execute(text("SELECT pg_advisory_xact_lock(812750319)"))
             day_count = session.query(MacroFetchRun).filter(MacroFetchRun.source.like(f"{source}%"),
+                ~MacroFetchRun.detail.like("%budget_exhausted%"),
                 MacroFetchRun.started_at >= now - timedelta(hours=24), MacroFetchRun.status.in_(["reserved", "success", "error"])).count()
             minute_count = session.query(MacroFetchRun).filter(MacroFetchRun.source.like(f"{source}%"),
+                ~MacroFetchRun.detail.like("%budget_exhausted%"),
                 MacroFetchRun.started_at >= now - timedelta(minutes=1), MacroFetchRun.status.in_(["reserved", "success", "error"])).count()
             if day_count >= daily_limit or minute_count >= minute_limit:
                 return None
@@ -431,7 +433,7 @@ class MarketMacroDatabase:
         for name, state in latest_runs.items():
             latest, success = state["latest"], state.get("success")
             last_success = success.finished_at if success else None
-            source_status.append({"source": name, "availability": latest.status,
+            source_status.append({"source": name, "availability": latest.status.removeprefix("diagnostic_"),
                 "lastSuccessAt": last_success.isoformat() if last_success else None,
                 "stale": not last_success or (now - last_success).total_seconds() > 36 * 3600,
                 "errorCode": latest.detail if latest.status != "success" else None})
