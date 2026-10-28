@@ -41,3 +41,21 @@
 **頻道貼文出現在研究報告清單。** `list_reports` 會附上每個 Telegram 頻道最新 10 則「已有主張」的貼文
 （`COLLECTOR_LISTED_PER_CHANNEL`）；沒有主張的貼文（廣告、閒聊）不列，更舊的貼文仍在資料庫，主張照常供分析引用。
 這些貼文沒有 PDF，卡片改顯示「頻道貼文」與原貼文連結。
+
+## 排程用量自我回報（2026-10-28，取代 OpenTelemetry 路徑）
+
+首頁報酬率圖的「費用線」讀 `claude-routine` 的用量。先前用環境變數讓雲端 Claude Code 匯出 OpenTelemetry，實測從沒有資料進來，改成排程自己回報：
+
+1. 排程最後一步執行倉庫裡的 `maya_sawa/public_scripts/report_routine_usage.py "<標籤>"`。雲端工作階段會把每則訊息的用量寫進
+   `~/.claude/projects/*/<session>.jsonl`，腳本把每個模型的 input / output / cache 建立 / cache 讀取加總（同一則訊息只算一次）。
+2. 腳本 POST 到 `POST /market/routine-usage`；寫入 key 由雲端環境的代理自動加，腳本不碰金鑰、不輸出對話內容。
+3. 後端用 `services/routine_cost.py` 估算費用（Claude 沒有公開的逐筆價格，費率由本站已記錄的 Claude Code 成本回推：Opus 5.5 約輸入每百萬 $1.46、
+   Sonnet 5.5 約 $1.18，輸出 5 倍、cache 建立 1.25 倍、cache 讀取 0.1 倍；是估算），再轉給用量服務（`PUBLIC_TYMB_URL` / `AI_USAGE_INGEST_TOKEN`），記為 `claude-routine`。
+4. 端點如實回報下游有沒有收下（`{"recorded": n, "failed": {...}}`），腳本據此印出「usage reported」或「usage not recorded」。
+
+要點：
+- **腳本必須在排程的倉庫目錄裡執行**。排程要在 `sources` 附上 `Vinskao/maya-sawa`。從網路下載再 `| python3` 會被雲端的安全分類器擋下（「從外部下載並執行程式碼」），
+  所以 `GET /market/routine-usage.py` 雖然存在，排程不該用它。
+- 腳本放在套件目錄 `maya_sawa/public_scripts/`，不能放 `scripts/`：Docker 映像用 `.dockerignore` 排除了 `scripts/`。
+- 每週文章排程沒有寫入金鑰（也不該有），所以它的用量不會被記錄。
+- 2026-10-28 實測：一次性測試排程回報成功，資料庫出現 `claude-routine`、`claude-sonnet-5-5`、約 66k token、$0.024。
