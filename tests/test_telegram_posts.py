@@ -171,7 +171,7 @@ def test_collector_summary_shows_per_channel_counts_statuses_dates_and_claims(db
     db.replace_claims(one["id"], [{"page": 1, "segment": "memory", "codes": ["MU"], "dimension": "cycle", "direction": "tailwind",
                                    "claim": "x", "evidence": "y", "as_of": None}], "routine")
     summary = db.collector_summary()
-    assert summary == [{"publisher": "IEObserve", "posts": 3, "statuses": {"claims_pending": 2, "ready": 1}, "withClaims": 1,
+    assert summary == [{"publisher": "IEObserve", "posts": 3, "statuses": {"claims_pending": 2, "ready": 1}, "visibility": {"public": 3}, "withClaims": 1,
                         "oldest": "2026-10-01", "newest": "2026-10-11"}]
 
 
@@ -242,3 +242,45 @@ def test_a_channel_with_an_age_limit_ignores_older_posts_and_stops_walking_back(
     assert tg.collect(db, ["chan"], fetch, now=now, settings={"chan": {"max_age_days": 30}}) == {"chan": {"new": 0, "known": 0}}
     assert fetch.asked == [None]                                              # the first page is already older than the limit
     assert db.list_reports(owner=None) == []
+
+
+def test_posts_stored_as_private_by_the_first_collector_version_are_made_public(db):
+    """2026-10-28: the first version stored channel posts as owner-only; 30 IEObserve posts had claims that no public query
+    could see. Re-reading a known post never changed its visibility, so a repair makes every collected post public."""
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    claim = {"page": 1, "segment": "memory", "codes": ["MU"], "dimension": "cycle", "direction": "tailwind", "claim": "x", "evidence": "y", "as_of": None}
+    private, _ = db.save_extracted(title="[IEObserve] 舊貼文", publisher="IEObserve", published_at=date(2026, 10, 1), visibility="owner",
+                                   uploaded_by="telegram-collector", digest="old", pdf=b"", pages=["來源：x\n\n內容"], source_url="https://t.me/ieobserve/1",
+                                   status="claims_pending")
+    db.replace_claims(private["id"], [claim], "routine")
+    assert db.list_claims(code=None, segment="memory") == [] and db.list_reports(owner=None) == []
+    assert db.collector_summary()[0]["visibility"] == {"owner": 1}
+    assert db.make_collector_posts_public() == 1
+    assert [row["claim"] for row in db.list_claims(code=None, segment="memory")] == ["x"]
+    assert len(db.list_reports(owner=None)) == 1 and db.collector_summary()[0]["visibility"] == {"public": 1}
+    assert db.make_collector_posts_public() == 0
+
+
+def test_old_backlog_of_an_age_limited_channel_is_archived_and_never_released(db):
+    """2026-10-28: TechNews and Bloomberg were first collected without the age limit, leaving ~3,400 old headline posts in the backlog."""
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    old = [{"channel": "technews_tw", "id": n, "url": f"https://t.me/technews_tw/{n}", "text": f"第 {n} 則：" + "內容" * 40,
+            "posted_at": datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=n)} for n in range(1, 4)]
+    tg.record_posts(db, old, channel_title="TechNews", now=now)
+    other = [{**old[0], "channel": "chan", "id": 9, "url": "https://t.me/chan/9"}]
+    tg.record_posts(db, other, channel_title="Chan", now=now)
+    assert db.archive_backlog_before("technews_tw", date(2026, 10, 1)) == 3
+    assert db.promote_backlog(limit=10) == 1                    # only the other channel's old post is still releasable
+    assert db.promote_latest_per_channel(10) == 0
+    assert {row["publisher"] for row in db.list_reports(owner=None)} == {"Chan"}
+    assert db.archive_backlog_before("technews_tw", date(2026, 10, 1)) == 0
+
+
+def test_a_known_headline_digest_gets_its_articles_on_a_later_run(db):
+    """The digests collected before link-following existed are re-read once: their articles are stored and the digest becomes an index."""
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    tg.record_posts(db, [digest_post(7)], channel_title="TechNews 科技新報", now=now)              # collected without enrich
+    assert [row["status"] for row in db.list_reports(owner=None)] == ["claims_pending"]
+    assert tg.record_posts(db, [digest_post(7)], channel_title="TechNews 科技新報", now=now, enrich=ARTICLES.get) == {"new": 0, "known": 1}
+    assert sorted(row["title"] for row in db.list_reports(owner=None)) == ["AI ASIC 動能強，外資調升聯發科目標價", "美光跳過 4F² DRAM 架構"]
+    assert db.pending_claims() and all("[TechNews" not in row["title"] for row in db.pending_claims())   # the headline report left the queue

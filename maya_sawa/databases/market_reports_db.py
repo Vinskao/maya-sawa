@@ -530,7 +530,7 @@ class MarketReportsDatabase:
                 .filter(
                     MarketReport.uploaded_by == COLLECTOR_UPLOADER,
                     MarketReport.visibility == "public",
-                    MarketReport.status.notin_(["failed", "digest"]),  # a digest is only an index of its articles
+                    MarketReport.status.notin_(["failed", "digest", "archived"]),  # a digest is only an index of its articles
                 )
                 .order_by(MarketReport.published_at.desc(), MarketReport.received_at.desc())
                 .all()
@@ -576,15 +576,47 @@ class MarketReportsDatabase:
             rows = session.query(MarketReport).filter(MarketReport.uploaded_by == COLLECTOR_UPLOADER).all()
             channels: dict[str, dict] = {}
             for row in rows:
-                item = channels.setdefault(row.publisher, {"publisher": row.publisher, "posts": 0, "statuses": {}, "withClaims": 0, "dates": []})
+                item = channels.setdefault(row.publisher, {"publisher": row.publisher, "posts": 0, "statuses": {}, "visibility": {}, "withClaims": 0, "dates": []})
                 item["posts"] += 1
+                item["visibility"][row.visibility] = item["visibility"].get(row.visibility, 0) + 1
                 item["statuses"][row.status] = item["statuses"].get(row.status, 0) + 1
                 item["withClaims"] += 1 if row.claims else 0
                 if row.published_at:
                     item["dates"].append(row.published_at.isoformat())
-            return [{"publisher": item["publisher"], "posts": item["posts"], "statuses": item["statuses"], "withClaims": item["withClaims"],
+            return [{"publisher": item["publisher"], "posts": item["posts"], "statuses": item["statuses"], "visibility": item["visibility"], "withClaims": item["withClaims"],
                      "oldest": min(item["dates"], default=None), "newest": max(item["dates"], default=None)}
                     for item in sorted(channels.values(), key=lambda value: value["publisher"])]
+
+    def archive_backlog_before(self, channel: str, cutoff) -> int:
+        """Old posts of an age-limited channel will never be extracted: park them (status "archived") instead of releasing them."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            rows = session.query(MarketReport).filter(
+                MarketReport.uploaded_by == COLLECTOR_UPLOADER, MarketReport.status == "backlog",
+                MarketReport.source_url.like(f"https://t.me/{channel}/%"), MarketReport.published_at < cutoff).all()
+            for row in rows:
+                row.status = "archived"
+            return len(rows)
+
+    def set_status_by_digest(self, digest: str, status: str) -> None:
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            report = session.query(MarketReport).filter_by(sha256=digest).first()
+            if report:
+                report.status = status
+
+    def make_collector_posts_public(self) -> int:
+        """Posts collected from public channels are public; the first collector version stored them owner-only and a known
+        post is never rewritten, so those rows stayed invisible. Idempotent."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            rows = session.query(MarketReport).filter(MarketReport.uploaded_by == COLLECTOR_UPLOADER, MarketReport.visibility != "public").all()
+            for row in rows:
+                row.visibility = "public"
+            return len(rows)
 
     def promote_latest_per_channel(self, per_channel: int) -> int:
         """Queue the newest `per_channel` backlog posts of every channel: those are the ones the report list shows."""

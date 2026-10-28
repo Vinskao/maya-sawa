@@ -111,8 +111,13 @@ def record_posts(db, posts: list[dict], *, channel_title: str, now: datetime | N
         recent = now - post["posted_at"] <= timedelta(days=RECENT_DAYS)
         status = "claims_pending" if recent else "backlog"
         if enrich:
-            if db.find_by_digest(digest):
+            existing = db.find_by_digest(digest)
+            if existing:
                 known += 1
+                # Collected before link-following existed (or its links were unreadable): read the articles now, once they are in range.
+                if existing["status"] in ("claims_pending", "backlog") and recent and _record_articles(
+                        db, post, channel_title=channel_title, enrich=enrich, recent=True):
+                    db.set_status_by_digest(digest, "digest")
                 continue
             if _record_articles(db, post, channel_title=channel_title, enrich=enrich, recent=recent):
                 status = "digest"
@@ -156,6 +161,8 @@ def collect(db, channels: list[str], fetch, max_pages: int = MAX_PAGES, now: dat
             return page, counts, too_old
 
         try:
+            if cutoff is not None:
+                db.archive_backlog_before(channel, cutoff.astimezone(TAIPEI).date())
             before = None
             for _ in range(max_pages):
                 page, counts, too_old = read(before)
@@ -195,6 +202,7 @@ class TelegramPostCollector:
         from ..databases.market_reports_db import market_reports_db
         if not market_reports_db.sessions:
             return {}
+        await asyncio.to_thread(market_reports_db.make_collector_posts_public)  # repairs rows from the first (owner-only) version
         counts = await asyncio.to_thread(collect, market_reports_db, CHANNELS, fetch_page, enrich=fetch_article)
         # The report list shows each channel's latest posts, so those are extracted first; the rest drain daily.
         counts["released"] = (await asyncio.to_thread(market_reports_db.promote_latest_per_channel, COLLECTOR_LISTED_PER_CHANNEL)
