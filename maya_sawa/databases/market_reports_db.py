@@ -568,6 +568,24 @@ class MarketReportsDatabase:
         ids = [int(url[len(prefix):]) for url in urls if url[len(prefix):].isdigit()]
         return min(ids) if ids else None
 
+    def collector_summary(self) -> list[dict]:
+        """Per channel: how many posts are stored, in which status, how many produced claims, and the date range."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions() as session:
+            rows = session.query(MarketReport).filter(MarketReport.uploaded_by == COLLECTOR_UPLOADER).all()
+            channels: dict[str, dict] = {}
+            for row in rows:
+                item = channels.setdefault(row.publisher, {"publisher": row.publisher, "posts": 0, "statuses": {}, "withClaims": 0, "dates": []})
+                item["posts"] += 1
+                item["statuses"][row.status] = item["statuses"].get(row.status, 0) + 1
+                item["withClaims"] += 1 if row.claims else 0
+                if row.published_at:
+                    item["dates"].append(row.published_at.isoformat())
+            return [{"publisher": item["publisher"], "posts": item["posts"], "statuses": item["statuses"], "withClaims": item["withClaims"],
+                     "oldest": min(item["dates"], default=None), "newest": max(item["dates"], default=None)}
+                    for item in sorted(channels.values(), key=lambda value: value["publisher"])]
+
     def promote_latest_per_channel(self, per_channel: int) -> int:
         """Queue the newest `per_channel` backlog posts of every channel: those are the ones the report list shows."""
         if not self.sessions:

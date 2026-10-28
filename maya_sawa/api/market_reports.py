@@ -195,6 +195,16 @@ def claim_code_variants(code: str) -> list[str]:
     return [code] if plain == code else [code, plain]
 
 
+@router.get("/collector")
+async def collector_status():
+    """Public, aggregate only: what the Telegram collector has stored per channel (no post text)."""
+    try:
+        return {"channels": market_reports_db.collector_summary()}
+    except Exception as exc:
+        logger.exception("Collector summary unavailable")
+        raise HTTPException(status_code=503, detail="Collector summary unavailable") from exc
+
+
 @router.get("/claims")
 async def list_report_claims(
     code: str | None = None, segment: str | None = None, since: date | None = None

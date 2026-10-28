@@ -156,3 +156,20 @@ def test_the_latest_ten_posts_of_every_channel_are_released_to_extraction_even_w
         mine = sorted(int(row["title"].split("第 ")[1].split(" 則")[0]) for row in queued if row["publisher"] == title)
         assert mine == list(range(6, 16))                                  # the newest ten, not the oldest
     assert db.promote_latest_per_channel(10) == 0                          # nothing left to release for the list
+
+
+def test_collector_summary_shows_per_channel_counts_statuses_dates_and_claims(db):
+    """So it is possible to tell from outside whether a channel is missing, queued or simply claim-less."""
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    posts = [{"channel": "ieobserve", "id": n, "url": f"https://t.me/ieobserve/{n}", "text": f"第 {n} 則：" + "內容" * 40,
+              "posted_at": datetime(2026, 10, 1, tzinfo=timezone.utc) + timedelta(days=n * 5 - 5)} for n in range(1, 4)]
+    tg.record_posts(db, posts, channel_title="IEObserve", now=now)   # 10-01 and 10-06 are older than 14 days, 10-11 too: all backlog
+    first = db.pending_claims()
+    assert first == []
+    db.promote_latest_per_channel(10)
+    one = db.pending_claims()[0]
+    db.replace_claims(one["id"], [{"page": 1, "segment": "memory", "codes": ["MU"], "dimension": "cycle", "direction": "tailwind",
+                                   "claim": "x", "evidence": "y", "as_of": None}], "routine")
+    summary = db.collector_summary()
+    assert summary == [{"publisher": "IEObserve", "posts": 3, "statuses": {"claims_pending": 2, "ready": 1}, "withClaims": 1,
+                        "oldest": "2026-10-01", "newest": "2026-10-11"}]

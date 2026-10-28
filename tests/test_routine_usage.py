@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("report_routine_usage", ROOT / "scripts" / "report_routine_usage.py")
+spec = importlib.util.spec_from_file_location("report_routine_usage", ROOT / "maya_sawa" / "public_scripts" / "report_routine_usage.py")
 script = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(script)
 FIXTURE = Path(__file__).parent / "fixtures" / "claude_session_usage.jsonl"

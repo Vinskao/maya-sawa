@@ -216,7 +216,8 @@ async def record_routine_usage(body: RoutineUsage, request: Request):
 @router.get("/routine-usage.py", response_class=PlainTextResponse)
 async def routine_usage_script():
     """The reporting script, so a routine without a repository checkout can run `curl … | python3 - label`."""
-    return PlainTextResponse((Path(__file__).resolve().parents[2] / "scripts" / "report_routine_usage.py").read_text(encoding="utf-8"))
+    # Kept inside the package: the Docker image excludes the top-level scripts/ directory.
+    return PlainTextResponse((Path(__file__).resolve().parents[1] / "public_scripts" / "report_routine_usage.py").read_text(encoding="utf-8"))
 
 
 def _verify_agent_key(request: Request) -> None:
