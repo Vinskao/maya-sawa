@@ -275,6 +275,12 @@ async def _startup_event():
             logger.error(f"Failed to start Telegram post collection: {e}")
 
         try:
+            from .services.analysis_timestamps import analysis_timestamper
+            await analysis_timestamper.start()
+        except Exception as e:
+            logger.error(f"Failed to start AI analysis timestamps: {e}")
+
+        try:
             from .services.market_macro import market_macro_service
             await market_macro_service.start()
         except Exception as e:
@@ -377,6 +383,11 @@ async def _shutdown_event():
             await telegram_post_collector.close()
         except Exception as e:
             logger.error(f"Error stopping Telegram post collection: {e}")
+        try:
+            from .services.analysis_timestamps import analysis_timestamper
+            await analysis_timestamper.close()
+        except Exception as e:
+            logger.error(f"Error stopping AI analysis timestamps: {e}")
         try:
             from .services.market_macro import market_macro_service
             await market_macro_service.close()

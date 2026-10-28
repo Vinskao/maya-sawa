@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field, field_validator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 
 from ..core.public_api import public_data
 from ..core.auth.keycloak import require_authenticated, require_manage_users_request
@@ -34,6 +34,7 @@ from ..databases.portfolio_history_db import portfolio_history_db
 from ..databases.market_dashboard_db import market_dashboard_db, market_for_currency
 from ..databases.market_history_db import market_history_db
 from ..databases.market_ai_analysis_db import market_ai_analysis_db, AnalysisConflict
+from ..databases.analysis_timestamp_db import analysis_timestamp_db
 from ..databases.market_price_target_db import market_price_target_db
 from ..databases.market_notification_db import market_notification_db
 from ..databases.market_watch_db import market_watch_db
@@ -111,6 +112,50 @@ async def get_market_ai_analysis(code: str, productType: str = "stock"):
             "instructions": "Read the current analysis, review this instrument's data, then update the same analysis. "
                 "Send model, content and expectedRevision (current revision, or 0 if absent). "
                 "On 409 reload and reconcile your draft. Verify the returned saved revision."}
+
+
+STAMP_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+@router.get("/timestamps", **public_data("AI 分析每日時間戳記（OpenTimestamps／比特幣）", "AI 分析與研究"))
+async def list_analysis_timestamps():
+    """One proof per Taipei day; the manifest lists that day's analysis revisions by SHA-256. See docs/ANALYSIS_TIMESTAMPS.md."""
+    try:
+        records = await asyncio.to_thread(analysis_timestamp_db.recent)
+    except Exception as exc:
+        logger.exception("Analysis timestamps read failed")
+        raise HTTPException(status_code=503, detail="Timestamp database unavailable") from exc
+    return {"days": [{"day": r["day"], "digest": r["digest"], "revisionCount": r["revisionCount"], "status": r["status"],
+                      "bitcoinHeight": r["bitcoinHeight"], "calendars": r["calendars"], "submittedAt": r["submittedAt"].isoformat(),
+                      "manifestUrl": f"/maya-sawa/market/timestamps/{r['day']}/manifest",
+                      "proofUrl": f"/maya-sawa/market/timestamps/{r['day']}/proof"} for r in records],
+            "verify": "Download the manifest and its .ots proof, then drop both on https://opentimestamps.org to verify."}
+
+
+async def _stamp_record(day: str) -> dict:
+    if not STAMP_DAY.fullmatch(day):
+        raise HTTPException(status_code=404, detail="No timestamp for that day")
+    try:
+        record = await asyncio.to_thread(analysis_timestamp_db.get, day)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Timestamp database unavailable") from exc
+    if not record:
+        raise HTTPException(status_code=404, detail="No timestamp for that day")
+    return record
+
+
+@router.get("/timestamps/{day}/manifest", **public_data("某日被蓋章的分析清單（原始檔）", "AI 分析與研究"))
+async def get_analysis_timestamp_manifest(day: str):
+    record = await _stamp_record(day)
+    return Response(record["manifest"].encode(), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="ai-analysis-{day}.json"'})
+
+
+@router.get("/timestamps/{day}/proof", **public_data("某日的 OpenTimestamps 證明檔（.ots）", "AI 分析與研究"))
+async def get_analysis_timestamp_proof(day: str):
+    record = await _stamp_record(day)
+    return Response(record["proof"], media_type="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="ai-analysis-{day}.json.ots"'})
 
 
 AGENT_EDITOR = "agent:scheduled-analysis"
