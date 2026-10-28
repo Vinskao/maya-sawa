@@ -530,7 +530,7 @@ class MarketReportsDatabase:
                 .filter(
                     MarketReport.uploaded_by == COLLECTOR_UPLOADER,
                     MarketReport.visibility == "public",
-                    MarketReport.status != "failed",
+                    MarketReport.status.notin_(["failed", "digest"]),  # a digest is only an index of its articles
                 )
                 .order_by(MarketReport.published_at.desc(), MarketReport.received_at.desc())
                 .all()

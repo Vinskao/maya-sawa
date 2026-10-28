@@ -178,3 +178,67 @@ def test_collector_summary_shows_per_channel_counts_statuses_dates_and_claims(db
 def test_the_collector_reads_these_public_channels():
     """2026-10-28: TechNews (technews_tw) and Bloomberg were added next to IEObserve and Gooaye."""
     assert tg.CHANNELS == ["ieobserve", "Gooaye", "technews_tw", "bloomberg"]
+
+
+def digest_post(post_id=1, links=None, days_ago=1):
+    return {"id": post_id, "channel": "technews_tw", "posted_at": datetime(2026, 10, 26, tzinfo=timezone.utc) - timedelta(days=days_ago),
+            "text": "【#TN熱門精選】 AI ASIC 動能強，外資調升聯發科目標價 https://pse.is/a 記憶體 美光跳過 4F² DRAM https://pse.is/b",
+            "media": [], "links": links if links is not None else ["?q=%23TN", "https://pse.is/a", "https://pse.is/b", "https://pse.is/c"],
+            "url": f"https://t.me/technews_tw/{post_id}"}
+
+
+ARTICLES = {
+    "https://pse.is/a": {"title": "AI ASIC 動能強，外資調升聯發科目標價", "url": "https://finance.technews.tw/2026/10/22/a/",
+                         "text": "外資發布報告，目標價 6,800 元。" * 10, "published_at": date(2026, 10, 22)},
+    "https://pse.is/b": {"title": "美光跳過 4F² DRAM 架構", "url": "https://technews.tw/2026/10/23/b/", "text": "美光認為密度優勢有根本性問題。" * 10,
+                         "published_at": date(2026, 10, 23)},
+}
+
+
+def test_a_digest_that_links_to_articles_becomes_one_report_per_article_and_the_digest_itself_is_not_listed(db):
+    asked = []
+
+    def enrich(url):
+        asked.append(url)
+        return ARTICLES.get(url)                       # pse.is/c cannot be read
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    assert tg.record_posts(db, [digest_post()], channel_title="TechNews 科技新報", now=now, enrich=enrich) == {"new": 1, "known": 0}
+    assert asked == ["https://pse.is/a", "https://pse.is/b", "https://pse.is/c"]  # the hashtag link is not a page
+    listed = db.list_reports(owner=None)
+    assert sorted(row["title"] for row in listed) == ["AI ASIC 動能強，外資調升聯發科目標價", "美光跳過 4F² DRAM 架構"]
+    first = next(row for row in listed if row["title"].startswith("AI ASIC"))
+    assert first["publisher"] == "TechNews 科技新報" and first["published_at"] == "2026-10-22"
+    assert first["source_url"] == "https://finance.technews.tw/2026/10/22/a/" and first["status"] == "claims_pending"
+    queued = {row["title"]: row for row in db.pending_claims()}
+    assert len(queued) == 2 and "6,800" in queued["AI ASIC 動能強，外資調升聯發科目標價"]["text"]
+    assert "頻道貼文：https://t.me/technews_tw/1" in queued["美光跳過 4F² DRAM 架構"]["text"]
+    asked.clear()
+    assert tg.record_posts(db, [digest_post()], channel_title="TechNews 科技新報", now=now, enrich=enrich) == {"new": 0, "known": 1}
+    assert asked == [] and len(db.list_reports(owner=None)) == 2   # a known post is not fetched again
+
+
+def test_a_digest_whose_links_cannot_be_read_still_goes_through_as_its_own_headlines(db):
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    assert tg.record_posts(db, [digest_post(2)], channel_title="TechNews 科技新報", now=now, enrich=lambda url: None) == {"new": 1, "known": 0}
+    assert [row["title"].split("] ")[0] for row in db.pending_claims()] == ["[TechNews 科技新報"]
+    assert len(db.list_reports(owner=None)) == 1
+
+
+def test_an_article_shared_by_two_digests_is_stored_once(db):
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    posts = [digest_post(3, links=["https://pse.is/a"]), digest_post(4, links=["https://pse.is/a"])]
+    tg.record_posts(db, posts, channel_title="TechNews 科技新報", now=now, enrich=ARTICLES.get)
+    assert len(db.list_reports(owner=None)) == 1
+
+
+def test_old_articles_wait_in_the_backlog_like_old_posts(db):
+    now = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    tg.record_posts(db, [digest_post(5, days_ago=40)], channel_title="TechNews 科技新報", now=now, enrich=ARTICLES.get)
+    assert db.pending_claims() == [] and {row["status"] for row in db.list_reports(owner=None)} == {"backlog"}
+
+
+def test_a_channel_with_an_age_limit_ignores_older_posts_and_stops_walking_back(db):
+    fetch, now = FakeChannel(), datetime(2026, 12, 1, tzinfo=timezone.utc)   # every post is from 2026-10-20: 42 days old
+    assert tg.collect(db, ["chan"], fetch, now=now, settings={"chan": {"max_age_days": 30}}) == {"chan": {"new": 0, "known": 0}}
+    assert fetch.asked == [None]                                              # the first page is already older than the limit
+    assert db.list_reports(owner=None) == []
