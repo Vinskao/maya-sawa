@@ -405,6 +405,13 @@ async def _shutdown_event():
 
 # ==================== 根路由 ====================
 
+@app.get("/public-openapi.json", include_in_schema=False)
+async def public_openapi():
+    """Opt-in OpenAPI document of the market-data endpoints anyone may read (see core/public_api.py); the site's API page renders it."""
+    from .core.public_api import build_public_openapi
+    return build_public_openapi(app)
+
+
 @app.get("/")
 async def root():
     """

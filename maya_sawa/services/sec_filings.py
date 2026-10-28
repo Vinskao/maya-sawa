@@ -28,13 +28,14 @@ S1_ORDER = [
     "Certain Relationships and Related Person Transactions", "Principal and Selling Stockholders", "Description of Capital Stock",
     "Shares Eligible for Future Sale", "Underwriting", "Index to Consolidated Financial Statements",
 ]
-# Chosen for the AI-supply-chain research: what the company sells, how it is growing, what it spends on compute, what can go wrong.
+# Chosen for the AI-supply-chain research, narrowed on the owner's request: the summary, what the money is for, and the numbers
+# (growth, margins, compute commitments and liquidity). Business (~185k chars) and Risk Factors (~470k) are left out.
 WANTED = {
-    "Prospectus Summary": "招股說明書摘要", "Risk Factors": "風險因素", "Use of Proceeds": "募資用途",
+    "Prospectus Summary": "招股說明書摘要", "Use of Proceeds": "募資用途",
     "Management’s Discussion and Analysis of Financial Condition and Results of Operations": "管理層討論與分析（營運結果與流動性）",
-    "Business": "業務",
 }
-CAPS = {"Risk Factors": 100000}  # the opening risks are the ones the company ranks first; the rest is boilerplate-heavy and ~500k characters
+LABELS = {**WANTED, "Risk Factors": "風險因素", "Business": "業務"}  # titles for sections a caller may still ask for
+CAPS = {"Risk Factors": 100000}  # only applies if Risk Factors is requested
 EXCERPT_NOTE = "\n[Excerpt only: the rest of this section was not imported.]"
 
 
@@ -140,7 +141,7 @@ def plan_parts(sections, max_chars: int = PART_CHARS, caps=CAPS, wanted=WANTED) 
 
 
 def part_title(base: str, part: dict) -> str:
-    label = WANTED.get(part["section"], part["section"])
+    label = LABELS.get(part["section"], part["section"])
     return f"{base}｜{label}" + (f"（{part['index']}/{part['total']}）" if part["total"] > 1 else "")
 
 

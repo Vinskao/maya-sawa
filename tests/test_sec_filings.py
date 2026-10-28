@@ -52,17 +52,22 @@ def test_finds_the_body_of_each_section_not_the_contents_page_or_cross_reference
     assert sections["Business"].startswith("We sell models") and "Capitalization table" in sections["Capitalization"]
 
 
-def test_plans_parts_for_the_chosen_sections_capping_risk_factors_and_splitting_long_ones():
+def test_plans_parts_for_the_chosen_sections_only_and_splits_long_ones():
     text = sec.filing_text(filing(summary_n=40, risk_n=40))
-    parts = sec.plan_parts(sec.split_sections(text), max_chars=600, caps={"Risk Factors": 1000})
-    names = [(part["section"], part["index"], part["total"]) for part in parts]
-    assert {name for name, _, _ in names} == {"Prospectus Summary", "Risk Factors", "Use of Proceeds",
-        "Management’s Discussion and Analysis of Financial Condition and Results of Operations", "Business"}   # Capitalization / Management are not wanted
-    risk = [part for part in parts if part["section"] == "Risk Factors"]
-    assert sum(len(part["text"]) for part in risk) <= 1000 + 200 and "excerpt" in risk[-1]["text"].lower()   # capped, and says so
-    assert all(len(part["text"]) <= 700 for part in parts)
-    assert [part["index"] for part in risk] == list(range(1, len(risk) + 1)) and all(part["total"] == len(risk) for part in risk)
-    assert sec.part_title("Anthropic, PBC S-1", parts[0]).startswith("Anthropic, PBC S-1｜招股說明書摘要")
+    parts = sec.plan_parts(sec.split_sections(text), max_chars=600)
+    assert {part["section"] for part in parts} == {"Prospectus Summary", "Use of Proceeds",
+        "Management’s Discussion and Analysis of Financial Condition and Results of Operations"}   # not Risk Factors, Business, Capitalization...
+    summary = [part for part in parts if part["section"] == "Prospectus Summary"]
+    assert len(summary) > 1 and all(len(part["text"]) <= 700 for part in parts)
+    assert [part["index"] for part in summary] == list(range(1, len(summary) + 1)) and all(part["total"] == len(summary) for part in summary)
+    assert sec.part_title("Anthropic, PBC S-1", summary[0]).startswith("Anthropic, PBC S-1｜招股說明書摘要（1/")
+
+
+def test_a_section_that_is_asked_for_but_too_long_is_capped_and_says_so():
+    text = sec.filing_text(filing(summary_n=3, risk_n=40))
+    parts = sec.plan_parts(sec.split_sections(text), max_chars=600, caps={"Risk Factors": 1000}, wanted={"Risk Factors": "風險因素"})
+    assert sum(len(part["text"]) for part in parts) <= 1000 + 200 and "excerpt" in parts[-1]["text"].lower()
+    assert sec.part_title("X", parts[0]).startswith("X｜風險因素（1/")
 
 
 def test_only_edgar_archive_pages_on_sec_gov_are_allowed():
@@ -80,16 +85,16 @@ def db():
 
 def test_import_stores_each_part_as_a_public_report_owned_by_the_importer_and_a_second_import_adds_nothing(db):
     first = sec.import_filing(db, URL, owner="owner-1", fetch=lambda url: filing(summary_n=3, risk_n=3))
-    assert first["created"] == 5 and first["known"] == 0 and first["title"] == "Anthropic, PBC S-1"
+    assert first["created"] == 3 and first["known"] == 0 and first["title"] == "Anthropic, PBC S-1"
     rows = db.list_reports(owner="owner-1")
-    assert len(rows) == 5 and {row["publisher"] for row in rows} == {"SEC EDGAR"}
+    assert len(rows) == 3 and {row["publisher"] for row in rows} == {"SEC EDGAR"}
     assert all(row["source_url"] == URL and row["published_at"] == "2026-10-26" and row["status"] == "claims_pending" for row in rows)
-    assert any(row["title"].startswith("Anthropic, PBC S-1｜業務") for row in rows)
-    assert {row["visibility"] for row in rows} == {"public"} and len(db.list_reports(owner=None)) == 5
+    assert any(row["title"].startswith("Anthropic, PBC S-1｜募資用途") for row in rows)
+    assert {row["visibility"] for row in rows} == {"public"} and len(db.list_reports(owner=None)) == 3
     pending = db.pending_claims()
-    assert len(pending) == 5 and "We sell models" in next(row for row in pending if "業務" in row["title"])["text"]
+    assert len(pending) == 3 and "We intend to use the proceeds" in next(row for row in pending if "募資用途" in row["title"])["text"]
     again = sec.import_filing(db, URL, owner="owner-1", fetch=lambda url: filing(summary_n=3, risk_n=3))
-    assert again["created"] == 0 and again["known"] == 5
+    assert again["created"] == 0 and again["known"] == 3
 
 
 def test_an_unreadable_or_section_less_page_is_refused_with_a_reason(db):
@@ -110,5 +115,5 @@ def test_the_endpoint_needs_the_owner_and_reports_what_was_stored(db, monkeypatc
     assert client.post("/market/reports/web", json={"url": URL}).status_code in (401, 403)   # no owner token
     app.dependency_overrides[require_manage_users_request] = lambda: {"sub": "owner-1"}
     ok = client.post("/market/reports/web", json={"url": URL})
-    assert ok.status_code == 200 and ok.json()["created"] == 5 and ok.json()["title"] == "Anthropic, PBC S-1"
+    assert ok.status_code == 200 and ok.json()["created"] == 3 and ok.json()["title"] == "Anthropic, PBC S-1"
     assert client.post("/market/reports/web", json={"url": "https://evil.example/x.htm"}).status_code == 422
