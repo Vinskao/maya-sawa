@@ -53,10 +53,10 @@ def build_payload(path, label: str) -> dict:
             "models": [{"model": model, **{key: value for key, value in bucket.items() if key != "calls"}} for model, bucket in totals.items()]}
 
 
-def post(body: dict) -> int:
+def post(body: dict) -> dict:
     request = urllib.request.Request(URL, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(request, timeout=20) as response:
-        return response.status
+        return json.loads(response.read().decode() or "{}")
 
 
 def main(argv) -> int:
@@ -70,9 +70,12 @@ def main(argv) -> int:
         print("usage not reported: transcript has no usage")
         return 0
     try:
-        status = post(body)
+        reply = post(body)
         tokens = sum(sum(item[key] for key in ("input", "output", "cacheCreation", "cacheRead")) for item in body["models"])
-        print(f"usage reported: HTTP {status}, {len(body['models'])} model(s), {tokens} tokens")
+        if reply.get("recorded"):
+            print(f"usage reported: {reply['recorded']} model(s), {tokens} tokens")
+        else:
+            print(f"usage not recorded: the usage service answered {reply.get('failed')}")
     except Exception as error:  # a routine must not fail because the dashboard could not be told
         print(f"usage not reported: {type(error).__name__}")
     return 0

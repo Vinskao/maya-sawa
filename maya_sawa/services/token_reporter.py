@@ -61,10 +61,12 @@ async def report_token_usage_async(
     cache_creation_input_tokens: int = 0,
     cache_read_input_tokens: int = 0,
     estimated_cost_usd: Optional[float] = None,
-) -> None:
+) -> int:
+    """Report one usage record. Returns the usage service's HTTP status, 0 when it could not be reached, -1 when
+    PUBLIC_TYMB_URL is not configured. Failures are logged, never raised."""
     if not TYMB_URL:
         logger.debug("PUBLIC_TYMB_URL 未設置，跳過 token usage 回報")
-        return
+        return -1
 
     try:
         payload = {
@@ -87,8 +89,10 @@ async def report_token_usage_async(
             resp = await client.post(AI_USAGE_ENDPOINT, json=payload, headers=_usage_headers())
             if resp.status_code not in (200, 201):
                 logger.warning(f"Token usage 回報失敗: HTTP {resp.status_code}")
+            return resp.status_code
     except Exception as e:
         logger.warning(f"Token usage 回報例外 (已忽略): {e}")
+        return 0
 
 
 def fire_and_forget(

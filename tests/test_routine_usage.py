@@ -44,8 +44,10 @@ def test_main_never_fails_the_routine(monkeypatch, tmp_path, capsys):
     (tmp_path / "p").mkdir()
     (tmp_path / "p" / "s.jsonl").write_text(FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
     sent = []
-    monkeypatch.setattr(script, "post", lambda body: sent.append(body) or 200)
+    monkeypatch.setattr(script, "post", lambda body: sent.append(body) or {"recorded": 2, "failed": {}})
     assert script.main(["萃取主張"]) == 0 and sent[0]["models"] and "reported" in capsys.readouterr().out
+    monkeypatch.setattr(script, "post", lambda body: {"recorded": 0, "failed": {"claude-opus-5-5": 401}})
+    assert script.main(["萃取主張"]) == 0 and "not recorded" in capsys.readouterr().out
     monkeypatch.setattr(script, "post", lambda body: (_ for _ in ()).throw(OSError("offline")))
     assert script.main(["萃取主張"]) == 0 and "not reported" in capsys.readouterr().out
 
@@ -58,6 +60,7 @@ def web(monkeypatch):
 
     async def record(**kwargs):
         calls.append(kwargs)
+        return 201
     monkeypatch.setattr(market, "report_token_usage_async", record)
     app = FastAPI()
     app.include_router(market.router)
@@ -72,7 +75,7 @@ def test_the_endpoint_records_each_model_as_routine_usage_and_only_for_the_agent
     assert client.post("/market/routine-usage", json=BODY).status_code == 401
     assert client.post("/market/routine-usage", json={**BODY, "models": []}, headers={"x-market-agent-key": "k"}).status_code == 422
     ok = client.post("/market/routine-usage", json=BODY, headers={"x-market-agent-key": "k"})
-    assert ok.status_code == 200 and ok.json() == {"recorded": 1}
+    assert ok.status_code == 200 and ok.json() == {"recorded": 1, "failed": {}}
     assert calls == [dict(ai_provider="claude-routine", model_name="claude-opus-5-5", input_tokens=10, output_tokens=430,
                           cache_creation_input_tokens=9300, cache_read_input_tokens=9000, estimated_cost_usd=0.02144, session_id="s1",
                           endpoint="/market/routine-usage/萃取主張")]
@@ -92,3 +95,17 @@ def test_cost_is_an_estimate_from_the_recorded_rates_and_never_zero_for_an_unkno
     assert estimate_cost("claude-sonnet-5-5-20261001", 1_000_000, 0) == pytest.approx(1.18)   # a dated model id still matches
     assert estimate_cost("claude-future-9", 1_000_000, 0) == pytest.approx(1.2)
     assert estimate_cost("claude-sonnet-5-5", 0, 0) == 0
+
+
+def test_the_endpoint_says_when_the_usage_service_refused_the_record(monkeypatch):
+    """2026-10-28: a routine reported success but nothing reached the database; the endpoint now tells the script what really happened."""
+    from maya_sawa.api import market
+    monkeypatch.setenv("MARKET_AGENT_KEY_SHA256", hashlib.sha256(b"k").hexdigest())
+
+    async def refused(**kwargs):
+        return 401
+    monkeypatch.setattr(market, "report_token_usage_async", refused)
+    app = FastAPI()
+    app.include_router(market.router)
+    reply = TestClient(app).post("/market/routine-usage", json=BODY, headers={"x-market-agent-key": "k"}).json()
+    assert reply == {"recorded": 0, "failed": {"claude-opus-5-5": 401}}

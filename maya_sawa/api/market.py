@@ -204,13 +204,15 @@ async def record_routine_usage(body: RoutineUsage, request: Request):
     """A scheduled cloud routine reports the tokens its own session used (agent key only). Recorded as provider
     claude-routine, which the portfolio chart plots as its cost line."""
     _verify_agent_key(request)
+    results = {}
     for item in body.models:
-        await report_token_usage_async(
+        results[item.model] = await report_token_usage_async(
             ai_provider="claude-routine", model_name=item.model, input_tokens=item.input, output_tokens=item.output,
             cache_creation_input_tokens=item.cacheCreation, cache_read_input_tokens=item.cacheRead,
             estimated_cost_usd=estimate_cost(item.model, item.input, item.output, item.cacheCreation, item.cacheRead),
             session_id=body.sessionId, endpoint=f"/market/routine-usage/{body.label}")
-    return {"recorded": len(body.models)}
+    failed = {model: status for model, status in results.items() if status not in (200, 201)}
+    return {"recorded": len(results) - len(failed), "failed": failed}
 
 
 @router.get("/routine-usage.py", response_class=PlainTextResponse)
