@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
+from ..core.public_api import public_data
 from ..core.auth.keycloak import require_authenticated, require_manage_users_request
 from ..core.auth.internal import require_internal_secret
 
@@ -54,7 +55,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
 
 
-@router.get('/dashboard/overseas/{code}')
+@router.get("/dashboard/overseas/{code}", **public_data("海外標的（美、日、韓）日線、財報與資料狀態", "行情與標的"))
 async def get_overseas_research(code: str, market: str):
     """Public contract/market data from PostgreSQL only; no broker or account access."""
     from ..services.ibkr_research import ibkr_research_collector
@@ -97,7 +98,7 @@ def analysis_target(code: str, product_type: str):
     return product_type, normalized
 
 
-@router.get("/dashboard/analysis/{code}")
+@router.get("/dashboard/analysis/{code}", **public_data("AI 分析、研究圖與其歷史版本", "AI 分析與研究"))
 async def get_market_ai_analysis(code: str, productType: str = "stock"):
     target = analysis_target(code, productType)
     try:
@@ -277,7 +278,7 @@ async def nominate_watch(body: WatchNomination, request: Request):
     return {"code": body.code, "status": status, "promoted": body.code in promoted}
 
 
-@router.get("/watch")
+@router.get("/watch", **public_data("AI 觀察名單：觀察中與候選的標的", "AI 觀察名單"))
 async def get_watch():
     """Public: the stocks in the custom area because of the analyst's reading, and the candidates still waiting."""
     try:
@@ -299,7 +300,7 @@ def price_target_identity(code: str, market: str) -> tuple[str, str]:
     return code, market
 
 
-@router.get("/dashboard/targets/{code}")
+@router.get("/dashboard/targets/{code}", **public_data("券商目標價、共識與相關報告觀點", "行情與標的"))
 async def get_price_targets(code: str, market: str = "TW"):
     """Broker target prices (per broker and consensus) from Yahoo Finance and the AI routine's sourced news."""
     code, market = price_target_identity(code, market)
@@ -360,7 +361,7 @@ async def put_price_targets(code: str, body: PriceTargetUpdate, market: str = "T
     return {"saved": saved}
 
 
-@router.get("/dashboard/macro/nodes")
+@router.get("/dashboard/macro/nodes", **public_data("總經邏輯鏈各節點的判讀", "總體經濟"))
 async def list_macro_node_analyses():
     """Every macro logic-chain node's current analysis, so the dashboard loads them in one request."""
     try:
@@ -370,7 +371,7 @@ async def list_macro_node_analyses():
         raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
 
 
-@router.get("/dashboard/research")
+@router.get("/dashboard/research", **public_data("所有標的的研究圖紀錄", "AI 分析與研究"))
 async def list_market_research():
     """All stored research maps, including instruments no longer held (records are never deleted)."""
     try:
@@ -380,7 +381,7 @@ async def list_market_research():
         raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
 
 
-@router.get("/dashboard/industries")
+@router.get("/dashboard/industries", **public_data("產業分組", "AI 分析與研究"))
 async def list_market_industries(code: str | None = None):
     """Industry groups (族群) with their member stocks; with ?code= only the groups that stock belongs to."""
     if code is not None and not re.fullmatch(r"[A-Z0-9]{1,12}(-[A-Z]{2})?", code.strip().upper()):
@@ -408,7 +409,7 @@ async def put_market_industry(group_id: str, body: dict, claims: dict = Depends(
         raise HTTPException(status_code=503, detail="Industry database unavailable") from exc
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", **public_data("儀表板標的清單與即時報價（固定、自動、自訂、AI 觀察）", "行情與標的"))
 async def get_market_dashboard():
     """Public, privacy-safe selection and live quotes; never returns account values."""
     auto = market_dashboard_db.latest_auto()
@@ -483,7 +484,7 @@ async def get_market_dashboard():
     }
 
 
-@router.get("/dashboard/events")
+@router.get("/dashboard/events", **public_data("近期營收／財報發布與法說會", "行情與標的"))
 async def get_market_dashboard_events():
     """Recent revenue/report releases and upcoming investor conferences for selected stock targets."""
     auto = market_dashboard_db.latest_auto()
@@ -506,7 +507,7 @@ async def get_market_dashboard_events():
         raise HTTPException(status_code=502, detail="Company events are temporarily unavailable") from exc
 
 
-@router.get("/dashboard/macro")
+@router.get("/dashboard/macro", **public_data("總體經濟指標序列", "總體經濟"))
 async def get_market_macro_dashboard(historyMonths: int = 24):
     """Persisted macro indicators and release calendar. GET never calls upstream providers."""
     if not MACRO_ENABLED:
@@ -521,7 +522,7 @@ async def get_market_macro_dashboard(historyMonths: int = 24):
         raise HTTPException(status_code=503, detail="Macroeconomic data is temporarily unavailable") from exc
 
 
-@router.get("/dashboard/brief")
+@router.get("/dashboard/brief", **public_data("持股籌碼摘要", "AI 分析與研究"))
 async def get_market_brief(format: str = "json", lang: str = "zh"):
     """Public agent-readable chip summary of the selected holdings; codes only, never account values."""
     brief = await market_brief_service.get()
@@ -559,7 +560,7 @@ async def get_market_dashboard_candidates(q: str = "", limit: int = 100,
     return {"results": market_dashboard_db.list_candidates(q[:40], min(max(limit, 1), 200))}
 
 
-@router.get("/dashboard/history/{code}")
+@router.get("/dashboard/history/{code}", **public_data("個股日線與籌碼歷史（最多五年）", "行情與標的"))
 async def get_market_dashboard_history(code: str, start: date | None = None, end: date | None = None,
                                       view: str = "daily"):
     """Public daily price and chip history; no account or portfolio fields are exposed."""
@@ -590,7 +591,7 @@ HISTORY_BACKFILL_COOLDOWN_SECONDS = 600
 _history_backfill_requested: dict[str, float] = {}
 
 
-@router.get("/dashboard/fundamentals/{code}")
+@router.get("/dashboard/fundamentals/{code}", **public_data("個股月營收與季度財報（官方資料）", "行情與標的"))
 async def get_market_fundamentals(code: str):
     """On-demand official TWSE/MOPS current revenue and quarterly statements."""
     try:
@@ -755,7 +756,7 @@ async def get_market_auth_status(
     }
 
 
-@router.get("/taiex-futures")
+@router.get("/taiex-futures", **public_data("台指期近月報價", "行情與標的"))
 async def get_taiex_futures_quote():
     try:
         return await shioaji_market_service.get_taiex_futures_quote()
@@ -780,7 +781,7 @@ async def get_taiex_futures_quote():
         ) from exc
 
 
-@router.get("/mini-tsmc-futures")
+@router.get("/mini-tsmc-futures", **public_data("小型台積電期貨報價", "行情與標的"))
 async def get_mini_tsmc_futures_quote():
     try:
         return await shioaji_market_service.get_mini_tsmc_futures_quote()

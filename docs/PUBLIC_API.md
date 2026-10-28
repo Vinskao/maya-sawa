@@ -3,13 +3,22 @@
 網站導覽列「關於」右邊的「API」分頁（`/tymultiverse/api-reference/`）列出任何人都能呼叫的**市場資料**端點。清單不是手寫的，
 前端直接讀 `GET /maya-sawa/public-openapi.json`，所以不會和實際部署的端點有出入。
 
-## 為什麼不用 FastAPI 內建的 `/openapi.json`
+## 怎麼公開一個新的 API（不用動網站）
 
-那份列出全部 100 多個端點，包含內部、管理與 agent key 的路由。公開頁面改用 `maya_sawa/core/public_api.py` 的**明確清單**（`PUBLIC_DATA`）：
-只列唯讀 GET、附中文說明、不含請求內容與資料結構。新增端點不會自動公開，要自己加進清單。
+在路由的裝飾器加一行，網站的 API 分頁會自己出現它，前端不用改：
 
-`tests/test_public_api.py` 守住這份清單：每個路徑必須存在、是 GET、沒有登入／agent key／內部密鑰的依賴（含在處理函式裡直接檢查標頭的情況），
-且持股、用量、通知、上傳、搜尋（會用到 OpenAI 額度）等都不能出現在清單裡。
+```python
+from ..core.public_api import public_data
+
+@router.get("/dashboard/foo/{code}", **public_data("中文說明", "分組名稱"))
+async def get_foo(code: str): ...
+```
+
+- 分組名稱就是頁面上的標題；沒出現過的名稱會自動變成新的一組。
+- 沒有加標記的路由永遠不會公開。FastAPI 內建的 `/openapi.json` 列出全部 100 多個端點（含內部、管理與 agent key 的路由），公開頁面不用它，
+  改讀 `GET /maya-sawa/public-openapi.json`（只含有標記的 GET，不含請求內容與資料結構）。
+- `tests/test_public_api.py` 在每次測試時檢查所有有標記的路由：必須是 GET、沒有登入／agent key／內部密鑰的依賴（含在函式裡直接讀標頭的情況）、
+  有中文說明；持股、用量、通知、上傳、搜尋等都不能被標記。標錯了測試會失敗。
 
 ## 認證現況（Python 服務）
 
@@ -30,3 +39,4 @@
 
 探測時發現下列 GET 不需要任何驗證：`/qa/chat-users`、`/qa/chat-history/{user_id}`（對話紀錄）、`/maya-v2/conversations/`、
 `/maya-v2/ai-models/`、`/paprika/articles`（回應 560 KB）。其中對話紀錄與使用者名單是否該公開，需要擁有者決定。
+

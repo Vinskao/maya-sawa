@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 import httpx
 
+from ..core.public_api import public_data
 from ..core.auth.keycloak import require_manage_users_request
 from ..core.config.config import Config
 from ..databases.market_reports_db import market_reports_db
@@ -162,7 +163,7 @@ async def upload_report(
         )
     return {"report": report_for_viewer(report, uploaded_by), "duplicate": False}
 
-@router.get("")
+@router.get("", **public_data("公開研究報告清單（含 SEC 申報、頻道貼文與網路文章）", "研究報告與主張"))
 async def list_reports(claims: dict | None = Depends(_optional_owner)):
     owner = str(claims["sub"]) if claims and claims.get("sub") else None
     try:
@@ -217,7 +218,7 @@ async def add_report_from_url(body: WebReportRequest, claims: dict = Depends(req
         raise HTTPException(status_code=502, detail="Could not fetch the filing from sec.gov") from exc
 
 
-@router.get("/collector")
+@router.get("/collector", **public_data("Telegram 頻道收集狀況（各頻道的數量與狀態，不含貼文內容）", "研究報告與主張"))
 async def collector_status():
     """Public, aggregate only: what the Telegram collector has stored per channel (no post text)."""
     try:
@@ -227,7 +228,7 @@ async def collector_status():
         raise HTTPException(status_code=503, detail="Collector summary unavailable") from exc
 
 
-@router.get("/claims")
+@router.get("/claims", **public_data("研究報告主張（可用 code 或 segment 篩選）", "研究報告與主張"))
 async def list_report_claims(
     code: str | None = None, segment: str | None = None, since: date | None = None
 ):
@@ -289,7 +290,7 @@ async def pending_reports(x_market_agent_key: str | None = Header(None)):
     return {"reports": market_reports_db.pending_claims()}
 
 
-@router.get("/{report_id}")
+@router.get("/{report_id}", **public_data("單一報告內容與其萃取出的主張", "研究報告與主張"))
 async def get_report(
     report_id: str,
     download: bool = False,
