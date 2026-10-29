@@ -28,7 +28,8 @@ def test_yahoo_markets_cache_gold_yen_and_dollar_index_daily_closes(monkeypatch)
             "indicators": {"quote": [{"close": closes}]}}]}}
     payloads = {"GC=F": chart("America/New_York", [4012.5, None, 4050.25]),
                 "JPY=X": chart("Europe/London", [157.5, 157.9, 158.006]),
-                "DX-Y.NYB": chart("America/New_York", [None, 101.2, 101.796])}
+                "DX-Y.NYB": chart("America/New_York", [None, 101.2, 101.796]),
+                "^VIX": chart("America/Chicago", [16.234, 17.9, None])}  # 2026-10-29: VIX shares a chart with Taiwan's margin ratio
     calls = []
 
     def fake_request(key, url, ttl_seconds=0, extra_headers=None):
@@ -42,11 +43,12 @@ def test_yahoo_markets_cache_gold_yen_and_dollar_index_daily_closes(monkeypatch)
     service = market_macro.MarketMacroService()
     saved = []
     monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
-    assert service._fetch_yahoo_markets() == 7
+    assert service._fetch_yahoo_markets() == 9
     by_code = {}
     for row in saved:
         by_code.setdefault(row["code"], []).append(row["value"])
-    assert by_code == {"COMEX_GOLD_USD": [4012.5, 4050.25], "USD_JPY": [157.5, 157.9, 158.01], "US_DOLLAR_INDEX": [101.2, 101.8]}
+    assert by_code == {"COMEX_GOLD_USD": [4012.5, 4050.25], "USD_JPY": [157.5, 157.9, 158.01], "US_DOLLAR_INDEX": [101.2, 101.8],
+                       "US_VIX": [16.23, 17.9]}
     assert all(len(row["period"]) == 10 for row in saved)
     assert {symbol for symbol, _ in calls} == set(payloads)
     assert all("Mozilla" in headers["User-Agent"] for _, headers in calls)
@@ -66,8 +68,8 @@ def test_yahoo_markets_keeps_other_symbols_when_one_fails(monkeypatch):
     service = market_macro.MarketMacroService()
     saved = []
     monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
-    assert service._fetch_yahoo_markets() == 2
-    assert {row["code"] for row in saved} == {"USD_JPY", "US_DOLLAR_INDEX"}
+    assert service._fetch_yahoo_markets() == 3  # yen, dollar index and VIX; gold failed
+    assert {row["code"] for row in saved} == {"USD_JPY", "US_DOLLAR_INDEX", "US_VIX"}
 
 
 def _sdmx(periods, values):

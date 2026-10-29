@@ -143,8 +143,15 @@ YAHOO_SERIES = {
     "COMEX_GOLD_USD": ("COMEX gold futures (front month) daily close", "USD/troy oz", "daily"),
     "USD_JPY": ("Japanese yen per U.S. dollar, daily close", "JPY/USD", "daily"),
     "US_DOLLAR_INDEX": ("ICE U.S. Dollar Index (DXY), daily close", "index points", "daily"),
+    "US_VIX": ("CBOE Volatility Index (VIX), daily close", "index points", "daily"),
 }
-YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB"}
+YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB", "US_VIX": "^VIX"}
+# TWSE publishes no market-wide margin maintenance ratio; it is estimated from two public tables (margin_maintenance).
+TWSE_MARGIN_SERIES = {
+    "TW_MARGIN_MAINTENANCE": ("Taiwan listed-market margin maintenance ratio (TWSE: collateral value / margin loans)", "percent", "daily"),
+}
+TWSE_MARGIN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={day}&selectType=ALL&response=json"
+TWSE_PRICE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={day}&type=ALLBUT0999&response=json"
 YAHOO_AGENT = {"User-Agent": "Mozilla/5.0 (compatible; maya-sawa macro dashboard)"}
 DGBAS_COMMODITY_SERIES = {
     "WORLD_GOLD_USD": ("World Bank monthly gold price", "USD/troy oz", "monthly"),
@@ -215,7 +222,7 @@ FREE_SERIES_FALLBACK_SECONDS = 30 * 24 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
-    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES))
+    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES))
 
 
 def parse_bis_cpi_csv(raw: bytes) -> list[dict]:
@@ -340,6 +347,50 @@ def parse_cbc_money_stock(payload: dict) -> list[dict]:
             if re.fullmatch(r"\d+(?:\.\d+)?", str(item[index])):
                 rows.append({"code": code, "period": f"{match.group(1)}-{match.group(2)}", "value": str(item[index])})
     return rows
+
+
+def _twse_number(value) -> float | None:
+    raw = str(value or "").replace(",", "").strip()
+    try:
+        return float(raw)
+    except ValueError:
+        return None                                       # "--" (no trade), blanks
+
+
+def _twse_table(payload: dict, *fields: str) -> dict | None:
+    return next((table for table in payload.get("tables") or [] if set(fields) <= set(table.get("fields") or [])), None)
+
+
+def margin_maintenance(margin: dict, prices: dict) -> dict | None:
+    """Listed-market margin maintenance ratio for one day: sum(margin lots x 1,000 x close) / margin loans, in percent.
+
+    None for a day without both tables (holiday, or margin published before prices) and when the per-stock lots do
+    not add up to the market total, so a partial table never shows as a falling ratio."""
+    summary, stocks = _twse_table(margin, "項目", "今日餘額"), _twse_table(margin, "代號", "今日餘額")
+    price_table = _twse_table(prices, "證券代號", "收盤價")
+    if not summary or not stocks or not price_table:
+        return None
+    column = summary["fields"].index("今日餘額")
+    totals = {str(row[0]).strip(): _twse_number(row[column]) for row in summary.get("data") or []}
+    loans_thousand, total_lots = totals.get("融資金額(仟元)"), totals.get("融資(交易單位)")
+    if not loans_thousand or not total_lots:
+        return None
+    code_at, close_at = price_table["fields"].index("證券代號"), price_table["fields"].index("收盤價")
+    closes = {str(row[code_at]).strip(): _twse_number(row[close_at]) for row in price_table.get("data") or []}
+    code_at, lots_at = stocks["fields"].index("代號"), stocks["fields"].index("今日餘額")   # first 今日餘額 is margin, then short
+    collateral, lots, unpriced = 0.0, 0.0, 0.0
+    for row in stocks.get("data") or []:
+        held = _twse_number(row[lots_at]) or 0.0
+        lots += held
+        close = closes.get(str(row[code_at]).strip())
+        if close is None:
+            unpriced += held
+        else:
+            collateral += held * 1000 * close
+    if abs(lots - total_lots) > total_lots * 0.001:
+        return None
+    loans = loans_thousand * 1000
+    return {"ratio": collateral / loans * 100, "loanTwd": int(loans), "lots": int(lots), "unpricedLots": int(unpriced)}
 
 
 def net_liquidity_rows(walcl: list[dict], tga: list[dict], rrp: list[dict]) -> list[dict]:
@@ -543,6 +594,7 @@ class MarketMacroService:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
+                ("TWSEMargin", self._fetch_twse_margin_maintenance),
                 ("DGBAS", self._fetch_dgbas_employment),
                 ("DGBASPrices", self._fetch_taiwan_prices),
                 ("WorldBank", self._fetch_world_bank_gold),
@@ -879,6 +931,38 @@ class MarketMacroService:
             raise RuntimeError("yahoo_all_symbols_failed")
         market_macro_db.finish_source_call(run_id, "success", saved, detail=";".join(failures), http_status=status)
         return saved
+
+    def _fetch_twse_margin_maintenance(self, today: date | None = None, max_days: int = 20) -> int:
+        """Backfill the daily ratio one trading day at a time, newest first: two TWSE requests per day, at most
+        max_days days per refresh (four refreshes a day fill a year in about a week). Stored days are not refetched."""
+        run_id = market_macro_db.reserve_source_call("TWSE", daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError("twse_daily_budget_exhausted")
+        code = "TW_MARGIN_MAINTENANCE"
+        history = {row["period"]: row["value"] for row in (_macro_local_cache.get(f"series:{code}") or {}).get("history") or []}
+        day, attempts, added, status = today or datetime.now(ZoneInfo("Asia/Taipei")).date(), 0, 0, None
+        try:
+            while attempts < max_days and day > date.today() - timedelta(days=366):
+                if day.weekday() < 5 and day.isoformat() not in history:
+                    attempts += 1
+                    compact = day.strftime("%Y%m%d")
+                    status, margin = _request_free_cached(f"twse:margin:{compact}", TWSE_MARGIN_URL.format(day=compact))
+                    time.sleep(1)                         # TWSE throttles bursts
+                    status, prices = _request_free_cached(f"twse:prices:{compact}", TWSE_PRICE_URL.format(day=compact))
+                    time.sleep(1)
+                    result = margin_maintenance(json.loads(margin), json.loads(prices))
+                    if result:
+                        history[day.isoformat()] = f"{result['ratio']:.2f}"
+                        added += 1
+                day -= timedelta(days=1)
+            if added:
+                rows = [{"code": code, "period": period, "value": value} for period, value in sorted(history.items())]
+                self._cache_free_series(rows, TWSE_MARGIN_SERIES, "TWSE (computed: MI_MARGN, MI_INDEX)",
+                                        "https://www.twse.com.tw/zh/trading/margin/mi-margn.html")
+            market_macro_db.finish_source_call(run_id, "success", added, http_status=status)
+            return added
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
 
     def _fetch_dgbas_employment(self) -> int:
         """Cache free DGBAS employment/unemployment totals; the API is monthly and anonymous."""
