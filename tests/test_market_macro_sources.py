@@ -72,6 +72,39 @@ def test_yahoo_markets_keeps_other_symbols_when_one_fails(monkeypatch):
     assert {row["code"] for row in saved} == {"USD_JPY", "US_DOLLAR_INDEX", "US_VIX"}
 
 
+def test_yahoo_markets_skips_series_restored_fresh_after_a_restart(monkeypatch):
+    # 2026-10-29: every deploy restarts the pod and reruns the refresh, so a day of deploys spent the 12-call Yahoo
+    # budget refetching gold, yen and dollar closes that the restart had just restored. VIX, added that day, never
+    # got a call ("yahoo_daily_budget_exhausted") and its chart stayed empty. Fresh series are now skipped.
+    cache = market_macro.LocalTTLCache(max_entries=32)
+    fresh = market_macro.datetime.now(market_macro.UTC).isoformat()
+    for code in ("COMEX_GOLD_USD", "USD_JPY", "US_DOLLAR_INDEX"):
+        cache.set(f"series:{code}", {"code": code, "fetchedAt": fresh, "history": []}, 3600)
+    monkeypatch.setattr(market_macro, "_macro_local_cache", cache)
+    good = {"chart": {"result": [{"meta": {}, "timestamp": [1792123200], "indicators": {"quote": [{"close": [17.1]}]}}]}}
+    urls, reservations = [], []
+
+    def fake_request(key, url, ttl_seconds=0, extra_headers=None):
+        urls.append(url)
+        return 200, json.dumps(good).encode()
+
+    monkeypatch.setattr(market_macro, "_request_free_cached", fake_request)
+    monkeypatch.setattr(market_macro.market_macro_db, "reserve_source_call", lambda *args, **kwargs: reservations.append(args) or 1)
+    monkeypatch.setattr(market_macro.market_macro_db, "finish_source_call", lambda *args, **kwargs: None)
+    service = market_macro.MarketMacroService()
+    saved = []
+    monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
+    assert service._fetch_yahoo_markets() == 1
+    assert [row["code"] for row in saved] == ["US_VIX"]
+    assert len(urls) == 1 and "%5EVIX" in urls[0]
+    assert len(reservations) == 1
+
+    # Once VIX is cached too, a further restart spends nothing.
+    cache.set("series:US_VIX", {"code": "US_VIX", "fetchedAt": fresh, "history": []}, 3600)
+    assert service._fetch_yahoo_markets() == 0
+    assert len(urls) == 1 and len(reservations) == 1
+
+
 def _sdmx(periods, values):
     return {"data": {
         "dataSets": [{"series": {"0": {"observations": {str(index): [value] for index, value in enumerate(values)}}}}],

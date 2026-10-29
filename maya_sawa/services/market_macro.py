@@ -443,6 +443,13 @@ def _request_free_cached(cache_key: str, url: str, ttl_seconds: int = FREE_HTTP_
     return response
 
 
+def _fetched_within(code: str, seconds: int) -> bool:
+    """True when the cached series for code was fetched less than seconds ago (restored copies keep their fetchedAt)."""
+    entry = _macro_local_cache.get(f"series:{code}")
+    try: return (datetime.now(UTC) - datetime.fromisoformat(entry["fetchedAt"])).total_seconds() < seconds
+    except (TypeError, KeyError, ValueError): return False
+
+
 def _record_run(source: str, status: str, count: int = 0, detail: str = "", http_status: int | None = None) -> None:
     # Summary diagnostics are not provider requests; the reserved request already records its own failure.
     if status == "error": status = "diagnostic_error"
@@ -909,11 +916,16 @@ class MarketMacroService:
             raise
 
     def _fetch_yahoo_markets(self) -> int:
-        """Cache one year of daily closes per Yahoo symbol; one failing symbol does not drop the others."""
+        """Cache one year of daily closes per Yahoo symbol; one failing symbol does not drop the others.
+
+        Symbols whose series was fetched within the last five hours are skipped, so a pod restarted by a deploy
+        (which restores the cache, then refreshes) spends no budget; the six-hourly loop still refetches them."""
+        due = {code: symbol for code, symbol in YAHOO_SYMBOLS.items() if not _fetched_within(code, 5 * 3600)}
+        if not due: return 0
         run_id = market_macro_db.reserve_source_call("Yahoo", daily_limit=12, minute_limit=2)
         if run_id is None: raise RuntimeError("yahoo_daily_budget_exhausted")
         saved, failures, status = 0, [], None
-        for code, symbol in YAHOO_SYMBOLS.items():
+        for code, symbol in due.items():
             try:
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}?range=1y&interval=1d"
                 status, raw = _request_free_cached(f"yahoo:{symbol}:1y", url, ttl_seconds=6 * 3600, extra_headers=YAHOO_AGENT)
@@ -926,7 +938,7 @@ class MarketMacroService:
                     f"https://finance.yahoo.com/quote/{urllib.parse.quote(symbol)}/")
             except Exception as exc:
                 failures.append(f"{code}:{str(exc)[:30]}")
-        if len(failures) == len(YAHOO_SYMBOLS):
+        if len(failures) == len(due):
             market_macro_db.finish_source_call(run_id, "error", detail=";".join(failures))
             raise RuntimeError("yahoo_all_symbols_failed")
         market_macro_db.finish_source_call(run_id, "success", saved, detail=";".join(failures), http_status=status)
