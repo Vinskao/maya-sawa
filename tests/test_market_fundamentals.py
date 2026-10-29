@@ -1,5 +1,40 @@
 import pytest
-from maya_sawa.services.market_fundamentals import MarketFundamentalsService
+from datetime import date
+from maya_sawa.services.market_fundamentals import MarketFundamentalsService, build_fundamental_metrics, fundamental_start_date
+
+
+def test_fundamental_backfill_starts_five_calendar_years_ago_including_leap_day():
+    assert fundamental_start_date(date(2026, 10, 29)) == "2021-10-29"
+    assert fundamental_start_date(date(2024, 2, 29)) == "2019-02-28"
+
+
+def test_fundamental_metrics_keep_five_years_of_monthly_and_quarterly_history():
+    monthly = []
+    income, balance, cash = [], [], []
+    for offset in range(72):
+        year, month = 2020 + offset // 12, (offset % 12) + 1
+        monthly.append({"period": f"{year:04d}-{month:02d}", "item": "revenue", "value": 100 + offset})
+    for offset in range(24):
+        year, quarter = 2020 + offset // 4, offset % 4 + 1
+        month = quarter * 3
+        from calendar import monthrange
+        end = f"{year:04d}-{month:02d}-{monthrange(year, month)[1]:02d}"
+        for item, value in (("Revenue", 100 + offset), ("GrossProfit", 50 + offset),
+                            ("OperatingIncome", 30 + offset), ("EPS", 2 + offset)):
+            income.append({"period": end, "item": item, "value": value})
+        for item, value in (("TotalAssets", 1000 + offset), ("Liabilities", 500 + offset), ("Inventories", 100 + offset)):
+            balance.append({"period": end, "item": item, "value": value})
+        cash.append({"period": end, "item": "CashFlowsFromOperatingActivities", "value": 100 + offset})
+
+    metrics = build_fundamental_metrics([], [], {
+        "TaiwanStockMonthRevenue": monthly,
+        "TaiwanStockFinancialStatements": income,
+        "TaiwanStockBalanceSheet": balance,
+        "TaiwanStockCashFlowsStatement": cash,
+    })
+    assert len(metrics["monthly"]) == 60 and metrics["monthly"][0]["period"] == "2021-01"
+    assert len(metrics["quarterly"]) == len(metrics["balance"]) == len(metrics["cashFlow"]) == 20
+    assert metrics["quarterly"][0]["period"] == "2021Q1"
 
 
 def test_monthly_revenue_parser_maps_official_mops_otc_csv_fields():
@@ -112,3 +147,13 @@ def test_inventory_days_fall_back_to_revenue_minus_gross_profit_and_skip_missing
     no_inventory = build_fundamental_metrics([], [], {"TaiwanStockFinancialStatements": income,
         "TaiwanStockBalanceSheet": [{"period": "2026-06-30", "item": "TotalAssets", "value": 100}]})["balance"][-1]
     assert no_inventory["inventoryDays"] is None and no_inventory["inventoryYoY"] is None
+
+
+def test_latest_fundamental_rows_are_bounded_to_the_requested_five_year_window():
+    from maya_sawa.services.market_fundamentals import _latest_fundamental_rows
+    months = [{"period": str(index)} for index in range(72)]
+    quarters = [{"period": str(index)} for index in range(24)]
+    assert len(_latest_fundamental_rows(months, 60)) == 60
+    assert _latest_fundamental_rows(months, 60)[0]["period"] == "12"
+    assert len(_latest_fundamental_rows(quarters, 20)) == 20
+    assert _latest_fundamental_rows(quarters, 20)[0]["period"] == "4"

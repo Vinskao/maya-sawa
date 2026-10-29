@@ -267,10 +267,10 @@ def build_financials(releases: list[dict], *, currency: str = "JPY", source: str
     return {
         "source": source, "standard": standard, "company": latest.get("company"),
         "sourceUrl": latest.get("zipUrl"),
-        "quarterly": sorted(quarterly, key=lambda row: row["end"])[-12:],
-        "annual": sorted(annual, key=lambda row: row["end"])[-12:],
-        "cumulative": sorted(cumulative, key=lambda row: row["end"])[-12:],
-        "balanceSheet": sorted(instants.values(), key=lambda row: row["end"])[-12:],
+        "quarterly": sorted(quarterly, key=lambda row: row["end"])[-20:],
+        "annual": sorted(annual, key=lambda row: row["end"])[-5:],
+        "cumulative": sorted(cumulative, key=lambda row: row["end"])[-10:],
+        "balanceSheet": sorted(instants.values(), key=lambda row: row["end"])[-20:],
         "forecasts": sorted(forecasts.values(), key=lambda row: row["end"])[-4:],
         "notes": notes if notes is not None else JP_NOTES,
     }

@@ -112,8 +112,9 @@ def normalize_sec_facts(raw):
         _exclude_one_time(row)
     durations = sorted(groups.values(), key=lambda row: (row['end'], row['start']))
     return {'source': 'SEC EDGAR companyfacts', 'cik': raw.get('cik'), 'company': raw.get('entityName'),
-        **{kind: [row for row in durations if row['periodType'] == kind][-12:] for kind in ('quarterly', 'annual', 'cumulative')},
-        'balanceSheet': sorted(instants.values(), key=lambda row: row['end'])[-12:],
+        **{kind: [row for row in durations if row['periodType'] == kind][-limit:] for kind, limit in
+           (('quarterly', 20), ('annual', 5), ('cumulative', 10))},
+        'balanceSheet': sorted(instants.values(), key=lambda row: row['end'])[-20:],
         'notes': ['All monetary amounts are USD, not millions; EPS is USD/share.',
                   'Calendar end/start and fiscal fy/fp are retained; fiscal years may differ from calendar years.',
                   'Only explicitly reported quarterly durations are shown; missing fourth-quarter facts are not fabricated.',

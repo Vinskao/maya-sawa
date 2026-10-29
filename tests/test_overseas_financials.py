@@ -108,3 +108,21 @@ def test_sec_collection_persists_raw_and_normalized_then_skips_upstream(monkeypa
 def test_inventory_is_kept_as_a_balance_sheet_instant():
     raw = {'facts': {'us-gaap': {'InventoryNet': fact([{'end': '2026-03-28', 'val': 512300000, 'filed': '2026-05-06', 'form': '10-Q'}])}}}
     assert normalize_sec_facts(raw)['balanceSheet'][0]['inventory'] == 512300000
+
+
+def test_sec_normalizer_retains_five_years_of_quarters_and_balance_sheets():
+    import calendar
+    quarterly, assets = [], []
+    for index in range(24):
+        year, quarter = 2020 + index // 4, index % 4 + 1
+        end_month = quarter * 3
+        end = f"{year:04d}-{end_month:02d}-{calendar.monthrange(year, end_month)[1]:02d}"
+        start_month = end_month - 2
+        quarterly.append({'start': f"{year:04d}-{start_month:02d}-01", 'end': end, 'val': 100 + index,
+                          'filed': end, 'form': '10-Q', 'fp': f'Q{quarter}'})
+        assets.append({'end': end, 'val': 1000 + index, 'filed': end, 'form': '10-Q'})
+    data = normalize_sec_facts({'facts': {'us-gaap': {
+        'Revenues': fact(quarterly), 'Assets': fact(assets),
+    }}})
+    assert len(data['quarterly']) == len(data['balanceSheet']) == 20
+    assert data['quarterly'][0]['end'] == data['balanceSheet'][0]['end'] == '2021-03-31'

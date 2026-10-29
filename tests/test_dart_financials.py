@@ -28,6 +28,11 @@ def test_corp_code_comes_from_the_stock_code_in_the_corp_code_archive():
     assert dart.corp_codes(archive.getvalue()) == {"000660": "00164779"}
 
 
+def test_opendart_history_window_starts_five_calendar_years_ago():
+    assert dart.history_start_date(date(2026, 10, 20)) == "20211020"
+    assert dart.history_start_date(date(2024, 2, 29)) == "20190228"
+
+
 def test_filing_list_maps_report_names_to_periods_and_report_codes():
     filings = dart.periodic_filings(load("sk_hynix_list.json"))
     by_end = {item["periodEnd"]: item for item in filings}

@@ -7,6 +7,7 @@ Fixtures are real TDnet downloads from 2026-10-15..20 (TDnet keeps about a month
 - list_001_20261016: one page of the daily disclosure list
 """
 import asyncio
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,23 @@ def test_daily_list_rows_carry_the_five_digit_code_title_and_absolute_xbrl_link(
     assert row["zipUrl"] == "https://www.release.tdnet.info/inbs/081220261016552169.zip"
     assert has_next is True
     assert td.tdnet_code("6857") == "68570"
+
+
+def test_shared_sec_tdnet_dart_normalizer_keeps_five_years_of_quarterly_and_balance_data():
+    from calendar import monthrange
+    releases = []
+    for index in range(24):
+        year, quarter = 2020 + index // 4, index % 4 + 1
+        start_month, end_month = (quarter - 1) * 3 + 1, quarter * 3
+        start = f"{year:04d}-{start_month:02d}-01"
+        end = f"{year:04d}-{end_month:02d}-{monthrange(year, end_month)[1]:02d}"
+        releases.append({"releasedAt": end, "durations": [{"start": start, "end": end,
+            "durationDays": (date.fromisoformat(end) - date.fromisoformat(start)).days + 1,
+            "revenue": 100 + index, "grossProfit": 50 + index}],
+            "instants": [{"end": end, "assets": 1000 + index, "equity": 500 + index}]})
+    data = td.build_financials(releases)
+    assert len(data["quarterly"]) == len(data["balanceSheet"]) == 20
+    assert data["quarterly"][0]["end"] == data["balanceSheet"][0]["end"] == "2021-03-31"
 
 
 def test_japan_gaap_interim_results_in_yen_with_attachment_gross_profit():

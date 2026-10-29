@@ -42,8 +42,17 @@ BALANCE = {"assets": ["ifrs-full_Assets"], "liabilities": ["ifrs-full_Liabilitie
            "equity": ["ifrs-full_EquityAttributableToOwnersOfParent", "ifrs-full_Equity"],
            "inventory": ["ifrs-full_Inventories"], "cash": ["ifrs-full_CashAndCashEquivalents"],
            "currentAssets": ["ifrs-full_CurrentAssets"], "currentLiabilities": ["ifrs-full_CurrentLiabilities"]}
-HISTORY_DAYS = 3 * 365
+HISTORY_YEARS = 5
 SCAN_INTERVAL_SECONDS = 12 * 3600
+
+
+def history_start_date(today: date | None = None) -> str:
+    """OpenDART listing requests use a five-calendar-year window."""
+    today = today or date.today()
+    try:
+        return today.replace(year=today.year - HISTORY_YEARS).strftime("%Y%m%d")
+    except ValueError:
+        return today.replace(year=today.year - HISTORY_YEARS, day=28).strftime("%Y%m%d")
 
 
 def corp_codes(archive: bytes) -> dict[str, str]:
@@ -192,7 +201,7 @@ async def collect(db, fetch, *, today: date | None = None) -> int:
                 logger.warning("OpenDART: no corp_code for %s", code)
                 continue
             await asyncio.to_thread(db.save, code, "KR", conid, "dart_corp_code", {"corpCode": corp})
-        listing = json.loads(await fetch("list.json", {"corp_code": corp, "bgn_de": (today - timedelta(days=HISTORY_DAYS)).strftime("%Y%m%d"),
+        listing = json.loads(await fetch("list.json", {"corp_code": corp, "bgn_de": history_start_date(today),
                                                        "end_de": today.strftime("%Y%m%d"), "pblntf_ty": "A", "page_count": "100"}))
         if listing.get("status") not in ("000", "013"):
             raise RuntimeError(f"opendart_list_status_{listing.get('status')}")

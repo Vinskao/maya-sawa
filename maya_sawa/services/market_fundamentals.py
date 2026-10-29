@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 import csv
 import io
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -23,6 +23,23 @@ logger = logging.getLogger(__name__)
 TZ = ZoneInfo("Asia/Taipei")
 TWSE = "https://openapi.twse.com.tw/v1/opendata"
 TPEx_OTC_MONTHLY = "https://mopsfin.twse.com.tw/opendata/t187ap05_O.csv"
+FUNDAMENTAL_HISTORY_YEARS = 5
+MONTHLY_HISTORY_LIMIT = 60
+QUARTERLY_HISTORY_LIMIT = 20
+
+
+def fundamental_start_date(today: date | None = None) -> str:
+    """Return the date five calendar years before today, clamping leap day to February 28."""
+    today = today or datetime.now(TZ).date()
+    try:
+        start = today.replace(year=today.year - FUNDAMENTAL_HISTORY_YEARS)
+    except ValueError:
+        start = today.replace(year=today.year - FUNDAMENTAL_HISTORY_YEARS, day=28)
+    return start.isoformat()
+
+
+def _latest_fundamental_rows(rows: list[dict], limit: int) -> list[dict]:
+    return rows[-limit:]
 
 
 def _get_json(url: str) -> Any:
@@ -277,7 +294,7 @@ class MarketFundamentalsService:
                            "yoyPercent": _first_number(row, ("營業收入-去年同月增減(%)", "去年同月增減(%)")),
                            "ytdRevenue": _first_number(row, ("累計營業收入-當月累計營收", "當月累計營收")),
                            "source": "TWSE / MOPS"})
-        return sorted(result, key=lambda item: item["period"])[-36:]
+        return _latest_fundamental_rows(sorted(result, key=lambda item: item["period"]), MONTHLY_HISTORY_LIMIT)
 
     @staticmethod
     def _statement_rows(payload: Any, code: str, statement: str) -> list[dict]:
@@ -318,7 +335,7 @@ class MarketFundamentalsService:
                            "singleQuarter": single if statement == "income" else None, "epsReported": eps,
                            "basis": ("TWSE quarterly income values are cumulative year-to-date; single-quarter amounts subtract the preceding reported quarter. EPS stays as reported because share-count basis can change." if statement == "income" else "Quarter-end balance sheet amounts; not cumulative."),
                            "source": "TWSE OpenAPI", "raw": row})
-        return sorted(result, key=lambda item: item["period"])[-12:]
+        return _latest_fundamental_rows(sorted(result, key=lambda item: item["period"]), QUARTERLY_HISTORY_LIMIT)
 
     @staticmethod
     def _watch_symbols() -> list[str]:
@@ -340,7 +357,7 @@ class MarketFundamentalsService:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         # Three years back so the oldest displayed month/quarter still has a year-ago comparison.
-        start_date = (datetime.now(TZ).date() - timedelta(days=3 * 366)).isoformat()
+        start_date = fundamental_start_date()
         for dataset in self.FINMIND_DATASETS:
             reservation_id = market_fundamentals_db.claim_finmind_slot(dataset, code, min_gap_seconds=FINMIND_GAP_SECONDS)
             if reservation_id is None:
@@ -453,7 +470,7 @@ def build_fundamental_metrics(monthly_official: list[dict], income_official: lis
     published = {str(row.get("period")): str(row.get("value")) for row in history.get("TaiwanStockMonthRevenue", [])
                  if row.get("item") == "publishedAt" and row.get("value")}
     monthly = []
-    for period in sorted(revenue)[-24:]:
+    for period in sorted(revenue)[-MONTHLY_HISTORY_LIMIT:]:
         official = official_month.get(period, {})
         year, month = period[:4], int(period[5:7])
         ytd = [revenue.get(f"{year}-{m:02d}") for m in range(1, month + 1)]
@@ -485,7 +502,7 @@ def build_fundamental_metrics(monthly_official: list[dict], income_official: lis
                 "netMargin": _ratio(_pick(values, ("IncomeAfterTaxes", "IncomeFromContinuingOperations")), revenue_value)}
 
     quarterly = []
-    for period in sorted(income)[-8:]:
+    for period in sorted(income)[-QUARTERLY_HISTORY_LIMIT:]:
         now, prev, year_ago = income_ratios(period), income_ratios(_shift_quarter(period, 1)), income_ratios(_shift_quarter(period, 4))
         entry: dict[str, Any] = {"period": period,
                                  "revenueQoQ": _growth(now["revenue"], prev["revenue"]),
@@ -518,7 +535,7 @@ def build_fundamental_metrics(monthly_official: list[dict], income_official: lis
                 "inventoryDays": round(inventory / cogs * 91.25, 2) if inventory is not None and cogs and cogs > 0 else None}
 
     balance = []
-    for period in sorted(balance_values)[-8:]:
+    for period in sorted(balance_values)[-QUARTERLY_HISTORY_LIMIT:]:
         now, prev, year_ago = balance_ratios(period), balance_ratios(_shift_quarter(period, 1)), balance_ratios(_shift_quarter(period, 4))
         balance.append({"period": period,
                         "debtRatio": now["debtRatio"], "debtRatioQoQ": _diff(now["debtRatio"], prev["debtRatio"]),
@@ -546,7 +563,7 @@ def build_fundamental_metrics(monthly_official: list[dict], income_official: lis
                 "capexToOcf": _ratio(-capex if capex is not None else None, ocf) if ocf and ocf > 0 else None}
 
     cash_flow = []
-    for period in sorted(cash_values)[-8:]:
+    for period in sorted(cash_values)[-QUARTERLY_HISTORY_LIMIT:]:
         now, year_ago = cash_ratios(period), cash_ratios(_shift_quarter(period, 4))
         cash_flow.append({"period": period, "ocfYoY": _growth(now["ocf"], year_ago["ocf"]),
                           "cashConversion": now["cashConversion"], "cashConversionYoY": _diff(now["cashConversion"], year_ago["cashConversion"]),
