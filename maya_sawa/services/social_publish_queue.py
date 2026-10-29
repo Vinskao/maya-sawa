@@ -103,7 +103,8 @@ class PublishQueue:
         """Caller must verify the Metricool brand and connection before resuming."""
         with self.sessions.begin() as session:
             account = session.get(PublisherAccount, ACCOUNT)
-            account.ready, account.notified, account.reason = True, False, ''
+            if not account.ready:
+                account.ready, account.notified, account.reason = True, False, ''
             session.execute(update(PublishJob).where(PublishJob.state == 'pending_auth').values(state='ready'))
 
     def claim(self, source_key, now=None):
@@ -117,6 +118,9 @@ class PublishQueue:
 
     def review(self, source_key):
         with self.sessions.begin() as session:
+            row = session.get(PublishJob, source_key)
+            if row is None or row.state not in {'publishing', 'pending_review'}:
+                raise ValueError('Only an in-flight publication can require review')
             session.execute(update(PublishJob).where(PublishJob.source_key == source_key,
                 PublishJob.state == 'publishing').values(state='pending_review'))
 

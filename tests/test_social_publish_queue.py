@@ -105,3 +105,21 @@ def test_monitor_lifecycle_starts_once_and_can_be_stopped(monkeypatch, queue):
         await service.stop_monitor()
         assert first.done() and service._monitor is None
     asyncio.run(lifecycle())
+
+
+def test_repeated_resume_does_not_rearm_an_unresolved_review_notification(queue):
+    queue.enqueue('macro:US:8', 'draft')
+    queue.resume()
+    queue.claim('macro:US:8')
+    queue.review('macro:US:8')
+    assert notify_pending(queue, send=lambda *args: {'sent': True})['sent']
+    queue.resume()
+    assert notify_pending(queue, send=lambda *args: {'sent': True})['reason'] == 'already-notified'
+
+
+def test_review_does_not_claim_success_for_a_missing_or_unclaimed_job(queue):
+    with pytest.raises(ValueError):
+        queue.review('macro:US:8')
+    queue.enqueue('macro:US:8', 'draft')
+    with pytest.raises(ValueError):
+        queue.review('macro:US:8')
