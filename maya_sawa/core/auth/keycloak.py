@@ -68,7 +68,7 @@ def _public_key_from_jwk(jwk: Dict[str, Any]) -> rsa.RSAPublicKey:
     return rsa.RSAPublicNumbers(e, n).public_key()
 
 
-def _verify_rs256(token: str) -> Dict[str, Any]:
+def _verify_rs256(token: str, required_audience: str | None = None) -> Dict[str, Any]:
     try:
         header_part, payload_part, signature_part = token.split(".")
         header = _decode_json_part(header_part)
@@ -98,9 +98,19 @@ def _verify_rs256(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issuer")
     audience = payload.get("aud", [])
     audiences = {audience} if isinstance(audience, str) else set(audience or [])
-    if Config.KEYCLOAK_CLIENT_ID not in audiences and payload.get("azp") != Config.KEYCLOAK_CLIENT_ID:
+    expected = required_audience or Config.KEYCLOAK_CLIENT_ID
+    if expected not in audiences and (required_audience is not None or payload.get("azp") != expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token audience")
 
+    return payload
+
+
+def verify_resource_bearer_token(token: str, audience: str) -> Dict[str, Any]:
+    """A connector token is valid only for its dedicated resource, never merely by its client id."""
+    payload = _verify_rs256(token, required_audience=audience)
+    if not payload.get('exp') or not payload.get('sub'):
+        raise HTTPException(status_code=401, detail='Expiring user access token required')
+    payload['_roles'] = sorted(_extract_roles(payload))
     return payload
 
 
