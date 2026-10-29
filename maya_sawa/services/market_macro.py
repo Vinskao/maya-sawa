@@ -156,6 +156,16 @@ TWSE_TURNOVER_SERIES = {
     "TW_MARKET_TURNOVER": ("Taiwan listed-market trading value (TWSE FMTQIK)", "TWD 100 million", "daily"),
 }
 TWSE_TURNOVER_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={day}&response=json"
+# TAIEX futures roll cost (services/futures_roll.py): next-month minus near-month settlement, and that spread above fair
+# carry (CBC rediscount rate, cash dividends going ex between the two expiries).
+TX_ROLL_SERIES = {
+    "TX_CALENDAR_SPREAD": ("TAIEX futures next-month minus near-month settlement (TAIFEX)", "TAIEX points", "daily"),
+    "TX_ROLL_EXCESS_SPREAD": ("TAIEX futures roll spread above fair carry (rate and dividend points removed)", "TAIEX points", "daily"),
+}
+TAIFEX_FUTURES_URL = "https://www.taifex.com.tw/cht/3/futDataDown"
+TWSE_SHARES_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+TWSE_PAST_DIVIDENDS_URL = "https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate={start}&endDate={end}&response=json"
+TWSE_UPCOMING_DIVIDENDS_URL = "https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=json"
 TWSE_MARGIN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={day}&selectType=ALL&response=json"
 TWSE_PRICE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={day}&type=ALLBUT0999&response=json"
 # Yahoo chart and worldbank.org (both hosts) answer urllib's default agent with 403.
@@ -229,7 +239,8 @@ FREE_SERIES_FALLBACK_SECONDS = 30 * 24 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
-    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES))
+    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
+    | set(TX_ROLL_SERIES))
 
 
 def parse_bis_cpi_csv(raw: bytes) -> list[dict]:
@@ -476,6 +487,16 @@ def _request_free_cached(cache_key: str, url: str, ttl_seconds: int = FREE_HTTP_
     return response
 
 
+def _taifex_tx_csv(start: date, end: date) -> str:
+    """TAIFEX daily futures CSV for TX (every contract month) between two dates; TAIFEX allows up to one month per request."""
+    from maya_sawa.services.market_history_collector import _download_taifex_csv
+    form = urllib.parse.urlencode({"down_type": "1", "queryStartDate": start.strftime("%Y/%m/%d"),
+                                   "queryEndDate": end.strftime("%Y/%m/%d"), "commodity_id": "TX", "commodity_id2": ""}).encode()
+    request = urllib.request.Request(TAIFEX_FUTURES_URL, data=form, headers={
+        "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "TY-Multiverse-MarketDashboard/1.0"})
+    return _download_taifex_csv(request, required_fields={"交易日期", "契約", "到期月份(週別)", "交易時段"}, timeout=25)
+
+
 def _fetched_within(code: str, seconds: int) -> bool:
     """True when the cached series for code was fetched less than seconds ago (restored copies keep their fetchedAt)."""
     entry = _macro_local_cache.get(f"series:{code}")
@@ -635,6 +656,7 @@ class MarketMacroService:
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
                 ("TWSEMargin", self._fetch_twse_margin_maintenance), ("TWSEMarketTurnover", self._fetch_twse_turnover),
+                ("TAIFEXRollSpread", self._fetch_tx_roll_spread),
                 ("DGBAS", self._fetch_dgbas_employment),
                 ("DGBASPrices", self._fetch_taiwan_prices),
                 ("WorldBank", self._fetch_world_bank_gold),
@@ -977,7 +999,7 @@ class MarketMacroService:
         market_macro_db.finish_source_call(run_id, "success", saved, detail=";".join(failures), http_status=status)
         return saved
 
-    def _fetch_twse_margin_maintenance(self, today: date | None = None, max_days: int = 20) -> int:
+    def _fetch_twse_margin_maintenance(self, today: date | None = None, max_days: int = 60) -> int:
         """Backfill the daily ratio one trading day at a time, newest first: two TWSE requests per day, at most
         max_days days per refresh (four refreshes a day fill a year in about a week). Stored days are not refetched."""
         run_id = market_macro_db.reserve_source_call("TWSE", daily_limit=8, minute_limit=2)
@@ -1039,6 +1061,57 @@ class MarketMacroService:
             rows = [{"code": code, "period": period, "value": value} for period, value in sorted(history.items())]
             saved = self._cache_free_series(rows, TWSE_TURNOVER_SERIES, "TWSE FMTQIK",
                                             "https://www.twse.com.tw/zh/trading/historical/fmtqik.html") if rows else 0
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_tx_roll_spread(self, today: date | None = None, months: int = 13) -> int:
+        """TX calendar spread and its excess over fair carry, one TAIFEX request per month: the current month every run,
+        earlier months only while they have no stored day. Inputs: CBC rediscount rate (cached CBC series), shares issued
+        (open data), the index divisor (latest MI_INDEX), and cash dividends (TWT49U past, TWT48U announced)."""
+        from maya_sawa.services import futures_roll
+        if _fetched_within("TX_ROLL_EXCESS_SPREAD", 5 * 3600): return 0
+        rates = sorted((row["period"], float(row["value"])) for row in
+                       (_macro_local_cache.get("series:CBC_REDISCOUNT") or {}).get("history") or [])
+        if not rates: raise RuntimeError("cbc_rediscount_rate_missing")
+        run_id = market_macro_db.reserve_source_call("TAIFEXRoll", daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError("taifex_roll_daily_budget_exhausted")
+        today = today or datetime.now(ZoneInfo("Asia/Taipei")).date()
+        stored = {code: {row["period"]: row["value"] for row in (_macro_local_cache.get(f"series:{code}") or {}).get("history") or []}
+                  for code in TX_ROLL_SERIES}
+        status = None
+        try:
+            settlements: dict[date, dict[str, float]] = {}
+            for index, (start, end) in enumerate(futures_roll.month_ranges(today, months)):
+                prefix = start.strftime("%Y-%m")
+                if index == 0 or not any(period.startswith(prefix) for period in stored["TX_CALENDAR_SPREAD"]):
+                    settlements.update(futures_roll.parse_tx_settlements(_taifex_tx_csv(start, end)))
+                    time.sleep(1)                     # TAIFEX throttles bursts
+            status, raw = _request_free_cached("twse:shares", TWSE_SHARES_URL, ttl_seconds=24 * 3600)
+            shares = futures_roll.parse_shares(json.loads(raw))
+            divisor = None
+            for back in range(7):                     # latest trading day with a closing table
+                compact = (today - timedelta(days=back)).strftime("%Y%m%d")
+                _, prices = _request_free_cached(f"twse:prices:{compact}", TWSE_PRICE_URL.format(day=compact))
+                divisor = futures_roll.index_divisor(json.loads(prices), shares)
+                if divisor: break
+            if not divisor: raise RuntimeError("taiex_divisor_unavailable")
+            first = min(settlements, default=today)
+            _, past = _request_free_cached(f"twse:dividends:{first:%Y%m}",
+                TWSE_PAST_DIVIDENDS_URL.format(start=first.replace(day=1).strftime("%Y%m%d"), end=today.strftime("%Y%m%d")),
+                ttl_seconds=12 * 3600)
+            _, upcoming = _request_free_cached("twse:dividends:upcoming", TWSE_UPCOMING_DIVIDENDS_URL, ttl_seconds=12 * 3600)
+            dividends = futures_roll.parse_past_dividends(json.loads(past)) + futures_roll.parse_upcoming_dividends(json.loads(upcoming))
+            rate_on = lambda day: next((value for period, value in reversed(rates) if period <= day.isoformat()), None)
+            for row in futures_roll.roll_rows(settlements, dividends, shares, divisor, rate_on):
+                stored["TX_CALENDAR_SPREAD"][row["period"]] = f"{row['spread']:.2f}"
+                stored["TX_ROLL_EXCESS_SPREAD"][row["period"]] = f"{row['excess']:.2f}"
+            rows = [{"code": code, "period": period, "value": value}
+                    for code, history in stored.items() for period, value in sorted(history.items())]
+            saved = self._cache_free_series(rows, TX_ROLL_SERIES, "TAIFEX, TWSE (computed)",
+                                            "https://www.taifex.com.tw/cht/3/futDailyMarketReport") if rows else 0
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
         except Exception as exc:
