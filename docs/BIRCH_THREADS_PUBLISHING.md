@@ -81,3 +81,9 @@ References: [ChatGPT custom MCP](https://developers.openai.com/api/docs/guides/c
 Full suite on 2026-10-29: 689 passed, 18 skipped, 5 existing failures (Redis/connection utility tests and missing
 industry membership for 009811). Resource-token isolation, owner scope, denied unauthenticated requests, persistence,
 claim deduplication, notification retries, heartbeat loss, and ambiguous publication recovery are covered by tests.
+
+## Channel order update (2026-10-30)
+
+The existing ChatGPT Work task remains paused and is scheduled weekly on Wednesday, Friday and Sunday at night (Asia/Taipei). Its prompt now treats publication channels independently: after Threads authorization, exact account verification and a successful Threads outbox claim, Threads may publish without waiting for LinkedIn. Save LinkedIn drafts as pending until LinkedIn authorization and per-channel publisher/outbox tools exist; when ready, publish only the pending LinkedIn version and never repost a successful Threads item. This records the requested task behavior; it does not mean either social connection is currently authorized or that a post was sent.
+
+
