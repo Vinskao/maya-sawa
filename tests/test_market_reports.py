@@ -10,6 +10,86 @@ from maya_sawa.services.market_reports import (
 )
 
 
+def test_owner_pdf_upload_persists_queued_record_and_schedules_backend_processing(monkeypatch):
+    import asyncio
+    import io
+    from fastapi import UploadFile
+    from starlette.background import BackgroundTasks
+    from starlette.datastructures import Headers
+    from maya_sawa.api import market_reports
+
+    class FakeDatabase:
+        def find_by_digest(self, _digest):
+            return None
+
+        def save_queued(self, **kwargs):
+            return {
+                "id": "queued-report",
+                "title": kwargs["title"],
+                "visibility": kwargs["visibility"],
+                "status": "queued",
+                "page_count": 0,
+                "claim_count": 0,
+                "claims": [],
+                "uploaded_by": kwargs["uploaded_by"],
+            }, False
+
+    database = FakeDatabase()
+    monkeypatch.setattr(market_reports, "market_reports_db", database)
+    monkeypatch.setattr(market_reports, "report_digest", lambda _data: "queued-digest")
+    monkeypatch.setattr(market_reports, "extract_pdf_pages", lambda _data: pytest.fail("PDF extraction must run after the response"))
+    background = BackgroundTasks()
+    result = asyncio.run(market_reports.upload_report(
+        file=UploadFile(file=io.BytesIO(b"%PDF-test"), filename="queued.pdf", headers=Headers({"content-type": "application/pdf"})),
+        title="Queued report",
+        publisher="Research",
+        published_at=None,
+        visibility="public",
+        claims={"sub": "owner"},
+        background_tasks=background,
+    ))
+
+    assert result["report"]["status"] == "queued"
+    assert result["duplicate"] is False
+    assert len(background.tasks) == 1
+    assert background.tasks[0].func is market_reports.process_queued_report
+    assert background.tasks[0].args == ("queued-report",)
+
+
+def test_backend_processor_persists_status_transitions_without_blocking_upload(monkeypatch):
+    import asyncio
+    from maya_sawa.api import market_reports
+
+    class FakeDatabase:
+        statuses = []
+
+        def get_report(self, report_id, *, include_pdf=False):
+            assert report_id == "queued-report" and include_pdf
+            return ({"id": report_id, "status": "queued"}, b"%PDF-test", "owner")
+
+        def set_upload_status(self, report_id, status, failure_reason=None):
+            self.statuses.append((report_id, status, failure_reason))
+
+        def update_upload_extracted(self, report_id, pages):
+            self.statuses.append((report_id, "extracted", len(pages)))
+
+        def add_chunks(self, report_id, chunks, vectors):
+            assert report_id == "queued-report" and len(chunks) == len(vectors)
+
+    class FakeEmbeddings:
+        def embed_documents(self, texts):
+            return [[0.0] * 1536 for _ in texts]
+
+    database = FakeDatabase()
+    monkeypatch.setattr(market_reports, "market_reports_db", database)
+    monkeypatch.setattr(market_reports, "extract_pdf_pages", lambda _pdf: ["Readable report text."])
+    monkeypatch.setattr(market_reports, "get_embedding_service", lambda: FakeEmbeddings())
+
+    asyncio.run(market_reports.process_queued_report("queued-report"))
+
+    assert [status for _, status, _ in database.statuses] == ["processing", "extracted", "claims_pending"]
+
+
 def text_pdf(pages):
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -249,35 +329,24 @@ def test_failed_report_upload_can_be_retried_by_its_owner(monkeypatch):
             self.deleted.append((report_id, owner))
             return report_id == "failed-report" and owner == "owner-sub"
 
-        def save_extracted(self, **_kwargs):
+        def save_queued(self, **kwargs):
             return (
                 {
                     "id": "retried-report",
-                    "title": "Retry succeeds",
+                    "title": kwargs["title"],
                     "visibility": "public",
-                    "status": "claims_pending",
+                    "status": "queued",
+                    "uploaded_by": kwargs["uploaded_by"],
                 },
                 False,
             )
 
-        def add_chunks(self, *_args, **_kwargs):
-            return None
-
-    class FakeEmbeddings:
-        def embed_documents(self, texts):
-            return [[0.0] * 1536 for _ in texts]
-
     database = FakeDatabase()
     monkeypatch.setattr(market_reports, "market_reports_db", database)
     monkeypatch.setattr(market_reports, "report_digest", lambda _data: "same-digest")
-    monkeypatch.setattr(
-        market_reports, "extract_pdf_pages", lambda _data: ["Readable page."]
-    )
-    monkeypatch.setattr(
-        market_reports,
-        "get_embedding_service",
-        lambda: FakeEmbeddings(),
-    )
+    async def no_op(_report_id):
+        return None
+    monkeypatch.setattr(market_reports, "process_queued_report", no_op)
     app = FastAPI()
     app.include_router(market_reports.router)
     app.dependency_overrides[market_reports.require_manage_users_request] = lambda: {
@@ -293,7 +362,7 @@ def test_failed_report_upload_can_be_retried_by_its_owner(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["duplicate"] is False
-    assert response.json()["report"]["status"] == "claims_pending"
+    assert response.json()["report"]["status"] == "queued"
     assert database.deleted == [("failed-report", "owner-sub")]
 
 
@@ -334,23 +403,49 @@ def test_failed_report_retry_cleanup_only_deletes_owned_failed_rows(tmp_path):
     assert db.find_by_digest("ready-digest")["id"] == ready["id"]
 
 
+def test_queued_upload_is_persisted_and_transitions_to_text_extracted(tmp_path):
+    from sqlalchemy import create_engine
+    from maya_sawa.databases.market_reports_db import MarketReportsDatabase
+
+    db = MarketReportsDatabase(create_engine(f"sqlite:///{tmp_path / 'queued.db'}"))
+    queued, duplicate = db.save_queued(
+        title="Queued PDF",
+        publisher="Research",
+        published_at=None,
+        visibility="public",
+        uploaded_by="owner",
+        digest="queued-digest",
+        pdf=b"%PDF-queued",
+    )
+    assert duplicate is False and queued["status"] == "queued"
+    stored, pdf, owner = db.get_report(queued["id"], include_pdf=True)
+    assert (stored["status"], stored["page_count"], stored["text"], pdf, owner) == (
+        "queued", 0, "", b"%PDF-queued", "owner"
+    )
+
+    assert db.set_upload_status(queued["id"], "processing") is True
+    assert db.update_upload_extracted(queued["id"], ["First page", "Second page"]) is True
+    extracted = db.find_by_digest("queued-digest")
+    assert extracted["status"] == "extracted"
+    assert extracted["page_count"] == 2
+    assert "=====PAGE 2=====\nSecond page" in extracted["text"]
+
+
 def test_embedding_failure_keeps_extracted_report_ready_for_claims(monkeypatch):
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
+    import asyncio
     from maya_sawa.api import market_reports
 
     class FakeDatabase:
-        def find_by_digest(self, _digest):
-            return None
+        statuses = []
 
-        def save_extracted(self, **kwargs):
-            return {
-                "id": "failed-report",
-                "title": kwargs["title"],
-                "visibility": kwargs["visibility"],
-                "status": "claims_pending",
-                "uploaded_by": kwargs["uploaded_by"],
-            }, False
+        def get_report(self, report_id, *, include_pdf=False):
+            return ({"id": report_id, "status": "queued"}, b"%PDF-test", "owner")
+
+        def set_upload_status(self, report_id, status, failure_reason=None):
+            self.statuses.append(status)
+
+        def update_upload_extracted(self, _report_id, _pages):
+            self.statuses.append("extracted")
 
         def add_chunks(self, *_args, **_kwargs):
             raise AssertionError("chunks must not be stored without embeddings")
@@ -359,30 +454,14 @@ def test_embedding_failure_keeps_extracted_report_ready_for_claims(monkeypatch):
         def embed_documents(self, _texts):
             raise RuntimeError("provider unavailable")
 
-    monkeypatch.setattr(market_reports, "market_reports_db", FakeDatabase())
-    monkeypatch.setattr(market_reports, "report_digest", lambda _data: "new-digest")
-    monkeypatch.setattr(
-        market_reports, "extract_pdf_pages", lambda _data: ["Readable page."]
-    )
+    database = FakeDatabase()
+    monkeypatch.setattr(market_reports, "market_reports_db", database)
+    monkeypatch.setattr(market_reports, "extract_pdf_pages", lambda _data: ["Readable page."])
     monkeypatch.setattr(
         market_reports, "get_embedding_service", lambda: FailedEmbeddings()
     )
-    app = FastAPI()
-    app.include_router(market_reports.router)
-    app.dependency_overrides[market_reports.require_manage_users_request] = lambda: {
-        "sub": "owner-sub"
-    }
-    client = TestClient(app)
-
-    response = client.post(
-        "/market/reports",
-        data={"title": "Embedding failure", "visibility": "public"},
-        files={"file": ("failed.pdf", b"%PDF-test", "application/pdf")},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["duplicate"] is False
-    assert response.json()["report"]["status"] == "claims_pending"
+    asyncio.run(market_reports.process_queued_report("failed-report"))
+    assert database.statuses == ["processing", "extracted", "claims_pending"]
 
 
 def test_extracted_report_without_vectors_is_in_claims_pending_queue(tmp_path):
@@ -467,21 +546,24 @@ def test_scanned_upload_is_saved_as_failed_with_ocr_reason(monkeypatch):
     from maya_sawa.services.market_reports import PDFTextExtractionError
 
     class FakeDatabase:
-        failed = None
+        statuses = []
 
         def find_by_digest(self, digest):
             return None
 
-        def save_failed(self, **kwargs):
-            self.failed = kwargs
-            return {
-                "id": "r1",
-                "title": kwargs["title"],
-                "status": "failed",
-                "page_count": kwargs["page_count"],
-                "failure_reason": kwargs["reason"],
-                "visibility": kwargs["visibility"],
-            }
+        def save_queued(self, **kwargs):
+            return ({"id": "r1", "title": kwargs["title"], "status": "queued", "page_count": 0,
+                     "visibility": kwargs["visibility"], "uploaded_by": kwargs["uploaded_by"]}, False)
+
+        def get_report(self, report_id, *, include_pdf=False):
+            assert report_id == "r1" and include_pdf
+            return ({"id": report_id, "status": "queued"}, b"%PDF-scan", "owner")
+
+        def set_upload_status(self, report_id, status, failure_reason=None):
+            self.statuses.append((report_id, status, failure_reason))
+
+        def set_upload_page_count(self, report_id, page_count):
+            self.statuses.append((report_id, "page_count", page_count))
 
     database = FakeDatabase()
     monkeypatch.setattr(market_reports, "market_reports_db", database)
@@ -502,9 +584,10 @@ def test_scanned_upload_is_saved_as_failed_with_ocr_reason(monkeypatch):
         files={"file": ("scan.pdf", b"%PDF-scan", "application/pdf")},
     )
     assert response.status_code == 200
-    assert response.json()["report"]["status"] == "failed"
-    assert response.json()["report"]["page_count"] == 2
-    assert "OCR" in response.json()["report"]["failure_reason"]
+    assert response.json()["report"]["status"] == "queued"
+    assert [(status, value) for _, status, value in database.statuses] == [
+        ("processing", None), ("failed", "PDF has no text layer; OCR is required"), ("page_count", 2)
+    ]
 
 
 def test_database_deduplicates_and_cascades_chunks_and_claims(tmp_path):

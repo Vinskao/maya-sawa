@@ -170,6 +170,86 @@ class MarketReportsDatabase:
                 return duplicate, True
             raise
 
+    def save_queued(
+        self,
+        *,
+        title,
+        publisher,
+        published_at,
+        visibility,
+        uploaded_by,
+        digest,
+        pdf,
+    ):
+        """Persist an uploaded PDF before extraction so the API can return immediately."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        try:
+            with self.sessions.begin() as session:
+                existing = session.query(MarketReport).filter_by(sha256=digest).first()
+                if existing:
+                    return {
+                        **self.public_report(existing),
+                        "uploaded_by": existing.uploaded_by,
+                    }, True
+                report = MarketReport(
+                    title=title,
+                    publisher=publisher,
+                    published_at=published_at,
+                    received_at=datetime.now(timezone.utc),
+                    uploaded_by=uploaded_by,
+                    sha256=digest,
+                    page_count=0,
+                    text="",
+                    visibility=visibility,
+                    status="queued",
+                    pdf=pdf,
+                )
+                session.add(report)
+                session.flush()
+                return {**self.public_report(report), "uploaded_by": uploaded_by}, False
+        except IntegrityError:
+            duplicate = self.find_by_digest(digest)
+            if duplicate:
+                return duplicate, True
+            raise
+
+    def set_upload_status(self, report_id, status, failure_reason=None):
+        """Update the durable status of an upload handled by the backend worker."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            report = session.get(MarketReport, report_id)
+            if not report:
+                return False
+            report.status = status
+            report.failure_reason = failure_reason[:1000] if failure_reason else None
+            return True
+
+    def update_upload_extracted(self, report_id, pages):
+        """Save extracted text on an already queued report."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            report = session.get(MarketReport, report_id)
+            if not report:
+                return False
+            report.page_count = len(pages)
+            report.text = self._page_text(pages)
+            report.status = "extracted"
+            report.failure_reason = None
+            return True
+
+    def set_upload_page_count(self, report_id, page_count):
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            report = session.get(MarketReport, report_id)
+            if not report:
+                return False
+            report.page_count = page_count
+            return True
+
     @staticmethod
     def _page_text(pages):
         return "\n\n".join(

@@ -9,7 +9,7 @@ import os
 import asyncio
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 import httpx
@@ -74,6 +74,7 @@ async def upload_report(
     publisher: str = Form(""),
     published_at: date | None = Form(None),
     visibility: str = Form("public"),
+    background_tasks: BackgroundTasks = None,
     claims: dict = Depends(require_manage_users_request),
 ):
     uploaded_by = _owner(claims)
@@ -114,9 +115,7 @@ async def upload_report(
                 "duplicate": True,
             }
     try:
-        pages = extract_pdf_pages(data)
-    except ValueError as exc:
-        stored = market_reports_db.save_failed(
+        report, duplicate = market_reports_db.save_queued(
             title=title.strip(),
             publisher=publisher.strip(),
             published_at=published_at,
@@ -124,44 +123,67 @@ async def upload_report(
             uploaded_by=uploaded_by,
             digest=digest,
             pdf=data,
-            reason=str(exc),
-            page_count=exc.page_count if isinstance(exc, PDFTextExtractionError) else 0,
-        )
-        return {"report": report_for_viewer(stored, uploaded_by), "duplicate": False}
-    chunks = chunk_pages(pages)
-    try:
-        report, duplicate = await asyncio.to_thread(
-            market_reports_db.save_extracted,
-            title=title.strip(),
-            publisher=publisher.strip(),
-            published_at=published_at,
-            visibility=visibility,
-            uploaded_by=uploaded_by,
-            digest=digest,
-            pdf=data,
-            pages=pages,
         )
     except Exception as exc:
-        logger.exception("Could not persist extracted market report")
+        logger.exception("Could not queue uploaded market report")
         raise HTTPException(
-            status_code=503, detail="Report extraction could not be saved"
+            status_code=503, detail="Report upload could not be queued"
         ) from exc
     if duplicate:
         return {"report": report_for_viewer(report, uploaded_by), "duplicate": True}
-    try:
-        vectors = await asyncio.to_thread(
-            get_embedding_service().embed_documents, [item["text"] for item in chunks]
-        )
-        await asyncio.to_thread(
-            market_reports_db.add_chunks, report["id"], chunks, vectors
-        )
-    except Exception as exc:
-        logger.warning(
-            "Semantic indexing unavailable for report %s: %s",
-            report["id"],
-            type(exc).__name__,
-        )
+    if background_tasks is None:
+        # FastAPI always injects this parameter in an HTTP request. Keep direct callers
+        # from creating a permanently queued record if they omit the task collector.
+        market_reports_db.set_upload_status(report["id"], "failed", "Background processing unavailable")
+        raise HTTPException(status_code=503, detail="Report processing unavailable")
+    background_tasks.add_task(process_queued_report, report["id"])
     return {"report": report_for_viewer(report, uploaded_by), "duplicate": False}
+
+
+async def process_queued_report(report_id: str) -> None:
+    """Extract and index a persisted PDF after the upload response has been sent."""
+    try:
+        stored = await asyncio.to_thread(market_reports_db.get_report, report_id, include_pdf=True)
+        if not stored:
+            return
+        report, pdf, _uploaded_by = stored
+        if report.get("status") != "queued":
+            return
+        await asyncio.to_thread(market_reports_db.set_upload_status, report_id, "processing")
+        try:
+            pages = await asyncio.to_thread(extract_pdf_pages, pdf)
+        except ValueError as exc:
+            page_count = exc.page_count if isinstance(exc, PDFTextExtractionError) else 0
+            await asyncio.to_thread(market_reports_db.set_upload_status, report_id, "failed", str(exc))
+            # Scanned documents still expose the page count in the failure record.
+            if page_count:
+                await asyncio.to_thread(market_reports_db.set_upload_page_count, report_id, page_count)
+            return
+        await asyncio.to_thread(market_reports_db.update_upload_extracted, report_id, pages)
+        chunks = chunk_pages(pages)
+        try:
+            vectors = await asyncio.to_thread(
+                get_embedding_service().embed_documents, [item["text"] for item in chunks]
+            )
+            await asyncio.to_thread(market_reports_db.add_chunks, report_id, chunks, vectors)
+        except Exception as exc:
+            logger.warning(
+                "Semantic indexing unavailable for report %s: %s",
+                report_id,
+                type(exc).__name__,
+            )
+        await asyncio.to_thread(market_reports_db.set_upload_status, report_id, "claims_pending")
+    except Exception as exc:
+        logger.exception("Background processing failed for market report %s", report_id)
+        try:
+            await asyncio.to_thread(
+                market_reports_db.set_upload_status,
+                report_id,
+                "failed",
+                f"Report processing failed: {type(exc).__name__}",
+            )
+        except Exception:
+            logger.exception("Could not save failure state for market report %s", report_id)
 
 @router.get("", **public_data("公開研究報告清單（含 SEC 申報、頻道貼文與網路文章）", "研究報告與主張"))
 async def list_reports(claims: dict | None = Depends(_optional_owner)):
