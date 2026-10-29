@@ -42,6 +42,8 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 | Market report claim extraction `trig_018MeBwwU74WvydGHRaRt6Wd` | Daily 20:30 | `30 12 * * *` | Extract report claims without OpenAI; subscription Claude Code routine |
 | 市場 AI 分析｜台股收盤後 `trig_01ECP68tWfgM749sJa3gBiN9` | Mon–Fri 21:15 | `15 13 * * 1-5` | Taiwan holdings, TXF, JP/KR holdings |
 | 市場 AI 分析｜美股與總經 `trig_01NETQT5DCSHj4TKwv45nbJR` | Tue–Sat 07:30 | `30 23 * * 1-5` | macro commentary first, then US holdings |
+| 市場 AI 分析｜台股收盤後（Opus） `trig_017Np2f7se83hdEcTFtpyRK8` | Mon–Fri 21:15 | `15 13 * * 1-5` | Opus twin of the Taiwan run; runs only on its turn (see **Model**) |
+| 市場 AI 分析｜美股與總經（Opus） `trig_01G7dADRBnG9TWzL46DSCo6b` | Tue–Sat 07:30 | `30 23 * * 1-5` | Opus twin of the US/macro run; runs only on its turn |
 | 每週維護｜ty-multiverse-backend `trig_01JEDibagHGmSFZ7D7nTLhLz` | Wed 01:00 | `0 17 * * 2` | Dependency/framework updates, small refactors; opens a PR to `main` |
 | 每週維護｜ty-multiverse-consumer `trig_01CsCHXk4X7zPkjb1EPf4xBL` | Thu 01:00 | `0 17 * * 3` | Same, PR to `main` |
 | 每週維護｜ty-multiverse-gateway `trig_018TNJoPunQ8N7PcgdbtCEqE` | Fri 01:00 | `0 17 * * 4` | Same, PR to `main` |
@@ -54,7 +56,13 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
   equivalents) were first seen at 20:51 on 2026-10-19 by a 10-minute poll, so they publish around 20:45. Prices are out by
   about 15:00 and institutional flows by 16:30. The second history pass now runs at 21:00 (was 22:00) and the Taiwan
   run at 21:15 (was 18:40), so each analysis includes the day's margin data.
-- **Model:** both run Claude Sonnet 5.5 on the subscription.
+- **Model (changed 2026-10-29):** two Sonnet 5.5 runs, then one Opus 5.5 run, per routine. A routine's model is fixed, so
+  each analysis routine has an Opus twin on the same cron. Both start with
+  `python3 maya_sawa/public_scripts/routine_turn.py taiwan|us`, which counts the routine's own cron days (Taipei) from
+  Monday 2026-10-26 and prints `opus` on every third run; the twin that is not on turn stops at once (it only reports
+  usage). Catch-up and new-instrument fires (`補跑：`, `新增標的：`) go to the Sonnet routine and skip the turn check.
+  If the script fails, the Sonnet routine runs and the Opus twin stops, so no day is missed. The Opus twins have no
+  connectors, like the originals. Tests: `tests/test_routine_turn.py`.
 - **Environment setup:** the cloud environment needs only the network secret. Its host is reachable even at the
   default **Trusted** network level.
 
