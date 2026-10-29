@@ -68,8 +68,8 @@ def test_yahoo_markets_keeps_other_symbols_when_one_fails(monkeypatch):
     service = market_macro.MarketMacroService()
     saved = []
     monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
-    assert service._fetch_yahoo_markets() == 3  # yen, dollar index and VIX; gold failed
-    assert {row["code"] for row in saved} == {"USD_JPY", "US_DOLLAR_INDEX", "US_VIX"}
+    assert service._fetch_yahoo_markets() == 4  # yen, dollar index, VIX and euro (added 2026-10-29); gold failed
+    assert {row["code"] for row in saved} == {"USD_JPY", "US_DOLLAR_INDEX", "US_VIX", "EUR_USD"}
 
 
 def test_yahoo_markets_skips_series_restored_fresh_after_a_restart(monkeypatch):
@@ -94,15 +94,16 @@ def test_yahoo_markets_skips_series_restored_fresh_after_a_restart(monkeypatch):
     service = market_macro.MarketMacroService()
     saved = []
     monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
-    assert service._fetch_yahoo_markets() == 1
-    assert [row["code"] for row in saved] == ["US_VIX"]
-    assert len(urls) == 1 and "%5EVIX" in urls[0]
+    assert service._fetch_yahoo_markets() == 2      # VIX and the euro (added 2026-10-29) were never cached
+    assert [row["code"] for row in saved] == ["US_VIX", "EUR_USD"]
+    assert len(urls) == 2 and "%5EVIX" in urls[0] and "EURUSD" in urls[1]
     assert len(reservations) == 1
 
-    # Once VIX is cached too, a further restart spends nothing.
-    cache.set("series:US_VIX", {"code": "US_VIX", "fetchedAt": fresh, "history": []}, 3600)
+    # Once both are cached too, a further restart spends nothing.
+    for code in ("US_VIX", "EUR_USD"):
+        cache.set(f"series:{code}", {"code": code, "fetchedAt": fresh, "history": []}, 3600)
     assert service._fetch_yahoo_markets() == 0
-    assert len(urls) == 1 and len(reservations) == 1
+    assert len(urls) == 2 and len(reservations) == 1
 
 
 def _sdmx(periods, values):

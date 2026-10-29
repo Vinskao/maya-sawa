@@ -144,8 +144,9 @@ YAHOO_SERIES = {
     "USD_JPY": ("Japanese yen per U.S. dollar, daily close", "JPY/USD", "daily"),
     "US_DOLLAR_INDEX": ("ICE U.S. Dollar Index (DXY), daily close", "index points", "daily"),
     "US_VIX": ("CBOE Volatility Index (VIX), daily close", "index points", "daily"),
+    "EUR_USD": ("EUR/USD (U.S. dollars per euro), daily close", "USD/EUR", "daily"),
 }
-YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB", "US_VIX": "^VIX"}
+YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB", "US_VIX": "^VIX", "EUR_USD": "EURUSD=X"}
 # TWSE publishes no market-wide margin maintenance ratio; it is estimated from two public tables (margin_maintenance).
 TWSE_MARGIN_SERIES = {
     "TW_MARGIN_MAINTENANCE": ("Taiwan listed-market margin maintenance ratio (TWSE: collateral value / margin loans)", "percent", "daily"),
@@ -162,6 +163,16 @@ TX_ROLL_SERIES = {
     "TX_CALENDAR_SPREAD": ("TAIEX futures next-month minus near-month settlement (TAIFEX)", "TAIEX points", "daily"),
     "TX_ROLL_EXCESS_SPREAD": ("TAIEX futures roll spread above fair carry (rate and dividend points removed)", "TAIEX points", "daily"),
 }
+# Policy rates of the five economies the dashboard compares (BIS WS_CBPOL, daily; Taiwan from the CBC rediscount rate).
+POLICY_RATE_SERIES = {
+    "POLICY_RATE_US": ("U.S. federal funds target, range midpoint (BIS)", "percent", "daily"),
+    "POLICY_RATE_EZ": ("Euro area ECB deposit facility rate (BIS)", "percent", "daily"),
+    "POLICY_RATE_JP": ("Japan BoJ policy rate (BIS)", "percent", "daily"),
+    "POLICY_RATE_KR": ("Korea BoK base rate (BIS)", "percent", "daily"),
+    "POLICY_RATE_TW": ("Taiwan CBC rediscount rate, carried to every weekday", "percent", "daily"),
+}
+BIS_POLICY_AREAS = {"US": "POLICY_RATE_US", "XM": "POLICY_RATE_EZ", "JP": "POLICY_RATE_JP", "KR": "POLICY_RATE_KR"}
+BIS_POLICY_URL = "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/D.US+XM+JP+KR?format=csv&startPeriod={start}"
 TAIFEX_FUTURES_URL = "https://www.taifex.com.tw/cht/3/futDataDown"
 TWSE_SHARES_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
 TWSE_PAST_DIVIDENDS_URL = "https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate={start}&endDate={end}&response=json"
@@ -240,7 +251,31 @@ FREE_HTTP_TTL_SECONDS = 4 * 3600
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES))
+
+
+def parse_bis_policy_rates(raw: bytes) -> list[dict]:
+    """BIS WS_CBPOL daily CSV as {code, period, value}; blank observations are skipped."""
+    rows = []
+    for item in csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))):
+        code, period, value = BIS_POLICY_AREAS.get(item.get("REF_AREA", "")), item.get("TIME_PERIOD", ""), item.get("OBS_VALUE", "")
+        if code and item.get("FREQ") == "D" and re.fullmatch(r"\d{4}-\d{2}-\d{2}", period) and value.strip():
+            rows.append({"code": code, "period": period, "value": value.strip()})
+    return rows
+
+
+def carry_forward_weekdays(code: str, history: list[dict], start: date, end: date) -> list[dict]:
+    """A step series known only at its change dates (CBC rates) as one value per weekday from start to end."""
+    changes = sorted((row["period"], row["value"]) for row in history if row.get("period") and row.get("value") is not None)
+    rows, day, index, current = [], start, 0, None
+    while day <= end:
+        while index < len(changes) and changes[index][0] <= day.isoformat():
+            current = changes[index][1]
+            index += 1
+        if current is not None and day.weekday() < 5:
+            rows.append({"code": code, "period": day.isoformat(), "value": current})
+        day += timedelta(days=1)
+    return rows
 
 
 def parse_bis_cpi_csv(raw: bytes) -> list[dict]:
@@ -656,7 +691,7 @@ class MarketMacroService:
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
                 ("TWSEMargin", self._fetch_twse_margin_maintenance), ("TWSEMarketTurnover", self._fetch_twse_turnover),
-                ("TAIFEXRollSpread", self._fetch_tx_roll_spread),
+                ("TAIFEXRollSpread", self._fetch_tx_roll_spread), ("BISPolicyRates", self._fetch_policy_rates),
                 ("DGBAS", self._fetch_dgbas_employment),
                 ("DGBASPrices", self._fetch_taiwan_prices),
                 ("WorldBank", self._fetch_world_bank_gold),
@@ -1112,6 +1147,29 @@ class MarketMacroService:
                     for code, history in stored.items() for period, value in sorted(history.items())]
             saved = self._cache_free_series(rows, TX_ROLL_SERIES, "TAIFEX, TWSE (computed)",
                                             "https://www.taifex.com.tw/cht/3/futDailyMarketReport") if rows else 0
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_policy_rates(self, today: date | None = None) -> int:
+        """Two years of daily policy rates: BIS for the U.S., euro area, Japan and Korea (it lags about a week), and
+        Taiwan's CBC rediscount rate carried to every weekday from the cached CBC series. Skipped within 12 hours."""
+        if all(_fetched_within(code, 12 * 3600) for code in BIS_POLICY_AREAS.values()): return 0
+        run_id = market_macro_db.reserve_source_call("BISPolicy", daily_limit=4, minute_limit=2)
+        if run_id is None: raise RuntimeError("bis_policy_daily_budget_exhausted")
+        today = today or datetime.now(ZoneInfo("Asia/Taipei")).date()
+        start = today - timedelta(days=730)
+        try:
+            status, raw = _request_free_cached(f"bis:cbpol:{start:%Y-%m}", BIS_POLICY_URL.format(start=start.isoformat()),
+                                               ttl_seconds=12 * 3600)
+            rows = parse_bis_policy_rates(raw)
+            if {row["code"] for row in rows} != set(BIS_POLICY_AREAS.values()): raise RuntimeError("bis_policy_response_incomplete")
+            cbc = (_macro_local_cache.get("series:CBC_REDISCOUNT") or {}).get("history") or []
+            rows += carry_forward_weekdays("POLICY_RATE_TW", cbc, start, today)
+            saved = self._cache_free_series(rows, POLICY_RATE_SERIES, "BIS (central bank policy rates); CBC",
+                                            "https://data.bis.org/topics/CBPOL", fresh_for_seconds=48 * 3600)
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
         except Exception as exc:
