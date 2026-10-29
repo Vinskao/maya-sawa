@@ -1,5 +1,9 @@
 # 文章知識庫：Markdown 直接入庫
 
+## 撰稿規範（2026-10-29 起，人與 AI 都適用）
+
+文章要讓之後的人或 AI 讀完就能維護或仿作，不是開發日記。規範的唯一來源是前端 `src/scripts/work/writingGuide.ts`（`WRITING_GUIDE`），顯示在 `/tymultiverse/work` 與 `/tymultiverse/work/manage`；管理頁「存入並發布」會跑同一個 `auditArticle`，不符合就不發布（草稿仍可存）。重點：一篇一個技術問題；第一個標籤是 `Software Engineering` 或 `Quant Finance`；依序有問題、原理、實作（兩段以上真實程式碼）、替代方案表格、驗證、限制、參考資料；不寫「決策一…」「近期」「下一步」。範例：`docs/blog-import/research-platform-engineering-2026-10-28.md`、`docs/blog-import/engineering-market-lab-2026-10.md`。API 匯入不經過這個檢查，Agent 發文前要自己逐項核對。
+
 ## 最終架構與狀態
 
 正文、文章資訊、修訂與向量都保存於 PostgreSQL。前端不再保存文章來源，也不再同步文章。

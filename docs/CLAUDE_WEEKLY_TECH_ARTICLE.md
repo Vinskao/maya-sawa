@@ -47,6 +47,8 @@
   - 洩漏機密。
 - **自我檢查：** 發布前逐項自我檢查；不符就重寫一次，仍不符則不發布，交草稿並標「未達標」。標籤第一個是 `Software Engineering` 或 `Quant Finance`。
 
+**2026-10-29：** 使用者也不接受〈從資料到決策：TY Multiverse 近期研究平台工程紀錄〉，兩篇已改寫成單一主題的技術文章（同 slug，見 `docs/blog-import/`）。規範同時放在部落格頁面（前端 `writingGuide.ts`），管理頁發布時會自動檢查。
+
 ## 可直接貼入 Claude Routine 的提示詞
 
 ```text

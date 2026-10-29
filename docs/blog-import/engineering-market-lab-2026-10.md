@@ -1,89 +1,147 @@
 ---
-title: "從技術筆記到可追溯的研究平台：TY 市場研究室開發紀錄"
+slug: engineering-market-lab-2026-10
+title: "把季報疊到日 K 線上而不偷看未來：公布日對齊與時間窗"
+description: "季度財務指標（營益率、存貨天數、本益比）要用公布日而不是季末對齊股價，否則圖表就有前視偏誤。說明對齊規則、缺公布日時的估計、時間窗以最後一筆觀測為錨，附程式碼、替代方案與測試。"
+category: Software Engineering
+tags: [Software Engineering, Time Series, Look-ahead Bias, TypeScript, Data Visualization, TDD]
 publishDate: "2026-10-27T09:00:00+08:00"
-description: "整理近期的 Astro SSR、圖表時間窗、多市場資料識別、研究證據管理、排程補跑與 TDD，記錄架構選擇、實作方式與驗證限制。"
-category: Engineering
-level: advance
-tags:
-  - Astro
-  - TypeScript
-  - FastAPI
-  - Data Engineering
-  - TDD
-  - PostgreSQL
 ---
 
-## 背景：讓資料、判斷與開發成果留下依據
+## 問題
 
-TY 市場研究室的方向，是彙整市場資料與他人觀點，把自己的判斷記成資料，再透過圖表比較條件。對工程而言，重點是資料期間、來源、單位與證據都能追溯，也能解釋畫面上的數字如何產生。
+**輸入**：
+- 每日 K 線 `{date, open, high, low, close, volume}`。
+- 每季財務指標 `{period: "2026Q2", operatingMargin, inventoryDays, publishedAt?}`。有時帶 `publishedAt`，有時沒有。
 
-本文依 2026 年 10 月 25 至 26 日更新的專案文件，整理近期實作。下文的歷史測試數量是原文件當次執行的結果，並非本文重新執行的全站驗收。本產品目前不宣稱提供策略回測、自動下單或獲利保證。
+**輸出**：每一根 K 線旁邊，顯示「那一天市場已經知道的」最新財務數字，畫在右軸上。
 
-## 決策一：以 Astro SSR 保留可讀內容，互動功能按需載入
+**限制**：不能插值造出不存在的日資料；缺值要留空，不能補 0；同一張圖要能切換「一日、一週、一月、一年、五年、全部」。
 
-首頁採用可索引的繁體中文正文，並保留使用者既有的中英文偏好。市場說明與文字訊號可保留在伺服器 HTML，較長的輔助摘要以 details 收合，兼顧閱讀與不執行 JavaScript 的讀取工具。
+**常見錯法**：把 2026Q2 的營益率畫在季末 2026-06-30，或更糟，畫在季初 2026-04-01。台股第二季財報的法定公告期限是 8 月 14 日，所以在 7 月看圖的人會「看到」一個當時還沒公布的數字。圖看起來營益率一上升股價就漲，其實是指標被往前挪了一個多月。這就是**前視偏誤（look-ahead bias）**。拿這種圖去回測或下判斷，結果都會偏樂觀。
 
-互動圖表仍由 React、TypeScript 與 D3 處理；技能泡泡圖放進可展開區域，使用 `client:visible` 在可見時才載入。這個分工讓內容的可讀性與互動功能的載入時機可以分別控制。
+海外資料還有第二個陷阱。SEC companyfacts 會把一個數字標成「最新一份申報」的日期，而明年的 10-K 會再列一次今年的比較數，所以同一季的數字可能被標成一年後才「申報」。
 
-SSR 專案也必須檢查 hydration：先看到標題和空 SVG，不代表 React 已經啟動。先確認 island runtime、SSR 標記與實際 DOM，再排查圖表邏輯。共用樣式則由版型集中掛載，降低重新整理後樣式漏載的風險。
+## 原理
 
-## 決策二：把畫圖之前的資料規則抽成可測試模組
+在任一天 *d*，可用的財務值是：**公布日 ≤ d** 的所有發布裡，公布日最晚的那一個（as-of join，或稱 point-in-time 查詢）。它是一個階梯函數：公布當天跳到新值，之後保持不變，直到下一次公布。
 
-圖表不只是折線。月增率與年增率要分開比較；人數與百分比不能共用格式；有相同走勢的數量和占比應在同一讀數裡說明，避免重複圖表讓讀者以為存在不同訊號。
+公布日不明時有兩種選擇：
 
-前端以獨立模組處理期間計算、序列對齊、欄位識別與數字格式，再交給畫面渲染。多線圖的線條、座標軸與讀數採一致顏色；不同單位使用各自的縱軸。
+- 丟掉該筆資料：安全，但線會大段空白。
+- 用「不會更早」的日期估計，並標示為估計。估計日只能晚、不能早，晚了只會讓圖慢半拍，早了就會偷看未來。
 
-共用時間窗模組 `chartViewport.ts` 提供近一日、七日、一月、一年、五年與全部資料。時間窗以最後一筆已存觀測為基準，避免延遲公布的數據因「今天沒有資料」而變成空圖。五年按鈕只篩選已有歷史，不代表自動補齊五年來源資料。
+## 實作
 
-股價圖可搭配本益比、存貨天數或營業利益率。財務資料須從公布時間起對齊；沒有實際公布日而採估計時，畫面要標示估計。這種比較不能直接當成 point-in-time 歷史回測。
+程式碼在 `ty-multiverse-frontend/src/scripts/market/priceComparison.ts` 與 `chartViewport.ts`（最新 commit `cb2ea67`）。圖表檔只負責畫，這些規則都是純函式，可以單獨測試。
 
-## 決策三：用市場與代碼共同識別標的
+### 1. 決定每一筆季報「什麼時候算公布」
 
-不同交易所可能出現相同數字代碼。資料管線與前端都必須帶著市場識別，防止日本標的誤用台灣的籌碼、財報或歷史資料。
+```ts
+// Without a publication timestamp, use the Taiwan filing deadline, explicitly marked as estimated.
+// Never align a quarter's financial result to the first day of that quarter.
+function statementDate(row: Record<string, any>, market: string) {
+    const published = typeof row.publishedAt === 'string' ? chartDate(row.publishedAt.slice(0, 10)) : null;
+    if (published) return { date: published, estimated: false };
+    const quarter = /^(\d{4})Q([1-4])$/.exec(String(row.period));
+    if (!quarter) return null;
+    const year = Number(quarter[1]);
+    if (market !== 'TW') {
+        const end = chartDate(String(row.period))!;
+        return { date: new Date(Date.parse(`${end}T00:00:00Z`) + 120 * 86_400_000).toISOString().slice(0, 10), estimated: true };
+    }
+    return { date: [`${year}-05-15`, `${year}-08-14`, `${year}-11-14`, `${year + 1}-03-31`][Number(quarter[2]) - 1], estimated: true };
+}
+```
 
-海外資料整合涉及 IBKR 行情，以及 J-Quants、SEC、DART 等財務來源。資料抓取時間和財務公布期間是兩個不同欄位；剛更新快取，不代表內容就是最新季度。
+規則依序是：
 
-同樣地，帳戶資料與行情 session 也有不同生命週期。帳戶 API 有回應，不代表行情通道仍然連線。排程必須分別檢查，再決定是否等待補資料。
+1. 有真實公布日就用公布日。
+2. 台股沒有公布日時，用法定期限：Q1 是 5/15、Q2 是 8/14、Q3 是 11/14，年報是隔年 3/31。
+3. 海外沒有公布日時，用季末加 120 天。
 
-## 決策四：研究內容以證據台帳與版本維護
+估計值都帶 `estimated: true`，讀數會標示「估計」。
 
-10 月 25 日的研究更新保留既有 JSON schema，涵蓋 21 份研究；文章與圖形區分官方披露、公司規劃、聚合資料與分析推論。
+海外的 EPS 另有一道上限：申報日如果晚於季末 120 天，就視為比較數重列，改用 120 天的估計日，避免 SEC 把它標成一年後。
 
-產業架構圖的箭頭代表功能或需求傳導，不能直接解讀為已證實的客戶供貨。產品展示、客戶驗證、量產、營收與現金回收也分屬不同階段。Mermaid subgraph 用來呈現並行方案，避免把多條技術路線誤畫成唯一的線性流程。
+```ts
+const allowance = new Date(Date.parse(`${end}T00:00:00Z`) + 120 * 86_400_000).toISOString().slice(0, 10);
+return filed > allowance ? { date: allowance, estimated: true } : { date: filed, estimated: false };
+```
 
-研究內容加入替代方案、反方、bull／base／bear 條件與可觀察追蹤項目；證據不足仍標為研究草稿。沒有已讀文件支持的量產或性能聲明應撤回，不以看似完整的圖掩蓋缺口。
+### 2. As-of 查詢
 
-更新由後端既有 startup seed 機制產生新版，只更新最後編輯者仍為 seed 的紀錄，保護人工編輯。前次文件記錄的驗證結果為後端 18 項、前端 168 項通過，並檢查 42 張 Mermaid 圖的解析；這不等於所有圖已完成瀏覽器視覺驗收。
+```ts
+export function comparisonAt(series: readonly ComparisonPoint[], date: string): ComparisonPoint | null {
+    let found: ComparisonPoint | null = null;
+    for (const point of series) if (point.date <= date && (!found || point.date >= found.date)) found = point;
+    return found;
+}
+```
 
-## 決策五：排程要記住失敗與補跑，而不是一直重複觸發
+**不變式**：對任一天，回傳值的 `date` 一定 ≤ 那一天。公布前一天回傳 `null`，不是上一季的值，也不是 0。日期一律用 `YYYY-MM-DD` 字串比較，不轉成本地時間，避免時區把日期往前推一天。
 
-市場分析依資料公布與交易時段排程。海外行情若因登入失效而落後，先記錄該次排程漏資料，等待使用者登入及行情收集完成後，再判斷是否補跑。
+這裡每根 K 線都線性掃一次，複雜度是 O(K 線數 × 發布數)。一檔股票五年約 1,250 根 K 線、20 季，可以忽略。資料量大時可以換成下面表格裡的雙指標合併。
 
-補跑需具備每次 session 的去重紀錄、最小間隔、資料到齊條件與明確狀態，例如等待行情、未設定、已觸發或失敗。新增自選標的也先補資料，再觸發分析；失敗應能在下次操作重試。
+### 3. 時間窗以最後一筆觀測為錨
 
-這些路徑在文件中已有實作，但補跑仍依賴正式環境觸發憑證。10 月 23 日文件記錄該憑證尚未設定，不能把程式完成寫成正式環境已自動補跑。
+```ts
+export function rangeWindow(dates: string[], range: ChartRange): ChartWindow | null {
+    const full = bounds(dates); if (!full || range === 'all') return full;
+    const end = new Date(`${full.end}T00:00:00Z`);
+    if (range === 'day') return { start: full.end, end: full.end };
+    if (range === 'week') return { start: iso(end.getTime() - 6 * DAY), end: full.end };
+    const months = range === 'month' ? 1 : range === 'year' ? 12 : 60;
+    const first = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - months, 1));
+    const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+    first.setUTCDate(Math.min(end.getUTCDate(), lastDay));
+    return { start: iso(first.getTime()), end: full.end };
+}
+```
 
-## 決策六：讓錯誤成為測試案例
+窗口的終點是**資料裡最後一個日期**，不是今天。月資料（例如 CPI）通常晚一個多月才公布，如果用「今天往前一個月」，「一月」視窗會是空的。往回推月份時要夾住月底：2024-02-29 往前一年是 2023-02-28，不能溢位成 3 月 1 日。
 
-開發流程採「錯誤先重現、修正再轉綠」。外部資料保留裁切且不含機密的 fixture，測試缺值、重複發布、時區、不同單位與真實期間。
+`chartDate` 會把 `2024Q2` 轉成季末 `2024-06-30`、`2024-05` 轉成月底，讓季資料、月資料和日資料可以放進同一個窗口篩選。這裡只決定「落在哪個時間窗」，跟上面的公布日對齊是兩件事。
 
-純運算從大型 UI 檔案抽出，測試資料轉換與格式判斷；畫面驗收再檢查滑鼠、觸控、鍵盤讀數與窄螢幕。近期元件測試也處理 Vite 的 JSX 轉換設定，將 automatic runtime 配到目前使用的解析器。
+## 替代方案
 
-聯繫流程同樣遵循這個原則：`mailto:` 在未設定郵件程式的電腦可能沒有可見反應，因此提供 Gmail、Outlook 網頁撰寫與複製內容選項。信件地址、主旨與範本集中在單一模組，並測試 URI 編碼和語言切換。
+| 做法 | 前視偏誤 | 線的連續性 | 複雜度 | 何時適用 |
+|---|---|---|---|---|
+| 畫在季末或季初 | 有，約 45～90 天 | 連續 | O(1) 查表 | 只看「各季本身」的走勢、不跟股價比時 |
+| 只用有真實公布日的資料 | 無 | 缺很多段 | 同下 | 用於回測，寧缺勿錯 |
+| **公布日；缺的話用法定期限或季末＋120 天估計，並標示（本文）** | 無；估計日只會偏晚 | 連續 | O(K·R) | 用於研究圖，要看趨勢也要誠實 |
+| 雙指標合併（K 線與發布都已排序） | 同上 | 同上 | O(K+R) | 資料量大、或在伺服器端批次計算時 |
+| 把季值內插成日值 | 有，而且會造出不存在的數字 | 平滑 | O(K) | 不建議 |
 
-## 下一步：文章也使用可管理的內容生命週期
+## 驗證
 
-知識庫本次改版將文章正文、資訊、修訂與向量保存在 PostgreSQL，由 API 處理 Markdown 上傳、剪貼簿貼上、草稿、發布、下架與復原，前端在請求時讀取公開版本。這樣後續發文不必重新部署前端。
+Vitest，`tests/market/priceComparison.test.ts` 與 `tests/market/chartViewport.test.ts`，共 16 個測試全部通過。其中直接鎖住本文規則的有：
 
-發布交易直接更新 Maya Sawa 查詢使用的正文，並清除過期向量；背景工作重新向量化，失敗則保留重試狀態。bucket 可另作附件或備份用途，本次不參與文章讀寫。
+- `aligns statements on explicit publication dates and keeps period labels in the readout`：2026Q2 在 8/14 公布，8/13 查詢得到 `null`，8/14 才得到 12.3%。沒有公布日的存貨天數在 8/14 出現，並標示 `estimated: true`。
+- `preserves zero margins, rejects placeholders and invalid inventory, and sorts releases`：營益率 0% 要保留，`null` 和負的存貨天數則丟掉。
+- `uses only same-day official PE, never fills missing PE from a later or previous trading day`：官方本益比只用當日值，不往前或往後填。
+- `gives US stocks a PE across a fiscal Q4 that exists only in the 10-K, dating restated comparatives as estimated (META)`：比較數重列套用 120 天上限。
+- `anchors presets on the latest observation and clamps leap years`：2024-02-29 往前一年是 2023-02-28。
+- `filters and sorts sparse observations, without inventing daily data`：季資料不會被展開成日資料。
 
-這項遷移的程式完成、資料庫驗證與正式切換是不同里程碑。切換前須核對既有文章數量、正文雜湊與原網址，停用舊的前端批次同步，並驗證草稿無法被匿名讀取。尚未完成的正式環境驗證，不會以文章措辭當作已完成。
+## 給維護者的檢查清單
 
-## 本文整理依據
+1. 任何「季度值畫到日線」的地方，先問：這一天市場知道這個數字了嗎？寫一個「公布前一天是 null」的測試。
+2. 不知道公布日時，用只會偏晚的估計並標示出來；永遠不要用季初。
+3. 日期用 `YYYY-MM-DD` 字串、UTC 午夜處理，不用 `new Date('2026-08-14')` 再轉本地時間。
+4. 時間窗錨在最後一筆資料，不是今天；月份回推要夾住月底。
+5. 缺值留空。0 是合法值，例如營益率 0%。
+6. 圖表檔只畫圖；對齊、格式、單位判斷都抽成純函式，再寫測試。
 
-- 首頁搜尋與產品定位、SSR 正文、按需載入與聯繫流程：`HOME_SEARCH_POSITIONING.md`，2026-10-26。
-- 研究資料結構、證據台帳、種子資料保護與測試結果：`RESEARCH_UPDATE_2026-10-25.md`。
-- 圖表時間窗、財務公布日對齊與歷史資料限制：`CHART_INTERACTION_PLAN.md`，2026-10-23。
-- 排程權限範圍、補跑狀態與觸發設定限制：市場分析排程維護文件，2026-10-26。
+## 限制
 
-以上為專案內部文件名稱，本文未包含私人報告、帳戶資料、金鑰或部署識別資訊。
+- 法定期限是上限，實際多半更早公布；用估計日時，圖會慢幾天到幾週，只會偏晚，不會偷看。
+- 財報事後更正（restatement）時，資料庫通常只留最新版。所以就算日期對了，顯示的也可能是更正後的值，嚴格來說還不是 point-in-time。要做嚴謹回測，得保存每一版公布的原始值。
+- 海外 120 天是經驗值，涵蓋美國 10-Q／10-K 和日本決算短信的常見時程，個別公司可能不同。
+- 這張圖是研究工具，不是交易訊號，也不構成投資建議。
+
+## 參考資料
+
+- 證券交易法第 36 條：財務報告公告申報期限（年報為會計年度終了後三個月內；第一、二、三季為各季終了後 45 日內）。
+- SEC EDGAR XBRL companyfacts API：<https://www.sec.gov/edgar/sec-api-documentation>
+- Marcos López de Prado，*Advances in Financial Machine Learning*（2018），談回測偏誤與 point-in-time 資料。
+- 本站實作：`src/scripts/market/priceComparison.ts`、`src/scripts/market/chartViewport.ts`；說明文件 `docs/CHART_INTERACTION_PLAN.md`。
