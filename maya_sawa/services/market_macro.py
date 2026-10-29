@@ -152,7 +152,8 @@ TWSE_MARGIN_SERIES = {
 }
 TWSE_MARGIN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={day}&selectType=ALL&response=json"
 TWSE_PRICE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={day}&type=ALLBUT0999&response=json"
-YAHOO_AGENT = {"User-Agent": "Mozilla/5.0 (compatible; maya-sawa macro dashboard)"}
+# Yahoo chart and worldbank.org (both hosts) answer urllib's default agent with 403.
+BROWSER_AGENT = {"User-Agent": "Mozilla/5.0 (compatible; maya-sawa macro dashboard)"}
 DGBAS_COMMODITY_SERIES = {
     "WORLD_GOLD_USD": ("World Bank monthly gold price", "USD/troy oz", "monthly"),
 }
@@ -928,7 +929,7 @@ class MarketMacroService:
         for code, symbol in due.items():
             try:
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}?range=1y&interval=1d"
-                status, raw = _request_free_cached(f"yahoo:{symbol}:1y", url, ttl_seconds=6 * 3600, extra_headers=YAHOO_AGENT)
+                status, raw = _request_free_cached(f"yahoo:{symbol}:1y", url, ttl_seconds=6 * 3600, extra_headers=BROWSER_AGENT)
                 result = (json.loads(raw).get("chart", {}).get("result") or [{}])[0]
                 zone = ZoneInfo(result.get("meta", {}).get("exchangeTimezoneName") or "America/New_York")
                 closes = ((result.get("indicators", {}).get("quote") or [{}])[0]).get("close") or []
@@ -978,6 +979,7 @@ class MarketMacroService:
 
     def _fetch_dgbas_employment(self) -> int:
         """Cache free DGBAS employment/unemployment totals; the API is monthly and anonymous."""
+        if all(_fetched_within(code, 12 * 3600) for code in ("TW_EMPLOYED", "TW_UNEMPLOYED")): return 0
         run_id = market_macro_db.reserve_source_call("DGBAS", daily_limit=24, minute_limit=5)
         if run_id is None: raise RuntimeError("dgbas_daily_budget_exhausted")
         try:
@@ -1027,6 +1029,7 @@ class MarketMacroService:
 
     def _fetch_taiwan_prices(self) -> int:
         """Cache Taiwan's official CPI and PPI general indices from DGBAS, in process memory only."""
+        if all(_fetched_within(code, 12 * 3600) for code in ("TW_CPI", "TW_PPI")): return 0
         run_id = market_macro_db.reserve_source_call("DGBASPrices", daily_limit=12, minute_limit=3)
         if run_id is None: raise RuntimeError("dgbas_prices_daily_budget_exhausted")
         try:
@@ -1079,16 +1082,23 @@ class MarketMacroService:
                 code = "TW_PMI" if "臺灣製造業PMI" in text else "TW_NMI" if "臺灣非製造業NMI" in text else None
                 if not code:
                     continue
+                # Since 2026-10 the PMI table also carries industry sub-indices; read the headline column by its header.
+                column = 1
                 for row in re.findall(r"<tr\b[^>]*>(.*?)</tr>", table, flags=re.I | re.S):
                     cells = [unescape(re.sub(r"<[^>]+>", " ", cell)).strip() for cell in re.findall(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", row, flags=re.I | re.S)]
-                    if len(cells) < 2:
+                    header = next((index for index, cell in enumerate(cells) if cell.replace(" ", "") in ("臺灣製造業PMI", "臺灣非製造業NMI")), None)
+                    if header is not None:
+                        column = header
+                        continue
+                    if len(cells) <= column:
                         continue
                     period_match = re.fullmatch(r"(\d{4})/(\d{1,2})", cells[0])
-                    value_match = re.search(r"\d+(?:\.\d+)?", cells[1].replace(",", ""))
+                    value_match = re.search(r"\d+(?:\.\d+)?", cells[column].replace(",", ""))
                     if period_match and value_match:
                         output[code].append({"code": code, "period": f"{period_match.group(1)}-{int(period_match.group(2)):02d}", "value": value_match.group(0)})
-            if not output["TW_PMI"] or not output["TW_NMI"]:
-                raise RuntimeError("cier_pmi_tables_incomplete")
+            # CIER dropped the NMI table from this page in 2026-10 (nmi-trend is 404); PMI alone is still worth keeping.
+            if not output["TW_PMI"]:
+                raise RuntimeError("cier_pmi_table_missing")
             saved = self._cache_free_series(output["TW_PMI"] + output["TW_NMI"], PMI_SERIES, "CIER", "https://www.cier.edu.tw/pmi-trend/", fresh_for_seconds=12 * 3600)
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
@@ -1142,12 +1152,13 @@ class MarketMacroService:
         run_id = market_macro_db.reserve_source_call("WorldBank", daily_limit=4, minute_limit=2)
         if run_id is None: raise RuntimeError("world_bank_daily_budget_exhausted")
         try:
-            _, catalog = _request_free_cached("worldbank:catalog", "https://www.worldbank.org/en/research/commodity-markets", ttl_seconds=24 * 3600)
+            _, catalog = _request_free_cached("worldbank:catalog", "https://www.worldbank.org/en/research/commodity-markets", ttl_seconds=24 * 3600,
+                extra_headers=BROWSER_AGENT)
             match = re.search(r"href=[\"']([^\"']*CMO-Historical-Data-Monthly\.xlsx[^\"']*)[\"']", catalog.decode("utf-8", errors="replace"), re.I)
             if not match:
                 raise RuntimeError("world_bank_monthly_file_link_missing")
             url = urllib.parse.urljoin("https://www.worldbank.org", unescape(match.group(1)))
-            status, raw = _request_free_cached("worldbank:pink-sheet-monthly", url, ttl_seconds=45 * 24 * 3600)
+            status, raw = _request_free_cached("worldbank:pink-sheet-monthly", url, ttl_seconds=45 * 24 * 3600, extra_headers=BROWSER_AGENT)
             namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
             with zipfile.ZipFile(io.BytesIO(raw)) as workbook:
                 shared_root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))

@@ -174,10 +174,10 @@ class MarketMacroDatabase:
         now = datetime.now(timezone.utc)
         with self.sessions.begin() as session:
             session.execute(text("SELECT pg_advisory_xact_lock(812750319)"))
-            day_count = session.query(MacroFetchRun).filter(MacroFetchRun.source.like(f"{source}%"),
+            day_count = session.query(MacroFetchRun).filter(MacroFetchRun.source == source,
                 ~MacroFetchRun.detail.like("%budget_exhausted%"),
                 MacroFetchRun.started_at >= now - timedelta(hours=24), MacroFetchRun.status.in_(["reserved", "success", "error"])).count()
-            minute_count = session.query(MacroFetchRun).filter(MacroFetchRun.source.like(f"{source}%"),
+            minute_count = session.query(MacroFetchRun).filter(MacroFetchRun.source == source,
                 ~MacroFetchRun.detail.like("%budget_exhausted%"),
                 MacroFetchRun.started_at >= now - timedelta(minutes=1), MacroFetchRun.status.in_(["reserved", "success", "error"])).count()
             if day_count >= daily_limit or minute_count >= minute_limit:

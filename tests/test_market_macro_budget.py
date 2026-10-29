@@ -37,3 +37,12 @@ def test_summary_errors_do_not_double_charge_a_failed_request(monkeypatch):
     with db.sessions() as session:
         assert session.query(MacroFetchRun).one().status == 'diagnostic_error'
     assert db.reserve_source_call('PMI', daily_limit=1) is not None
+
+
+def test_a_source_budget_counts_only_its_own_calls_not_names_that_start_with_it():
+    # 2026-10-29: "DGBAS" was counted with LIKE 'DGBAS%', so every DGBASPrices request also spent DGBAS's budget.
+    db = database()
+    with db.sessions.begin() as session:
+        for _ in range(3):
+            session.add(MacroFetchRun(source='DGBASPrices', started_at=datetime.now(timezone.utc), status='success', record_count=1, detail=''))
+    assert db.reserve_source_call('DGBAS', daily_limit=1) is not None
