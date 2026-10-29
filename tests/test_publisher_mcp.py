@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
+from maya_sawa.core.security import SecurityMiddleware
 
 from maya_sawa.api import publisher_mcp as api
 from maya_sawa.services.social_publish_queue import PublishQueue
@@ -16,7 +17,10 @@ def client(monkeypatch):
     monkeypatch.setattr(api, 'publishing_queue', lambda: queue)
     monkeypatch.setattr(api, 'notify_pending', lambda *a, **kw: {'sent': True})
     monkeypatch.setattr(api.market_ai_analysis_db, 'read', lambda kind, code: {'analysis': {'revision': 8}})
-    app = FastAPI()
+    monkeypatch.setattr(api.Config, 'SECURITY_ENABLED', True)
+    monkeypatch.setattr(SecurityMiddleware, '_rate_limited', lambda *args: False)
+    app = FastAPI(root_path='/maya-sawa')
+    app.add_middleware(SecurityMiddleware)
     app.include_router(api.router)
     return TestClient(app)
 
@@ -84,3 +88,13 @@ def test_owner_with_publisher_scope_can_use_the_connector(client, monkeypatch):
     response = client.post('/market/publishing/mcp', headers={'Authorization': 'Bearer test'},
         json={'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'})
     assert response.status_code == 200
+
+
+def test_general_middleware_is_not_bypassed_for_publisher_path_prefixes(client, monkeypatch):
+    from fastapi import HTTPException
+    from maya_sawa.core import security
+    def reject(token):
+        raise HTTPException(401, 'Invalid token audience')
+    monkeypatch.setattr(security, 'verify_bearer_token', reject)
+    response = client.post('/market/publishing/mcp/other', headers={'Authorization': 'Bearer publisher-only'}, json={})
+    assert response.status_code == 401
