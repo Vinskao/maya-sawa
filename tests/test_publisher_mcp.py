@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from maya_sawa.core.security import SecurityMiddleware
+from maya_sawa.core.errors.errors import register_exception_handlers
 
 from maya_sawa.api import publisher_mcp as api
 from maya_sawa.services.social_publish_queue import PublishQueue
@@ -20,6 +21,7 @@ def client(monkeypatch):
     monkeypatch.setattr(api.Config, 'SECURITY_ENABLED', True)
     monkeypatch.setattr(SecurityMiddleware, '_rate_limited', lambda *args: False)
     app = FastAPI(root_path='/maya-sawa')
+    register_exception_handlers(app)
     app.add_middleware(SecurityMiddleware)
     app.include_router(api.router)
     return TestClient(app)
