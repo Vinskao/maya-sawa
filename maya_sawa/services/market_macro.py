@@ -149,7 +149,13 @@ YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX"
 # TWSE publishes no market-wide margin maintenance ratio; it is estimated from two public tables (margin_maintenance).
 TWSE_MARGIN_SERIES = {
     "TW_MARGIN_MAINTENANCE": ("Taiwan listed-market margin maintenance ratio (TWSE: collateral value / margin loans)", "percent", "daily"),
+    "TW_MARGIN_BALANCE": ("Taiwan listed-market margin loan balance (TWSE MI_MARGN)", "TWD 100 million", "daily"),
 }
+# Listed-market daily trading value; FMTQIK returns every trading day of one month per request.
+TWSE_TURNOVER_SERIES = {
+    "TW_MARKET_TURNOVER": ("Taiwan listed-market trading value (TWSE FMTQIK)", "TWD 100 million", "daily"),
+}
+TWSE_TURNOVER_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={day}&response=json"
 TWSE_MARGIN_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={day}&selectType=ALL&response=json"
 TWSE_PRICE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={day}&type=ALLBUT0999&response=json"
 # Yahoo chart and worldbank.org (both hosts) answer urllib's default agent with 403.
@@ -223,7 +229,7 @@ FREE_SERIES_FALLBACK_SECONDS = 30 * 24 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
-    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES))
+    | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES))
 
 
 def parse_bis_cpi_csv(raw: bytes) -> list[dict]:
@@ -360,6 +366,32 @@ def _twse_number(value) -> float | None:
 
 def _twse_table(payload: dict, *fields: str) -> dict | None:
     return next((table for table in payload.get("tables") or [] if set(fields) <= set(table.get("fields") or [])), None)
+
+
+def margin_loan_balance(margin: dict) -> float | None:
+    """The market's margin loan balance (融資金額 今日餘額) in NT$ 100 million; None on a holiday."""
+    summary = _twse_table(margin, "項目", "今日餘額")
+    if not summary:
+        return None
+    column = summary["fields"].index("今日餘額")
+    thousand = next((_twse_number(row[column]) for row in summary.get("data") or [] if str(row[0]).strip() == "融資金額(仟元)"), None)
+    return thousand * 1000 / 1e8 if thousand else None
+
+
+def twse_turnover_rows(payload: dict) -> list[dict]:
+    """FMTQIK rows as {period: ISO date, value: trading value in NT$ 100 million}; dates are ROC ("115/10/28")."""
+    fields = payload.get("fields") or []
+    if "日期" not in fields or "成交金額" not in fields:
+        return []
+    day_at, value_at = fields.index("日期"), fields.index("成交金額")
+    rows = []
+    for row in payload.get("data") or []:
+        match = re.fullmatch(r"(\d{2,3})/(\d{2})/(\d{2})", str(row[day_at]).strip())
+        value = _twse_number(row[value_at])
+        if match and value:
+            period = f"{int(match.group(1)) + 1911}-{match.group(2)}-{match.group(3)}"
+            rows.append({"period": period, "value": f"{value / 1e8:.2f}"})
+    return rows
 
 
 def margin_maintenance(margin: dict, prices: dict) -> dict | None:
@@ -602,7 +634,7 @@ class MarketMacroService:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
-                ("TWSEMargin", self._fetch_twse_margin_maintenance),
+                ("TWSEMargin", self._fetch_twse_margin_maintenance), ("TWSEMarketTurnover", self._fetch_twse_turnover),
                 ("DGBAS", self._fetch_dgbas_employment),
                 ("DGBASPrices", self._fetch_taiwan_prices),
                 ("WorldBank", self._fetch_world_bank_gold),
@@ -950,29 +982,65 @@ class MarketMacroService:
         max_days days per refresh (four refreshes a day fill a year in about a week). Stored days are not refetched."""
         run_id = market_macro_db.reserve_source_call("TWSE", daily_limit=8, minute_limit=2)
         if run_id is None: raise RuntimeError("twse_daily_budget_exhausted")
-        code = "TW_MARGIN_MAINTENANCE"
-        history = {row["period"]: row["value"] for row in (_macro_local_cache.get(f"series:{code}") or {}).get("history") or []}
+        # The same MI_MARGN response also gives the margin loan balance (TW_MARGIN_BALANCE, since 2026-10-29).
+        # A day is due while either series lacks it; prices are fetched only when the ratio is missing.
+        stored = lambda code: {row["period"]: row["value"] for row in (_macro_local_cache.get(f"series:{code}") or {}).get("history") or []}
+        history, balances = stored("TW_MARGIN_MAINTENANCE"), stored("TW_MARGIN_BALANCE")
         day, attempts, added, status = today or datetime.now(ZoneInfo("Asia/Taipei")).date(), 0, 0, None
         try:
             while attempts < max_days and day > date.today() - timedelta(days=366):
-                if day.weekday() < 5 and day.isoformat() not in history:
+                iso = day.isoformat()
+                if day.weekday() < 5 and (iso not in history or iso not in balances):
                     attempts += 1
                     compact = day.strftime("%Y%m%d")
-                    status, margin = _request_free_cached(f"twse:margin:{compact}", TWSE_MARGIN_URL.format(day=compact))
+                    status, raw_margin = _request_free_cached(f"twse:margin:{compact}", TWSE_MARGIN_URL.format(day=compact))
                     time.sleep(1)                         # TWSE throttles bursts
-                    status, prices = _request_free_cached(f"twse:prices:{compact}", TWSE_PRICE_URL.format(day=compact))
-                    time.sleep(1)
-                    result = margin_maintenance(json.loads(margin), json.loads(prices))
-                    if result:
-                        history[day.isoformat()] = f"{result['ratio']:.2f}"
+                    margin = json.loads(raw_margin)
+                    balance = margin_loan_balance(margin)
+                    if balance is not None:               # None: holiday, so no price table either
+                        balances[iso] = f"{balance:.2f}"
                         added += 1
+                        if iso not in history:
+                            status, prices = _request_free_cached(f"twse:prices:{compact}", TWSE_PRICE_URL.format(day=compact))
+                            time.sleep(1)
+                            result = margin_maintenance(margin, json.loads(prices))
+                            if result:
+                                history[iso] = f"{result['ratio']:.2f}"
                 day -= timedelta(days=1)
             if added:
-                rows = [{"code": code, "period": period, "value": value} for period, value in sorted(history.items())]
+                rows = [{"code": code, "period": period, "value": value}
+                    for code, series in (("TW_MARGIN_MAINTENANCE", history), ("TW_MARGIN_BALANCE", balances)) for period, value in sorted(series.items())]
                 self._cache_free_series(rows, TWSE_MARGIN_SERIES, "TWSE (computed: MI_MARGN, MI_INDEX)",
                                         "https://www.twse.com.tw/zh/trading/margin/mi-margn.html")
             market_macro_db.finish_source_call(run_id, "success", added, http_status=status)
             return added
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_twse_turnover(self, today: date | None = None, months: int = 13) -> int:
+        """Daily listed-market trading value, one FMTQIK request per month: the current month every run (it is
+        still filling in), earlier months only while they have no stored day. Skipped within five hours of a fetch."""
+        code = "TW_MARKET_TURNOVER"
+        if _fetched_within(code, 5 * 3600): return 0
+        run_id = market_macro_db.reserve_source_call("TWSETurnover", daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError("twse_turnover_daily_budget_exhausted")
+        history = {row["period"]: row["value"] for row in (_macro_local_cache.get(f"series:{code}") or {}).get("history") or []}
+        month, status = (today or datetime.now(ZoneInfo("Asia/Taipei")).date()).replace(day=1), None
+        try:
+            for index in range(months):
+                prefix = month.strftime("%Y-%m")
+                if index == 0 or not any(period.startswith(prefix) for period in history):
+                    compact = month.strftime("%Y%m%d")
+                    status, raw = _request_free_cached(f"twse:turnover:{compact}", TWSE_TURNOVER_URL.format(day=compact))
+                    time.sleep(1)                         # TWSE throttles bursts
+                    history.update({row["period"]: row["value"] for row in twse_turnover_rows(json.loads(raw))})
+                month = (month - timedelta(days=1)).replace(day=1)
+            rows = [{"code": code, "period": period, "value": value} for period, value in sorted(history.items())]
+            saved = self._cache_free_series(rows, TWSE_TURNOVER_SERIES, "TWSE FMTQIK",
+                                            "https://www.twse.com.tw/zh/trading/historical/fmtqik.html") if rows else 0
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
         except Exception as exc:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
             raise
