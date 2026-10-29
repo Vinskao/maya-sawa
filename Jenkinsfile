@@ -390,6 +390,24 @@ TELEGRAM_CHAT_ID=%s
             }
         }
 
+        stage('Configure EDINET Key') {
+            // Free EDINET API v2 key (Japan FSA filings: annual and semiannual securities reports). Owner-registered
+            // Jenkins Secret text EDINET_API_KEY; a missing credential must not block deploys.
+            steps {
+                container('kubectl') {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'EDINET_API_KEY unavailable; EDINET collection stays off') {
+                        withCredentials([string(credentialsId: 'EDINET_API_KEY', variable: 'EDINET_API_KEY')]) {
+                            sh '''
+                                set -e
+                                printf 'EDINET_API_KEY=%s\n' "$EDINET_API_KEY" | kubectl create secret generic edinet-credentials \
+                                  --from-env-file=/dev/stdin -n default --dry-run=client -o yaml | kubectl apply -f -
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {

@@ -233,6 +233,12 @@ spec:
               name: binance-credentials
               key: BINANCE_API_SECRET
               optional: true
+        - name: EDINET_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: edinet-credentials
+              key: EDINET_API_KEY
+              optional: true
         - name: MACRO_ENABLED
           value: "${MACRO_ENABLED}"
         - name: MACRO_BLS_DAILY_BUDGET
