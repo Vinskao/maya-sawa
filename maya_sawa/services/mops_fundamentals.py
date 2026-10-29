@@ -209,6 +209,27 @@ def fetch_revenue(market: str, year: int, month: int) -> str:
     return _fetch(revenue_url(market, year, month))
 
 
+# Inventory and capex are only in each company's full statements; fetched per selected stock (one page per quarter).
+DETAIL_PAGES = {"balance": ("t164sb03", "存貨", "TaiwanStockBalanceSheet", "Inventories"),
+                "cash": ("t164sb05", "取得不動產、廠房及設備", "TaiwanStockCashFlowsStatement", "PropertyAndPlantAndEquipment")}
+
+
+def detail_value(document: str, label: str) -> float | None:
+    """First amount (the current period; comparatives follow) of the row labelled exactly `label`, in yuan."""
+    for row in re.findall(r"<tr.*?</tr>", document, flags=re.S | re.I):
+        cells = [_text(cell) for cell in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", row, flags=re.S | re.I)]
+        if len(cells) > 1 and cells[0] == label:
+            value = _number(cells[1])
+            return round(value * 1000) if value is not None else None
+    return None
+
+
+def fetch_detail(page: str, code: str, year: int, quarter: int) -> str:
+    form = {"encodeURIComponent": "1", "step": "1", "firstin": "1", "off": "1", "queryName": "co_id", "inpuType": "co_id",
+            "TYPEK": "all", "isnew": "false", "co_id": code, "year": str(year - 1911), "season": f"{quarter:02d}"}
+    return _fetch(f"{BASE}/mops/web/ajax_{page}", form)
+
+
 class MopsCollector:
     """Works through `backlog` one page at a time, writing every company of each page in bulk.
 
@@ -216,8 +237,10 @@ class MopsCollector:
     (late filers, restatements). MOPS throttles bursts, so pages are spaced `gap_seconds` apart and a throttle page
     pauses the pass."""
 
-    def __init__(self, db, fetch_statement=fetch_statement, fetch_revenue=fetch_revenue, sleep=time.sleep, gap_seconds: float = 8):
-        self.db, self.fetch_statement, self.fetch_revenue, self.sleep, self.gap = db, fetch_statement, fetch_revenue, sleep, gap_seconds
+    def __init__(self, db, fetch_statement=fetch_statement, fetch_revenue=fetch_revenue, fetch_detail=fetch_detail,
+                 sleep=time.sleep, gap_seconds: float = 8):
+        self.db, self.fetch_statement, self.fetch_revenue, self.fetch_detail = db, fetch_statement, fetch_revenue, fetch_detail
+        self.sleep, self.gap = sleep, gap_seconds
 
     def _write(self, kind: str, period: str, by_code: dict[str, dict[str, float]], source_url: str) -> int:
         records = [{"code": code, "period": period, "item": item, "value": value,
@@ -271,6 +294,37 @@ class MopsCollector:
                 self.sleep(self.gap)
                 continue
             self.db.record_mops(kind, market, period, "success" if rows else "empty")
+            written += bool(rows)
+            self.sleep(self.gap)
+        return written
+
+    def run_pass_detail(self, codes: list[str], today: date, max_jobs: int = 40, quarters: list[str] | None = None) -> int:
+        """Inventory and capex for the selected stocks, newest quarter first; checkpoint kind detail-balance/detail-cash
+        with the stock code in place of the market. The latest two quarters are refetched."""
+        recent = recent_periods(today)
+        if quarters is None:
+            quarters = sorted({period for _, _, period in backlog(today.year, today.month) if "Q" in period}, reverse=True)
+        done = {job for job in self.db.mops_done() if job[2] not in recent}
+        jobs = [(kind, code, period) for period in quarters for code in codes for kind in DETAIL_PAGES
+                if (f"detail-{kind}", code, period) not in done][:max_jobs]
+        written = 0
+        for kind, code, period in jobs:
+            page, label, dataset, item = DETAIL_PAGES[kind]
+            year, quarter = int(period[:4]), int(period[-1])
+            try:
+                document = self.fetch_detail(page, code, year, quarter)
+            except Exception as exc:
+                logger.warning("MOPS detail %s/%s/%s failed: %s", page, code, period, type(exc).__name__)
+                self.db.record_mops(f"detail-{kind}", code, period, "error")
+                self.sleep(self.gap)
+                continue
+            if throttled(document):
+                logger.warning("MOPS throttled the detail collector; pausing this pass")
+                return written
+            value = detail_value(document, label)
+            rows = self.db.upsert_many(dataset, [{"code": code, "period": quarter_end(year, quarter), "item": item, "value": value,
+                                                  "unit": "新台幣元"}], f"{BASE}/mops/web/{page}") if value is not None else 0
+            self.db.record_mops(f"detail-{kind}", code, period, "success" if rows else "empty")
             written += bool(rows)
             self.sleep(self.gap)
         return written

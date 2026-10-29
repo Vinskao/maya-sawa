@@ -1,0 +1,96 @@
+
+
+
+<html>
+<head>
+	<title>公開資訊觀測站</title>
+	
+	
+	<link href="css/css2.css" rel="stylesheet" type="text/css" Media="Screen"/> 
+	
+	<script type="text/javascript" src="js/mops2.js"></script>
+	
+	
+	
+</head>
+
+<body>
+
+
+<div id="div01" >
+<center>
+<h2 align='center'><font color='blue'>合併現金流量表</font></h2>
+<h4 align='center'><font color='blue'>本資料由台積電公司提供</font></h4>
+<table class='noBorder' align='center''></table><table class='hasBorder' align='center'><tr><th class='tblHead' colspan='7'>民國115年第2季</tr><tr><th class='tblHead' style='text-align:left;'>會計項目</th><th class='tblHead' style='text-align:left;white-space:nowrap;'>115年01月01日至115年06月30日</th><th class='tblHead' style='text-align:left;white-space:nowrap;'>114年01月01日至114年06月30日</th></tr><tr><td class='odd' style='text-align:left;white-space:nowrap;'>　　　　存貨（增加）減少</td><td class='odd' style='text-align:right;'>                    -97,415,057</td><td class='odd' style='text-align:right;'>                    -16,324,906</td></tr><tr><td class='odd' style='text-align:left;white-space:nowrap;'>營業活動之淨現金流入（流出）</td><td class='odd' style='text-align:right;'>                  1,482,341,242</td><td class='odd' style='text-align:right;'>                  1,122,637,757</td></tr><tr><td class='odd' style='text-align:left;white-space:nowrap;'>　取得不動產、廠房及設備</td><td class='odd' style='text-align:right;'>                   -846,764,746</td><td class='odd' style='text-align:right;'>                   -628,052,531</td></tr></table>
+</center>
+
+</div>
+
+
+</body>
+
+
+
+<script>
+	try {
+		if(!document.querySelector('#table01')){
+			var table01 = document.createElement("div");
+			table01.id = "table01"; 
+			document.body.appendChild(table01);
+			if(document.querySelector("#div01")){
+				table01.appendChild(div01);
+			};
+		};
+
+		if (document.autoForm!=null && document.autoForm!=undefined && document.autoForm.run.value==''){
+			ajax1(document.autoForm,'div01');
+			document.querySelector('form[name=autoForm]').remove();
+		};
+
+		if (document.autoForm1!=null && document.autoForm1!=undefined && document.autoForm1.run.value==''){
+			ajax1(document.autoForm1,'div01');
+			document.querySelector('form[name=autoForm1]').remove();
+		};
+
+		if (document.autoRunScript!=null && document.autoRunScript!=undefined && document.autoRunScript.run!=null && document.autoRunScript.run.value!=''){
+			let s = document.autoRunScript.run.value;
+			let script = document.createElement("script");
+
+			script.innerText = s;
+			document.body.appendChild(script);
+			document.querySelector('form[name=autoRunScript] > input[name=run]').remove();
+		};
+
+		if (document.autoRunScript1!=null && document.autoRunScript1!=undefined){
+			if (document.autoRunScript1.count!=null && document.autoRunScript1.count!=undefined && document.autoRunScript1.count.value!=''){
+				var count = parseInt(document.autoRunScript1.count.value);
+				for (var i=0;i<count;i++){
+					var run = eval("document.autoRunScript1.run"+i);
+					if (run!=null && run!=undefined && run.value!=''){
+						var s = run.value;
+
+						var script = document.createElement("script");
+						script.textContent = s;
+						document.querySelector("body").appendChild(script);
+
+						run.remove();
+					};
+				};
+			}else if (document.autoRunScript1.run!=null && document.autoRunScript1.run!=undefined && document.autoRunScript1.run.value!=''){
+				var s = document.autoRunScript1.run.value;
+				s = htmlEncode(s);
+				var script = document.createElement("script");
+				script.textContent = s;
+				document.querySelector("body").appendChild(script);
+
+				document.querySelector('form[name=autoRunScript1] > input[name=run]').remove();
+			};
+		};
+	} catch (error) {
+		console.error("Script Error:", error);
+	};
+</script>
+
+
+
+</html>

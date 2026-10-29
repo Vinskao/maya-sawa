@@ -83,13 +83,15 @@ class MarketFundamentalsService:
         self._collector_task: asyncio.Task | None = None
         self._worker_task: asyncio.Task | None = None
         self._mops_task: asyncio.Task | None = None
+        self._opened: set[str] = set()   # stocks opened in the fundamentals view: their inventory/capex is collected too
         self._queue: list[str] = []
         self._queue_event = asyncio.Event()
 
     async def start(self) -> None:
         if self._collector_task is None or self._collector_task.done():
             self._collector_task = asyncio.create_task(self._collector_loop())
-        if self._worker_task is None or self._worker_task.done():
+        # FinMind Free is non-commercial only; MOPS now supplies the same items, so FinMind runs only when asked for.
+        if os.getenv("FINMIND_ENABLED", "0") == "1" and (self._worker_task is None or self._worker_task.done()):
             self._worker_task = asyncio.create_task(self._finmind_worker())
         if os.getenv("MOPS_FUNDAMENTALS_ENABLED", "1") != "0" and (self._mops_task is None or self._mops_task.done()):
             self._mops_task = asyncio.create_task(self._mops_loop())
@@ -130,7 +132,10 @@ class MarketFundamentalsService:
         await asyncio.sleep(5 * 60)                 # let the pod finish starting before the first crawl
         while True:
             try:
-                written = await asyncio.to_thread(collector.run_pass, datetime.now(TZ).date())
+                today = datetime.now(TZ).date()
+                written = await asyncio.to_thread(collector.run_pass, today)
+                codes = sorted(set(await asyncio.to_thread(self._watch_symbols)) | self._opened)
+                written += await asyncio.to_thread(collector.run_pass_detail, codes, today)
                 await asyncio.sleep(10 * 60 if written else 60 * 60)
             except asyncio.CancelledError:
                 raise
@@ -219,6 +224,7 @@ class MarketFundamentalsService:
         history = await asyncio.to_thread(self._finmind_history, code)
         # Any stock someone opens joins the refresh queue; the 24h per-dataset checkpoint stops repeat downloads.
         self._enqueue(code, urgent=True)
+        self._opened.add(code)
         return {"code": code, "monthlyRevenue": monthly, "incomeStatements": income, "balanceSheets": balance,
                 "metrics": build_fundamental_metrics(monthly, income, history),
                 "historyPending": not history.get("TaiwanStockFinancialStatements"),

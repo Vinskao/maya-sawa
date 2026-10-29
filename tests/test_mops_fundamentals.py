@@ -152,3 +152,43 @@ def test_a_pass_writes_single_quarters_and_stops_when_throttled():
 def test_the_latest_two_months_and_quarters_are_refetched_even_when_done():
     assert mops.recent_periods(date(2026, 10, 29)) == {"2026-09", "2026-08", "2026Q3", "2026Q2"}
     assert mops.recent_periods(date(2026, 1, 5)) == {"2025-12", "2025-11", "2025Q4", "2025Q3"}
+
+
+# Inventory and capex are only in each company's full statements (t164sb03 balance sheet, t164sb05 cash flow), so they
+# are fetched per selected stock; with them FinMind is no longer needed. Fixtures: real 2330 2026Q2 pages, rows trimmed.
+def test_full_statements_give_inventory_and_year_to_date_capex():
+    balance, cash = read("t164sb03_2330_115Q2.html"), read("t164sb05_2330_115Q2.html")
+    assert mops.detail_value(balance, "存貨") == 385_524_542_000           # not the cash-flow line 存貨（增加）減少
+    assert mops.detail_value(cash, "取得不動產、廠房及設備") == -846_764_746_000
+    assert mops.detail_value(cash, "不存在的科目") is None
+
+
+def test_detail_jobs_store_finmind_item_names_per_stock():
+    db = _db()
+    pages = {"t164sb03": read("t164sb03_2330_115Q2.html"), "t164sb05": read("t164sb05_2330_115Q2.html")}
+    collector = mops.MopsCollector(db, fetch_detail=lambda page, code, year, quarter: pages[page], sleep=lambda seconds: None)
+    collector.run_pass_detail(["2330"], date(2026, 10, 29), max_jobs=2, quarters=["2026Q2"])
+    balance = {row["item"]: row for row in db.rows("2330", "TaiwanStockBalanceSheet")}
+    cash = {row["item"]: row for row in db.rows("2330", "TaiwanStockCashFlowsStatement")}
+    assert float(balance["Inventories"]["value"]) == 385_524_542_000 and balance["Inventories"]["source"] == "MOPS"
+    assert float(cash["PropertyAndPlantAndEquipment"]["value"]) == -846_764_746_000
+    assert {("detail-balance", "2330", "2026Q2"), ("detail-cash", "2330", "2026Q2")} <= db.mops_done()
+
+
+def test_finmind_collection_is_off_unless_enabled(monkeypatch):
+    import asyncio
+    from maya_sawa.services import market_fundamentals
+    monkeypatch.delenv("FINMIND_ENABLED", raising=False)
+    monkeypatch.setenv("MOPS_FUNDAMENTALS_ENABLED", "0")
+
+    async def started():
+        service = market_fundamentals.MarketFundamentalsService()
+        monkeypatch.setattr(service, "_collector_loop", lambda: asyncio.sleep(0))
+        await service.start()
+        worker = service._worker_task
+        await service.close()
+        return worker
+
+    assert asyncio.run(started()) is None
+    monkeypatch.setenv("FINMIND_ENABLED", "1")
+    assert asyncio.run(started()) is not None
