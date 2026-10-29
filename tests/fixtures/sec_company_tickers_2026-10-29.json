@@ -1,0 +1,42 @@
+{
+"0": {
+"cik_str": 1045810,
+"ticker": "NVDA",
+"title": "NVIDIA CORP"
+},
+"2": {
+"cik_str": 1652044,
+"ticker": "GOOGL",
+"title": "Alphabet Inc."
+},
+"5": {
+"cik_str": 1326801,
+"ticker": "META",
+"title": "Meta Platforms, Inc."
+},
+"8": {
+"cik_str": 1067983,
+"ticker": "BRK-B",
+"title": "BERKSHIRE HATHAWAY INC"
+},
+"11": {
+"cik_str": 723125,
+"ticker": "MU",
+"title": "MICRON TECHNOLOGY INC"
+},
+"254": {
+"cik_str": 1633978,
+"ticker": "LITE",
+"title": "Lumentum Holdings Inc."
+},
+"7242": {
+"cik_str": 1046179,
+"ticker": "TSM",
+"title": "TAIWAN SEMICONDUCTOR MANUFACTURING CO LTD"
+},
+"7470": {
+"cik_str": 1652044,
+"ticker": "GOOG",
+"title": "Alphabet Inc."
+}
+}

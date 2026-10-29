@@ -15,6 +15,29 @@ from datetime import date, datetime, timezone
 import httpx
 
 SEC_CIK = {'META': '0001326801', 'LITE': '0001633978'}
+# Any other U.S. ticker is resolved from SEC's full ticker map (about 10,400 entries), fetched at most once a day.
+SEC_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json'
+_sec_ticker_cache: dict = {}
+
+
+def resolve_sec_cik(code, tickers):
+    """Ten-digit CIK for a ticker from company_tickers.json; share classes use a dash there (BRK.B -> BRK-B)."""
+    wanted = str(code or '').strip().upper().replace('.', '-')
+    for item in (tickers or {}).values():
+        if str(item.get('ticker', '')).upper() == wanted:
+            return str(item.get('cik_str')).zfill(10)
+    return None
+
+
+async def _sec_cik(code, client):
+    if code in SEC_CIK:
+        return SEC_CIK[code]
+    now = datetime.now(timezone.utc).timestamp()
+    if not _sec_ticker_cache or now - _sec_ticker_cache.get('at', 0) > 86400:
+        response = await client.get(SEC_TICKERS_URL)
+        response.raise_for_status()
+        _sec_ticker_cache.update({'at': now, 'tickers': response.json()})
+    return resolve_sec_cik(code, _sec_ticker_cache.get('tickers'))
 
 
 def financial_content_period(data):
@@ -124,13 +147,16 @@ def normalize_sec_facts(raw):
 
 
 async def collect_sec_financials(collector, code, market, conid):
-    if market != 'US' or code not in SEC_CIK or not await asyncio.to_thread(collector.due, code, market, 'financials', 86400):
+    if market != 'US' or not await asyncio.to_thread(collector.due, code, market, 'financials', 86400):
         return
-    cik = SEC_CIK[code]
-    url = f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json'
+    url = None
     try:
         async with httpx.AsyncClient(timeout=30, headers={'User-Agent': os.getenv('SEC_USER_AGENT',
                 'TYMultiverseResearch/1.0 (https://peoplesystem.tatdvsonorth.com)')}) as client:
+            cik = await _sec_cik(code, client)
+            if not cik:
+                return                            # not an SEC registrant (e.g. a foreign listing without a U.S. ticker)
+            url = f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json'
             response = await client.get(url)
             response.raise_for_status()
             raw = response.json()
