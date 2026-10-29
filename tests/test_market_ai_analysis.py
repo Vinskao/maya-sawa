@@ -85,9 +85,9 @@ def test_shared_macro_commentary_uses_its_own_slot(database, monkeypatch):
 AGENT_KEY = "test-agent-key-not-a-real-secret"
 
 
-def test_scheduled_agent_key_writes_daily_analyses_only(database, monkeypatch):
+def test_scheduled_agent_key_writes_stock_research_and_macro_analyses(database, monkeypatch):
     # The scheduled Claude Code routine has no Keycloak login; it sends a dedicated key whose SHA-256 is the only
-    # thing the server stores. The key can write stock / futures / macro analyses and nothing else.
+    # thing the server stores. The key can write analyses and validated per-instrument research maps only.
     import hashlib
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -105,8 +105,19 @@ def test_scheduled_agent_key_writes_daily_analyses_only(database, monkeypatch):
     assert client.put(endpoint, json=body, headers={"X-Market-Agent-Key": AGENT_KEY}).json()["analysis"]["revision"] == 1
     assert client.put("/market/dashboard/analysis/US?productType=macro", json=body,
                       headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 200
-    assert client.put("/market/dashboard/analysis/2330?productType=research", json=body,
-                      headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 403
+    research = {
+        "name": "台積電", "market": "TW", "asOf": "2026-10-29", "summary": "先進製程需求穩健",
+        "supplyChain": "flowchart LR\nA[設備] --> B[晶圓製造]",
+        "technology": "flowchart LR\nA[試產] --> B[量產]",
+        "assessment": {
+            "cycle": {"view": "中性", "note": "週期持平"},
+            "technology": {"view": "順風", "note": "N2 於 2026-10 進入量產"},
+            "delivery": {"view": "中性", "note": "交期未變"},
+        }, "lean": "中立", "leanReason": "新資料尚未改變三項判斷", "watch": [], "sources": [],
+    }
+    research_body = {"model": "Claude (scheduled)", "content": __import__("json").dumps(research), "expectedRevision": 0}
+    assert client.put("/market/dashboard/analysis/2330?productType=research", json=research_body,
+                      headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 200
     assert database.last_editor("stock", "2330") == "agent:scheduled-analysis"
     assert client.put("/market/dashboard/industries/ai-optics", json={},
                       headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 401  # the key is not a login

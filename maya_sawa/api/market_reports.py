@@ -20,6 +20,7 @@ from ..core.config.config import Config
 from ..databases.market_reports_db import market_reports_db
 from ..services import sec_filings
 from ..services.embedding_service import get_embedding_service
+from ..services import market_automation
 from ..services.market_reports import (
     MAX_REPORT_BYTES,
     PDFTextExtractionError,
@@ -361,7 +362,8 @@ class ClaimsBody(BaseModel):
 
 @router.put("/{report_id}/claims")
 async def put_claims(
-    report_id: str, body: ClaimsBody, x_market_agent_key: str | None = Header(None)
+    report_id: str, body: ClaimsBody, background_tasks: BackgroundTasks,
+    x_market_agent_key: str | None = Header(None)
 ):
     _verify_agent(x_market_agent_key)
     try:
@@ -374,4 +376,15 @@ async def put_claims(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not saved:
         raise HTTPException(status_code=404, detail="Report not found")
+    related_codes = sorted({code.strip() for claim in body.claims
+                            for code in claim.get("codes", [])
+                            if isinstance(code, str) and len(code.strip()) == 4 and code.strip().isdigit()})
+    if related_codes:
+        background_tasks.add_task(
+            market_automation.fire_analysis_event,
+            market_automation.automation_store(),
+            event_key=f"report:{report_id}:claims",
+            codes=related_codes,
+            reason=f"研究報告 {report_id} 的主張已完成擷取",
+        )
     return {"saved": True, "claim_count": len(body.claims)}

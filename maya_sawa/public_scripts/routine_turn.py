@@ -12,8 +12,8 @@ from datetime import date, datetime, timedelta, timezone
 
 ANCHOR = date(2026, 10, 26)
 TAIPEI = timezone(timedelta(hours=8))
-# Taipei weekdays (Mon=0) each routine's cron fires on: 台股收盤後 Mon-Fri 21:15, 美股與總經 Tue-Sat 07:30.
-SCHEDULES = {"taiwan": frozenset(range(0, 5)), "us": frozenset(range(1, 6))}
+# Taipei weekdays (Mon=0): Taiwan Friday 21:15; US and macro Tue-Sat 07:30.
+SCHEDULES = {"taiwan": frozenset({4}), "us": frozenset(range(1, 6))}
 LATE_START = timedelta(hours=6)  # a start delayed past midnight still belongs to the scheduled evening
 
 

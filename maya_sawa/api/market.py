@@ -169,7 +169,7 @@ async def get_analysis_timestamp_proof(day: str):
 
 
 AGENT_EDITOR = "agent:scheduled-analysis"
-AGENT_PRODUCT_TYPES = {"stock", "futures", "macro", "macro-node"}
+AGENT_PRODUCT_TYPES = {"stock", "futures", "macro", "macro-node", "research"}
 
 
 async def analysis_editor(request: Request) -> str:
@@ -195,7 +195,7 @@ async def put_market_ai_analysis(code: str, body: MarketAiAnalysisUpdate, produc
                                  editor: str = Depends(analysis_editor)):
     target = analysis_target(code, productType)
     if editor == AGENT_EDITOR and target[0] not in AGENT_PRODUCT_TYPES:
-        raise HTTPException(status_code=403, detail="The agent key writes daily analyses only")
+        raise HTTPException(status_code=403, detail="The agent key cannot write this analysis type")
     if target[0] == "research":
         try:
             validate_research_content(body.content)

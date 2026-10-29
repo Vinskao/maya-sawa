@@ -136,12 +136,54 @@ class MarketFundamentalsService:
                 written = await asyncio.to_thread(collector.run_pass, today)
                 codes = sorted(set(await asyncio.to_thread(self._watch_symbols)) | self._opened)
                 written += await asyncio.to_thread(collector.run_pass_detail, codes, today)
+                if codes:
+                    await self._fire_recent_analysis_events(codes, today)
                 await asyncio.sleep(10 * 60 if written else 60 * 60)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("MOPS fundamentals pass failed")
                 await asyncio.sleep(60 * 60)
+
+    async def _fire_recent_analysis_events(self, codes: list[str], today: date) -> None:
+        """Trigger only selected Taiwan names when official releases or a completed investor conference arrive."""
+        from .market_company_events import market_company_events_service
+        from . import market_automation
+
+        selected = sorted({code for code in codes if code.isdigit() and len(code) == 4})
+        if not selected:
+            return
+        try:
+            payload = await market_company_events_service.get(selected)
+        except Exception:
+            logger.exception("Taiwan publication check failed")
+            return
+        grouped: dict[tuple[str, str, str], set[str]] = {}
+        for event in payload.get("events", []):
+            if event.get("status") != "recent" or event.get("type") not in {
+                "monthly_revenue", "financial_report", "investor_conference"
+            }:
+                continue
+            try:
+                published = date.fromisoformat(str(event.get("date", ""))[:10])
+            except ValueError:
+                continue
+            if published > today or (today - published).days > 7:
+                continue
+            code = str(event.get("code", ""))
+            if code not in selected:
+                continue
+            kind = str(event["type"])
+            period = str(event.get("period") or event.get("date") or "")
+            grouped.setdefault((kind, period, published.isoformat()), set()).add(code)
+        store = market_automation.automation_store()
+        for (kind, period, published), event_codes in sorted(grouped.items()):
+            code_list = sorted(event_codes)
+            key = f"taiwan-disclosure:{kind}:{period}:{published}:{','.join(code_list)}"
+            await market_automation.fire_analysis_event(
+                store, event_key=key, codes=code_list,
+                reason=f"台股 {kind}（期間 {period}，公布日 {published}）",
+            )
 
     def _enqueue(self, code: str, urgent: bool = False) -> None:
         if code in self._queue:

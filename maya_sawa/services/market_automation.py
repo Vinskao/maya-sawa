@@ -13,6 +13,7 @@ from the environment (MARKET_ROUTINE_TAIWAN_TOKEN, MARKET_ROUTINE_US_TOKEN). Wit
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 from dataclasses import dataclass
@@ -43,9 +44,8 @@ class RoutineRun:
 
 
 RUNS = (
-    # Taiwan, Tokyo and Seoul all close by 14:30 Taipei. Margin balances and securities lending publish around
-    # 20:45 (measured 2026-10-19) and are collected at 21:00, so the run waits until 21:10. Cron: 13:15 UTC.
-    RoutineRun("taiwan", "trig_01ECP68tWfgM749sJa3gBiN9", "MARKET_ROUTINE_TAIWAN_TOKEN", ("JP", "KR"), (0, 1, 2, 3, 4),
+    # Friday reconciliation is Taiwan-only; it does not wait on an IB login or overseas market bars.
+    RoutineRun("taiwan", "trig_01ECP68tWfgM749sJa3gBiN9", "MARKET_ROUTINE_TAIWAN_TOKEN", (), (4,),
                time(14, 30), time(21, 10), time(21, 15)),
     # New York closes 04:00 (EDT) / 05:00 (EST) Taipei, Tuesday to Saturday. Cron: 23:30 UTC.
     RoutineRun("us", "trig_01NETQT5DCSHj4TKwv45nbJR", "MARKET_ROUTINE_US_TOKEN", ("US",), (1, 2, 3, 4, 5),
@@ -54,6 +54,7 @@ RUNS = (
 MISSED = ":missed"  # AutomationFire.run suffix marking a session whose scheduled run had stale bars
 ADDED = "added:"  # AutomationFire.run prefix: a newly added instrument's first analysis, once per code per day
 ADDED_COLLECT_TIMEOUT = timedelta(minutes=15)  # a 92-day backfill of every Taiwan source takes a few minutes
+EVENT_DAY = date(1970, 1, 1)  # stable primary-key date: event triggers are deduplicated for the event's lifetime
 
 
 def session_date(run: RoutineRun, now: datetime) -> date | None:
@@ -265,6 +266,45 @@ async def fire_routine(run: RoutineRun, text: str) -> str:
             "anthropic-version": "2023-06-01", "Content-Type": "application/json"})
     response.raise_for_status()
     return str(response.json().get("claude_code_session_url", ""))
+
+
+async def fire_analysis_event(store: AutomationStore, *, event_key: str, codes: list[str], reason: str,
+                             now: datetime | None = None) -> dict:
+    """Fire one targeted Taiwan analysis for a newly available report or company disclosure.
+
+    Report claims already carry explicit instrument codes. This event path only accepts four-digit Taiwan
+    tickers, records a stable idempotency key, and tells the routine to update those codes' AI analysis and
+    research map. The report/event is data context; daily price-only changes are not a write trigger.
+    """
+    normalized = sorted({str(code).strip().upper() for code in codes
+                         if str(code).strip().isdigit() and len(str(code).strip()) == 4})
+    if not normalized:
+        return {"state": "no-taiwan-codes", "codes": []}
+    run = RUNS[0]
+    if not os.environ.get(run.token_env, "").strip():
+        return {"state": "not-configured", "codes": normalized}
+    digest = hashlib.sha256(event_key.encode("utf-8")).hexdigest()[:32]
+    fire_key = f"event:{digest}"
+    if not store.record(fire_key, EVENT_DAY, ""):
+        return {"state": "done", "codes": normalized}
+    local_now = (now or datetime.now(timezone.utc)).astimezone(TAIPEI)
+    listed = ", ".join(normalized)
+    text = (
+        f"事件更新：{reason}（{local_now:%Y-%m-%d %H:%M} 台北）。\n"
+        f"只更新這些台股：{listed}。\n"
+        "這是即時事件觸發，不受每週 Sonnet/Opus 輪替限制；請直接執行，不要跑輪替檢查後停止。"
+        "先讀這些代碼的報告主張、公司事件、已保存研究圖和目前 AI 分析；有新證據才寫入。"
+        "如新證據改變供應鏈位置、製程／產品階段、送樣、客戶驗證、爬坡或量產狀態，更新 productType=research，"
+        "並在 technology assessment 和技術圖標示資料日期、來源與頁碼；同時依新證據更新 productType=stock AI 分析。"
+        "若資料沒有改變判斷，不要重寫。不要更新其他市場或總經評論。"
+    )
+    try:
+        url = await fire_routine(run, text)
+    except Exception as exc:
+        store.release(fire_key, EVENT_DAY)
+        logger.warning("Taiwan analysis event %s not fired: %s", digest, type(exc).__name__)
+        return {"state": "error", "codes": normalized}
+    return {"state": "fired", "codes": normalized, "sessionUrl": url}
 
 
 async def analyze_added(store: AutomationStore, items: list[dict], collect, now: datetime | None = None) -> dict:

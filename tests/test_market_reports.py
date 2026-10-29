@@ -706,6 +706,11 @@ def test_claim_api_requires_agent_key_and_validates_claim_pages(monkeypatch):
             return report_id == "r1"
 
     monkeypatch.setattr(market_reports, "market_reports_db", FakeDatabase())
+    event_calls = []
+    monkeypatch.setattr(market_reports.market_automation, "automation_store", lambda: "event-store")
+    async def fake_event(store, **kwargs):
+        event_calls.append((store, kwargs))
+    monkeypatch.setattr(market_reports.market_automation, "fire_analysis_event", fake_event)
     key = "test-reports-agent-key"
     monkeypatch.setenv(
         "MARKET_AGENT_KEY_SHA256", hashlib.sha256(key.encode()).hexdigest()
@@ -750,6 +755,10 @@ def test_claim_api_requires_agent_key_and_validates_claim_pages(monkeypatch):
         json={"claims": [claim], "extracted_by": "Claude"},
         headers={"X-Market-Agent-Key": key},
     ).json() == {"saved": True, "claim_count": 1}
+    assert event_calls == [("event-store", {
+        "event_key": "report:r1:claims", "codes": ["2408"],
+        "reason": "研究報告 r1 的主張已完成擷取",
+    })]
 
 
 def test_semantic_search_includes_private_reports_only_when_explicitly_requested(monkeypatch):

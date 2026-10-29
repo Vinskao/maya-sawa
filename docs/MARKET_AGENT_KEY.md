@@ -1,11 +1,12 @@
 # Scheduled analysis routine write key
 
-The scheduled Claude Code routine refreshes the market AI analyses twice a day. It has no Keycloak login, so it
-writes with a dedicated key sent as the `X-Market-Agent-Key` header.
+Claude Code routines update market analysis on new report and Taiwan disclosure events, with a weekly Taiwan-only
+reconciliation run. The routine has no Keycloak login, so it writes with a dedicated key sent as the
+`X-Market-Agent-Key` header.
 
 - **Server side:** `MARKET_AGENT_KEY_SHA256` in `k8s/deployment.yaml` holds only the key's SHA-256. The repository
   and the deployment config never contain a usable secret.
-- **Scope:** the key can call `PUT /market/dashboard/analysis/{code}` for `productType` stock, futures, macro or
+- **Scope:** the key can call `PUT /market/dashboard/analysis/{code}` for `productType` stock, futures, research, macro or
   macro-node (one analysis per macro logic-chain node, code = the node id upper-cased; all of them are read with
   `GET /market/dashboard/macro/nodes`, see the frontend `docs/MACRO_LOGIC_CHAINS.md`), and the
   report-library routine endpoints `GET /market/reports/pending`, `PUT /market/reports/{id}/claims`, and
@@ -20,8 +21,9 @@ writes with a dedicated key sent as the `X-Market-Agent-Key` header.
   this: read the stored targets, search the last 30 days of news (TW, JP, KR), write only targets an article states
   with the broker, number and date, use one fixed name per broker so the chart joins a broker's targets, and list what
   was added in the final report. Codes are bare (`6857` with `market=JP`, not `6857-JP`).
-  It cannot upload, download, list, or delete reports, change
-  visibility, or edit research maps. Every other endpoint still requires a login.
+  It can update a research map only through the validated analysis endpoint; the JSON schema is checked before a
+  revision is stored. It cannot upload, download, list, or delete reports or change visibility. Every other endpoint
+  still requires a login.
 - **Edit history:** saves are recorded with editor `agent:scheduled-analysis` and keep the normal revision history.
 - **Routine side:** the key is a **network secret** on the routine's claude.ai cloud environment (header
   `X-Market-Agent-Key`, no prefix, host `peoplesystem.tatdvsonorth.com`). The agent proxy adds it outside the session VM,
@@ -40,9 +42,9 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 | Routine | When (Taipei) | Cron (UTC) | Scope |
 |---|---|---|---|
 | Market report claim extraction `trig_018MeBwwU74WvydGHRaRt6Wd` | Daily 20:30 | `30 12 * * *` | Extract report claims without OpenAI; subscription Claude Code routine |
-| 市場 AI 分析｜台股收盤後 `trig_01ECP68tWfgM749sJa3gBiN9` | Mon–Fri 21:15 | `15 13 * * 1-5` | Taiwan holdings, TXF, JP/KR holdings |
+| 市場 AI 分析｜台股收盤後 `trig_01ECP68tWfgM749sJa3gBiN9` | Friday 21:15 | `15 13 * * 5` | Taiwan stocks and TXF only; weekly reconciliation |
 | 市場 AI 分析｜美股與總經 `trig_01NETQT5DCSHj4TKwv45nbJR` | Tue–Sat 07:30 | `30 23 * * 1-5` | macro commentary first, then US holdings |
-| 市場 AI 分析｜台股收盤後（Opus） `trig_017Np2f7se83hdEcTFtpyRK8` | Mon–Fri 21:15 | `15 13 * * 1-5` | Opus twin of the Taiwan run; runs only on its turn (see **Model**) |
+| 市場 AI 分析｜台股收盤後（Opus） `trig_017Np2f7se83hdEcTFtpyRK8` | Friday 21:15 | `15 13 * * 5` | Opus twin of the Taiwan run; runs only on its turn (see **Model**) |
 | 市場 AI 分析｜美股與總經（Opus） `trig_01G7dADRBnG9TWzL46DSCo6b` | Tue–Sat 07:30 | `30 23 * * 1-5` | Opus twin of the US/macro run; runs only on its turn |
 | 每週維護｜ty-multiverse-backend `trig_01JEDibagHGmSFZ7D7nTLhLz` | Wed 01:00 | `0 17 * * 2` | Dependency/framework updates, small refactors; opens a PR to `main` |
 | 每週維護｜ty-multiverse-consumer `trig_01CsCHXk4X7zPkjb1EPf4xBL` | Thu 01:00 | `0 17 * * 3` | Same, PR to `main` |
@@ -50,6 +52,7 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 | 每週維護｜maya-sawa `trig_01LRDWjEdkEH5PKjSpfW8YfN` | Sat 01:00 | `0 17 * * 5` | Same, PR to `main` (the one exception to "main only, no branches") |
 | 每週維護｜ty-multiverse-frontend `trig_01RbWXpne4jvHA1B737V6PSw` | Sun 01:00 | `0 17 * * 6` | Same plus small UI fixes, PR to `dev` |
 
+- **Taiwan event-triggered analysis (changed 2026-10-29):** new report claims trigger a targeted routine after the claims API stores them; only explicit four-digit Taiwan codes in `claims.codes` are linked. The hourly MOPS/TDCC check triggers selected Taiwan stocks when monthly revenue, quarterly financial statements, or a completed investor conference is published. Stable event IDs prevent duplicate fires. The Friday review is a missed-event reconciliation; it skips stock-analysis revisions when no new relevant evidence exists. Daily market-data collection and PostgreSQL history retention continue unchanged.
 - **Weekly maintenance (added 2026-10-28):** each run only opens a PR (never merges or pushes the base branch, which would deploy through Jenkins), then sends one Telegram note with the PR link via `/market/notify` and reports token usage. The Java runs also clone `ty-multiverse-common` and `mvn install` it locally, because the cloud has no GitHub Packages token. Connectors (Gmail, Drive, etc.) are removed from these routines on purpose: they read external changelogs and need no account access.
 - **README architecture diagrams (added 2026-10-29):** each weekly maintenance run also checks its repo's README Mermaid diagrams against the code (section 4.2 of the prompt): one overall diagram first, plus one small diagram per complex module. Every node must map to a directory, class or config file, and the diagrams must render on GitHub. No keys, internal addresses or IPs go into a diagram. Changes go into the same PR, and the PR, final report and Telegram note each say what changed (「架構圖已核對，無變動」 when nothing changed).
 
@@ -61,7 +64,7 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
   each analysis routine has an Opus twin on the same cron. Both start with
   `python3 maya_sawa/public_scripts/routine_turn.py taiwan|us`, which counts the routine's own cron days (Taipei) from
   Monday 2026-10-26 and prints `opus` on every third run; the twin that is not on turn stops at once (it only reports
-  usage). Catch-up and new-instrument fires (`補跑：`, `新增標的：`) go to the Sonnet routine and skip the turn check.
+  usage). Catch-up, new-instrument, and evidence-event fires (`catch-up`, `new-instrument`, `event update`) go to the Sonnet routine and skip the turn check.
   If the script fails, the Sonnet routine runs and the Opus twin stops, so no day is missed. The Opus twins have no
   connectors, like the originals. Tests: `tests/test_routine_turn.py`.
 - **Environment setup:** the cloud environment needs only the network secret. Its host is reachable even at the
@@ -70,7 +73,7 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 ## Catch-up runs after the IB login (`services/market_automation.py`)
 
 IBKR needs a manual login about once a day, so Japan, Korea and US bars only arrive while the session is alive.
-The routines run on their own cron (Taiwan 21:15 Mon–Fri, US 07:30 Tue–Sat, Taipei). Since 2026-10-23 maya-sawa
+The routines run on their own cron (Taiwan-only reconciliation Friday 21:15, US 07:30 Tue-Sat, Taipei). Since 2026-10-23 maya-sawa
 only re-runs a routine whose scheduled run missed the IB data; a day with IB up fires nothing extra.
 
 Flow (asynchronous, human in the loop):

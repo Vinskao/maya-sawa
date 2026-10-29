@@ -8,6 +8,37 @@ def test_fundamental_backfill_starts_five_calendar_years_ago_including_leap_day(
     assert fundamental_start_date(date(2024, 2, 29)) == "2019-02-28"
 
 
+def test_only_recent_selected_taiwan_publications_trigger_analysis(monkeypatch):
+    from maya_sawa.services import market_company_events, market_automation
+    service = MarketFundamentalsService()
+    async def fake_events(codes):
+        assert codes == ["2330", "3008"]
+        return {"events": [
+            {"code": "2330", "type": "monthly_revenue", "period": "2026-09", "date": "2026-10-29", "status": "recent"},
+            {"code": "3008", "type": "investor_conference", "period": "", "date": "2026-10-29", "status": "recent"},
+            {"code": "2408", "type": "financial_report", "period": "2026Q3", "date": "2026-10-29", "status": "recent"},
+            {"code": "2330", "type": "investor_conference", "period": "", "date": "2026-11-02", "status": "upcoming"},
+            {"code": "3008", "type": "financial_report", "period": "2026Q2", "date": "2026-10-10", "status": "recent"},
+        ]}
+    monkeypatch.setattr(market_company_events.market_company_events_service, "get", fake_events)
+    calls = []
+    monkeypatch.setattr(market_automation, "automation_store", lambda: "store")
+    async def fake_fire(store, **kwargs):
+        calls.append((store, kwargs))
+        return {"state": "fired", "codes": kwargs["codes"]}
+    monkeypatch.setattr(market_automation, "fire_analysis_event", fake_fire)
+
+    import asyncio
+    asyncio.run(service._fire_recent_analysis_events(["2330", "3008"], date(2026, 10, 29)))
+
+    assert calls == [
+        ("store", {"event_key": "taiwan-disclosure:investor_conference:2026-10-29:2026-10-29:3008",
+                   "codes": ["3008"], "reason": "台股 investor_conference（期間 2026-10-29，公布日 2026-10-29）"}),
+        ("store", {"event_key": "taiwan-disclosure:monthly_revenue:2026-09:2026-10-29:2330",
+                   "codes": ["2330"], "reason": "台股 monthly_revenue（期間 2026-09，公布日 2026-10-29）"}),
+    ]
+
+
 def test_fundamental_metrics_keep_five_years_of_monthly_and_quarterly_history():
     monthly = []
     income, balance, cash = [], [], []

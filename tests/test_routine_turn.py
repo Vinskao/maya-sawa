@@ -23,8 +23,14 @@ def taiwan_turns(*days):
 
 def test_the_taiwan_routine_alternates_two_sonnet_runs_then_one_opus_across_the_weekend():
     # Mon 10/26 … Fri 10/30, then Mon 11/2 … Wed 11/4 (Taipei weekday sessions).
-    assert taiwan_turns((10, 26), (10, 27), (10, 28), (10, 29), (10, 30), (11, 2), (11, 3), (11, 4)) == [
-        "sonnet", "sonnet", "opus", "sonnet", "sonnet", "opus", "sonnet", "sonnet"]
+    assert taiwan_turns((10, 30), (11, 6), (11, 13), (11, 20), (11, 27), (12, 4)) == [
+        "sonnet", "sonnet", "opus", "sonnet", "sonnet", "opus"]
+
+
+def test_taiwan_run_counter_counts_only_the_weekly_friday_schedule():
+    assert routine_turn.run_number("taiwan", date(2026, 10, 29)) == 0
+    assert routine_turn.run_number("taiwan", date(2026, 10, 30)) == 1
+    assert routine_turn.run_number("taiwan", date(2026, 11, 6)) == 2
 
 
 def test_the_us_and_macro_routine_counts_its_own_tuesday_to_saturday_runs():
@@ -34,7 +40,7 @@ def test_the_us_and_macro_routine_counts_its_own_tuesday_to_saturday_runs():
 
 def test_one_run_in_three_is_opus_over_a_long_stretch_including_month_ends():
     days = [date.fromordinal(day) for day in range(date(2026, 10, 26).toordinal(), date(2027, 10, 26).toordinal())]
-    turns = [routine_turn.turn("taiwan", day) for day in days if day.weekday() < 5]
+    turns = [routine_turn.turn("taiwan", day) for day in days if day.weekday() == 4]
     assert all(turns[index:index + 3] == ["sonnet", "sonnet", "opus"] for index in range(0, len(turns) - 2, 3))
 
 
@@ -46,8 +52,8 @@ def test_a_late_start_still_counts_as_the_scheduled_day():
 
 
 def test_the_command_prints_whose_turn_it_is(capsys):
-    assert routine_turn.main(["taiwan"], now=datetime(2026, 10, 28, 13, 15, tzinfo=timezone.utc)) == 0
-    assert capsys.readouterr().out.split()[0] == "opus"
+    assert routine_turn.main(["taiwan"], now=datetime(2026, 10, 30, 13, 15, tzinfo=timezone.utc)) == 0
+    assert capsys.readouterr().out.split()[0] == "sonnet"
     assert routine_turn.main(["nope"]) == 2
 
 
