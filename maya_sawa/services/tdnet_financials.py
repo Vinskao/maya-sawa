@@ -334,11 +334,16 @@ JQUANTS_SOURCE = "J-Quants 決算短信サマリー (JPX)"
 
 
 def rebuild_japan(db, code: str, conid) -> dict:
-    """Financials from every stored TDnet release and J-Quants summary of one Japan holding."""
+    """Financials from every stored TDnet release, J-Quants summary and EDINET annual report of one Japan holding.
+
+    EDINET's five-year table (edinet_financials.py) supplies the annual history that J-Quants Free (two years) lacks;
+    at an equal release time it ranks below the other two."""
+    from .edinet_financials import SOURCE as EDINET_SOURCE
     tdnet = [row["payload"] for row in db.history(code, "JP", "tdnet_release")]
     jquants = [{**row["payload"], "precedence": 0} for row in db.history(code, "JP", "jquants_release") if row["payload"]]
-    source = " + ".join(name for name, rows in ((SOURCE, tdnet), (JQUANTS_SOURCE, jquants)) if rows) or SOURCE
-    data = build_financials(tdnet + jquants, source=source)
+    edinet = [{**row["payload"], "precedence": -1} for row in db.history(code, "JP", "edinet_release") if row["payload"]]
+    source = " + ".join(name for name, rows in ((SOURCE, tdnet), (JQUANTS_SOURCE, jquants), (EDINET_SOURCE, edinet)) if rows) or SOURCE
+    data = build_financials(tdnet + jquants + edinet, source=source)
     db.save(code, "JP", conid, "financials", data, period=_content_period(data))
     return data
 

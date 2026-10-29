@@ -1,0 +1,161 @@
+要素ID	項目名	コンテキストID	相対年度	連結・個別	期間・時点	ユニットID	単位	値
+jpcrp_cor:RevenueIFRSSummaryOfBusinessResults	売上収益（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPY	円	416901000000
+jpcrp_cor:RevenueIFRSSummaryOfBusinessResults	売上収益（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPY	円	560191000000
+jpcrp_cor:RevenueIFRSSummaryOfBusinessResults	売上収益（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPY	円	486507000000
+jpcrp_cor:RevenueIFRSSummaryOfBusinessResults	売上収益（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPY	円	779707000000
+jpcrp_cor:RevenueIFRSSummaryOfBusinessResults	売上収益（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPY	円	1128610000000
+jpcrp_cor:ProfitLossBeforeTaxIFRSSummaryOfBusinessResults	税引前利益又は税引前損失（△）（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPY	円	116343000000
+jpcrp_cor:ProfitLossBeforeTaxIFRSSummaryOfBusinessResults	税引前利益又は税引前損失（△）（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPY	円	171270000000
+jpcrp_cor:ProfitLossBeforeTaxIFRSSummaryOfBusinessResults	税引前利益又は税引前損失（△）（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPY	円	78170000000
+jpcrp_cor:ProfitLossBeforeTaxIFRSSummaryOfBusinessResults	税引前利益又は税引前損失（△）（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPY	円	224774000000
+jpcrp_cor:ProfitLossBeforeTaxIFRSSummaryOfBusinessResults	税引前利益又は税引前損失（△）（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPY	円	516720000000
+jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期利益又は当期損失（△）：親会社の所有者に帰属（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPY	円	87301000000
+jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期利益又は当期損失（△）：親会社の所有者に帰属（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPY	円	130400000000
+jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期利益又は当期損失（△）：親会社の所有者に帰属（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPY	円	62290000000
+jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期利益又は当期損失（△）：親会社の所有者に帰属（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPY	円	161177000000
+jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期利益又は当期損失（△）：親会社の所有者に帰属（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPY	円	375353000000
+jpcrp_cor:ComprehensiveIncomeAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期包括利益：親会社の所有者に帰属（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPY	円	107286000000
+jpcrp_cor:ComprehensiveIncomeAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期包括利益：親会社の所有者に帰属（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPY	円	146882000000
+jpcrp_cor:ComprehensiveIncomeAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期包括利益：親会社の所有者に帰属（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPY	円	84441000000
+jpcrp_cor:ComprehensiveIncomeAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期包括利益：親会社の所有者に帰属（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPY	円	149428000000
+jpcrp_cor:ComprehensiveIncomeAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	当期包括利益：親会社の所有者に帰属（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPY	円	432230000000
+jpcrp_cor:EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	親会社の所有者に帰属する持分（IFRS）、経営指標等	Prior4YearInstant	四期前時点	その他	時点	JPY	円	294621000000
+jpcrp_cor:EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	親会社の所有者に帰属する持分（IFRS）、経営指標等	Prior3YearInstant	三期前時点	その他	時点	JPY	円	368694000000
+jpcrp_cor:EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	親会社の所有者に帰属する持分（IFRS）、経営指標等	Prior2YearInstant	前々期末	その他	時点	JPY	円	431178000000
+jpcrp_cor:EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	親会社の所有者に帰属する持分（IFRS）、経営指標等	Prior1YearInstant	前期末	その他	時点	JPY	円	506539000000
+jpcrp_cor:EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults	親会社の所有者に帰属する持分（IFRS）、経営指標等	CurrentYearInstant	当期末	その他	時点	JPY	円	795726000000
+jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults	総資産額（IFRS）、経営指標等	Prior4YearInstant	四期前時点	その他	時点	JPY	円	494696000000
+jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults	総資産額（IFRS）、経営指標等	Prior3YearInstant	三期前時点	その他	時点	JPY	円	600224000000
+jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults	総資産額（IFRS）、経営指標等	Prior2YearInstant	前々期末	その他	時点	JPY	円	671229000000
+jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults	総資産額（IFRS）、経営指標等	Prior1YearInstant	前期末	その他	時点	JPY	円	854210000000
+jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults	総資産額（IFRS）、経営指標等	CurrentYearInstant	当期末	その他	時点	JPY	円	1171816000000
+jpcrp_cor:EquityToAssetRatioIFRSSummaryOfBusinessResults	１株当たり親会社所有者帰属持分（IFRS）、経営指標等	Prior4YearInstant	四期前時点	その他	時点	JPYPerShares		1551.72
+jpcrp_cor:EquityToAssetRatioIFRSSummaryOfBusinessResults	１株当たり親会社所有者帰属持分（IFRS）、経営指標等	Prior3YearInstant	三期前時点	その他	時点	JPYPerShares		500.61
+jpcrp_cor:EquityToAssetRatioIFRSSummaryOfBusinessResults	１株当たり親会社所有者帰属持分（IFRS）、経営指標等	Prior2YearInstant	前々期末	その他	時点	JPYPerShares		584.25
+jpcrp_cor:EquityToAssetRatioIFRSSummaryOfBusinessResults	１株当たり親会社所有者帰属持分（IFRS）、経営指標等	Prior1YearInstant	前期末	その他	時点	JPYPerShares		690.80
+jpcrp_cor:EquityToAssetRatioIFRSSummaryOfBusinessResults	１株当たり親会社所有者帰属持分（IFRS）、経営指標等	CurrentYearInstant	当期末	その他	時点	JPYPerShares		1097.50
+jpcrp_cor:BasicEarningsLossPerShareIFRSSummaryOfBusinessResults	基本的１株当たり利益又は損失（△）（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPYPerShares		449.56
+jpcrp_cor:BasicEarningsLossPerShareIFRSSummaryOfBusinessResults	基本的１株当たり利益又は損失（△）（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPYPerShares		174.35
+jpcrp_cor:BasicEarningsLossPerShareIFRSSummaryOfBusinessResults	基本的１株当たり利益又は損失（△）（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPYPerShares		84.45
+jpcrp_cor:BasicEarningsLossPerShareIFRSSummaryOfBusinessResults	基本的１株当たり利益又は損失（△）（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPYPerShares		218.67
+jpcrp_cor:BasicEarningsLossPerShareIFRSSummaryOfBusinessResults	基本的１株当たり利益又は損失（△）（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPYPerShares		515.15
+jpcrp_cor:DilutedEarningsLossPerShareIFRSSummaryOfBusinessResults	希薄化後１株当たり利益又は損失（△）（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPYPerShares		447.26
+jpcrp_cor:DilutedEarningsLossPerShareIFRSSummaryOfBusinessResults	希薄化後１株当たり利益又は損失（△）（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPYPerShares		173.68
+jpcrp_cor:DilutedEarningsLossPerShareIFRSSummaryOfBusinessResults	希薄化後１株当たり利益又は損失（△）（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPYPerShares		84.16
+jpcrp_cor:DilutedEarningsLossPerShareIFRSSummaryOfBusinessResults	希薄化後１株当たり利益又は損失（△）（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPYPerShares		218.01
+jpcrp_cor:DilutedEarningsLossPerShareIFRSSummaryOfBusinessResults	希薄化後１株当たり利益又は損失（△）（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPYPerShares		513.30
+jpcrp_cor:RatioOfOwnersEquityToGrossAssetsIFRSSummaryOfBusinessResults	親会社所有者帰属持分比率（IFRS）、経営指標等	Prior4YearInstant	四期前時点	その他	時点	pure		0.596
+jpcrp_cor:RatioOfOwnersEquityToGrossAssetsIFRSSummaryOfBusinessResults	親会社所有者帰属持分比率（IFRS）、経営指標等	Prior3YearInstant	三期前時点	その他	時点	pure		0.614
+jpcrp_cor:RatioOfOwnersEquityToGrossAssetsIFRSSummaryOfBusinessResults	親会社所有者帰属持分比率（IFRS）、経営指標等	Prior2YearInstant	前々期末	その他	時点	pure		0.642
+jpcrp_cor:RatioOfOwnersEquityToGrossAssetsIFRSSummaryOfBusinessResults	親会社所有者帰属持分比率（IFRS）、経営指標等	Prior1YearInstant	前期末	その他	時点	pure		0.593
+jpcrp_cor:RatioOfOwnersEquityToGrossAssetsIFRSSummaryOfBusinessResults	親会社所有者帰属持分比率（IFRS）、経営指標等	CurrentYearInstant	当期末	その他	時点	pure		0.679
+jpcrp_cor:RateOfReturnOnEquityIFRSSummaryOfBusinessResults	親会社所有者帰属持分利益率（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	pure		0.304
+jpcrp_cor:RateOfReturnOnEquityIFRSSummaryOfBusinessResults	親会社所有者帰属持分利益率（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	pure		0.393
+jpcrp_cor:RateOfReturnOnEquityIFRSSummaryOfBusinessResults	親会社所有者帰属持分利益率（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	pure		0.156
+jpcrp_cor:RateOfReturnOnEquityIFRSSummaryOfBusinessResults	親会社所有者帰属持分利益率（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	pure		0.344
+jpcrp_cor:RateOfReturnOnEquityIFRSSummaryOfBusinessResults	親会社所有者帰属持分利益率（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	pure		0.576
+jpcrp_cor:PriceEarningsRatioIFRSSummaryOfBusinessResults	株価収益率（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	pure		21.51
+jpcrp_cor:PriceEarningsRatioIFRSSummaryOfBusinessResults	株価収益率（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	pure		17.44
+jpcrp_cor:PriceEarningsRatioIFRSSummaryOfBusinessResults	株価収益率（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	pure		80.75
+jpcrp_cor:PriceEarningsRatioIFRSSummaryOfBusinessResults	株価収益率（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	pure		29.60
+jpcrp_cor:PriceEarningsRatioIFRSSummaryOfBusinessResults	株価収益率（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	pure		39.46
+jpcrp_cor:CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults	営業活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPY	円	78889000000
+jpcrp_cor:CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults	営業活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPY	円	70224000000
+jpcrp_cor:CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults	営業活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPY	円	32668000000
+jpcrp_cor:CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults	営業活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPY	円	285971000000
+jpcrp_cor:CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults	営業活動によるキャッシュ・フロー（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPY	円	335182000000
+jpcrp_cor:CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults	投資活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPY	円	-46907000000
+jpcrp_cor:CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults	投資活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPY	円	-26706000000
+jpcrp_cor:CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults	投資活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPY	円	-27940000000
+jpcrp_cor:CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults	投資活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPY	円	-42189000000
+jpcrp_cor:CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults	投資活動によるキャッシュ・フロー（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPY	円	-34552000000
+jpcrp_cor:CashFlowsFromUsedInFinancingActivitiesIFRSSummaryOfBusinessResults	財務活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior4YearDuration	四期前	その他	期間	JPY	円	-68736000000
+jpcrp_cor:CashFlowsFromUsedInFinancingActivitiesIFRSSummaryOfBusinessResults	財務活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior3YearDuration	三期前	その他	期間	JPY	円	-77434000000
+jpcrp_cor:CashFlowsFromUsedInFinancingActivitiesIFRSSummaryOfBusinessResults	財務活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior2YearDuration	前々期	その他	期間	JPY	円	10760000000
+jpcrp_cor:CashFlowsFromUsedInFinancingActivitiesIFRSSummaryOfBusinessResults	財務活動によるキャッシュ・フロー（IFRS）、経営指標等	Prior1YearDuration	前期	その他	期間	JPY	円	-82818000000
+jpcrp_cor:CashFlowsFromUsedInFinancingActivitiesIFRSSummaryOfBusinessResults	財務活動によるキャッシュ・フロー（IFRS）、経営指標等	CurrentYearDuration	当期	その他	期間	JPY	円	-230550000000
+jpcrp_cor:CashAndCashEquivalentsIFRSSummaryOfBusinessResults	現金及び現金同等物（IFRS）、経営指標等	Prior4YearInstant	四期前時点	その他	時点	JPY	円	116582000000
+jpcrp_cor:CashAndCashEquivalentsIFRSSummaryOfBusinessResults	現金及び現金同等物（IFRS）、経営指標等	Prior3YearInstant	三期前時点	その他	時点	JPY	円	85537000000
+jpcrp_cor:CashAndCashEquivalentsIFRSSummaryOfBusinessResults	現金及び現金同等物（IFRS）、経営指標等	Prior2YearInstant	前々期末	その他	時点	JPY	円	106702000000
+jpcrp_cor:CashAndCashEquivalentsIFRSSummaryOfBusinessResults	現金及び現金同等物（IFRS）、経営指標等	Prior1YearInstant	前期末	その他	時点	JPY	円	262544000000
+jpcrp_cor:CashAndCashEquivalentsIFRSSummaryOfBusinessResults	現金及び現金同等物（IFRS）、経営指標等	CurrentYearInstant	当期末	その他	時点	JPY	円	339966000000
+jpcrp_cor:NetSalesSummaryOfBusinessResults	売上高、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	JPY	円	355575000000
+jpcrp_cor:NetSalesSummaryOfBusinessResults	売上高、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	JPY	円	482576000000
+jpcrp_cor:NetSalesSummaryOfBusinessResults	売上高、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	JPY	円	394694000000
+jpcrp_cor:NetSalesSummaryOfBusinessResults	売上高、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	JPY	円	673095000000
+jpcrp_cor:NetSalesSummaryOfBusinessResults	売上高、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	JPY	円	988232000000
+jpcrp_cor:OrdinaryIncomeLossSummaryOfBusinessResults	経常利益又は経常損失（△）、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	JPY	円	93667000000
+jpcrp_cor:OrdinaryIncomeLossSummaryOfBusinessResults	経常利益又は経常損失（△）、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	JPY	円	150368000000
+jpcrp_cor:OrdinaryIncomeLossSummaryOfBusinessResults	経常利益又は経常損失（△）、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	JPY	円	58068000000
+jpcrp_cor:OrdinaryIncomeLossSummaryOfBusinessResults	経常利益又は経常損失（△）、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	JPY	円	226951000000
+jpcrp_cor:OrdinaryIncomeLossSummaryOfBusinessResults	経常利益又は経常損失（△）、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	JPY	円	425372000000
+jpcrp_cor:NetIncomeLossSummaryOfBusinessResults	当期純利益又は当期純損失（△）、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	JPY	円	70814000000
+jpcrp_cor:NetIncomeLossSummaryOfBusinessResults	当期純利益又は当期純損失（△）、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	JPY	円	115834000000
+jpcrp_cor:NetIncomeLossSummaryOfBusinessResults	当期純利益又は当期純損失（△）、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	JPY	円	49394000000
+jpcrp_cor:NetIncomeLossSummaryOfBusinessResults	当期純利益又は当期純損失（△）、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	JPY	円	166854000000
+jpcrp_cor:NetIncomeLossSummaryOfBusinessResults	当期純利益又は当期純損失（△）、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	JPY	円	301335000000
+jpcrp_cor:CapitalStockSummaryOfBusinessResults	資本金、経営指標等	Prior4YearInstant_NonConsolidatedMember	四期前時点	その他	時点	JPY	円	32363000000
+jpcrp_cor:CapitalStockSummaryOfBusinessResults	資本金、経営指標等	Prior3YearInstant_NonConsolidatedMember	三期前時点	その他	時点	JPY	円	32363000000
+jpcrp_cor:CapitalStockSummaryOfBusinessResults	資本金、経営指標等	Prior2YearInstant_NonConsolidatedMember	前々期末	その他	時点	JPY	円	32363000000
+jpcrp_cor:CapitalStockSummaryOfBusinessResults	資本金、経営指標等	Prior1YearInstant_NonConsolidatedMember	前期末	その他	時点	JPY	円	32363000000
+jpcrp_cor:CapitalStockSummaryOfBusinessResults	資本金、経営指標等	CurrentYearInstant_NonConsolidatedMember	当期末	その他	時点	JPY	円	32363000000
+jpcrp_cor:TotalNumberOfIssuedSharesSummaryOfBusinessResults	発行済株式総数（普通株式）、経営指標等	Prior4YearInstant_NonConsolidatedMember	四期前時点	その他	時点	shares		199542000
+jpcrp_cor:TotalNumberOfIssuedSharesSummaryOfBusinessResults	発行済株式総数（普通株式）、経営指標等	Prior3YearInstant_NonConsolidatedMember	三期前時点	その他	時点	shares		191542000
+jpcrp_cor:TotalNumberOfIssuedSharesSummaryOfBusinessResults	発行済株式総数（普通株式）、経営指標等	Prior2YearInstant_NonConsolidatedMember	前々期末	その他	時点	shares		766141000
+jpcrp_cor:TotalNumberOfIssuedSharesSummaryOfBusinessResults	発行済株式総数（普通株式）、経営指標等	Prior1YearInstant_NonConsolidatedMember	前期末	その他	時点	shares		766141000
+jpcrp_cor:TotalNumberOfIssuedSharesSummaryOfBusinessResults	発行済株式総数（普通株式）、経営指標等	CurrentYearInstant_NonConsolidatedMember	当期末	その他	時点	shares		732000000
+jpcrp_cor:NetAssetsSummaryOfBusinessResults	純資産額、経営指標等	Prior4YearInstant_NonConsolidatedMember	四期前時点	その他	時点	JPY	円	262918000000
+jpcrp_cor:NetAssetsSummaryOfBusinessResults	純資産額、経営指標等	Prior3YearInstant_NonConsolidatedMember	三期前時点	その他	時点	JPY	円	305989000000
+jpcrp_cor:NetAssetsSummaryOfBusinessResults	純資産額、経営指標等	Prior2YearInstant_NonConsolidatedMember	前々期末	その他	時点	JPY	円	332607000000
+jpcrp_cor:NetAssetsSummaryOfBusinessResults	純資産額、経営指標等	Prior1YearInstant_NonConsolidatedMember	前期末	その他	時点	JPY	円	426685000000
+jpcrp_cor:NetAssetsSummaryOfBusinessResults	純資産額、経営指標等	CurrentYearInstant_NonConsolidatedMember	当期末	その他	時点	JPY	円	583420000000
+jpcrp_cor:TotalAssetsSummaryOfBusinessResults	総資産額、経営指標等	Prior4YearInstant_NonConsolidatedMember	四期前時点	その他	時点	JPY	円	459809000000
+jpcrp_cor:TotalAssetsSummaryOfBusinessResults	総資産額、経営指標等	Prior3YearInstant_NonConsolidatedMember	三期前時点	その他	時点	JPY	円	533860000000
+jpcrp_cor:TotalAssetsSummaryOfBusinessResults	総資産額、経営指標等	Prior2YearInstant_NonConsolidatedMember	前々期末	その他	時点	JPY	円	586204000000
+jpcrp_cor:TotalAssetsSummaryOfBusinessResults	総資産額、経営指標等	Prior1YearInstant_NonConsolidatedMember	前期末	その他	時点	JPY	円	809980000000
+jpcrp_cor:TotalAssetsSummaryOfBusinessResults	総資産額、経営指標等	CurrentYearInstant_NonConsolidatedMember	当期末	その他	時点	JPY	円	998158000000
+jpcrp_cor:NetAssetsPerShareSummaryOfBusinessResults	１株当たり純資産額、経営指標等	Prior4YearInstant_NonConsolidatedMember	四期前時点	その他	時点	JPYPerShares		1380.85
+jpcrp_cor:NetAssetsPerShareSummaryOfBusinessResults	１株当たり純資産額、経営指標等	Prior3YearInstant_NonConsolidatedMember	三期前時点	その他	時点	JPYPerShares		414.65
+jpcrp_cor:NetAssetsPerShareSummaryOfBusinessResults	１株当たり純資産額、経営指標等	Prior2YearInstant_NonConsolidatedMember	前々期末	その他	時点	JPYPerShares		450.14
+jpcrp_cor:NetAssetsPerShareSummaryOfBusinessResults	１株当たり純資産額、経営指標等	Prior1YearInstant_NonConsolidatedMember	前期末	その他	時点	JPYPerShares		581.37
+jpcrp_cor:NetAssetsPerShareSummaryOfBusinessResults	１株当たり純資産額、経営指標等	CurrentYearInstant_NonConsolidatedMember	当期末	その他	時点	JPYPerShares		804.15
+jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults	１株当たり配当額、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	JPYPerShares		120.00
+jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults	１株当たり配当額、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	JPYPerShares		135.00
+jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults	１株当たり配当額、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	JPYPerShares		－
+jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults	１株当たり配当額、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	JPYPerShares		39.00
+jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults	１株当たり配当額、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	JPYPerShares		59.00
+jpcrp_cor:InterimDividendPaidPerShareSummaryOfBusinessResults	１株当たり中間配当額、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	JPYPerShares		50.00
+jpcrp_cor:InterimDividendPaidPerShareSummaryOfBusinessResults	１株当たり中間配当額、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	JPYPerShares		65.00
+jpcrp_cor:InterimDividendPaidPerShareSummaryOfBusinessResults	１株当たり中間配当額、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	JPYPerShares		65.00
+jpcrp_cor:InterimDividendPaidPerShareSummaryOfBusinessResults	１株当たり中間配当額、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	JPYPerShares		19.00
+jpcrp_cor:InterimDividendPaidPerShareSummaryOfBusinessResults	１株当たり中間配当額、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	JPYPerShares		29.00
+jpcrp_cor:BasicEarningsLossPerShareSummaryOfBusinessResults	１株当たり当期純利益又は当期純損失（△）、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	JPYPerShares		364.61
+jpcrp_cor:BasicEarningsLossPerShareSummaryOfBusinessResults	１株当たり当期純利益又は当期純損失（△）、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	JPYPerShares		154.81
+jpcrp_cor:BasicEarningsLossPerShareSummaryOfBusinessResults	１株当たり当期純利益又は当期純損失（△）、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	JPYPerShares		66.93
+jpcrp_cor:BasicEarningsLossPerShareSummaryOfBusinessResults	１株当たり当期純利益又は当期純損失（△）、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	JPYPerShares		226.24
+jpcrp_cor:BasicEarningsLossPerShareSummaryOfBusinessResults	１株当たり当期純利益又は当期純損失（△）、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	JPYPerShares		413.29
+jpcrp_cor:DilutedEarningsPerShareSummaryOfBusinessResults	潜在株式調整後１株当たり当期純利益、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	JPYPerShares		363.54
+jpcrp_cor:DilutedEarningsPerShareSummaryOfBusinessResults	潜在株式調整後１株当たり当期純利益、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	JPYPerShares		154.45
+jpcrp_cor:DilutedEarningsPerShareSummaryOfBusinessResults	潜在株式調整後１株当たり当期純利益、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	JPYPerShares		66.80
+jpcrp_cor:DilutedEarningsPerShareSummaryOfBusinessResults	潜在株式調整後１株当たり当期純利益、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	JPYPerShares		225.77
+jpcrp_cor:DilutedEarningsPerShareSummaryOfBusinessResults	潜在株式調整後１株当たり当期純利益、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	JPYPerShares		412.51
+jpcrp_cor:EquityToAssetRatioSummaryOfBusinessResults	自己資本比率、経営指標等	Prior4YearInstant_NonConsolidatedMember	四期前時点	その他	時点	pure		0.570
+jpcrp_cor:EquityToAssetRatioSummaryOfBusinessResults	自己資本比率、経営指標等	Prior3YearInstant_NonConsolidatedMember	三期前時点	その他	時点	pure		0.572
+jpcrp_cor:EquityToAssetRatioSummaryOfBusinessResults	自己資本比率、経営指標等	Prior2YearInstant_NonConsolidatedMember	前々期末	その他	時点	pure		0.567
+jpcrp_cor:EquityToAssetRatioSummaryOfBusinessResults	自己資本比率、経営指標等	Prior1YearInstant_NonConsolidatedMember	前期末	その他	時点	pure		0.527
+jpcrp_cor:EquityToAssetRatioSummaryOfBusinessResults	自己資本比率、経営指標等	CurrentYearInstant_NonConsolidatedMember	当期末	その他	時点	pure		0.584
+jpcrp_cor:RateOfReturnOnEquitySummaryOfBusinessResults	自己資本利益率、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	pure		0.259
+jpcrp_cor:RateOfReturnOnEquitySummaryOfBusinessResults	自己資本利益率、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	pure		0.408
+jpcrp_cor:RateOfReturnOnEquitySummaryOfBusinessResults	自己資本利益率、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	pure		0.155
+jpcrp_cor:RateOfReturnOnEquitySummaryOfBusinessResults	自己資本利益率、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	pure		0.440
+jpcrp_cor:RateOfReturnOnEquitySummaryOfBusinessResults	自己資本利益率、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	pure		0.597
+jpcrp_cor:PriceEarningsRatioSummaryOfBusinessResults	株価収益率、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	pure		26.52
+jpcrp_cor:PriceEarningsRatioSummaryOfBusinessResults	株価収益率、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	pure		19.64
+jpcrp_cor:PriceEarningsRatioSummaryOfBusinessResults	株価収益率、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	pure		101.88
+jpcrp_cor:PriceEarningsRatioSummaryOfBusinessResults	株価収益率、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	pure		28.61
+jpcrp_cor:PriceEarningsRatioSummaryOfBusinessResults	株価収益率、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	pure		49.19
+jpcrp_cor:PayoutRatioSummaryOfBusinessResults	配当性向、経営指標等	Prior4YearDuration_NonConsolidatedMember	四期前	その他	期間	pure		0.3291
+jpcrp_cor:PayoutRatioSummaryOfBusinessResults	配当性向、経営指標等	Prior3YearDuration_NonConsolidatedMember	三期前	その他	期間	pure		0.2180
+jpcrp_cor:PayoutRatioSummaryOfBusinessResults	配当性向、経営指標等	Prior2YearDuration_NonConsolidatedMember	前々期	その他	期間	pure		0.5117
+jpcrp_cor:PayoutRatioSummaryOfBusinessResults	配当性向、経営指標等	Prior1YearDuration_NonConsolidatedMember	前期	その他	期間	pure		0.1724
+jpcrp_cor:PayoutRatioSummaryOfBusinessResults	配当性向、経営指標等	CurrentYearDuration_NonConsolidatedMember	当期	その他	期間	pure		0.1428
