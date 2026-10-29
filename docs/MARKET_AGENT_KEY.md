@@ -51,6 +51,7 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 | 每週維護｜ty-multiverse-frontend `trig_01RbWXpne4jvHA1B737V6PSw` | Sun 01:00 | `0 17 * * 6` | Same plus small UI fixes, PR to `dev` |
 
 - **Weekly maintenance (added 2026-10-28):** each run only opens a PR (never merges or pushes the base branch, which would deploy through Jenkins), then sends one Telegram note with the PR link via `/market/notify` and reports token usage. The Java runs also clone `ty-multiverse-common` and `mvn install` it locally, because the cloud has no GitHub Packages token. Connectors (Gmail, Drive, etc.) are removed from these routines on purpose: they read external changelogs and need no account access.
+- **README architecture diagrams (added 2026-10-29):** each weekly maintenance run also checks its repo's README Mermaid diagrams against the code (section 4.2 of the prompt): one overall diagram first, plus one small diagram per complex module. Every node must map to a directory, class or config file, and the diagrams must render on GitHub. No keys, internal addresses or IPs go into a diagram. Changes go into the same PR, and the PR, final report and Telegram note each say what changed (「架構圖已核對，無變動」 when nothing changed).
 
 - **Taiwan run timing (changed 2026-10-19):** margin balances and securities lending (TWSE MI_MARGN/TWT93U and the TPEx
   equivalents) were first seen at 20:51 on 2026-10-19 by a 10-minute poll, so they publish around 20:45. Prices are out by
