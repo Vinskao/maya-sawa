@@ -82,6 +82,7 @@ class MarketFundamentalsService:
         self._stale_sources: set[str] = set()
         self._collector_task: asyncio.Task | None = None
         self._worker_task: asyncio.Task | None = None
+        self._mops_task: asyncio.Task | None = None
         self._queue: list[str] = []
         self._queue_event = asyncio.Event()
 
@@ -90,16 +91,18 @@ class MarketFundamentalsService:
             self._collector_task = asyncio.create_task(self._collector_loop())
         if self._worker_task is None or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._finmind_worker())
+        if os.getenv("MOPS_FUNDAMENTALS_ENABLED", "1") != "0" and (self._mops_task is None or self._mops_task.done()):
+            self._mops_task = asyncio.create_task(self._mops_loop())
 
     async def close(self) -> None:
-        for task in (self._collector_task, self._worker_task, *self._refreshing.values()):
+        for task in (self._collector_task, self._worker_task, self._mops_task, *self._refreshing.values()):
             if task:
                 task.cancel()
                 try:
                     await task
                 except (asyncio.CancelledError, Exception):
                     pass
-        self._collector_task = self._worker_task = None
+        self._collector_task = self._worker_task = self._mops_task = None
         self._refreshing.clear()
 
     async def _collector_loop(self) -> None:
@@ -117,6 +120,22 @@ class MarketFundamentalsService:
                 raise
             except Exception:
                 logger.exception("Fundamentals collector loop failed")
+                await asyncio.sleep(60 * 60)
+
+    async def _mops_loop(self) -> None:
+        """Whole-market five-year backfill from MOPS (services/mops_fundamentals.py): up to 60 pages per pass, a pass
+        every 10 minutes while the backlog lasts, then hourly to pick up new releases."""
+        from maya_sawa.services.mops_fundamentals import MopsCollector
+        collector = MopsCollector(market_fundamentals_db)
+        await asyncio.sleep(5 * 60)                 # let the pod finish starting before the first crawl
+        while True:
+            try:
+                written = await asyncio.to_thread(collector.run_pass, datetime.now(TZ).date())
+                await asyncio.sleep(10 * 60 if written else 60 * 60)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("MOPS fundamentals pass failed")
                 await asyncio.sleep(60 * 60)
 
     def _enqueue(self, code: str, urgent: bool = False) -> None:
@@ -203,7 +222,7 @@ class MarketFundamentalsService:
         return {"code": code, "monthlyRevenue": monthly, "incomeStatements": income, "balanceSheets": balance,
                 "metrics": build_fundamental_metrics(monthly, income, history),
                 "historyPending": not history.get("TaiwanStockFinancialStatements"),
-                "source": "TWSE OpenAPI / MOPS OTC CSV / FinMind", "checkedAt": datetime.now(TZ).isoformat(),
+                "source": "TWSE OpenAPI / MOPS / FinMind", "checkedAt": datetime.now(TZ).isoformat(),
                 "staleSources": sorted(self._stale_sources), "errors": errors}
 
     def cached_official(self, code: str) -> tuple[list[dict], list[dict]]:

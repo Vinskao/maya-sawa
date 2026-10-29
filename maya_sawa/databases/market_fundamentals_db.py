@@ -1,11 +1,12 @@
-"""Persistent low-frequency fundamentals fallback data (FinMind only)."""
+"""Persistent Taiwan fundamentals history: whole-market MOPS summaries (services/mops_fundamentals.py) and FinMind."""
 from __future__ import annotations
 
 import json
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import BigInteger, Column, Date, DateTime, Text, UniqueConstraint, create_engine, pool, text
+from sqlalchemy import BigInteger, Column, Date, DateTime, Integer, Text, UniqueConstraint, create_engine, pool, text
+from sqlalchemy.dialects import sqlite
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -13,12 +14,14 @@ from ..core.config.config import Config
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
+# BIGINT ids in PostgreSQL; INTEGER under SQLite (tests), which only auto-numbers INTEGER primary keys.
+Id = BigInteger().with_variant(Integer, "sqlite")
 
 
 class FinMindFundamental(Base):
     __tablename__ = "maya_sawa_market_fundamental_history"
     __table_args__ = (UniqueConstraint("dataset", "code", "period", "item", name="uq_market_fundamental_identity"),)
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Id, primary_key=True, autoincrement=True)
     dataset = Column(Text, nullable=False)
     code = Column(Text, nullable=False)
     period = Column(Text, nullable=False)
@@ -31,7 +34,7 @@ class FinMindFundamental(Base):
 
 class FinMindUsage(Base):
     __tablename__ = "maya_sawa_finmind_usage"
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Id, primary_key=True, autoincrement=True)
     requested_at = Column(DateTime(timezone=True), nullable=False)
     dataset = Column(Text, nullable=False)
     code = Column(Text, nullable=False, default="")
@@ -42,7 +45,7 @@ class FinMindUsage(Base):
 class MarketQuoteSnapshot(Base):
     __tablename__ = "maya_sawa_market_quote_snapshot"
     __table_args__ = (UniqueConstraint("product_type", "code", name="uq_market_quote_snapshot_identity"),)
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Id, primary_key=True, autoincrement=True)
     product_type = Column(Text, nullable=False)
     code = Column(Text, nullable=False)
     payload = Column(Text, nullable=False)
@@ -52,11 +55,23 @@ class MarketQuoteSnapshot(Base):
 class FinMindCheckpoint(Base):
     __tablename__ = "maya_sawa_finmind_checkpoint"
     __table_args__ = (UniqueConstraint("dataset", "code", name="uq_finmind_checkpoint_identity"),)
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Id, primary_key=True, autoincrement=True)
     dataset = Column(Text, nullable=False)
     code = Column(Text, nullable=False)
     checked_at = Column(DateTime(timezone=True), nullable=False)
     status = Column(Text, nullable=False)
+
+
+class MopsCheckpoint(Base):
+    """Last result per MOPS page (kind, market, period); successful past periods are not fetched again."""
+    __tablename__ = "maya_sawa_mops_checkpoint"
+    __table_args__ = (UniqueConstraint("kind", "market", "period", name="uq_mops_checkpoint"),)
+    id = Column(Id, primary_key=True, autoincrement=True)
+    kind = Column(Text, nullable=False)
+    market = Column(Text, nullable=False)
+    period = Column(Text, nullable=False)
+    status = Column(Text, nullable=False)
+    checked_at = Column(DateTime(timezone=True), nullable=False)
 
 
 class FundamentalReleaseSeen(Base):
@@ -66,7 +81,7 @@ class FundamentalReleaseSeen(Base):
     """
     __tablename__ = "maya_sawa_fundamental_release_seen"
     __table_args__ = (UniqueConstraint("dataset", "code", "period", name="uq_fundamental_release_seen"),)
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Id, primary_key=True, autoincrement=True)
     dataset = Column(Text, nullable=False)
     code = Column(Text, nullable=False)
     period = Column(Text, nullable=False)
@@ -91,7 +106,40 @@ class MarketFundamentalsDatabase:
             return []
         with self.sessions() as session:
             found = session.query(FinMindFundamental).filter_by(code=code.upper(), dataset=dataset).order_by(FinMindFundamental.period, FinMindFundamental.item).all()
-        return [{"period": row.period, "item": row.item, "value": row.value, "unit": row.unit, "source": "FinMind", "fetchedAt": row.fetched_at.isoformat()} for row in found]
+        return [{"period": row.period, "item": row.item, "value": row.value, "unit": row.unit,
+                 "source": "MOPS" if "mops" in (row.source_url or "") else "FinMind", "fetchedAt": row.fetched_at.isoformat()} for row in found]
+
+    def upsert_many(self, dataset: str, records: list[dict], source_url: str, chunk: int = 2000) -> int:
+        """Many codes in one write (a whole-market MOPS page); only the given items are replaced, other items stay."""
+        if not self.sessions or not records:
+            return 0
+        now = datetime.now(timezone.utc)
+        unique = {(str(row["code"]).upper(), str(row["period"]), str(row["item"])): row for row in records}  # last write wins
+        values = [{"dataset": dataset, "code": code, "period": period, "item": item, "value": json.dumps(row.get("value"), ensure_ascii=False),
+                   "unit": str(row.get("unit", "")), "source_url": source_url, "fetched_at": now} for (code, period, item), row in unique.items()]
+        upsert = sqlite.insert if self.engine is not None and self.engine.dialect.name == "sqlite" else insert
+        with self.sessions.begin() as session:
+            for start in range(0, len(values), chunk):
+                statement = upsert(FinMindFundamental).values(values[start:start + chunk])
+                session.execute(statement.on_conflict_do_update(index_elements=["dataset", "code", "period", "item"],
+                    set_={key: getattr(statement.excluded, key) for key in ("value", "unit", "source_url", "fetched_at")}))
+        return len(values)
+
+    def record_mops(self, kind: str, market: str, period: str, status: str) -> None:
+        if not self.sessions:
+            return
+        upsert = sqlite.insert if self.engine is not None and self.engine.dialect.name == "sqlite" else insert
+        with self.sessions.begin() as session:
+            statement = upsert(MopsCheckpoint).values(kind=kind, market=market, period=period, status=status, checked_at=datetime.now(timezone.utc))
+            session.execute(statement.on_conflict_do_update(index_elements=["kind", "market", "period"],
+                set_={"status": statement.excluded.status, "checked_at": statement.excluded.checked_at}))
+
+    def mops_done(self) -> set[tuple[str, str, str]]:
+        if not self.sessions:
+            return set()
+        with self.sessions() as session:
+            found = session.query(MopsCheckpoint).filter_by(status="success").all()
+        return {(row.kind, row.market, row.period) for row in found}
 
     def replace_dataset(self, dataset: str, code: str, records: list[dict], source_url: str) -> int:
         if not self.sessions or not records:
