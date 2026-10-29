@@ -66,7 +66,7 @@ async def get_overseas_research(code: str, market: str):
         raise HTTPException(status_code=422, detail='Invalid overseas instrument identity')
     if market == 'CRYPTO':
         from ..services import binance_market
-        if code not in binance_market.configured_symbols():
+        if code not in await asyncio.to_thread(binance_market.tracked_symbols):
             raise HTTPException(status_code=404, detail='Crypto symbol is not collected')
         try:
             return await asyncio.to_thread(binance_market.binance_market_collector.read, code)
@@ -253,11 +253,21 @@ def instrument_names() -> dict[str, str]:
     return {code: name for code, name in names.items() if code not in ambiguous}
 
 
-@router.get("/notifications")
-async def list_notifications(limit: int = 100, _claims: dict = Depends(require_manage_users_request)):
-    """The owner's notification history (newest first), shown in the site's bell."""
+async def optional_owner(request: Request) -> dict | None:
+    """The owner's claims, or None for anyone else (signed out, bad token or another account)."""
     try:
-        return {"notifications": await asyncio.to_thread(market_notification_db.recent, max(1, min(limit, 200)))}
+        return await require_manage_users_request(request)
+    except HTTPException:
+        return None
+
+
+@router.get("/notifications")
+async def list_notifications(limit: int = 100, owner: dict | None = Depends(optional_owner)):
+    """Routine notification history (newest first), shown in the site's bell. Anyone sees the 'update' rows; the
+    'attention' rows (an account needs a login, a run is stuck) are the owner's only."""
+    kinds = None if owner else ("update",)
+    try:
+        return {"notifications": await asyncio.to_thread(market_notification_db.recent, max(1, min(limit, 200)), kinds)}
     except Exception as exc:
         logger.exception("Notification history read failed")
         raise HTTPException(status_code=503, detail="Notification database unavailable") from exc
@@ -551,6 +561,8 @@ async def get_market_dashboard():
     # A live quote carries underlyingCode; when Shioaji is unavailable fall back to the persisted snapshots.
     await asyncio.to_thread(attach_underlying, auto_rows + custom_rows, list(quotes.values()))
 
+    quotes.update(await asyncio.to_thread(crypto_quotes, auto_rows))
+
     def expose(item: dict) -> dict:
         return {**item, "quote": quotes.get((item["productType"], item["code"].upper(), item["market"]))}
     return {
@@ -558,23 +570,24 @@ async def get_market_dashboard():
         "automatic": {"snapshotAt": auto["snapshotAt"], "positions": [expose(item) for item in auto_rows]},
         "custom": [expose(item) for item in custom_rows],
         "customLimit": 5,
-        "crypto": await asyncio.to_thread(crypto_dashboard_rows),
     }
 
 
-def crypto_dashboard_rows() -> list[dict]:
-    """Public Binance spot quotes the background collector persisted; never calls Binance."""
+def crypto_quotes(rows: list[dict]) -> dict[tuple[str, str, str], dict | None]:
+    """Persisted Binance quotes for held coins; never calls Binance."""
     from ..services import binance_market
-    rows = []
-    for code in binance_market.configured_symbols():
+    quotes = {}
+    for item in rows:
+        if item.get("market") != binance_market.MARKET:
+            continue
+        code = item["code"].upper()
         try:
             persisted = binance_market.binance_market_collector.db.latest(code, binance_market.MARKET, "quote")
         except Exception:
             logger.warning("Persisted Binance quote unavailable")
             persisted = None
-        rows.append({"code": code, "name": binance_market.NAMES.get(code, code), "productType": "crypto",
-                     "market": binance_market.MARKET, "quote": binance_market.dashboard_quote(code, persisted)})
-    return rows
+        quotes[("crypto", code, binance_market.MARKET)] = binance_market.dashboard_quote(code, persisted)
+    return quotes
 
 
 @router.get("/dashboard/events", **public_data("近期營收／財報發布與法說會", "行情與標的"))

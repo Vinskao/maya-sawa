@@ -140,7 +140,27 @@ def _crypto_collector(monkeypatch):
     return collector
 
 
-def test_dashboard_lists_configured_crypto_with_persisted_binance_quotes(monkeypatch):
+def test_binance_coins_join_the_holdings_by_value_including_usdt():
+    """2026-10-29: the owner wants every coin they hold, USDT included, in the holdings list (largest first), not a separate quote box."""
+    portfolio = {
+        "balanceAvailable": True, "fetchedAt": "2026-10-29T03:00:00+00:00",
+        "positions": [{"code": "2330", "name": "TSMC", "productType": "stock", "marketValue": 900},
+                      {"code": "3008", "name": "LARGAN", "productType": "stock", "marketValue": 100}],
+        "binance": {"positions": [
+            {"asset": "ETH", "name": "Ethereum", "wallet": "Spot", "quantity": 0.1, "valueTwd": 200},
+            {"asset": "ETH", "name": "Ethereum", "wallet": "Earn", "quantity": 0.1, "valueTwd": 200},  # one row per coin
+            {"asset": "BTC", "name": "Bitcoin", "wallet": "Spot", "quantity": 0.001, "valueTwd": 50},
+            {"asset": "USDT", "name": "USDT", "wallet": "Funding", "quantity": 5000, "valueTwd": 160000},  # USDT is a holding too
+            {"asset": "DUST", "name": "DUST", "wallet": "Spot", "quantity": 1, "valueTwd": 0},
+        ]},
+    }
+    result = public_selection_from_portfolio(portfolio)
+    assert [(item["code"], item["market"], item["productType"]) for item in result] == [
+        ("USDT", "CRYPTO", "crypto"), ("2330", "TW", "stock"), ("ETH", "CRYPTO", "crypto"), ("3008", "TW", "stock"), ("BTC", "CRYPTO", "crypto")]
+    assert all(set(item) == {"code", "name", "productType", "market"} for item in result)
+
+
+def test_held_coins_are_quoted_from_binance_and_there_is_no_separate_crypto_box(monkeypatch):
     import asyncio
     from maya_sawa.api import market
     _crypto_collector(monkeypatch)
@@ -151,7 +171,9 @@ def test_dashboard_lists_configured_crypto_with_persisted_binance_quotes(monkeyp
     async def no_snapshot():
         return {}
 
-    monkeypatch.setattr(market.market_dashboard_db, "latest_auto", lambda: {"snapshotAt": None, "positions": []})
+    monkeypatch.setattr(market.market_dashboard_db, "latest_auto", lambda: {"snapshotAt": None, "positions": [
+        {"code": "BTC", "name": "Bitcoin", "productType": "crypto", "market": "CRYPTO"},
+        {"code": "SOL", "name": "Solana", "productType": "crypto", "market": "CRYPTO"}]})
     monkeypatch.setattr(market.market_dashboard_db, "custom_symbols", lambda: [])
     monkeypatch.setattr(market.market_dashboard_db, "watch_symbols", lambda: [])
     monkeypatch.setattr(market.shioaji_market_service, "get_dashboard_quotes", nothing)
@@ -159,11 +181,11 @@ def test_dashboard_lists_configured_crypto_with_persisted_binance_quotes(monkeyp
     monkeypatch.setattr(market.ibkr_market_service, "get_snapshot", no_snapshot)
     monkeypatch.setattr(market, "attach_underlying", lambda *args, **kwargs: None)
     payload = asyncio.run(market.get_market_dashboard())
-    rows = {row["code"]: row for row in payload["crypto"]}
-    assert list(rows) == ["BTC", "ETH"]
+    assert "crypto" not in payload
+    rows = {row["code"]: row for row in payload["automatic"]["positions"]}
     assert rows["BTC"]["market"] == "CRYPTO" and rows["BTC"]["productType"] == "crypto"
     assert rows["BTC"]["quote"]["close"] == 80724.72 and rows["BTC"]["quote"]["currency"] == "USDT"
-    assert rows["ETH"]["quote"] is None  # not collected yet: no quote, never a zero price
+    assert rows["SOL"]["quote"] is None  # not collected yet: no quote, never a zero price
 
 
 def test_overseas_endpoint_serves_crypto_from_binance_and_rejects_unknown_symbols(monkeypatch):
@@ -177,6 +199,17 @@ def test_overseas_endpoint_serves_crypto_from_binance_and_rejects_unknown_symbol
     with pytest.raises(HTTPException) as error:
         asyncio.run(market.get_overseas_research("DOGE", "CRYPTO"))
     assert error.value.status_code == 404
+
+
+def test_a_held_coin_outside_binance_symbols_is_collected_and_charted(monkeypatch):
+    from maya_sawa.services import binance_market
+    monkeypatch.setenv("BINANCE_SYMBOLS", "BTC")
+    monkeypatch.setattr("maya_sawa.databases.market_dashboard_db.market_dashboard_db.latest_auto", lambda: {"snapshotAt": None, "positions": [
+        {"code": "2330", "name": "TSMC", "productType": "stock", "market": "TW"},
+        {"code": "SOL", "name": "Solana", "productType": "crypto", "market": "CRYPTO"},
+        {"code": "BTC", "name": "Bitcoin", "productType": "crypto", "market": "CRYPTO"},
+        {"code": "USDT", "name": "USDT", "productType": "crypto", "market": "CRYPTO"}]})
+    assert binance_market.tracked_symbols() == ["BTC", "SOL"]  # USDT is the quote asset: there is no USDT/USDT pair
 
 
 def test_crypto_instruments_can_carry_an_ai_analysis():

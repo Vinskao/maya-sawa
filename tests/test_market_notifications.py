@@ -28,6 +28,7 @@ def client_for(db, monkeypatch, owner=True, sent=None):
     def deny():
         raise HTTPException(status_code=401, detail="no token")
     app.dependency_overrides[require_manage_users_request] = (lambda: {"sub": "owner"}) if owner else deny
+    app.dependency_overrides[market.optional_owner] = (lambda: {"sub": "owner"}) if owner else (lambda: None)
     return TestClient(app)
 
 
@@ -65,11 +66,23 @@ def test_stored_text_is_masked_like_the_telegram_text(db, monkeypatch):
     assert secret not in db.recent()[0]["body"]
 
 
-def test_only_the_owner_reads_the_history(db, monkeypatch):
+def test_anyone_reads_routine_updates_but_only_the_owner_reads_attention(db, monkeypatch):
+    """2026-10-29: the owner wants the bell readable without signing in. 'attention' rows (IB login needed, a stuck run)
+    are about the owner's accounts, so they stay owner-only."""
     db.add("update", "台股收盤後", "x")
-    assert client_for(db, monkeypatch, owner=False).get("/market/notifications").status_code == 401
+    db.add("attention", "IB 斷線", "請重新登入")
+    public = client_for(db, monkeypatch, owner=False).get("/market/notifications?limit=5")
+    assert public.status_code == 200
+    assert [row["title"] for row in public.json()["notifications"]] == ["台股收盤後"]
     data = client_for(db, monkeypatch).get("/market/notifications?limit=5").json()
-    assert [row["title"] for row in data["notifications"]] == ["台股收盤後"]
+    assert [row["title"] for row in data["notifications"]] == ["IB 斷線", "台股收盤後"]
+
+
+def test_the_public_list_still_returns_the_limit_of_updates(db):
+    for index in range(3):
+        db.add("update", f"u{index}", "")
+        db.add("attention", f"a{index}", "")
+    assert [row["title"] for row in db.recent(limit=2, kinds=("update",))] == ["u2", "u1"]
 
 
 def test_messages_sent_before_history_was_kept_are_backfilled_once(db):

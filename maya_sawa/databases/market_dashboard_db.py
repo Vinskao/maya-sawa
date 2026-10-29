@@ -44,6 +44,16 @@ def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_cod
         for position in ibkr.get("positions", [])
         if str(position.get("assetClass") or "").upper() == "STK"
     )
+    # Binance coins, USDT included (one row per coin across spot, funding and earn), valued in NT$.
+    coins: dict[str, dict[str, Any]] = {}
+    for position in (portfolio.get("binance") or {}).get("positions", []):
+        asset = str(position.get("asset") or "").strip().upper()
+        if not asset:
+            continue
+        coin = coins.setdefault(asset, {"code": asset, "name": position.get("name") or asset, "productType": "crypto",
+                                        "allocationValue": 0.0, "currency": "TWD", "market": "CRYPTO"})
+        coin["allocationValue"] += float(position.get("valueTwd") or 0)
+    positions.extend(coins.values())
     rows = []
     for position in positions:
         kind = position.get("productType")
@@ -61,7 +71,7 @@ def public_selection_from_portfolio(portfolio: dict[str, Any], fixed_futures_cod
             weight = raw_weight * fx if currency not in {"TWD", "NTD"} and fx else raw_weight
         except (ValueError, TypeError):
             continue
-        if (kind not in {"stock", "futures"} or not code or not name or weight <= 0
+        if (kind not in {"stock", "futures", "crypto"} or not code or not name or weight <= 0
                 or (kind == "futures" and fixed_futures_code and code == fixed_futures_code.upper())):
             continue
         rows.append({"code": code, "name": name, "productType": kind, "weight": weight, "market": position.get("market") or "TW"})

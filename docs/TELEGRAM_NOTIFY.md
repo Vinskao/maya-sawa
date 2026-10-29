@@ -35,7 +35,8 @@
 
 **通知歷史。** `POST /market/notify` 除了送 Telegram，也會把同一則（已遮蔽疑似金鑰的字串）存進 `maya_sawa_market_notification`，
 只保留最新 500 則。即使 Telegram 沒設定，也會存；存失敗只記 log，不影響 Telegram。
-`GET /market/notifications?limit=100`（`limit` 最多 200）回傳最新在前的清單，需要擁有者角色（同 `/market/auth-status`），
+`GET /market/notifications?limit=100`（`limit` 最多 200）回傳最新在前的清單。不用登入就能讀 `update`（研究更新、券商目標價）；
+`attention`（例如 IB 要重新登入、排程卡住）跟帳號有關，只有擁有者角色看得到（2026-10-29 起）。
 網站導覽列的鈴鐺用它顯示「全部／未讀」，已讀的訊息仍留在清單裡可以重讀。已讀狀態存在瀏覽器 localStorage，
 不會寫回後端。
 

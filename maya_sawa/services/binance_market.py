@@ -52,6 +52,20 @@ def configured_symbols() -> list[str]:
     return symbols
 
 
+def tracked_symbols() -> list[str]:
+    """BINANCE_SYMBOLS plus every coin in the holdings list, so a held coin always has quotes and a chart."""
+    symbols = configured_symbols()
+    try:
+        from ..databases.market_dashboard_db import market_dashboard_db
+        held = [str(row.get("code") or "").upper() for row in market_dashboard_db.latest_auto().get("positions", [])
+                if row.get("market") == MARKET]
+    except Exception:
+        logger.warning("Holdings unavailable; collecting BINANCE_SYMBOLS only")
+        held = []
+    # USDT is the quote asset itself (no USDT/USDT pair), so it is held but never collected.
+    return symbols + [code for code in held if re.fullmatch(r'[A-Z0-9]{2,10}', code) and code not in symbols and code != QUOTE_ASSET]
+
+
 def parse_klines(raw) -> list[dict]:
     bars = {}
     for row in raw if isinstance(raw, list) else []:
@@ -137,7 +151,7 @@ class BinanceMarketCollector:
         self.db.save(code, MARKET, 0, kind, {'reason': type(exc).__name__, 'detail': detail}, status='unavailable')
 
     async def collect_once(self):
-        symbols = configured_symbols()
+        symbols = await asyncio.to_thread(tracked_symbols)
         due_quotes = [code for code in symbols if await asyncio.to_thread(self._due, code, 'quote', self.quote_seconds)]
         if due_quotes:
             pairs = [code + QUOTE_ASSET for code in due_quotes]
@@ -177,7 +191,7 @@ class BinanceMarketCollector:
 
     def read(self, code: str) -> dict:
         code = code.upper()
-        if code not in configured_symbols():
+        if code not in tracked_symbols():
             raise ValueError('Unsupported crypto symbol')
         cached = self._read_cache.get(code)
         if cached and time.monotonic() - cached[0] < 60:

@@ -57,11 +57,14 @@ class MarketNotificationDatabase:
             self.add(row["kind"], row["title"], row["body"], at=datetime.fromisoformat(row["at"]))
         return len(rows)
 
-    def recent(self, limit: int = 100) -> list[dict]:
+    def recent(self, limit: int = 100, kinds: tuple[str, ...] | None = None) -> list[dict]:
         if not self.sessions:
             raise RuntimeError("Notification database unavailable")
         with self.sessions() as session:
-            rows = session.query(MarketNotification).order_by(MarketNotification.id.desc()).limit(limit).all()
+            query = session.query(MarketNotification)
+            if kinds is not None:
+                query = query.filter(MarketNotification.kind.in_(kinds))
+            rows = query.order_by(MarketNotification.id.desc()).limit(limit).all()
             return [{"id": row.id, "kind": row.kind, "title": row.title, "body": row.body,
                      "createdAt": row.created_at.replace(tzinfo=row.created_at.tzinfo or timezone.utc).isoformat()} for row in rows]
 
