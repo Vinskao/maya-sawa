@@ -441,19 +441,25 @@ TELEGRAM_CHAT_ID=%s
                         withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                             script {
                                 try {
-                                    // Routine fire tokens for market_automation are optional: skip quietly until the
-                                    // Jenkins credentials exist, and keep the existing Secret otherwise.
-                                    try {
-                                        withCredentials([
-                                            string(credentialsId: 'MARKET_ROUTINE_TAIWAN_TOKEN', variable: 'MARKET_ROUTINE_TAIWAN_TOKEN'),
-                                            string(credentialsId: 'MARKET_ROUTINE_US_TOKEN', variable: 'MARKET_ROUTINE_US_TOKEN')
-                                        ]) {
-                                            sh '''
-                                                kubectl create secret generic market-routine-fire                                                   --from-literal=MARKET_ROUTINE_TAIWAN_TOKEN="${MARKET_ROUTINE_TAIWAN_TOKEN}"                                                   --from-literal=MARKET_ROUTINE_US_TOKEN="${MARKET_ROUTINE_US_TOKEN}"                                                   -n default --dry-run=client -o yaml | kubectl apply -f -
-                                            '''
+                                    // Each market is optional independently; preserve other stored token keys.
+                                    ['MARKET_ROUTINE_TAIWAN_TOKEN', 'MARKET_ROUTINE_US_TOKEN'].each { tokenId ->
+                                        try {
+                                            withCredentials([string(credentialsId: tokenId, variable: 'ROUTINE_FIRE_TOKEN')]) {
+                                                withEnv(["ROUTINE_TOKEN_ID=${tokenId}"]) {
+                                                    sh '''
+                                                        set +x
+                                                        set -e
+                                                        kubectl create secret generic market-routine-fire \
+                                                          --from-literal="${ROUTINE_TOKEN_ID}=${ROUTINE_FIRE_TOKEN}" \
+                                                          -n default --dry-run=client -o yaml | \
+                                                          kubectl apply --server-side --force-conflicts \
+                                                            --field-manager="market-routine-${ROUTINE_TOKEN_ID}" -f -
+                                                    '''
+                                                }
+                                            }
+                                        } catch (err) {
+                                            echo "Optional routine token ${tokenId} unavailable; preserving the stored Secret key"
                                         }
-                                    } catch (err) {
-                                        echo "Routine fire tokens not configured in Jenkins; automatic routine runs stay off"
                                     }
                                     sh '''
                                         set -e

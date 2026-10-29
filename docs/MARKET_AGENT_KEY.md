@@ -104,7 +104,10 @@ Flow (asynchronous, human in the loop):
   within about 4 minutes and the due routines can fire.
 - **Fire tokens:** routine API trigger tokens, held in the optional Jenkins credentials `MARKET_ROUTINE_TAIWAN_TOKEN` and
   `MARKET_ROUTINE_US_TOKEN`. Jenkins puts them in the k8s Secret `market-routine-fire`. Without them, nothing is fired
-  and runs report `not-configured`. As of 2026-10-23 neither is set in production.
+  and runs report `not-configured`. On 2026-10-29 the Taiwan routine's API trigger was enabled and its token stored
+  in Jenkins folder `vinskao` and the production Secret. The US trigger remains unconfigured. Jenkins binds each
+  optional credential independently and applies only that key with server-side apply, preserving other stored keys.
+  The raw token must never be placed in this document, source, screenshots or logs.
 - **New custom picks (since 2026-10-25):** saving the custom list (`PUT /market/dashboard/custom`) finds the picks that
   were not saved before. It backfills their history and futures bars, queues their FinMind statements first, and then
   fires the Taiwan routine for just those codes, so the first analysis doesn't wait for 21:15. Each code fires at most
