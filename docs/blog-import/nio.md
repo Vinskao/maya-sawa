@@ -1,7 +1,7 @@
 ---
 title: "nio"
 publishDate: "2025-09-16 18:00:00"
-img: /tymultiverse/assets/java.jpg
+img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: 深入理解 Java NIO：非阻塞 I/O 的核心原理與實戰應用
 level: advance

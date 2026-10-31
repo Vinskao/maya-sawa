@@ -1,7 +1,7 @@
 ---
 title: "algorithm-24hour-to-12hour"
 publishDate: "2024-03-05 18:00:00"
-img: /tymultiverse/assets/java.jpg
+img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
   24小時制轉12小時制算法實現

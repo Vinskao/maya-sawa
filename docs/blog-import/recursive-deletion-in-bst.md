@@ -1,7 +1,7 @@
 ---
 title: "recursive-deletion-in-bst"
 publishDate: "2025-09-13 10:00:00"
-img: /tymultiverse/assets/algorithm.jpg
+img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: Understanding BST Recursive Deletion Algorithm
 level: advance

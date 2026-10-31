@@ -1,7 +1,7 @@
 ---
 title: "embedding-vs-full-text-search"
 publishDate: "2025-08-27 02:00:00"
-img: /tymultiverse/assets/algorithm.jpg
+img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: 深入比較Embedding向量搜索與傳統全文檢索的差異，以Maya V2專案為例，展示PostgreSQL驅動混合檢索的實際實現與最佳實踐
 level: advance

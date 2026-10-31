@@ -125,7 +125,7 @@ def run_tool(name, raw_arguments):
 
 def check_origin(request):
     origin = request.headers.get('origin')
-    if origin and origin not in {'https://chatgpt.com', 'https://peoplesystem.tatdvsonorth.com'}:
+    if origin and origin not in {'https://chatgpt.com', 'https://tymultiverse.cc'}:
         raise HTTPException(403, 'Origin not allowed')
 
 

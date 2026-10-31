@@ -2,7 +2,7 @@
 
 ## 撰稿規範（2026-10-29 起，人與 AI 都適用）
 
-文章要讓之後的人或 AI 讀完就能維護或仿作，不是開發日記。規範的唯一來源是前端 `src/scripts/work/writingGuide.ts`（`WRITING_GUIDE`），顯示在 `/tymultiverse/work` 與 `/tymultiverse/work/manage`；管理頁「存入並發布」會跑同一個 `auditArticle`，不符合就不發布（草稿仍可存）。重點：一篇一個技術問題；第一個標籤是 `Software Engineering` 或 `Quant Finance`；依序有問題、原理、實作（兩段以上真實程式碼）、替代方案表格、驗證、限制、參考資料；不寫「決策一…」「近期」「下一步」。範例：`docs/blog-import/research-platform-engineering-2026-10-28.md`、`docs/blog-import/engineering-market-lab-2026-10.md`。API 匯入不經過這個檢查，Agent 發文前要自己逐項核對。
+文章要讓之後的人或 AI 讀完就能維護或仿作，不是開發日記。規範的唯一來源是前端 `src/scripts/work/writingGuide.ts`（`WRITING_GUIDE`），顯示在 `/work` 與 `/work/manage`；管理頁「存入並發布」會跑同一個 `auditArticle`，不符合就不發布（草稿仍可存）。重點：一篇一個技術問題；第一個標籤是 `Software Engineering` 或 `Quant Finance`；依序有問題、原理、實作（兩段以上真實程式碼）、替代方案表格、驗證、限制、參考資料；不寫「決策一…」「近期」「下一步」。範例：`docs/blog-import/research-platform-engineering-2026-10-28.md`、`docs/blog-import/engineering-market-lab-2026-10.md`。API 匯入不經過這個檢查，Agent 發文前要自己逐項核對。
 
 ## 最終架構與狀態
 
@@ -14,7 +14,7 @@
 
 ## 使用方式
 
-1. 管理者開啟 `/tymultiverse/work/manage`，上傳 UTF-8 `.md` 或將完整 Markdown 貼進文字框。
+1. 管理者開啟 `/work/manage`，上傳 UTF-8 `.md` 或將完整 Markdown 貼進文字框。
 2. 「直接存入 DB 草稿」建立草稿；「存入並發布」保存後發布。載入既有文章後，匯入會更新該文章並帶版本檢查。
 3. 發布、下架與刪除直接更新 DB；不需前端 build，也沒有 Sync 按鈕。
 4. Agent 可呼叫 JSON 匯入或 multipart 上傳 API。使用既有 Keycloak `manage-users` 權限，沒有新增共用寫入金鑰。
@@ -42,7 +42,7 @@ publishDate: "2026-10-27T09:00:00+08:00"
 
 ## API
 
-路徑前綴為 `/maya-sawa/blog`；瀏覽器另可透過同源 `/tymultiverse/api/blog` proxy。讀寫目標固定，不接受任意 upstream URL。
+路徑前綴為 `/maya-sawa/blog`；瀏覽器另可透過同源 `/api/blog` proxy。讀寫目標固定，不接受任意 upstream URL。
 
 - `GET /articles`：公開已發布列表，不含正文與編輯資訊。
 - `GET /articles/{slug}`：公開發布版本正文。

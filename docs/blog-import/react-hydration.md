@@ -1,7 +1,7 @@
 ---
 title: "react-hydration"
 publishDate: "2026-01-02 13:00:00"
-img: /tymultiverse/assets/react.png
+img: /assets/react.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
   從根本探討為什麼需要服務端渲染 (SSR)，以及 SSR 為什麼會更快。深入解析 React Hydration 機制，通過實際主題切換按鈕案例，學習如何正確處理 SSR/CSR 協作，避免常見的 hydration 失敗問題。

@@ -1,7 +1,7 @@
 ---
 title: "container-microsoft-sql-server"
 publishDate: "2024-03-16 12:00:00"
-img: /tymultiverse/assets/container.jpg
+img: /assets/container.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
   2024/03/16
@@ -22,7 +22,7 @@ tags:
 docker images
 ```
 
-![展示結果](/tymultiverse/assets/md-image/docker-images.png)
+![展示結果](/assets/md-image/docker-images.png)
 
 ### Azure SQL Edge vs MSSQL
 
@@ -54,7 +54,7 @@ SQL Server 容器的資料包括：
 docker volume ls
 ```
 
-![展示結果](/tymultiverse/assets/md-image/docker-volume.png)
+![展示結果](/assets/md-image/docker-volume.png)
 
 ### 從 Docker Hub 拉取鏡像檔
 
@@ -109,7 +109,7 @@ sudo docker run -e "ACCEPT_EULA=Y" \
 ```
 
 進入 Docker Desktop 可以看到 volume 位置：
-![展示結果](/tymultiverse/assets/md-image/sql-volume.png)
+![展示結果](/assets/md-image/sql-volume.png)
 
 ## 容器運維與性能調優
 

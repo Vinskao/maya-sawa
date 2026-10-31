@@ -550,7 +550,7 @@ curl -X GET "http://localhost:8000/maya-sawa/qa/stats" | jq .
 curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" \
   -H "Content-Type: application/json" \
   -d '{
-    "remote_url": "https://peoplesystem.tatdvsonorth.com/paprika/articles"
+    "remote_url": "https://tymultiverse.cc/paprika/articles"
   }' | jq .
 ```
 
@@ -571,7 +571,7 @@ curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" \
   }' | jq .
 
 # 選項3: 測試遠端服務是否可用 (先檢查遠端服務)
-curl -X GET "https://peoplesystem.tatdvsonorth.com/paprika/articles" | jq . || echo "遠端服務不可用"
+curl -X GET "https://tymultiverse.cc/paprika/articles" | jq . || echo "遠端服務不可用"
 
 # 選項4: 完整數據同步測試 (推薦)
 # 首先檢查你有多少篇文章在原來的 QA 系統中
@@ -913,7 +913,7 @@ celery -A maya_sawa.tasks.celery_app worker -Q maya_sawa -l info
 | **QA 系統** | `/qa/query` | POST | 文檔問答查詢 | `curl -X POST "http://localhost:8000/maya-sawa/qa/query" -H "Content-Type: application/json" -d '{"text": "Maya Sawa 是什麼？", "user_id": "test_user", "language": "chinese", "name": "Maya"}' \| jq .` | `{"success": true, "answer": "...", "sources": [...]}` |
 | | `/qa/convert-to-vector` | POST | 文本轉向量 | `curl -X POST "http://localhost:8000/maya-sawa/qa/convert-to-vector" -H "Content-Type: application/json" -d '{"content": "這是測試文本"}' \| jq .` | `{"success": true, "vector": [0.123, ...], "dimensions": 1536, "model": "text-embedding-3-small"}` |
 | | `/qa/stats` | GET | 文章統計 | `curl -X GET "http://localhost:8000/maya-sawa/qa/stats" \| jq .` | `{"success": true, "stats": {"total_articles": 38, "total_chunks": 152, "last_sync": "..."}}` |
-| | `/qa/sync-from-api` | POST | 從 API 同步文章 | `curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" -H "Content-Type: application/json" -d '{"remote_url": "https://peoplesystem.tatdvsonorth.com/paprika/articles"}' \| jq .` | `{"success": true, "message": "Sync completed", "stats": {...}}` |
+| | `/qa/sync-from-api` | POST | 從 API 同步文章 | `curl -X POST "http://localhost:8000/maya-sawa/qa/sync-from-api" -H "Content-Type: application/json" -d '{"remote_url": "https://tymultiverse.cc/paprika/articles"}' \| jq .` | `{"success": true, "message": "Sync completed", "stats": {...}}` |
 | | `/qa/chat-history/{user_id}` | GET | 獲取對話歷史 | `curl -X GET "http://localhost:8000/maya-sawa/qa/chat-history/test_user" \| jq .` | `{"success": true, "history": [...], "total": 5}` |
 | | `/qa/search-people` | POST | 人員語義搜索 | `curl -X POST "http://localhost:8000/maya-sawa/qa/search-people" -H "Content-Type: application/json" -d '{"query": "戰鬥力很強的角色", "limit": 5, "threshold": 0.5, "sort_by_power": true}' \| jq .` | `{"success": true, "results": [...], "total_found": 3}` |
 | | `/qa/sync-config` | GET | 同步配置查詢 | `curl -X GET "http://localhost:8000/maya-sawa/qa/sync-config" \| jq .` | `{"success": true, "config": {...}, "status": "idle"}` |

@@ -1,7 +1,7 @@
 ---
 title: "python-code-style"
 publishDate: "2025-09-16 15:00:00"
-img: /tymultiverse/assets/python.png
+img: /assets/python.png
 img_alt: Python programming and code style illustration
 description: |
   Python 程式碼風格深度指南：從 __init__.py 的基本概念到現代專案架構設計，掌握專業 Python 開發的最佳實踐

@@ -1,7 +1,7 @@
 ---
 title: "microservices"
 publishDate: "2025-02-24 10:00:00"
-img: /tymultiverse/assets/java.jpg
+img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: A comprehensive guide to Spring Boot microservices architecture, covering API Gateway, gRPC communication, and practical implementation strategies.
 level: advance
@@ -15,7 +15,7 @@ tags:
 
 # Spring Boot 微服務的合理範圍
 
-如果 `peoplesystem.tatdvsonorth.com/tymultiverse` 這類 HR 系統是以 Spring Boot 打造的微服務架構，我們通常會預期至少三個（甚至更多）獨立的 Spring Boot 應用程式。這是因為微服務的核心精神，就是依據業務職責拆分服務，讓每個服務獨立部署與擴充。
+如果 `tymultiverse.cc/tymultiverse` 這類 HR 系統是以 Spring Boot 打造的微服務架構，我們通常會預期至少三個（甚至更多）獨立的 Spring Boot 應用程式。這是因為微服務的核心精神，就是依據業務職責拆分服務，讓每個服務獨立部署與擴充。
 
 # 基於業務的最低 Spring Boot 服務
 

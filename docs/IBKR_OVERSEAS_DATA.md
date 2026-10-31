@@ -8,7 +8,7 @@
 - SEC EDGAR companyfacts supplements US holdings META and LITE without a key. Original XBRL and normalized financials are persisted. Daily polling uses content-addressed archives: identical filings do not create new daily copies. Changed values/revisions preserve a new source version.
 - Financials preserve exact start/end, fiscal year/quarter, currency/unit, filing date, form and accession. Single-quarter, annual, cumulative YTD and instant balance-sheet data remain separate. EPS is USD/share; other monetary amounts are USD. Missing fourth-quarter XBRL facts are not fabricated. Current/noncurrent debt remain distinct. Cost/revenue-derived gross profit is explicitly marked.
 
-Public route: `GET /market/dashboard/overseas/{code}?market=US|JP|KR|HK`; frontend proxy: `/tymultiverse/api/market/dashboard/overseas/{code}?market=...`. `datasets.financials` and each dataset's `fetchedAt`, `coverage`, `technical.asOf`, latest daily date and `gaps` are available to AI agents. Do not treat fetchedAt as a publication date or broker snapshot update time as guaranteed exchange trade time. Read source availability; do not call frozen/delayed prices real time.
+Public route: `GET /market/dashboard/overseas/{code}?market=US|JP|KR|HK`; frontend proxy: `/api/market/dashboard/overseas/{code}?market=...`. `datasets.financials` and each dataset's `fetchedAt`, `coverage`, `technical.asOf`, latest daily date and `gaps` are available to AI agents. Do not treat fetchedAt as a publication date or broker snapshot update time as guaranteed exchange trade time. Read source availability; do not call frozen/delayed prices real time.
 
 ## Verified production initial backfill
 

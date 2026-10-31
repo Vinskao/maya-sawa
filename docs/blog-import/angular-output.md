@@ -1,7 +1,7 @@
 ---
 title: "angular-output"
 publishDate: "2025-12-26 13:00:00"
-img: /tymultiverse/assets/angular.png
+img: /assets/angular.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
   探索 Angular 17.3 中引入的 Signal-based Outputs (output()) 如何取代傳統的 @Output 裝飾器，提供更簡潔且效能更好的組件間通信方式。

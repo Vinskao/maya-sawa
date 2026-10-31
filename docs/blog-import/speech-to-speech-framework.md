@@ -1,7 +1,7 @@
 ---
 title: "speech-to-speech-framework"
 publishDate: "2025-09-19 15:30:00"
-img: /tymultiverse/assets/langchain.png
+img: /assets/langchain.png
 img_alt: Real-time speech AI framework illustration
 description: |
   Pipecat 語音 AI 框架完整指南：從 Python 基礎到實時語音處理，掌握現代語音 AI 應用開發的核心技術與最佳實踐

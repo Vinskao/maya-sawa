@@ -379,7 +379,7 @@ class TdnetFinancialsCollector:
     async def _fetch(self, url: str) -> bytes:
         import httpx
         async with httpx.AsyncClient(timeout=30, follow_redirects=True,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; TYMultiverseResearch/1.0; +https://peoplesystem.tatdvsonorth.com)"}) as client:
+                headers={"User-Agent": "Mozilla/5.0 (compatible; TYMultiverseResearch/1.0; +https://tymultiverse.cc)"}) as client:
             response = await client.get(url)
             response.raise_for_status()
             return response.content

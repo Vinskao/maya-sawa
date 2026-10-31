@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-USER_AGENT = os.environ.get("SEC_USER_AGENT", "TYMultiverse maya-sawa research (+https://peoplesystem.tatdvsonorth.com/tymultiverse)")
+USER_AGENT = os.environ.get("SEC_USER_AGENT", "TYMultiverse maya-sawa research (+https://tymultiverse.cc)")
 MAX_BYTES = 30 * 1024 * 1024
 PART_CHARS = 40000
 PAGE_CHARS = 8000

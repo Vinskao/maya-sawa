@@ -121,10 +121,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - peoplesystem.tatdvsonorth.com
+    - tymultiverse.cc
     secretName: ffmpeg-tls
   rules:
-  - host: peoplesystem.tatdvsonorth.com
+  - host: tymultiverse.cc
     http:
       paths:
       - path: /ffmpeg

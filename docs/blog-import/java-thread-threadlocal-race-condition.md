@@ -1,7 +1,7 @@
 ---
 title: "java-thread-threadlocal-race-condition"
 publishDate: "2025-05-26 10:00:00"
-img: /tymultiverse/assets/java.jpg
+img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: Understanding Java Thread & ThreadLocal
 level: advance

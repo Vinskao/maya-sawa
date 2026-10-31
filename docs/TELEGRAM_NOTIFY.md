@@ -27,7 +27,7 @@
 ## 排程 token 用量記錄（費用第二軸）
 - 排程（Claude Code 雲端 routine）可匯出 OpenTelemetry 指標：`POST /maya-sawa/otel/v1/metrics`（OTLP http/json）。
 - 驗證：排程的網路代理會自動加上 `X-Market-Agent-Key`（和寫分析同一把），所以排程環境**不需要放任何新密鑰**。通過後用量以 `claude-routine` 記入 `/ai-usage`；本機 Claude Code 仍是 `claude`（需 ingest token）。
-- 排程要設的環境變數（非機密）：`CLAUDE_CODE_ENABLE_TELEMETRY=1`、`OTEL_METRICS_EXPORTER=otlp`、`OTEL_EXPORTER_OTLP_PROTOCOL=http/json`、`OTEL_EXPORTER_OTLP_ENDPOINT=https://peoplesystem.tatdvsonorth.com/maya-sawa/otel`。
+- 排程要設的環境變數（非機密）：`CLAUDE_CODE_ENABLE_TELEMETRY=1`、`OTEL_METRICS_EXPORTER=otlp`、`OTEL_EXPORTER_OTLP_PROTOCOL=http/json`、`OTEL_EXPORTER_OTLP_ENDPOINT=https://tymultiverse.cc/maya-sawa/otel`。
 - 首頁報酬率圖的第二軸只加總 `claude-routine`。
 - 測試：`tests/test_otel_usage.py`。
 

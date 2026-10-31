@@ -363,6 +363,10 @@ metadata:
     cert-manager.io/certificate-name: peoplesystem-tls
 spec:
   ingressClassName: nginx
+  # Old host kept on purpose: API clients that still call it (Apps Script, the ChatGPT
+  # connector) must not get a 301. tymultiverse.cc serves the same paths through
+  # peoplesystem-terraform-oke/tymultiverse-domain/mirror-ingress.yaml (tymcc-maya-sawa);
+  # adding that host here would collide with it in the admission webhook.
   tls:
   - hosts:
     - peoplesystem.tatdvsonorth.com

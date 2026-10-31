@@ -1,6 +1,6 @@
 ﻿# 公開資料 API（網站「API」分頁）
 
-網站導覽列「關於」右邊的「API」分頁（`/tymultiverse/api-reference/`）列出任何人都能呼叫的**市場資料**端點。清單不是手寫的，
+網站導覽列「關於」右邊的「API」分頁（`/api-reference/`）列出任何人都能呼叫的**市場資料**端點。清單不是手寫的，
 前端直接讀 `GET /maya-sawa/public-openapi.json`，所以不會和實際部署的端點有出入。
 
 ## 怎麼公開一個新的 API（不用動網站）

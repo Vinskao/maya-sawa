@@ -1,7 +1,7 @@
 ---
 title: "container-mongodb-setup"
 publishDate: "2024-03-17 12:00:00"
-img: /tymultiverse/assets/container.jpg
+img: /assets/container.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
   2024/03/17
@@ -114,7 +114,7 @@ mongo-express:latest
 
 連線成功後可以看到以下畫面：
 
-![展示結果](/tymultiverse/assets/md-image/mongodb-express.png)
+![展示結果](/assets/md-image/mongodb-express.png)
 
 ## 進階設定與資料保護
 

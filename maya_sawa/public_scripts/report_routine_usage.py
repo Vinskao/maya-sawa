@@ -12,7 +12,7 @@ import os
 import sys
 import urllib.request
 
-URL = os.environ.get("ROUTINE_USAGE_URL", "https://peoplesystem.tatdvsonorth.com/maya-sawa/market/routine-usage")
+URL = os.environ.get("ROUTINE_USAGE_URL", "https://tymultiverse.cc/maya-sawa/market/routine-usage")
 ROOTS = [os.path.expanduser("~/.claude/projects")]
 FIELDS = (("input_tokens", "input"), ("output_tokens", "output"),
           ("cache_creation_input_tokens", "cacheCreation"), ("cache_read_input_tokens", "cacheRead"))

@@ -26,7 +26,7 @@ reconciliation run. The routine has no Keycloak login, so it writes with a dedic
   still requires a login.
 - **Edit history:** saves are recorded with editor `agent:scheduled-analysis` and keep the normal revision history.
 - **Routine side:** the key is a **network secret** on the routine's claude.ai cloud environment (header
-  `X-Market-Agent-Key`, no prefix, host `peoplesystem.tatdvsonorth.com`). The agent proxy adds it outside the session VM,
+  `X-Market-Agent-Key`, no prefix, host `tymultiverse.cc`). The agent proxy adds it outside the session VM,
   so the routine never sees it. The key must never appear in a prompt, the repository or a log.
 
 ## Rotate or revoke

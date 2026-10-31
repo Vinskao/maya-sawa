@@ -1,7 +1,7 @@
 ---
 title: "redis"
 publishDate: "2025-09-28 10:00:00"
-img: /tymultiverse/assets/redis.png
+img: /assets/redis.png
 img_alt: Redis database logo with data structures and performance metrics
 description: Redis 在 TY Multiverse Backend 中的完整應用指南，從基礎概念到專案實戰，涵蓋非同步結果、分散式鎖、快取等核心場景。
 level: advance

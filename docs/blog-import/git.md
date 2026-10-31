@@ -1,7 +1,7 @@
 ---
 title: "git"
 publishDate: "2025-09-24 10:00:00"
-img: /tymultiverse/assets/git.png
+img: /assets/git.png
 img_alt: Git version control system with branching and merging visualization
 description: 深入探討 Git reset --hard 與 --soft 的差異，以及團隊協作中為何 prefer revert 而非 reset 的實戰策略。
 category: Git

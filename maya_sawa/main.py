@@ -147,7 +147,7 @@ app.add_middleware(
         "http://127.0.0.1:4321",
         "http://localhost:3000",
         "https://localhost:3000",
-        "https://peoplesystem.tatdvsonorth.com",
+        "https://tymultiverse.cc",
     ],
     allow_credentials=True,  # 允許攜帶認證信息
     allow_methods=["*"],  # 允許所有 HTTP 方法

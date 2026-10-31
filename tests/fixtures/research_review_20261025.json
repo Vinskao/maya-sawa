@@ -3,7 +3,7 @@
   "financials": {
     "2330": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2330",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/2330",
       "monthly": [
         {
           "period": "2026-09",
@@ -34,7 +34,7 @@
     },
     "3711": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3711",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/3711",
       "monthly": [
         {
           "period": "2026-09",
@@ -65,7 +65,7 @@
     },
     "6187": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6187",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/6187",
       "monthly": [
         {
           "period": "2026-09",
@@ -96,7 +96,7 @@
     },
     "3443": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3443",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/3443",
       "monthly": [
         {
           "period": "2026-09",
@@ -127,7 +127,7 @@
     },
     "3081": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3081",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/3081",
       "monthly": [
         {
           "period": "2026-09",
@@ -158,7 +158,7 @@
     },
     "3105": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3105",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/3105",
       "monthly": [
         {
           "period": "2026-09",
@@ -189,7 +189,7 @@
     },
     "6442": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6442",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/6442",
       "monthly": [
         {
           "period": "2026-09",
@@ -220,7 +220,7 @@
     },
     "3017": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3017",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/3017",
       "monthly": [
         {
           "period": "2026-09",
@@ -251,7 +251,7 @@
     },
     "3324": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3324",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/3324",
       "monthly": [
         {
           "period": "2026-09",
@@ -282,7 +282,7 @@
     },
     "8996": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/8996",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/8996",
       "monthly": [
         {
           "period": "2026-09",
@@ -313,7 +313,7 @@
     },
     "6213": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/6213",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/6213",
       "monthly": [
         {
           "period": "2026-09",
@@ -344,7 +344,7 @@
     },
     "3167": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3167",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/3167",
       "monthly": [
         {
           "period": "2026-09",
@@ -375,7 +375,7 @@
     },
     "2408": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2408",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/2408",
       "monthly": [
         {
           "period": "2026-09",
@@ -406,7 +406,7 @@
     },
     "3008": {
       "status": 200,
-      "source": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/3008",
+      "source": "https://tymultiverse.cc/api/market/dashboard/fundamentals/3008",
       "monthly": [
         {
           "period": "2026-09",
@@ -799,11 +799,11 @@
     "sources": [
       {
         "label": "本站基本面（月營收／季報）",
-        "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/fundamentals/2330"
+        "url": "https://tymultiverse.cc/api/market/dashboard/fundamentals/2330"
       },
       {
         "label": "本站日線與籌碼",
-        "url": "https://peoplesystem.tatdvsonorth.com/tymultiverse/api/market/dashboard/history/2330"
+        "url": "https://tymultiverse.cc/api/market/dashboard/history/2330"
       },
       {
         "label": "公開資訊觀測站 MOPS",

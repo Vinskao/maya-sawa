@@ -34,9 +34,9 @@ that connector is unavailable. Initial setup without a heartbeat does not start 
 
 ## Protected cloud tools
 
-MCP URL: `https://peoplesystem.tatdvsonorth.com/maya-sawa/market/publishing/mcp`
+MCP URL: `https://tymultiverse.cc/maya-sawa/market/publishing/mcp`
 
-Discovery: `https://peoplesystem.tatdvsonorth.com/maya-sawa/market/publishing/.well-known/oauth-protected-resource`
+Discovery: `https://tymultiverse.cc/maya-sawa/market/publishing/.well-known/oauth-protected-resource`
 
 The stateless Streamable HTTP endpoint uses the site's existing Keycloak issuer. Every tool request requires a valid,
 unexpired user token with the **exact MCP URL as audience**, scope `birch.publish`, and the site's existing owner role.

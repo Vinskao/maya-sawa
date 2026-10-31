@@ -202,7 +202,7 @@ pipeline {
                                 MONGODB_DB=voyeur
                                 MONGODB_COLLECTION=metrics
                                 REDIS_QUEUE_VOYEUR=voyeur_queue
-                                WEBSOCKET_HOST=peoplesystem.tatdvsonorth.com
+                                WEBSOCKET_HOST=tymultiverse.cc
                                 WEBSOCKET_PORT=443
                                 WEBSOCKET_PATH=/tymb/metrics
                                 

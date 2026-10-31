@@ -152,7 +152,7 @@ async def collect_sec_financials(collector, code, market, conid):
     url = None
     try:
         async with httpx.AsyncClient(timeout=30, headers={'User-Agent': os.getenv('SEC_USER_AGENT',
-                'TYMultiverseResearch/1.0 (https://peoplesystem.tatdvsonorth.com)')}) as client:
+                'TYMultiverseResearch/1.0 (https://tymultiverse.cc)')}) as client:
             cik = await _sec_cik(code, client)
             if not cik:
                 return                            # not an SEC registrant (e.g. a foreign listing without a U.S. ticker)

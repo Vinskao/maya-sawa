@@ -1,7 +1,7 @@
 ---
 title: "self-balancing-trees"
 publishDate: "2025-08-27T10:00:00.000Z"
-img: /tymultiverse/assets/algorithm.jpg
+img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: Understanding Self-Balancing Trees
 level: advance

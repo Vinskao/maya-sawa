@@ -553,7 +553,7 @@ async def query_document(request: QueryRequest, http_request: Request):
     # 檢查前端來源，決定是否啟用文章QA功能
     enable_article_qa = True
     if request.frontend_source:
-        # 只有當前端來源是 https://peoplesystem.tatdvsonorth.com/tymultiverse 開頭時才啟用文章QA
+        # 只有當前端來源是 https://tymultiverse.cc 開頭時才啟用文章QA
         expected_source = get_public_api_base_url() + "/tymultiverse"
         if not request.frontend_source.startswith(expected_source):
             enable_article_qa = False

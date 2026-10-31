@@ -1,7 +1,7 @@
 ---
 title: "sql-clauses"
 publishDate: "2024-03-04 15:00:00"
-img: /tymultiverse/assets/SQL.jpg
+img: /assets/SQL.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: An in-depth guide on using WHERE, HAVING, and GROUP BY in SQL queries.
 category: Database

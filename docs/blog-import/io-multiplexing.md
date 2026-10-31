@@ -1,7 +1,7 @@
 ---
 title: "io-multiplexing"
 publishDate: "2025-08-27 01:00:00"
-img: /tymultiverse/assets/algorithm.jpg
+img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: 高併發架構深度剖析：從 I/O 多工技術到事件驅動設計的完整演進
 level: advance

@@ -1,7 +1,7 @@
 ---
 title: "system-out-println"
 publishDate: "2024-02-27T12:00:00.000Z"
-img: /tymultiverse/assets/java.jpg
+img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
   2024/02/27

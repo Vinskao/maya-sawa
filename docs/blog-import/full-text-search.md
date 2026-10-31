@@ -1,7 +1,7 @@
 ---
 title: "full-text-search"
 publishDate: "2025-09-03 14:00:00"
-img: /tymultiverse/assets/algorithm.jpg
+img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
   深入探討字典索引（Lexicon Index）與N-Gram索引的技術原理、實現方式及應用場景，比較兩種索引技術在全文檢索系統中的優劣勢

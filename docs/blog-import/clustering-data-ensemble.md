@@ -1,7 +1,7 @@
 ---
 title: "clustering-data-ensemble"
 publishDate: "2025-12-29 01:00:00"
-img: /tymultiverse/assets/algorithm.jpg
+img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: "新手零基礎入門：Clustering 分群術 - 為什麼你要學？讓資料自己說話！"
 level: basic

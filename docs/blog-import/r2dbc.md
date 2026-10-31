@@ -1,7 +1,7 @@
 ---
 title: "r2dbc"
 publishDate: "2025-09-28 10:00:00"
-img: /tymultiverse/assets/java.jpg
+img: /assets/java.jpg
 img_alt: R2DBC reactive database connectivity logo with non-blocking operations
 description: R2DBC 在 TY Multiverse Backend 中的完整應用指南，從基礎概念到專案實戰，涵蓋反應式程式設計、非阻塞操作、高併發處理等核心場景。
 level: advance

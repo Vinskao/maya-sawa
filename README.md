@@ -175,4 +175,4 @@ flowchart TD
 ### Documentation
 
 - Local API Docs: `http://localhost:8000/maya-sawa/docs`
-- Production: `https://peoplesystem.tatdvsonorth.com/maya-sawa/docs`
+- Production: `https://tymultiverse.cc/maya-sawa/docs`

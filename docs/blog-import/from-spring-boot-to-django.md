@@ -1,7 +1,7 @@
 ---
 title: "from-spring-boot-to-django"
 publishDate: "2025-08-25 03:00:00"
-img: /tymultiverse/assets/django.jpg
+img: /assets/django.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
   Django專案基礎教學 + 設計模式對應，用Java思維理解Django架構
