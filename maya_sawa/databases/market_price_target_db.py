@@ -1,5 +1,5 @@
 """Broker target prices: one row per broker action, and one consensus snapshot per day, stored in Postgres."""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import Column, Date, DateTime, Float, Integer, Text, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -39,6 +39,24 @@ class PriceTargetConsensus(Base):
     high = Column(Float)
     low = Column(Float)
     analysts = Column(Integer)
+    currency = Column(Text, nullable=False)
+    recorded_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class EpsEstimate(Base):
+    """Daily consensus EPS for the current and next fiscal year (forward P/E). source yahoo is that day's snapshot;
+    yahoo-trend is backfilled from Yahoo's 7/30/60/90-days-ago figures and never replaces a real snapshot."""
+    __tablename__ = "maya_sawa_market_eps_estimate"
+    code = Column(Text, primary_key=True)
+    market = Column(Text, primary_key=True)
+    snapshot_date = Column(Date, primary_key=True)
+    source = Column(Text, primary_key=True)
+    fy0_end = Column(Date, nullable=False)
+    fy0_eps = Column(Float, nullable=False)
+    fy0_analysts = Column(Integer)
+    fy1_end = Column(Date, nullable=False)
+    fy1_eps = Column(Float, nullable=False)
+    fy1_analysts = Column(Integer)
     currency = Column(Text, nullable=False)
     recorded_at = Column(DateTime(timezone=True), nullable=False)
 
@@ -86,6 +104,28 @@ class MarketPriceTargetDatabase:
                 "currency": consensus["currency"], "recorded_at": datetime.now(timezone.utc),
             }, ["code", "market", "snapshot_date", "source"])
 
+    def save_eps_estimates(self, code, market, day: date, estimates, *, source) -> None:
+        if not self.sessions:
+            raise RuntimeError("Price target database unavailable")
+        fy0, fy1 = estimates["years"]
+        fy0_end, fy1_end = date.fromisoformat(fy0["end"]), date.fromisoformat(fy1["end"])
+        base = {"code": code.upper(), "market": market.upper(), "fy0_end": fy0_end, "fy1_end": fy1_end,
+                "currency": estimates["currency"], "recorded_at": datetime.now(timezone.utc)}
+        insert = sqlite_insert if self.engine.dialect.name == "sqlite" else pg_insert
+        with self.sessions.begin() as session:
+            self._upsert(session, EpsEstimate, {**base, "snapshot_date": day, "source": source,
+                "fy0_eps": fy0["eps"], "fy0_analysts": fy0["analysts"], "fy1_eps": fy1["eps"], "fy1_analysts": fy1["analysts"]},
+                ["code", "market", "snapshot_date", "source"])
+            fiscal_start = fy0_end - timedelta(days=364)  # avoids replace(year=...) on a Feb 29 year end
+            for days, old_fy0 in fy0["trend"].items():
+                old_fy1, then = fy1["trend"].get(days), day - timedelta(days=days)
+                # Before this fiscal year began the "0y" estimate was not the current year: no backfill there.
+                if old_fy0 is None or old_fy1 is None or then < fiscal_start:
+                    continue
+                session.execute(insert(EpsEstimate).values(**base, snapshot_date=then, source=f"{source}-trend",
+                    fy0_eps=old_fy0, fy0_analysts=None, fy1_eps=old_fy1, fy1_analysts=None).on_conflict_do_nothing(
+                    index_elements=["code", "market", "snapshot_date", "source"]))
+
     def read(self, code, market) -> dict:
         if not self.sessions:
             raise RuntimeError("Price target database unavailable")
@@ -102,7 +142,21 @@ class MarketPriceTargetDatabase:
                 "consensus": [{"date": row.snapshot_date.isoformat(), "mean": row.mean, "median": row.median, "high": row.high,
                                "low": row.low, "analysts": row.analysts, "currency": row.currency, "source": row.source}
                               for row in consensus],
+                "epsEstimates": self._eps_rows(session, code, market),
             }
+
+    @staticmethod
+    def _eps_rows(session, code, market) -> list[dict]:
+        rows = session.query(EpsEstimate).filter_by(code=code.upper(), market=market.upper()).order_by(
+            EpsEstimate.snapshot_date, EpsEstimate.source).all()
+        by_date = {}
+        for row in rows:  # a real snapshot wins over a trend backfill of the same day
+            if row.snapshot_date not in by_date or by_date[row.snapshot_date].source.endswith("-trend"):
+                by_date[row.snapshot_date] = row
+        return [{"date": day.isoformat(), "source": row.source, "currency": row.currency, "years": [
+                    {"end": row.fy0_end.isoformat(), "eps": row.fy0_eps, "analysts": row.fy0_analysts},
+                    {"end": row.fy1_end.isoformat(), "eps": row.fy1_eps, "analysts": row.fy1_analysts}]}
+                for day, row in sorted(by_date.items())]
 
 
 def _default_db():

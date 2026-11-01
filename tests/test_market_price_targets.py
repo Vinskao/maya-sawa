@@ -64,7 +64,7 @@ def test_actions_and_daily_consensus_are_stored_once_and_read_in_date_order(db):
     assert data["consensus"] == [{"date": "2026-10-25", "mean": 1170.0, "median": 1200.0, "high": 1500.0, "low": 750.0,
                                   "analysts": 27, "currency": "USD", "source": "yahoo"}]
     assert data["actions"][-1]["source"] == "yahoo" and data["actions"][-1]["currency"] == "USD"
-    assert db.read("2330", "TW") == {"actions": [], "consensus": []}
+    assert db.read("2330", "TW") == {"actions": [], "consensus": [], "epsEstimates": []}
 
 
 def test_collector_falls_back_to_tpex_symbol_and_one_failure_does_not_stop_the_rest(db):
@@ -204,3 +204,45 @@ def test_a_report_without_dates_is_dated_by_when_it_was_recorded(monkeypatch):
     monkeypatch.setattr(market, "market_reports_db", StubReports([claim(["3081"], 7)]))
     views = market.report_views("3081", "TW")
     assert [(view["date"], view["dateKind"]) for view in views] == [("2026-10-20", "recorded")]
+
+
+def test_eps_estimates_keep_this_and_next_fiscal_year_with_their_trend():
+    parsed = targets.parse_yahoo_eps(fixture("yahoo_eps_2330TW.json"))
+    assert parsed["currency"] == "TWD"
+    assert parsed["years"] == [
+        {"period": "0y", "end": "2026-12-31", "eps": 110.54858, "analysts": 35,
+         "trend": {7: 110.24858, 30: 107.85, 60: 107.6434, 90: 106.92136}},
+        {"period": "+1y", "end": "2027-12-31", "eps": 149.17497, "analysts": 36,
+         "trend": {7: 148.87776, 30: 142.9571, 60: 142.12909, 90: 138.26859}}]
+    assert targets.parse_yahoo_eps({}) is None
+    assert targets.parse_yahoo_eps(fixture("yahoo_targets_LITE.json")) is None  # no earningsTrend module
+
+
+def test_eps_snapshot_backfills_the_trend_days_only_inside_the_current_fiscal_year(db):
+    parsed = targets.parse_yahoo_eps(fixture("yahoo_eps_6857T.json"))  # fiscal year ends 2027-03-31
+    db.save_eps_estimates("6857", "JP", date(2026, 11, 1), parsed, source="yahoo")
+    rows = db.read("6857", "JP")["epsEstimates"]
+    assert [(row["date"], row["source"]) for row in rows] == [
+        ("2026-08-03", "yahoo-trend"), ("2026-09-02", "yahoo-trend"), ("2026-10-02", "yahoo-trend"),
+        ("2026-10-25", "yahoo-trend"), ("2026-11-01", "yahoo")]
+    assert rows[-1] == {"date": "2026-11-01", "source": "yahoo", "currency": "JPY", "years": [
+        {"end": "2027-03-31", "eps": 1016.87524, "analysts": 21}, {"end": "2028-03-31", "eps": 1328.6896, "analysts": 22}]}
+    assert rows[0]["years"] == [{"end": "2027-03-31", "eps": 856.35614, "analysts": None},
+                                {"end": "2028-03-31", "eps": 1003.74915, "analysts": None}]
+    # Next day: the new snapshot never overwrites earlier days, and the trend backfill never replaces a real snapshot.
+    db.save_eps_estimates("6857", "JP", date(2026, 11, 8), parsed, source="yahoo")
+    rows = db.read("6857", "JP")["epsEstimates"]
+    assert [row["source"] for row in rows if row["date"] == "2026-11-01"] == ["yahoo"]
+    # 90 days before 2026-04-20 is in the previous fiscal year: that day is not backfilled with this year's estimate.
+    db.save_eps_estimates("9999", "JP", date(2026, 4, 20), parsed, source="yahoo")
+    assert "2026-01-20" not in [row["date"] for row in db.read("9999", "JP")["epsEstimates"]]
+
+
+def test_collector_stores_eps_estimates_from_the_same_request(db):
+    def fetch(symbol):
+        payload = fixture("yahoo_targets_2330TW.json")
+        payload["quoteSummary"]["result"][0]["earningsTrend"] = fixture("yahoo_eps_2330TW.json")["quoteSummary"]["result"][0]["earningsTrend"]
+        return payload
+    targets.collect(db, [{"code": "2330", "market": "TW", "productType": "stock"}], fetch, date(2026, 11, 1))
+    rows = db.read("2330", "TW")["epsEstimates"]
+    assert rows[-1]["date"] == "2026-11-01" and rows[-1]["years"][1]["eps"] == 149.17497

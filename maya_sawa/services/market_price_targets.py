@@ -58,6 +58,30 @@ def parse_yahoo_targets(payload: dict) -> dict:
     return {"consensus": consensus, "actions": actions}
 
 
+TREND_DAYS = (7, 30, 60, 90)
+
+
+def parse_yahoo_eps(payload: dict) -> dict | None:
+    """Consensus EPS for this and next fiscal year (earningsTrend 0y / +1y) and what it was 7-90 days ago.
+
+    Yahoo's own `forwardEps` is not used: for 6857.T it disagreed with these estimates (237 vs 1016)."""
+    result = ((payload.get("quoteSummary") or {}).get("result") or [None])[0] or {}
+    years, currency = [], None
+    for row in (result.get("earningsTrend") or {}).get("trend") or []:
+        if row.get("period") not in ("0y", "+1y") or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(row.get("endDate") or "")):
+            continue
+        estimate, trend = row.get("earningsEstimate") or {}, row.get("epsTrend") or {}
+        eps = _raw(estimate.get("avg"))
+        if eps is None:
+            continue
+        analysts = _raw(estimate.get("numberOfAnalysts"))
+        currency = currency or trend.get("epsTrendCurrency")
+        years.append({"period": row["period"], "end": row["endDate"], "eps": eps,
+                      "analysts": int(analysts) if analysts is not None else None,
+                      "trend": {days: _raw(trend.get(f"{days}daysAgo")) for days in TREND_DAYS}})
+    return {"currency": currency, "years": years} if len(years) == 2 else None
+
+
 def yahoo_symbols(code: str, market: str) -> list[str]:
     code = code.strip().upper()
     if market == "TW" and not (code.isdigit() and len(code) == 4):
@@ -80,7 +104,8 @@ def collect(db, instruments: list[dict], fetch, today: date) -> dict[str, str]:
         seen.add((code, market))
         try:
             for symbol in symbols:
-                parsed = parse_yahoo_targets(fetch(symbol))
+                payload = fetch(symbol)
+                parsed = parse_yahoo_targets(payload)
                 if parsed["consensus"] or parsed["actions"]:
                     break
             currency = MARKET_CURRENCY.get(market) or (parsed["consensus"] or {}).get("currency") or ""
@@ -89,6 +114,8 @@ def collect(db, instruments: list[dict], fetch, today: date) -> dict[str, str]:
                 db.save_actions(code, market, currency, parsed["actions"], source="yahoo", source_url=url)
             if parsed["consensus"]:
                 db.save_consensus(code, market, today, {**parsed["consensus"], "currency": currency}, source="yahoo")
+            if (eps := parse_yahoo_eps(payload)) is not None:  # forward P/E on the price chart
+                db.save_eps_estimates(code, market, today, {**eps, "currency": eps["currency"] or currency}, source="yahoo")
             results[code] = "ok" if parsed["consensus"] or parsed["actions"] else "no_data"
         except Exception as exc:
             logger.warning("Price targets for %s %s unavailable: %s", code, market, type(exc).__name__)
@@ -143,7 +170,7 @@ class YahooTargets:
             if not self.crumb:
                 self._refresh()
             response = self.client.get(f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}",
-                                       params={"modules": "upgradeDowngradeHistory,financialData", "crumb": self.crumb})
+                                       params={"modules": "upgradeDowngradeHistory,financialData,earningsTrend", "crumb": self.crumb})
             if response.status_code == 401 and attempt == 0:
                 self.crumb = None
                 continue

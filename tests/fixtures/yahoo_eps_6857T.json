@@ -1,0 +1,197 @@
+{
+ "quoteSummary": {
+  "result": [
+   {
+    "earningsTrend": {
+     "trend": [
+      {
+       "period": "0q",
+       "endDate": "2026-12-31",
+       "earningsEstimate": {
+        "avg": {
+         "raw": 261.1778,
+         "fmt": "261.18"
+        },
+        "low": {
+         "raw": 234.8,
+         "fmt": "234.8"
+        },
+        "high": {
+         "raw": 284.57672,
+         "fmt": "284.58"
+        },
+        "numberOfAnalysts": {
+         "raw": 6,
+         "fmt": "6",
+         "longFmt": "6"
+        }
+       },
+       "epsTrend": {
+        "current": {
+         "raw": 261.1778,
+         "fmt": "261.18"
+        },
+        "7daysAgo": {
+         "raw": 227.07294,
+         "fmt": "227.07"
+        },
+        "30daysAgo": {
+         "raw": 227.01952,
+         "fmt": "227.02"
+        },
+        "60daysAgo": {
+         "raw": 227.01952,
+         "fmt": "227.02"
+        },
+        "90daysAgo": {
+         "raw": 227.01952,
+         "fmt": "227.02"
+        },
+        "epsTrendCurrency": "JPY"
+       }
+      },
+      {
+       "period": "+1q",
+       "endDate": "2027-03-31",
+       "earningsEstimate": {
+        "avg": {
+         "raw": 293.55273,
+         "fmt": "293.55"
+        },
+        "low": {
+         "raw": 194.47,
+         "fmt": "194.47"
+        },
+        "high": {
+         "raw": 377.82,
+         "fmt": "377.82"
+        },
+        "numberOfAnalysts": {
+         "raw": 5,
+         "fmt": "5",
+         "longFmt": "5"
+        }
+       },
+       "epsTrend": {
+        "current": {
+         "raw": 293.55273,
+         "fmt": "293.55"
+        },
+        "7daysAgo": {
+         "raw": 230.09515,
+         "fmt": "230.1"
+        },
+        "30daysAgo": {
+         "raw": 230.98915,
+         "fmt": "230.99"
+        },
+        "60daysAgo": {
+         "raw": 230.98915,
+         "fmt": "230.99"
+        },
+        "90daysAgo": {
+         "raw": 230.38914,
+         "fmt": "230.39"
+        },
+        "epsTrendCurrency": "JPY"
+       }
+      },
+      {
+       "period": "0y",
+       "endDate": "2027-03-31",
+       "earningsEstimate": {
+        "avg": {
+         "raw": 1016.87524,
+         "fmt": "1,016.88"
+        },
+        "low": {
+         "raw": 918.9,
+         "fmt": "918.9"
+        },
+        "high": {
+         "raw": 1174.2,
+         "fmt": "1,174.2"
+        },
+        "numberOfAnalysts": {
+         "raw": 21,
+         "fmt": "21",
+         "longFmt": "21"
+        }
+       },
+       "epsTrend": {
+        "current": {
+         "raw": 1016.87524,
+         "fmt": "1,016.88"
+        },
+        "7daysAgo": {
+         "raw": 932.03845,
+         "fmt": "932.04"
+        },
+        "30daysAgo": {
+         "raw": 931.43134,
+         "fmt": "931.43"
+        },
+        "60daysAgo": {
+         "raw": 916.5509,
+         "fmt": "916.55"
+        },
+        "90daysAgo": {
+         "raw": 856.35614,
+         "fmt": "856.36"
+        },
+        "epsTrendCurrency": "JPY"
+       }
+      },
+      {
+       "period": "+1y",
+       "endDate": "2028-03-31",
+       "earningsEstimate": {
+        "avg": {
+         "raw": 1328.6896,
+         "fmt": "1,328.69"
+        },
+        "low": {
+         "raw": 891.63,
+         "fmt": "891.63"
+        },
+        "high": {
+         "raw": 1761.78,
+         "fmt": "1,761.78"
+        },
+        "numberOfAnalysts": {
+         "raw": 22,
+         "fmt": "22",
+         "longFmt": "22"
+        }
+       },
+       "epsTrend": {
+        "current": {
+         "raw": 1328.6896,
+         "fmt": "1,328.69"
+        },
+        "7daysAgo": {
+         "raw": 1205.066,
+         "fmt": "1,205.07"
+        },
+        "30daysAgo": {
+         "raw": 1198.654,
+         "fmt": "1,198.65"
+        },
+        "60daysAgo": {
+         "raw": 1139.7559,
+         "fmt": "1,139.76"
+        },
+        "90daysAgo": {
+         "raw": 1003.74915,
+         "fmt": "1,003.75"
+        },
+        "epsTrendCurrency": "JPY"
+       }
+      }
+     ]
+    }
+   }
+  ],
+  "error": null
+ }
+}
