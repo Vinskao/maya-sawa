@@ -38,6 +38,15 @@ def test_unauthenticated_caller_gets_oauth_challenge_and_no_tools(client):
     assert client.get('/market/publishing/.well-known/oauth-protected-resource').status_code == 200
 
 
+def test_resource_metadata_matches_public_connector_url(client):
+    # ChatGPT requires the advertised resource to equal the connector URL it was given.
+    url = 'https://tymultiverse.cc/maya-sawa/market/publishing/mcp'
+    body = client.get('/market/publishing/.well-known/oauth-protected-resource').json()
+    assert body['resource'] == url
+    challenge = rpc(client, 'tools/list').headers['www-authenticate']
+    assert 'resource_metadata="https://tymultiverse.cc/maya-sawa/market/publishing/.well-known/oauth-protected-resource"' in challenge
+
+
 def authorize(client):
     client.app.dependency_overrides[api.publisher_user] = lambda: {'sub': 'owner'}
 

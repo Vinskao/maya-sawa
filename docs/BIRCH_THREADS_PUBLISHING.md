@@ -117,3 +117,11 @@ Next steps: inspect the actual scheduled task and latest execution; verify both 
 - The existing three-hour heartbeat logic cannot detect a task that never connected, and would be inappropriate for the observed multi-day schedule. No per-run Telegram delivery or watchdog fix has yet been deployed. Reconnecting alone does not implement either requirement.
 
 
+
+## Resource URL moved to tymultiverse.cc (2026-11-01)
+
+`RESOURCE` in `maya_sawa/api/publisher_mcp.py` (advertised in protected-resource metadata and required as the token
+audience) is now `https://tymultiverse.cc/maya-sawa/market/publishing/mcp`, matching the connector URL above. The old
+`peoplesystem.tatdvsonorth.com` value made ChatGPT's OAuth setup fail on a resource mismatch. No Keycloak client or
+ChatGPT connection existed yet, so nothing else had to move; configure the audience mapper with the new URL.
+Covered by `test_resource_metadata_matches_public_connector_url`.

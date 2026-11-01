@@ -15,7 +15,7 @@ from ..databases.market_notification_db import market_notification_db
 from ..services.social_publish_queue import publishing_queue, notify_pending
 
 router = APIRouter(prefix='/market/publishing', tags=['publishing'])
-RESOURCE = 'https://peoplesystem.tatdvsonorth.com/maya-sawa/market/publishing/mcp'
+RESOURCE = 'https://tymultiverse.cc/maya-sawa/market/publishing/mcp'
 METADATA = RESOURCE.removesuffix('/mcp') + '/.well-known/oauth-protected-resource'
 SCOPE = 'birch.publish'
 logger = logging.getLogger(__name__)
