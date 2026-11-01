@@ -34,6 +34,10 @@ COPY --from=mwader/static-ffmpeg:7.1.1 /ffmpeg /ffprobe /usr/local/bin/
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
+# Traditional Chinese font for the Instagram text cards (maya_sawa/services/social/card.py). Two pinned,
+# checksum-verified OTF weights (~11MB) instead of apt's full fonts-noto-cjk (~90MB). SIL Open Font License.
+RUN python -c "import hashlib, os, urllib.request; base = 'https://github.com/notofonts/noto-cjk/raw/Sans2.004/Sans/SubsetOTF/TC/'; fonts = {'NotoSansTC-Regular.otf': '5bab0cb3c1cf89dde07c4a95a4054b195afbcfe784d69d75c340780712237537',          'NotoSansTC-Bold.otf': '55420b259eb119bf5f2a0aadba10cf9d736c12d64ab93e78546d69ef5f43558b'}; os.makedirs('/usr/share/fonts/noto-tc', exist_ok=True); [open('/usr/share/fonts/noto-tc/' + name, 'wb').write(data) if hashlib.sha256(data).hexdigest() == digest  else exit(name + ' checksum mismatch')  for name, digest in fonts.items() for data in [urllib.request.urlopen(base + name, timeout=120).read()]]"
+
 # Runtime configuration (OpenAI / DB / Redis / ...) is injected by
 # k8s/deployment.yaml through envsubst, and the build passes no secret
 # build-args, so the image deliberately bakes in no ARG/ENV defaults.

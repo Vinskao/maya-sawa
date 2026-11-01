@@ -60,6 +60,8 @@ from .api.otel_usage import router as otel_usage_router
 from .api.market import router as market_router
 from .api.market_reports import router as market_reports_router
 from .api.publisher_mcp import router as publisher_mcp_router
+from .api.social_publishing import router as social_publishing_router
+from .services.social import runner as social_runner
 from .services.social_publish_queue import start_monitor as start_publishing_monitor, stop_monitor as stop_publishing_monitor
 from .api.runpod import router as runpod_router
 from .api.research_pipeline import router as research_pipeline_router
@@ -104,10 +106,12 @@ async def lifespan(app: FastAPI):
     try:
         await _startup_event()
         start_publishing_monitor()
+        social_runner.start()
         async with blog_worker():
             yield
     finally:
         await stop_publishing_monitor()
+        await social_runner.stop()
         await _shutdown_event()
         get_research_pipeline_container().shutdown()
 
@@ -196,6 +200,7 @@ app.include_router(otel_usage_router)
 app.include_router(market_router)
 app.include_router(market_reports_router)
 app.include_router(publisher_mcp_router)
+app.include_router(social_publishing_router)
 
 # RunPod GPU cost & balance observability (GraphQL-backed, read-only).
 app.include_router(runpod_router)

@@ -197,6 +197,42 @@ spec:
               name: telegram-notify
               key: TELEGRAM_CHAT_ID
               optional: true
+        - name: SOCIAL_PUBLISH_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: social-publish
+              key: SOCIAL_PUBLISH_ENABLED
+              optional: true
+        - name: META_PAGE_ID
+          valueFrom:
+            secretKeyRef:
+              name: social-publish
+              key: META_PAGE_ID
+              optional: true
+        - name: META_PAGE_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: social-publish
+              key: META_PAGE_ACCESS_TOKEN
+              optional: true
+        - name: INSTAGRAM_USER_ID
+          valueFrom:
+            secretKeyRef:
+              name: social-publish
+              key: INSTAGRAM_USER_ID
+              optional: true
+        - name: THREADS_USER_ID
+          valueFrom:
+            secretKeyRef:
+              name: social-publish
+              key: THREADS_USER_ID
+              optional: true
+        - name: THREADS_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: social-publish
+              key: THREADS_ACCESS_TOKEN
+              optional: true
         - name: BLS_API_KEY
           valueFrom:
             secretKeyRef:

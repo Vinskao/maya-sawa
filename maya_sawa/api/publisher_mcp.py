@@ -2,7 +2,6 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,12 +13,12 @@ from ..core.config.config import Config
 from ..databases.market_ai_analysis_db import market_ai_analysis_db
 from ..databases.market_notification_db import market_notification_db
 from ..services.social_publish_queue import publishing_queue, notify_pending
+from ..services.social.sources import public_sources
 
 router = APIRouter(prefix='/market/publishing', tags=['publishing'])
 RESOURCE = 'https://tymultiverse.cc/maya-sawa/market/publishing/mcp'
 METADATA = RESOURCE.removesuffix('/mcp') + '/.well-known/oauth-protected-resource'
 SCOPE = 'birch.publish'
-SOURCE_LIMIT = 30
 logger = logging.getLogger(__name__)
 
 
@@ -96,16 +95,6 @@ def tool_list():
              'annotations': {'readOnlyHint': read_only, 'destructiveHint': False,
                              'openWorldHint': name in {'birch_auth_required', 'birch_pending_review', 'birch_enqueue_draft'}}}
             for name, (model, description, read_only) in TOOLS.items()]
-
-
-def public_sources(since=None):
-    """The same current analyses the public /dashboard/analysis routes serve; never holdings or private reports."""
-    rows = market_ai_analysis_db.list('stock') + [row for row in market_ai_analysis_db.list('macro') if row['code'] == 'US']
-    items = [{'id': f"{row['productType']}:{row['code']}:{row['revision']}", 'productType': row['productType'],
-              'code': row['code'], 'revision': row['revision'], 'updatedAt': row['updatedAt'], 'content': row['content']}
-             for row in rows if since is None or datetime.fromisoformat(row['updatedAt']) > since]
-    items.sort(key=lambda item: datetime.fromisoformat(item['updatedAt']), reverse=True)
-    return {'sources': items[:SOURCE_LIMIT], 'truncated': len(items) > SOURCE_LIMIT}
 
 
 def run_tool(name, raw_arguments):

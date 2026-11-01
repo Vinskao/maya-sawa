@@ -131,3 +131,10 @@ audience) is now `https://tymultiverse.cc/maya-sawa/market/publishing/mcp`, matc
 `birch.publish`; that scope's Audience mapper was moved to the new URL the same day. The client still has
 "Full scope allowed" on, so tokens carry all of the user's roles; the API only accepts them for this audience.
 Covered by `test_resource_metadata_matches_public_connector_url`.
+
+## Superseded by server-side publishing (2026-11-01)
+
+ChatGPT's Metricool tools could only schedule posts, not publish and return a verified Threads URL, so the outbox
+never got past `ready`. Posting moved to Maya Sawa itself, to Facebook, Instagram and Threads: see
+[SOCIAL_PUBLISHING.md](SOCIAL_PUBLISHING.md). The MCP connector and `birch_sources` remain but are no longer needed
+for posting.

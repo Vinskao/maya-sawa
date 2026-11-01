@@ -355,6 +355,38 @@ TELEGRAM_CHAT_ID=%s
             }
         }
 
+        stage('Configure Social Publishing') {
+            // Facebook Page / Instagram / Threads publishing (docs/SOCIAL_PUBLISHING.md). Every credential is optional:
+            // a platform without its ids/token is simply skipped, and SOCIAL_PUBLISH_ENABLED=true turns the scheduler on.
+            steps {
+                container('kubectl') {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Social publishing secret not updated') {
+                        script {
+                            sh 'rm -f /tmp/social-publish.env'
+                            ['SOCIAL_PUBLISH_ENABLED', 'META_PAGE_ID', 'META_PAGE_ACCESS_TOKEN', 'INSTAGRAM_USER_ID',
+                             'THREADS_USER_ID', 'THREADS_ACCESS_TOKEN'].each { key ->
+                                try {
+                                    withCredentials([string(credentialsId: key, variable: 'SOCIAL_VALUE')]) {
+                                        sh "printf '%s=%s\\n' '${key}' \"\$SOCIAL_VALUE\" >> /tmp/social-publish.env"
+                                    }
+                                } catch (err) {
+                                    echo "Social credential ${key} not configured; skipping"
+                                }
+                            }
+                            sh '''
+                                set -e
+                                if [ -s /tmp/social-publish.env ]; then
+                                    kubectl create secret generic social-publish --from-env-file=/tmp/social-publish.env \
+                                        -n default --dry-run=client -o yaml | kubectl apply -f -
+                                fi
+                                rm -f /tmp/social-publish.env
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Configure J-Quants Key') {
             // JPX J-Quants key for the Japan holdings' financial history; a missing credential must not block deploys.
             steps {
