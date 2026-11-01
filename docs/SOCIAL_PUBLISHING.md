@@ -53,7 +53,10 @@ credential is fixed.
 | `THREADS_ACCESS_TOKEN` | long-lived (60-day) Threads token from the app's Threads *User Token Generator*; used once as the seed |
 | `META_PAGE_ID`, `INSTAGRAM_USER_ID`, `THREADS_USER_ID` | optional overrides; by default each run looks them up from the tokens (`/me` with the Page token returns the Page and its linked `instagram_business_account`; Threads `/me` returns the user id) |
 
-Instagram is "configured" only when the Page has a linked Instagram professional account.
+Instagram is "configured" only when the Page has a linked Instagram professional account. When a run finds the Page
+token but no linked Instagram, it sends one Telegram message (not one per run) saying Instagram is being skipped and how
+to link it; the message re-arms once the link exists. Revisions that went out while Instagram was skipped are not
+back-filled to Instagram later. A failed Page lookup (expired token, network) is *not* reported as a missing link.
 A platform without its ids/token is skipped. Threads tokens are refreshed weekly by the server and the refreshed
 token is kept in `maya_sawa_social_state` (Postgres), so the Jenkins value only seeds it. Never put tokens in Git,
 prompts or screenshots.

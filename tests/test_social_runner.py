@@ -213,3 +213,52 @@ def test_card_url_points_at_the_public_card_route():
     from maya_sawa.services.social.runner import card_url
     assert card_url({'productType': 'stock', 'code': '2330', 'revision': 5}) == \
         'https://tymultiverse.cc/maya-sawa/market/publishing/cards/stock/2330/5.png'
+
+
+def test_missing_instagram_link_alerts_once_and_rearms_after_it_is_linked(outbox, monkeypatch):
+    from maya_sawa.services.social import meta, runner
+    for name in ('META_PAGE_ID', 'INSTAGRAM_USER_ID', 'THREADS_USER_ID', 'THREADS_ACCESS_TOKEN'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('META_PAGE_ACCESS_TOKEN', 'p')
+    monkeypatch.setattr(runner, 'threads_token', lambda outbox: None)
+    found = {'page_id': '1', 'instagram_id': None}
+    monkeypatch.setattr(meta, 'discover_page', lambda token: dict(found))
+    notices = []
+    notify = lambda channel, reason: notices.append((channel, reason))
+
+    assert set(runner.build_publishers(outbox, notify)) == {'facebook'}
+    assert set(runner.build_publishers(outbox, notify)) == {'facebook'}
+    assert notices == [('instagram', 'not_linked')]  # once, not on every run
+
+    found['instagram_id'] = '2'
+    assert set(runner.build_publishers(outbox, notify)) == {'facebook', 'instagram'}
+    assert len(notices) == 1
+    found['instagram_id'] = None  # unlinked again later: alert again
+    runner.build_publishers(outbox, notify)
+    assert notices == [('instagram', 'not_linked')] * 2
+
+
+def test_failed_page_lookup_is_not_reported_as_a_missing_instagram_link(outbox, monkeypatch):
+    from maya_sawa.services.social import meta, runner
+    for name in ('META_PAGE_ID', 'INSTAGRAM_USER_ID', 'THREADS_USER_ID', 'THREADS_ACCESS_TOKEN'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('META_PAGE_ACCESS_TOKEN', 'p')
+    monkeypatch.setattr(runner, 'threads_token', lambda outbox: None)
+
+    def fail(token):
+        raise meta.AuthError('expired')
+
+    monkeypatch.setattr(meta, 'discover_page', fail)
+    notices = []
+    assert runner.build_publishers(outbox, lambda channel, reason: notices.append((channel, reason))) == {}
+    assert notices == []
+
+
+def test_owner_message_for_a_missing_instagram_link_says_what_to_do(monkeypatch):
+    from maya_sawa.services import telegram_notify
+    from maya_sawa.services.social import runner
+    sent = []
+    monkeypatch.setattr(telegram_notify, 'send', lambda kind, title, body='': sent.append((kind, title, body)))
+    runner.notify_owner('instagram', 'not_linked')
+    kind, title, body = sent[0]
+    assert kind == 'attention' and 'Instagram' in body and '粉專' in body and '略過' in body

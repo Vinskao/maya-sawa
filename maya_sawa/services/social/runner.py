@@ -109,20 +109,25 @@ def threads_token(outbox, refresh=None, now=None):
     return token
 
 
-def build_publishers(outbox):
-    """Only two secrets are required (Page token, Threads token); ids come from the environment or the tokens."""
+def build_publishers(outbox, notify=None):
+    """Only two secrets are required (Page token, Threads token); ids come from the environment or the tokens.
+
+    `notify(channel, reason)` is told once when the Page has no linked Instagram account, until that is fixed."""
     from . import meta
     from .post_text import build_post
     publishers = {}
     page_token = os.getenv('META_PAGE_ACCESS_TOKEN', '').strip()
     if page_token:
         page_id, ig_user = os.getenv('META_PAGE_ID', '').strip(), os.getenv('INSTAGRAM_USER_ID', '').strip()
+        looked_up = False
         if not (page_id and ig_user):
             try:
                 found = meta.discover_page(page_token)
                 page_id, ig_user = page_id or found['page_id'], ig_user or (found['instagram_id'] or '')
+                looked_up = True
             except meta.PublishError:
                 logger.warning('Facebook Page lookup failed; Facebook and Instagram skipped this run')
+        _instagram_link_alert(outbox, notify, linked=bool(ig_user), checked=looked_up or bool(ig_user))
         if page_id:
             page = meta.FacebookPage(page_id, page_token)
             publishers['facebook'] = lambda source: page.publish(build_post(source, 'facebook'))
@@ -143,14 +148,31 @@ def build_publishers(outbox):
     return publishers
 
 
+def _instagram_link_alert(outbox, notify, linked, checked):
+    """Instagram posts only exist when the Page has a linked professional account; say so once instead of skipping silently."""
+    if not checked:
+        return  # the Page lookup failed: we do not know, so do not claim the link is missing
+    if linked:
+        outbox.delete('alerted:instagram_link')
+    elif notify and outbox.get('alerted:instagram_link') is None:
+        outbox.set('alerted:instagram_link', 'not_linked')
+        notify('instagram', 'not_linked')
+
+
 def notify_owner(channel, reason):
     from .. import telegram_notify
     names = {'facebook': 'Facebook 粉專', 'instagram': 'Instagram', 'threads': 'Threads'}
+    name = names.get(channel, channel)
     if reason == 'auth':
-        body = (f'{names.get(channel, channel)} 授權失效，該平台貼文已保留在佇列、不會遺失。\n'
+        body = (f'{name} 授權失效，該平台貼文已保留在佇列、不會遺失。\n'
                 '請更新 Jenkins credential 後重新部署；恢復後下次排程會補發。')
+    elif reason == 'not_linked':
+        body = ('Instagram 尚未連結到 Facebook 粉專，這一輪只發 Facebook 與 Threads，Instagram 被略過；'
+                '之後才連結的話，被略過的貼文不會補發。\n'
+                '請在 Instagram App：個人檔案 → 編輯個人檔案 → 粉專，選 Birch Investments 連結。'
+                '連結後若仍被略過，請重新產生 META_PAGE_ACCESS_TOKEN（選到 Instagram 帳號）並更新 Jenkins。')
     else:
-        body = (f'{names.get(channel, channel)} 有一則貼文發布結果不明，已標為 pending_review、不會自動重送。\n'
+        body = (f'{name} 有一則貼文發布結果不明，已標為 pending_review、不會自動重送。\n'
                 '請到平台確認是否已發出。')
     try:
         telegram_notify.send('attention', 'Birch 社群發文需要處理', body)
@@ -169,7 +191,7 @@ def run_now():
         return market_ai_analysis_db.read(kind, code).get('analysis')
 
     return run_once(outbox, sources=lambda since: public_sources(since, limit=None)['sources'], current=current,
-                    publishers=build_publishers(outbox), now=datetime.now(timezone.utc), notify=notify_owner,
+                    publishers=build_publishers(outbox, notify_owner), now=datetime.now(timezone.utc), notify=notify_owner,
                     pause=lambda seconds: __import__('time').sleep(seconds))
 
 
