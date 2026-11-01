@@ -49,12 +49,11 @@ credential is fixed.
 | Jenkins credential ID | Value |
 |---|---|
 | `SOCIAL_PUBLISH_ENABLED` | `true` to start the scheduler |
-| `META_PAGE_ID` | Birch Investments Facebook Page id |
-| `META_PAGE_ACCESS_TOKEN` | long-lived **Page** token (from a long-lived user token, so it does not expire) |
-| `INSTAGRAM_USER_ID` | the Instagram professional account id linked to that Page |
-| `THREADS_USER_ID` | Threads user id of `birch_investments` |
-| `THREADS_ACCESS_TOKEN` | long-lived (60-day) Threads token; used once as the seed |
+| `META_PAGE_ACCESS_TOKEN` | long-lived **Page** token (taken from a long-lived user token, so it does not expire); used for Facebook and Instagram |
+| `THREADS_ACCESS_TOKEN` | long-lived (60-day) Threads token from the app's Threads *User Token Generator*; used once as the seed |
+| `META_PAGE_ID`, `INSTAGRAM_USER_ID`, `THREADS_USER_ID` | optional overrides; by default each run looks them up from the tokens (`/me` with the Page token returns the Page and its linked `instagram_business_account`; Threads `/me` returns the user id) |
 
+Instagram is "configured" only when the Page has a linked Instagram professional account.
 A platform without its ids/token is skipped. Threads tokens are refreshed weekly by the server and the refreshed
 token is kept in `maya_sawa_social_state` (Postgres), so the Jenkins value only seeds it. Never put tokens in Git,
 prompts or screenshots.

@@ -110,22 +110,36 @@ def threads_token(outbox, refresh=None, now=None):
 
 
 def build_publishers(outbox):
-    from .meta import FacebookPage, Instagram, Threads
+    """Only two secrets are required (Page token, Threads token); ids come from the environment or the tokens."""
+    from . import meta
     from .post_text import build_post
     publishers = {}
-    page_id, page_token = os.getenv('META_PAGE_ID', '').strip(), os.getenv('META_PAGE_ACCESS_TOKEN', '').strip()
-    ig_user = os.getenv('INSTAGRAM_USER_ID', '').strip()
-    threads_user = os.getenv('THREADS_USER_ID', '').strip()
-    if page_id and page_token:
-        page = FacebookPage(page_id, page_token)
-        publishers['facebook'] = lambda source: page.publish(build_post(source, 'facebook'))
-        if ig_user:
-            ig = Instagram(ig_user, page_token)
+    page_token = os.getenv('META_PAGE_ACCESS_TOKEN', '').strip()
+    if page_token:
+        page_id, ig_user = os.getenv('META_PAGE_ID', '').strip(), os.getenv('INSTAGRAM_USER_ID', '').strip()
+        if not (page_id and ig_user):
+            try:
+                found = meta.discover_page(page_token)
+                page_id, ig_user = page_id or found['page_id'], ig_user or (found['instagram_id'] or '')
+            except meta.PublishError:
+                logger.warning('Facebook Page lookup failed; Facebook and Instagram skipped this run')
+        if page_id:
+            page = meta.FacebookPage(page_id, page_token)
+            publishers['facebook'] = lambda source: page.publish(build_post(source, 'facebook'))
+        if page_id and ig_user:
+            ig = meta.Instagram(ig_user, page_token)
             publishers['instagram'] = lambda source: ig.publish(build_post(source, 'instagram'), card_url(source))
-    token = threads_token(outbox) if threads_user else None
-    if threads_user and token:
-        threads = Threads(threads_user, token)
-        publishers['threads'] = lambda source: threads.publish(build_post(source, 'threads'))
+    token = threads_token(outbox)
+    if token:
+        threads_user = os.getenv('THREADS_USER_ID', '').strip()
+        if not threads_user:
+            try:
+                threads_user = meta.discover_threads_user(token)
+            except meta.PublishError:
+                logger.warning('Threads user lookup failed; Threads skipped this run')
+        if threads_user:
+            threads = meta.Threads(threads_user, token)
+            publishers['threads'] = lambda source: threads.publish(build_post(source, 'threads'))
     return publishers
 
 

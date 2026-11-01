@@ -111,3 +111,13 @@ def refresh_threads_token(token, client=None):
     client = client or httpx.Client()
     body = _call(client, 'GET', 'https://graph.threads.net/refresh_access_token', token, grant_type='th_refresh_token')
     return body['access_token']
+
+
+def discover_page(page_token, client=None):
+    """A Page token's /me is the Page itself; its linked Instagram professional account comes with it."""
+    body = _call(client or httpx.Client(), 'GET', f'{GRAPH}/me', page_token, fields='id,name,instagram_business_account')
+    return {'page_id': body['id'], 'instagram_id': (body.get('instagram_business_account') or {}).get('id')}
+
+
+def discover_threads_user(token, client=None):
+    return _call(client or httpx.Client(), 'GET', f'{THREADS}/me', token, fields='id,username')['id']

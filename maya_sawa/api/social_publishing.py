@@ -34,11 +34,9 @@ def _outbox():
 async def status(user=Depends(require_manage_users_request)):
     from ..services.social import runner
     outbox = await asyncio.to_thread(_outbox)
-    configured = {'facebook': bool(os.getenv('META_PAGE_ID') and os.getenv('META_PAGE_ACCESS_TOKEN')),
-                  'instagram': bool(os.getenv('META_PAGE_ID') and os.getenv('META_PAGE_ACCESS_TOKEN')
-                                    and os.getenv('INSTAGRAM_USER_ID')),
-                  'threads': bool(os.getenv('THREADS_USER_ID') and (os.getenv('THREADS_ACCESS_TOKEN')
-                                                                     or outbox.get('threads_token')))}
+    page = bool(os.getenv('META_PAGE_ACCESS_TOKEN'))
+    configured = {'facebook': page, 'instagram': page, 'threads': bool(os.getenv('THREADS_ACCESS_TOKEN')
+                                                                       or outbox.get('threads_token'))}
     return {'enabled': runner.enabled(), 'configured': configured, 'cursor': outbox.get(runner.CURSOR),
             'posts': await asyncio.to_thread(outbox.posts)}
 

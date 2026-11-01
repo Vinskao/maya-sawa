@@ -1,13 +1,66 @@
 {
   "_note": "Shapes from Meta's Graph API / Threads API documentation; replace with trimmed live captures once tokens exist. No secrets.",
-  "threads_container": {"id": "178"},
-  "threads_publish": {"id": "179"},
-  "threads_permalink": {"permalink": "https://www.threads.com/@birch_investments/post/DAbc123", "id": "179"},
-  "threads_refresh": {"access_token": "THNEW", "token_type": "bearer", "expires_in": 5183944},
-  "facebook_feed": {"id": "222_333"},
-  "facebook_permalink": {"permalink_url": "https://www.facebook.com/222/posts/333", "id": "222_333"},
-  "instagram_permalink": {"permalink": "https://www.instagram.com/p/DXyz789/", "id": "666"},
-  "error_expired_token": {"error": {"message": "Error validating access token: Session has expired.", "type": "OAuthException", "code": 190, "error_subcode": 463, "fbtrace_id": "AbC"}},
-  "error_invalid_parameter": {"error": {"message": "Invalid parameter", "type": "OAuthException", "code": 100, "fbtrace_id": "AbD"}},
-  "error_unknown": {"error": {"message": "An unknown error has occurred.", "type": "OAuthException", "code": 1, "is_transient": true, "fbtrace_id": "AbE"}}
+  "threads_container": {
+    "id": "178"
+  },
+  "threads_publish": {
+    "id": "179"
+  },
+  "threads_permalink": {
+    "permalink": "https://www.threads.com/@birch_investments/post/DAbc123",
+    "id": "179"
+  },
+  "threads_refresh": {
+    "access_token": "THNEW",
+    "token_type": "bearer",
+    "expires_in": 5183944
+  },
+  "facebook_feed": {
+    "id": "222_333"
+  },
+  "facebook_permalink": {
+    "permalink_url": "https://www.facebook.com/222/posts/333",
+    "id": "222_333"
+  },
+  "instagram_permalink": {
+    "permalink": "https://www.instagram.com/p/DXyz789/",
+    "id": "666"
+  },
+  "error_expired_token": {
+    "error": {
+      "message": "Error validating access token: Session has expired.",
+      "type": "OAuthException",
+      "code": 190,
+      "error_subcode": 463,
+      "fbtrace_id": "AbC"
+    }
+  },
+  "error_invalid_parameter": {
+    "error": {
+      "message": "Invalid parameter",
+      "type": "OAuthException",
+      "code": 100,
+      "fbtrace_id": "AbD"
+    }
+  },
+  "error_unknown": {
+    "error": {
+      "message": "An unknown error has occurred.",
+      "type": "OAuthException",
+      "code": 1,
+      "is_transient": true,
+      "fbtrace_id": "AbE"
+    }
+  },
+  "page_me": {
+    "id": "222",
+    "name": "Birch Investments",
+    "instagram_business_account": {
+      "id": "555"
+    }
+  },
+  "threads_me": {
+    "id": "111",
+    "username": "birch_investments"
+  }
 }

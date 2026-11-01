@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -175,14 +176,36 @@ def test_threads_token_is_seeded_from_the_secret_then_refreshed_weekly_into_the_
 
 
 def test_only_channels_with_credentials_are_published(outbox, monkeypatch):
-    from maya_sawa.services.social import runner
+    from maya_sawa.services.social import meta, runner
     for name in ('META_PAGE_ID', 'META_PAGE_ACCESS_TOKEN', 'INSTAGRAM_USER_ID', 'THREADS_USER_ID', 'THREADS_ACCESS_TOKEN'):
         monkeypatch.delenv(name, raising=False)
+    found = {'page_id': '1', 'instagram_id': None}
+    monkeypatch.setattr(meta, 'discover_page', lambda token: dict(found))
+    monkeypatch.setattr(meta, 'discover_threads_user', lambda token: '9')
+    monkeypatch.setattr(runner, 'threads_token', lambda outbox: os.environ.get('THREADS_ACCESS_TOKEN'))
     assert runner.build_publishers(outbox) == {}
-    monkeypatch.setenv('META_PAGE_ID', '1')
     monkeypatch.setenv('META_PAGE_ACCESS_TOKEN', 'p')
     assert set(runner.build_publishers(outbox)) == {'facebook'}
+    found['instagram_id'] = '2'
+    assert set(runner.build_publishers(outbox)) == {'facebook', 'instagram'}
+    monkeypatch.setenv('THREADS_ACCESS_TOKEN', 't')
+    assert set(runner.build_publishers(outbox)) == {'facebook', 'instagram', 'threads'}
+
+
+def test_ids_from_the_environment_win_and_a_failed_lookup_only_skips_that_channel(outbox, monkeypatch):
+    from maya_sawa.services.social import meta, runner
+    monkeypatch.setenv('META_PAGE_ACCESS_TOKEN', 'p')
+    monkeypatch.setenv('META_PAGE_ID', '1')
     monkeypatch.setenv('INSTAGRAM_USER_ID', '2')
+    monkeypatch.setenv('THREADS_ACCESS_TOKEN', 't')
+    monkeypatch.delenv('THREADS_USER_ID', raising=False)
+    monkeypatch.setattr(runner, 'threads_token', lambda outbox: 't')
+
+    def fail(token):
+        raise meta.AuthError('expired')
+
+    monkeypatch.setattr(meta, 'discover_page', fail)  # not called: both ids are configured
+    monkeypatch.setattr(meta, 'discover_threads_user', fail)
     assert set(runner.build_publishers(outbox)) == {'facebook', 'instagram'}
 
 

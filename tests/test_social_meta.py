@@ -98,3 +98,19 @@ def test_threads_token_refresh_returns_new_token():
     calls = []
     assert refresh_threads_token('old', client(routes, calls)) == 'THNEW'
     assert calls[0][2]['grant_type'] == 'th_refresh_token'
+
+
+def test_page_token_discovers_the_page_and_its_linked_instagram_account():
+    from maya_sawa.services.social.meta import discover_page
+    routes = {'GET /v23.0/me': (200, FIXTURES['page_me'])}
+    calls = []
+    assert discover_page('tok', client(routes, calls)) == {'page_id': '222', 'instagram_id': '555'}
+    assert 'instagram_business_account' in calls[0][2]['fields']
+    routes = {'GET /v23.0/me': (200, {'id': '222', 'name': 'Birch Investments'})}
+    assert discover_page('tok', client(routes, [])) == {'page_id': '222', 'instagram_id': None}
+
+
+def test_threads_token_discovers_its_user_id():
+    from maya_sawa.services.social.meta import discover_threads_user
+    routes = {'GET /v1.0/me': (200, FIXTURES['threads_me'])}
+    assert discover_threads_user('tok', client(routes, [])) == '111'
