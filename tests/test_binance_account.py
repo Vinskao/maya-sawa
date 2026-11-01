@@ -176,7 +176,7 @@ def test_refresh_adds_cost_basis_from_trades_and_fetches_incrementally(monkeypat
     calls.clear()
     asyncio.run(service.refresh_once())
     assert not [c for c in calls if c[1] in ('/api/v3/myTrades', '/sapi/v1/convert/tradeFlow')]
-    service._costs_checked = 0.0
+    service._costs_checked = None
     time.sleep(0.01)  # the next convert window must start after the stored end
     asyncio.run(service.refresh_once())
     assert ('GET', '/api/v3/myTrades', {'symbol': 'BTCUSDT', 'fromId': 6, 'limit': 1000}) in calls

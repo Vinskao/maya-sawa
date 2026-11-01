@@ -143,7 +143,7 @@ class BinanceAccountService:
         self._request = request or self._http_request
         self._task: asyncio.Task | None = None
         self._time_offset = 0
-        self._costs_checked = 0.0
+        self._costs_checked: float | None = None  # monotonic time; None until the first history refresh
 
     @property
     def enabled(self) -> bool:
@@ -260,7 +260,7 @@ class BinanceAccountService:
     async def _attach_costs(self, snapshot: dict, symbols: set) -> dict:
         assets = sorted({p['asset'] for p in snapshot.get('positions', [])})
         pairs = tracked_pairs(assets, symbols)
-        if time.monotonic() - self._costs_checked >= COST_REFRESH_SECONDS:
+        if self._costs_checked is None or time.monotonic() - self._costs_checked >= COST_REFRESH_SECONDS:
             self._costs_checked = time.monotonic()
             try:
                 await self._refresh_trades(pairs)
