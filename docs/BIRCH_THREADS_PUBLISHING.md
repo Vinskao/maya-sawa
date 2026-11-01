@@ -122,6 +122,9 @@ Next steps: inspect the actual scheduled task and latest execution; verify both 
 
 `RESOURCE` in `maya_sawa/api/publisher_mcp.py` (advertised in protected-resource metadata and required as the token
 audience) is now `https://tymultiverse.cc/maya-sawa/market/publishing/mcp`, matching the connector URL above. The old
-`peoplesystem.tatdvsonorth.com` value made ChatGPT's OAuth setup fail on a resource mismatch. No Keycloak client or
-ChatGPT connection existed yet, so nothing else had to move; configure the audience mapper with the new URL.
+`peoplesystem.tatdvsonorth.com` value made ChatGPT's OAuth setup fail on a resource mismatch. Keycloak realm
+`PeopleSystem` already had public client `birch-publisher-chatgpt` (standard flow only, PKCE S256, one exact
+`https://chatgpt.com/connector/oauth/...` redirect, web origin `https://chatgpt.com`) with default client scope
+`birch.publish`; that scope's Audience mapper was moved to the new URL the same day. The client still has
+"Full scope allowed" on, so tokens carry all of the user's roles; the API only accepts them for this audience.
 Covered by `test_resource_metadata_matches_public_connector_url`.
