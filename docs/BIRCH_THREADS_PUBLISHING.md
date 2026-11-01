@@ -43,12 +43,15 @@ unexpired user token with the **exact MCP URL as audience**, scope `birch.publis
 These tokens do not authorize general Maya API routes. No Telegram token, chat ID, generic API write key, arbitrary
 notification recipient, arbitrary URL fetch, or social credential is exposed by this connector.
 
-Tools: `birch_status`, `birch_enqueue_draft`, `birch_auth_required`, `birch_resume`, `birch_claim`,
+Tools: `birch_sources`, `birch_status`, `birch_enqueue_draft`, `birch_auth_required`, `birch_resume`, `birch_claim`,
 `birch_published`, `birch_pending_review`, `birch_heartbeat`.
 
 Scheduled flow:
 
-1. Call `birch_heartbeat`, then `birch_status`. Read current public source revisions and the saved outbox.
+1. Call `birch_heartbeat`, then `birch_status`, then `birch_sources` (with `since` = last successful check) to read
+   current public source revisions and the saved outbox. `birch_sources` is read-only and returns only what the public
+   `/dashboard/analysis/{code}` routes already serve (current `stock` analyses and `macro:US`), newest first, at most 30,
+   each with its job id. It exists because ChatGPT's web reader could not fetch the dashboard JSON on 2026-11-01.
 2. Verify Metricool's connection and exact Threads account before resuming. If it needs login, call
    `birch_auth_required` with a fixed reason and stop publishing; drafts remain stored.
 3. Enqueue a draft for the current public source revision. If already stored, use the existing job.

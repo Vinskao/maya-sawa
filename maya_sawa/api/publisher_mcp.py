@@ -2,11 +2,12 @@
 import asyncio
 import json
 import logging
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError
 
 from ..core.auth.keycloak import get_bearer_token, verify_resource_bearer_token
 from ..core.config.config import Config
@@ -18,6 +19,7 @@ router = APIRouter(prefix='/market/publishing', tags=['publishing'])
 RESOURCE = 'https://tymultiverse.cc/maya-sawa/market/publishing/mcp'
 METADATA = RESOURCE.removesuffix('/mcp') + '/.well-known/oauth-protected-resource'
 SCOPE = 'birch.publish'
+SOURCE_LIMIT = 30
 logger = logging.getLogger(__name__)
 
 
@@ -65,12 +67,19 @@ class AuthRequired(Empty):
     reason: Literal['missing_connection', 'login_required', 'token_expired']
 
 
+class Sources(Empty):
+    since: AwareDatetime | None = None
+
+
 class Resume(Empty):
     verifiedAccount: Literal['birch_investments']
     verifiedConnection: Literal[True]
 
 
 TOOLS = {
+    'birch_sources': (Sources, 'Read current public AI analyses (stock and macro:US) with full text, newest first. '
+        'Pass since (ISO time with offset) to get only revisions updated after the last successful check. '
+        'Each id is the job id for birch_enqueue_draft.', True),
     'birch_status': (Empty, 'Read the durable Threads outbox and pending state; call before drafting or posting.', True),
     'birch_enqueue_draft': (Draft, 'Store a draft for an existing current public analysis revision. Same id is idempotent.', False),
     'birch_auth_required': (AuthRequired, 'Keep drafts pending and notify the owner once through Maya Sawa Telegram when Metricool/Threads needs login.', False),
@@ -89,10 +98,22 @@ def tool_list():
             for name, (model, description, read_only) in TOOLS.items()]
 
 
+def public_sources(since=None):
+    """The same current analyses the public /dashboard/analysis routes serve; never holdings or private reports."""
+    rows = market_ai_analysis_db.list('stock') + [row for row in market_ai_analysis_db.list('macro') if row['code'] == 'US']
+    items = [{'id': f"{row['productType']}:{row['code']}:{row['revision']}", 'productType': row['productType'],
+              'code': row['code'], 'revision': row['revision'], 'updatedAt': row['updatedAt'], 'content': row['content']}
+             for row in rows if since is None or datetime.fromisoformat(row['updatedAt']) > since]
+    items.sort(key=lambda item: datetime.fromisoformat(item['updatedAt']), reverse=True)
+    return {'sources': items[:SOURCE_LIMIT], 'truncated': len(items) > SOURCE_LIMIT}
+
+
 def run_tool(name, raw_arguments):
     if name not in TOOLS:
         raise ValueError('Unknown publisher tool')
     arguments = TOOLS[name][0].model_validate(raw_arguments)
+    if name == 'birch_sources':
+        return public_sources(arguments.since)
     queue = publishing_queue()
     if name == 'birch_status':
         return queue.status()

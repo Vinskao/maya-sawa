@@ -58,7 +58,9 @@ def test_stateless_handshake_notifications_and_scoped_tool_list(client):
     assert client.post('/market/publishing/mcp', json={'jsonrpc': '2.0', 'method': 'notifications/initialized'}).status_code == 202
     tools = rpc(client, 'tools/list').json()['result']['tools']
     assert {tool['name'] for tool in tools} == {'birch_status', 'birch_enqueue_draft', 'birch_auth_required',
-        'birch_resume', 'birch_claim', 'birch_published', 'birch_pending_review', 'birch_heartbeat'}
+        'birch_resume', 'birch_claim', 'birch_published', 'birch_pending_review', 'birch_heartbeat', 'birch_sources'}
+    sources = next(tool for tool in tools if tool['name'] == 'birch_sources')
+    assert sources['annotations']['readOnlyHint'] is True
     assert client.get('/market/publishing/mcp').status_code == 405
 
 
@@ -109,3 +111,44 @@ def test_general_middleware_is_not_bypassed_for_publisher_path_prefixes(client, 
     monkeypatch.setattr(security, 'verify_bearer_token', reject)
     response = client.post('/market/publishing/mcp/other', headers={'Authorization': 'Bearer publisher-only'}, json={})
     assert response.status_code == 401
+
+
+def analysis(kind, code, revision, updated, content='text'):
+    return {'code': code, 'productType': kind, 'revision': revision, 'model': 'm', 'content': content, 'updatedAt': updated}
+
+
+@pytest.fixture
+def sources(monkeypatch):
+    rows = {
+        'stock': [analysis('stock', '2330', 4, '2026-10-30T10:00:00+00:00', '台積電分析'),
+                  analysis('stock', '2408', 2, '2026-10-20T10:00:00+00:00')],
+        'macro': [analysis('macro', 'US', 9, '2026-10-31T01:00:00+00:00', '總經評論'),
+                  analysis('macro', 'JP', 1, '2026-10-31T02:00:00+00:00')],
+        'research': [analysis('research', '2330', 3, '2026-10-31T03:00:00+00:00')],
+    }
+    monkeypatch.setattr(api.market_ai_analysis_db, 'list', lambda kind: rows.get(kind, []))
+    return rows
+
+
+def test_sources_returns_current_public_stock_and_us_macro_newest_first_with_job_ids(client, sources):
+    authorize(client)
+    items = call(client, 'birch_sources', {})['structuredContent']['sources']
+    assert [item['id'] for item in items] == ['macro:US:9', 'stock:2330:4', 'stock:2408:2']
+    assert items[0] == {'id': 'macro:US:9', 'productType': 'macro', 'code': 'US', 'revision': 9,
+                        'updatedAt': '2026-10-31T01:00:00+00:00', 'content': '總經評論'}
+
+
+def test_sources_since_filters_out_revisions_already_checked(client, sources):
+    authorize(client)
+    result = call(client, 'birch_sources', {'since': '2026-10-25T00:00:00+08:00'})['structuredContent']
+    assert [item['id'] for item in result['sources']] == ['macro:US:9', 'stock:2330:4']
+    assert call(client, 'birch_sources', {'since': 'yesterday'})['isError']
+
+
+def test_sources_caps_the_number_of_returned_analyses(client, monkeypatch):
+    authorize(client)
+    many = [analysis('stock', f'{1000 + i}', 1, f'2026-10-{i + 1:02d}T00:00:00+00:00') for i in range(31)]
+    monkeypatch.setattr(api.market_ai_analysis_db, 'list', lambda kind: many if kind == 'stock' else [])
+    result = call(client, 'birch_sources', {})['structuredContent']
+    assert len(result['sources']) == 30 and result['truncated'] is True
+    assert result['sources'][0]['id'] == 'stock:1030:1'
