@@ -83,3 +83,51 @@ prompts or screenshots.
 
 The Meta responses in `tests/fixtures/meta_responses.json` follow Meta's documentation. Replace them with trimmed live
 captures (no tokens) after the first real run.
+
+## 架構圖
+
+```mermaid
+flowchart LR
+    subgraph Source["資料來源（公開）"]
+        A[("market_ai_analysis<br/>個股分析 + macro:US")]
+    end
+    subgraph Maya["maya-sawa（FastAPI，K8s）"]
+        S["scheduler<br/>週三/五/日 21:30 台北"] --> R["runner.run_once"]
+        R -->|"cursor 之後有更新的 revision"| O[("maya_sawa_social_post<br/>outbox：每 revision × 平台一列")]
+        O -->|"claim（原子）"| P["post_text<br/>各平台字數規則"]
+        P --> M["meta.py<br/>Graph / Threads client"]
+        C["/cards/{kind}/{code}/{rev}.png<br/>公開文字卡"] -.IG 抓圖.-> M
+        R -->|"授權失效 / 結果不明 / IG 未連結"| T["Telegram 通知（每情況一次）"]
+    end
+    A --> R
+    M --> FB["Facebook 粉專 /feed"]
+    M --> IG["Instagram media → media_publish"]
+    M --> TH["Threads threads → threads_publish"]
+    J["Jenkins credentials<br/>→ K8s Secret social-publish"] -.token.-> Maya
+```
+
+### 單一貼文的狀態機
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued: 新 revision
+    queued --> publishing: claim
+    publishing --> published: 成功（存 post_id / url）
+    publishing --> failed: 最終發布前失敗（≤3 次重試）
+    failed --> queued: 下一輪重試
+    publishing --> queued: 授權失效（不扣次數，只暫停該平台）
+    publishing --> pending_review: 最終發布逾時 / 5xx / 崩潰（可能已發出，絕不重送）
+    queued --> superseded: 有更新的 revision
+    published --> [*]
+```
+
+## 開發方法（這次串接 FB / IG / Threads 的做法，之後同類串接照做）
+
+1. **先寫「不重發」的規則，再寫程式。** 外部平台沒有冪等鍵，所以先定義狀態（上表）與「結果不明就不重送」，再寫 `outbox.py`。重發比漏發糟。
+2. **測試先行，外部服務一律注入。** `meta.py` 的 client、`runner.run_once` 的 `sources / current / publishers / notify / pause` 都由參數傳入，測試不連網；每個狀態轉換、每種錯誤（190/102、逾時、5xx）各一個測試（`tests/test_social_*.py`）。
+3. **回應 fixture 先照官方文件，真實發過後換成實測。** `tests/fixtures/meta_responses.json`（去掉 token）。
+4. **憑證走 Jenkins Secret text → K8s Secret，全部選填。** 沒設就略過該平台；id（Page、IG、Threads user）由 token 反查，少填兩個值。Threads 長效 token 由伺服器每週續期、存資料庫。
+5. **先上線「只記基準線」再開始發。** 第一次排程只記 cursor，確認狀態端點與通知都正常後，下一輪才真的發。
+6. **平台限制寫成可測的純函式。** 字數上限、截斷位置、IG 文字卡尺寸都在 `post_text.py` / `card.py`，不寫在排程裡。
+7. **失敗要通知、且只通知一次。** 授權失效、結果不明、IG 未連結都發 Telegram，用 outbox 的 `alerted:*` 鍵去重，情況恢復後重新武裝。
+8. **文件與架構圖同一個 commit。** 見工作區 `AGENTS.md`「新流程／架構要畫圖並記錄方法」。

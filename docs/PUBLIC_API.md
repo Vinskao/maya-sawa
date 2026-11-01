@@ -40,3 +40,37 @@ async def get_foo(code: str): ...
 探測時發現下列 GET 不需要任何驗證：`/qa/chat-users`、`/qa/chat-history/{user_id}`（對話紀錄）、`/maya-v2/conversations/`、
 `/maya-v2/ai-models/`、`/paprika/articles`（回應 560 KB）。其中對話紀錄與使用者名單是否該公開，需要擁有者決定。
 
+
+## 回應結構（schema）與各平台合法查詢範例
+
+`public_data` 另有兩個選填參數，網站 API 分頁會顯示：
+
+```python
+@router.get("/dashboard/overseas/{code}",
+            **public_data("說明", "行情與標的", schema=public_schemas.OVERSEAS, examples=public_schemas.OVERSEAS_EXAMPLES))
+```
+
+- `schema`：200 回應的 JSON Schema（行內，不用 `$ref`、不產生 `components`）。頁面把它攤平成「欄位／型別／說明」表（`points[].date` 這種路徑）。
+- `examples`：`{venue, title, path}` 清單，頁面依 `venue` 分組並產生可直接貼上的 `curl`。
+- 內容集中在 `maya_sawa/core/public_schemas.py`，欄位依正式站實際回應整理。目前已有 schema＋範例的路由：`history`、`fundamentals`、`overseas`、`analysis`；其他公開路由尚未補 schema。
+
+| 平台 | 代號格式 | 合法範例 |
+|---|---|---|
+| 台股 | 4 碼數字 | `/market/dashboard/history/2330?start=2026-10-01&end=2026-10-31`、`/market/dashboard/fundamentals/2330` |
+| IBKR 美股／日股 | 代號＋`market=US\|JP\|KR\|HK` | `/market/dashboard/overseas/LITE?market=US`、`/market/dashboard/overseas/6857?market=JP` |
+| Binance | 幣別代號（`BTC`、`ETH`，不是 `BTCUSDT`）＋`market=CRYPTO` | `/market/dashboard/overseas/BTC?market=CRYPTO` |
+
+```mermaid
+flowchart LR
+    D["路由 @router.get(..., **public_data(summary, group, schema, examples))"] --> B["build_public_openapi<br/>只收有標記的 GET"]
+    B --> J["GET /public-openapi.json"]
+    J --> F["前端 publicSpec.ts<br/>publicOperations / schemaRows / groupExamples"]
+    F --> P["/api-reference/ 分頁：參數、各平台範例、回應結構"]
+    T["tests/test_public_api.py<br/>範例必須屬於該路由、參數合法"] -.守門.-> D
+```
+
+## 開發方法
+
+1. 先到正式站打公開端點，取得真實回應，再寫 schema；不憑程式碼猜欄位（Binance 的代號是 `BTC` 而不是 `BTCUSDT`，就是這樣發現的）。
+2. 測試先行：`tests/test_public_api.py` 檢查每個範例都落在對應路由、query 參數有宣告、`market` 值合法；測試不呼叫 handler（避免連資料庫或官方來源）。
+3. 前端把「攤平 schema」「依平台分組」「組 curl」寫成純函式並測試（`tests/api/publicSpec.test.ts`），頁面只負責畫。

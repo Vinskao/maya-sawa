@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response
 
 from ..core.public_api import public_data
+from ..core import public_schemas
 from ..core.auth.keycloak import require_authenticated, require_manage_users_request
 from ..core.auth.internal import require_internal_secret
 
@@ -57,7 +58,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
 
 
-@router.get("/dashboard/overseas/{code}", **public_data("海外標的（美、日、韓）與加密貨幣（CRYPTO）日線、報價與資料狀態", "行情與標的"))
+@router.get("/dashboard/overseas/{code}", **public_data("海外標的（IBKR 美、日、韓）與 Binance 加密貨幣日線、報價與資料狀態", "行情與標的", schema=public_schemas.OVERSEAS, examples=public_schemas.OVERSEAS_EXAMPLES))
 async def get_overseas_research(code: str, market: str):
     """Public contract/market data from PostgreSQL only; no broker or account access."""
     from ..services.ibkr_research import ibkr_research_collector
@@ -109,7 +110,7 @@ def analysis_target(code: str, product_type: str):
     return product_type, normalized
 
 
-@router.get("/dashboard/analysis/{code}", **public_data("AI 分析、研究圖與其歷史版本", "AI 分析與研究"))
+@router.get("/dashboard/analysis/{code}", **public_data("AI 分析、研究圖與其歷史版本", "AI 分析與研究", schema=public_schemas.ANALYSIS, examples=public_schemas.ANALYSIS_EXAMPLES))
 async def get_market_ai_analysis(code: str, productType: str = "stock"):
     target = analysis_target(code, productType)
     try:
@@ -666,7 +667,7 @@ async def get_market_dashboard_candidates(q: str = "", limit: int = 100,
     return {"results": market_dashboard_db.list_candidates(q[:40], min(max(limit, 1), 200))}
 
 
-@router.get("/dashboard/history/{code}", **public_data("個股日線與籌碼歷史（最多五年）", "行情與標的"))
+@router.get("/dashboard/history/{code}", **public_data("個股日線與籌碼歷史（最多五年）", "行情與標的", schema=public_schemas.HISTORY, examples=public_schemas.HISTORY_EXAMPLES))
 async def get_market_dashboard_history(code: str, start: date | None = None, end: date | None = None,
                                       view: str = "daily"):
     """Public daily price and chip history; no account or portfolio fields are exposed."""
@@ -697,7 +698,7 @@ HISTORY_BACKFILL_COOLDOWN_SECONDS = 600
 _history_backfill_requested: dict[str, float] = {}
 
 
-@router.get("/dashboard/fundamentals/{code}", **public_data("個股月營收與季度財報（官方資料）", "行情與標的"))
+@router.get("/dashboard/fundamentals/{code}", **public_data("個股月營收與季度財報（官方資料）", "行情與標的", schema=public_schemas.FUNDAMENTALS, examples=public_schemas.FUNDAMENTALS_EXAMPLES))
 async def get_market_fundamentals(code: str):
     """On-demand official TWSE/MOPS current revenue and quarterly statements."""
     try:

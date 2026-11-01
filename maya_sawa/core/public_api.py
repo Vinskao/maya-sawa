@@ -16,9 +16,11 @@ DESCRIPTION = ("市場資料與研究紀錄的唯讀端點，任何人都能呼�
 KEEP_RESPONSES = {"200", "404", "422", "503"}
 
 
-def public_data(summary: str, group: str) -> dict:
-    """Decorator keyword arguments that publish a GET route on the API page, with a Chinese summary and a group heading."""
-    return {"summary": summary, "openapi_extra": {MARK: {"group": group}}}
+def public_data(summary: str, group: str, *, schema: dict | None = None, examples: list | None = None) -> dict:
+    """Decorator keyword arguments that publish a GET route on the API page, with a Chinese summary and a group heading.
+
+    `schema` (inline JSON Schema of the 200 body) and `examples` ({venue, title, path} queries that work today) are optional."""
+    return {"summary": summary, "openapi_extra": {MARK: {"group": group, "schema": schema, "examples": examples or []}}}
 
 
 def build_public_openapi(app) -> dict:
@@ -28,17 +30,22 @@ def build_public_openapi(app) -> dict:
         operation = operations.get("get")
         if not operation or MARK not in operation:
             continue
-        group = operation[MARK]["group"]
+        mark = operation[MARK]
+        group = mark["group"]
         parameters = [dict(parameter) for parameter in copy.deepcopy(operation.get("parameters", [])) if "$ref" not in parameter]
         for parameter in parameters:
             parameter["schema"] = {"type": (parameter.get("schema") or {}).get("type", "string")}
+        responses = {code: {"description": response.get("description", "")} for code, response in operation.get("responses", {}).items()
+                     if code in KEEP_RESPONSES}
+        if mark.get("schema") and "200" in responses:
+            responses["200"]["content"] = {"application/json": {"schema": copy.deepcopy(mark["schema"])}}
         paths[path] = {"get": {
             "summary": operation.get("summary", path),
             "tags": [group],
             "x-group": group,
             "parameters": parameters,
-            "responses": {code: {"description": response.get("description", "")} for code, response in operation.get("responses", {}).items()
-                          if code in KEEP_RESPONSES},
+            "responses": responses,
+            **({"x-examples": copy.deepcopy(mark["examples"])} if mark.get("examples") else {}),
         }}
     return {"openapi": "3.1.0", "info": {"title": TITLE, "description": DESCRIPTION, "version": "1"},
             "servers": [{"url": "/maya-sawa"}], "paths": paths}

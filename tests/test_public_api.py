@@ -94,7 +94,7 @@ def test_the_public_spec_has_only_marked_gets_and_no_schemas(app):
         operation = operations["get"]
         assert "requestBody" not in operation and "security" not in operation and operation["x-group"]
         assert all("$ref" not in parameter for parameter in operation["parameters"])
-        assert all(set(r) == {"description"} for r in operation["responses"].values())
+        assert all(set(r) <= {"description", "content"} for r in operation["responses"].values())
     history = spec["paths"]["/market/dashboard/history/{code}"]["get"]
     assert {(p["name"], p["in"]) for p in history["parameters"]} >= {("code", "path"), ("start", "query"), ("end", "query")}
 
@@ -105,3 +105,51 @@ def test_the_spec_endpoint_is_public_and_not_listed_in_the_full_schema(app):
     reply = client.get("/public-openapi.json")
     assert reply.status_code == 200 and reply.json()["info"]["title"].startswith("TY 市場研究室")
     assert "/public-openapi.json" not in client.get("/openapi.json").json()["paths"]
+
+
+# ---- response schemas and per-venue query examples ----
+
+def test_a_route_can_publish_its_response_schema_and_venue_examples():
+    tiny = FastAPI()
+    schema = {"type": "object", "properties": {"code": {"type": "string"}}}
+    examples = [{"venue": "台股", "title": "台積電", "path": "/market/new-thing/2330"}]
+
+    @tiny.get("/market/new-thing/{code}", **public_data("新的公開資料", "行情與標的", schema=schema, examples=examples))
+    async def new_thing(code: str):
+        return {}
+    operation = public_api.build_public_openapi(tiny)["paths"]["/market/new-thing/{code}"]["get"]
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == schema
+    assert operation["x-examples"] == examples
+
+
+def test_the_market_data_routes_publish_a_schema_and_a_valid_example_for_every_venue(app):
+    spec = public_api.build_public_openapi(app)
+    base = "/market/dashboard"
+
+    def op(path):
+        return spec["paths"][path]["get"]
+    for path in (f"{base}/history/{{code}}", f"{base}/fundamentals/{{code}}", f"{base}/overseas/{{code}}"):
+        assert "schema" in op(path)["responses"]["200"]["content"]["application/json"], path
+    venues = {example["venue"] for example in op(f"{base}/overseas/{{code}}")["x-examples"]}
+    assert {"IBKR 美股", "IBKR 日股", "Binance"} <= venues
+    assert {example["venue"] for example in op(f"{base}/history/{{code}}")["x-examples"]} == {"台股"}
+
+
+def test_every_published_example_hits_a_public_route_with_valid_parameters(app):
+    import re
+    spec = public_api.build_public_openapi(app)
+    templates = {path: re.compile("^" + re.sub(r"\{[^/]+\}", "[^/]+", path) + "$") for path in spec["paths"]}
+    for path, operations in spec["paths"].items():
+        for example in operations["get"].get("x-examples", []):
+            route_path = example["path"].split("?")[0]
+            assert templates[path].match(route_path), f"{example['path']} does not belong to {path}"
+            assert {"venue", "title", "path"} <= set(example)
+    # Never call the handlers (they reach databases and official sources): check the example against the declared parameters.
+    for path, operations in spec["paths"].items():
+        declared = {p["name"] for p in operations["get"]["parameters"] if p["in"] == "query"}
+        required = {p["name"] for p in operations["get"]["parameters"] if p["in"] == "query" and p.get("required")}
+        for example in operations["get"].get("x-examples", []):
+            query = dict(pair.split("=") for pair in example["path"].partition("?")[2].split("&") if pair)
+            assert set(query) <= declared and required <= set(query), example["path"]
+            if "market" in query:
+                assert query["market"] in {"US", "JP", "KR", "HK", "CRYPTO"}, example["path"]
