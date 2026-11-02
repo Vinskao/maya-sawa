@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from .meta import Ambiguous, AuthError, PublishError
+from .outbox import MAX_ATTEMPTS
 
 logger = logging.getLogger(__name__)
 CURSOR = 'cursor'
@@ -43,16 +44,13 @@ class RunTrigger:
 
 
 def run_once(outbox, *, sources, current, publishers, now, notify, pause=lambda seconds: None):
-    """One pass. `sources(since)` lists public analyses updated after `since`; `publishers` maps channel -> callable."""
-    cursor = outbox.get(CURSOR)
-    if cursor is None:
-        outbox.set(CURSOR, now.isoformat())
-        return {'baseline': now.isoformat(), 'published': 0}
+    """One pass. `sources(None)` lists the latest public analysis of every stock plus macro:US; each must end up
+    published on every configured channel, so anything not yet posted (including old backlog) is queued and sent."""
     outbox.stall(now)
     channels = [channel for channel in ('facebook', 'instagram', 'threads') if channel in publishers]
-    for source in sorted(sources(datetime.fromisoformat(cursor)), key=lambda row: row['updatedAt']):
+    for source in sorted(sources(None), key=lambda row: row['updatedAt']):
         outbox.ensure(source['id'], channels, datetime.fromisoformat(source['updatedAt']))
-    outbox.set(CURSOR, now.isoformat())
+    outbox.set(CURSOR, now.isoformat())  # last run time, for the status page only
 
     blocked, published, first = set(), 0, True
     for row in outbox.due():
@@ -84,6 +82,10 @@ def run_once(outbox, *, sources, current, publishers, now, notify, pause=lambda 
             continue
         except PublishError as exc:
             outbox.failed(row['id'], channel, exc)
+            alert_key = f"alerted:failing:{row['id']}:{channel}"
+            if row['attempts'] + 1 >= MAX_ATTEMPTS and outbox.get(alert_key) is None:
+                outbox.set(alert_key, str(exc)[:200])
+                notify(channel, 'failing')
             continue
         except Exception as exc:  # unexpected: treat like an unknown outcome, never resend blindly
             logger.exception('Social publish crashed for %s %s', channel, row['id'])
@@ -92,8 +94,19 @@ def run_once(outbox, *, sources, current, publishers, now, notify, pause=lambda 
             continue
         outbox.published(row['id'], channel, result.get('id'), result.get('url'))
         outbox.delete(f'alerted:{channel}')
+        outbox.delete(f"alerted:failing:{row['id']}:{channel}")
         published += 1
-    return {'baseline': None, 'published': published}
+    return {'published': published}
+
+
+def coverage(outbox, sources, channels):
+    """For the latest revision of every public analysis: its state on each channel ('missing' = not queued yet)."""
+    states = {(row['id'], row['channel']): row['state'] for row in outbox.posts()}
+    report = [{'id': source['id'], 'updatedAt': source['updatedAt'],
+               'channels': {channel: states.get((source['id'], channel), 'missing') for channel in channels}}
+              for source in sorted(sources, key=lambda row: row['updatedAt'], reverse=True)]
+    return {'complete': all(state == 'published' for row in report for state in row['channels'].values()),
+            'sources': report}
 
 
 # ---- production wiring ----
@@ -142,6 +155,7 @@ def build_publishers(outbox, notify=None):
             try:
                 found = meta.discover_page(page_token)
                 page_id, ig_user = page_id or found['page_id'], ig_user or (found['instagram_id'] or '')
+                page_token = found.get('page_token') or page_token  # a user token is swapped for the Page's own token
                 looked_up = True
             except meta.PublishError:
                 logger.warning('Facebook Page lookup failed; Facebook and Instagram skipped this run')
@@ -184,6 +198,9 @@ def notify_owner(channel, reason):
     if reason == 'auth':
         body = (f'{name} 授權失效，該平台貼文已保留在佇列、不會遺失。\n'
                 '請更新 Jenkins credential 後重新部署；恢復後下次排程會補發。')
+    elif reason == 'failing':
+        body = (f'{name} 有貼文連續發布失敗 {MAX_ATTEMPTS} 次（平台拒絕，尚未發出）。之後每輪仍會自動重試直到發出；'
+                '請看 /maya-sawa/market/publishing/social/status 的 error 欄位。')
     elif reason == 'not_linked':
         body = ('Instagram 尚未連結到 Facebook 粉專，這一輪只發 Facebook 與 Threads，Instagram 被略過；'
                 '之後才連結的話，被略過的貼文不會補發。\n'

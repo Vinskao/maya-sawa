@@ -113,10 +113,31 @@ def refresh_threads_token(token, client=None):
     return body['access_token']
 
 
-def discover_page(page_token, client=None):
-    """A Page token's /me is the Page itself; its linked Instagram professional account comes with it."""
-    body = _call(client or httpx.Client(), 'GET', f'{GRAPH}/me', page_token, fields='id,name,instagram_business_account')
-    return {'page_id': body['id'], 'instagram_id': (body.get('instagram_business_account') or {}).get('id')}
+PAGE_NAME = 'Birch Investments'
+
+
+def discover_page(token, client=None, page_id=None):
+    """Accept either token kind. A (long-lived) USER token lists its Pages with their own Page tokens under
+    /me/accounts; a Page token has no such edge, and its /me is the Page itself. Returns the token to post with."""
+    client = client or httpx.Client()
+    try:
+        pages = _call(client, 'GET', f'{GRAPH}/me/accounts', token,
+                      fields='id,name,access_token,instagram_business_account').get('data')
+    except AuthError:
+        raise
+    except Rejected:
+        pages = None
+    if pages is None:
+        body = _call(client, 'GET', f'{GRAPH}/me', token, fields='id,name,instagram_business_account')
+        return {'page_id': body['id'], 'instagram_id': (body.get('instagram_business_account') or {}).get('id'),
+                'page_token': token}
+    page = (next((p for p in pages if page_id and p.get('id') == page_id), None)
+            or next((p for p in pages if p.get('name') == PAGE_NAME), None)
+            or (pages[0] if len(pages) == 1 else None))
+    if not page or not page.get('access_token'):
+        raise Rejected('The user token does not manage the Birch Investments Page')
+    return {'page_id': page['id'], 'instagram_id': (page.get('instagram_business_account') or {}).get('id'),
+            'page_token': page['access_token']}
 
 
 def discover_threads_user(token, client=None):

@@ -13,7 +13,11 @@ Metricool connector could only schedule posts and never return a verified post U
   current revision of each analysis is posted; older revisions saved in between are `superseded`.
 - **Sources:** the current `stock` analyses and `macro:US`, exactly what `/dashboard/analysis/{code}` serves
   publicly (`services/social/sources.py`). Never holdings, costs or private reports.
-- **First run:** records a baseline and posts nothing; only revisions updated after it are posted.
+- **Coverage (2026-11-02):** every run takes the **latest** revision of every stock analysis and `macro:US` and makes
+  sure it is published on every configured channel. Anything not yet posted, including analyses older than the first
+  run, is queued and sent in the same run, one after another, until all are out. There is no baseline skip any more.
+  `GET /social/status` returns `coverage` (per latest analysis, the state on each channel, `missing` if not queued yet)
+  and `complete` (all published).
 - **Text** (`services/social/post_text.py`): the analysis verbatim. Macro gets the title
   「總經評論｜所有個股分析共用」; a stock gets its code in front only if the first line lacks it. Over the limit
   (Threads 500, Instagram 2,200, Facebook none) the front is kept, cut at a sentence or line end, and
@@ -33,7 +37,7 @@ Table `maya_sawa_social_post` has one row per (revision, platform):
 | `queued` | waiting | claimed atomically on the next run |
 | `publishing` | claimed, request in flight | → `pending_review` if stuck 30 min |
 | `published` | live; `post_id` and `url` stored | never touched again |
-| `failed` | failed **before** the final publish call, nothing is live | retried, up to 3 attempts |
+| `failed` | failed **before** the final publish call, nothing is live | retried on every run until it is posted; one Telegram alert after 3 failures |
 | `pending_review` | final publish call timed out / 5xx / crashed: the post **may** be live | never resent; Telegram alert; check the platform by hand |
 | `superseded` | a newer revision replaced it before it went out | the newer revision is posted instead |
 
@@ -52,7 +56,7 @@ credential is fixed.
 | Jenkins credential ID | Value |
 |---|---|
 | `SOCIAL_PUBLISH_ENABLED` | `true` to start the scheduler |
-| `META_PAGE_ACCESS_TOKEN` | long-lived **Page** token (taken from a long-lived user token, so it does not expire); used for Facebook and Instagram |
+| `META_PAGE_ACCESS_TOKEN` | a long-lived **user** token (with `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`, `instagram_basic`, `instagram_content_publish`) **or** a Page token. A user token is swapped each run for the Birch Investments Page's own token via `/me/accounts` (2026-11-02: Jenkins held a user token and Facebook/Instagram were silently skipped). The user token expires after ~60 days; a Page token taken from it does not |
 | `THREADS_ACCESS_TOKEN` | long-lived (60-day) Threads token from the app's Threads *User Token Generator*; used once as the seed |
 | `META_PAGE_ID`, `INSTAGRAM_USER_ID`, `THREADS_USER_ID` | optional overrides; by default each run looks them up from the tokens (`/me` with the Page token returns the Page and its linked `instagram_business_account`; Threads `/me` returns the user id) |
 
@@ -121,7 +125,7 @@ stateDiagram-v2
     [*] --> queued: 新 revision
     queued --> publishing: claim
     publishing --> published: 成功（存 post_id / url）
-    publishing --> failed: 最終發布前失敗（≤3 次重試）
+    publishing --> failed: 最終發布前失敗（每輪重試直到成功，3 次後通知一次）
     failed --> queued: 下一輪重試
     publishing --> queued: 授權失效（不扣次數，只暫停該平台）
     publishing --> pending_review: 最終發布逾時 / 5xx / 崩潰（可能已發出，絕不重送）
@@ -139,4 +143,6 @@ stateDiagram-v2
 6. **平台限制寫成可測的純函式。** 字數上限、截斷位置、IG 文字卡尺寸都在 `post_text.py` / `card.py`，不寫在排程裡。
 7. **失敗要通知、且只通知一次。** 授權失效、結果不明、IG 未連結都發 Telegram，用 outbox 的 `alerted:*` 鍵去重，情況恢復後重新武裝。
 8. **觸發改成事件驅動（2026-11-02）。** 不再靠 GPT 排程，所以改為分析一存檔就發：DB 層只提供 listener 清單（不 import 社群模組），runner 啟用時才註冊；listener 出錯不影響存檔；`RunTrigger` 先寫測試（合併、失敗後仍可再觸發）。保留每小時 sweep 補重試。
-9. **文件與架構圖同一個 commit。** 見工作區 `AGENTS.md`「新流程／架構要畫圖並記錄方法」。
+9. **覆蓋率取代基準線（2026-11-02）。** 需求改為「每個標的與總經的最新一篇都要發過」，所以拿掉第一次只記基準線的設計，每輪以全部最新 revision 為準補齊；`coverage()` 先寫測試，再接到 status。
+10. **Token 類型不要假設。** 線上發現存的是 user token；先用真實錯誤回應（#100 nonexisting field）寫失敗測試，再讓 `discover_page` 兩種都吃。
+11. **文件與架構圖同一個 commit。** 見工作區 `AGENTS.md`「新流程／架構要畫圖並記錄方法」。

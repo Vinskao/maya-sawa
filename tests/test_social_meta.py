@@ -102,12 +102,44 @@ def test_threads_token_refresh_returns_new_token():
 
 def test_page_token_discovers_the_page_and_its_linked_instagram_account():
     from maya_sawa.services.social.meta import discover_page
-    routes = {'GET /v23.0/me': (200, FIXTURES['page_me'])}
+    no_accounts = (400, NONEXISTING_FIELD)  # a Page token has no /me/accounts edge
+    routes = {'GET /v23.0/me/accounts': no_accounts, 'GET /v23.0/me': (200, FIXTURES['page_me'])}
     calls = []
-    assert discover_page('tok', client(routes, calls)) == {'page_id': '222', 'instagram_id': '555'}
-    assert 'instagram_business_account' in calls[0][2]['fields']
-    routes = {'GET /v23.0/me': (200, {'id': '222', 'name': 'Birch Investments'})}
-    assert discover_page('tok', client(routes, [])) == {'page_id': '222', 'instagram_id': None}
+    assert discover_page('tok', client(routes, calls)) == {'page_id': '222', 'instagram_id': '555', 'page_token': 'tok'}
+    assert 'instagram_business_account' in calls[-1][2]['fields']
+    routes = {'GET /v23.0/me/accounts': no_accounts, 'GET /v23.0/me': (200, {'id': '222', 'name': 'Birch Investments'})}
+    assert discover_page('tok', client(routes, [])) == {'page_id': '222', 'instagram_id': None, 'page_token': 'tok'}
+
+
+# Shape of the live error on 2026-11-02 when a USER token was saved as META_PAGE_ACCESS_TOKEN and /me asked for the IG field.
+NONEXISTING_FIELD = {'error': {'message': '(#100) Tried accessing nonexisting field (instagram_business_account) on node type (User)',
+                               'type': 'OAuthException', 'code': 100}}
+
+
+def test_a_long_lived_user_token_is_exchanged_for_the_birch_page_token():
+    """2026-11-02: Jenkins held a long-lived USER token; Facebook and Instagram were silently skipped."""
+    from maya_sawa.services.social.meta import discover_page
+    accounts = {'data': [{'id': '1425078927350905', 'name': 'Birch Investments', 'access_token': 'PAGE-TOKEN'}]}
+    routes = {'GET /v23.0/me/accounts': (200, accounts)}
+    calls = []
+    found = discover_page('USER-TOKEN', client(routes, calls))
+    assert found == {'page_id': '1425078927350905', 'instagram_id': None, 'page_token': 'PAGE-TOKEN'}
+    assert 'access_token' in calls[0][2]['fields'] and 'instagram_business_account' in calls[0][2]['fields']
+    linked = {'data': [{'id': '9', 'name': 'Other', 'access_token': 'X'},
+                       {'id': '1425078927350905', 'name': 'Birch Investments', 'access_token': 'PAGE-TOKEN',
+                        'instagram_business_account': {'id': '555'}}]}
+    found = discover_page('USER-TOKEN', client({'GET /v23.0/me/accounts': (200, linked)}, []))
+    assert found == {'page_id': '1425078927350905', 'instagram_id': '555', 'page_token': 'PAGE-TOKEN'}
+    assert discover_page('USER-TOKEN', client({'GET /v23.0/me/accounts': (200, linked)}, []), page_id='9')['page_token'] == 'X'
+
+
+def test_a_user_token_without_the_page_or_an_expired_token_is_an_error():
+    from maya_sawa.services.social.meta import discover_page
+    with pytest.raises(Rejected):
+        discover_page('USER-TOKEN', client({'GET /v23.0/me/accounts': (200, {'data': []})}, []))
+    expired = (400, {'error': {'message': 'Session has expired', 'type': 'OAuthException', 'code': 190}})
+    with pytest.raises(AuthError):
+        discover_page('USER-TOKEN', client({'GET /v23.0/me/accounts': expired}, []))
 
 
 def test_threads_token_discovers_its_user_id():

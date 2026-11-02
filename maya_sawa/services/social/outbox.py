@@ -11,7 +11,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
 CHANNEL_ORDER = ('facebook', 'instagram', 'threads')
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 3  # after this many failed attempts the owner is alerted once; retries continue on every run
 STALL = timedelta(minutes=30)
 
 
@@ -96,8 +96,8 @@ class SocialOutbox:
             return [public_post(row) for row in rows]
 
     def due(self):
-        return [row for row in self.posts() if row['state'] == 'queued'
-                or (row['state'] == 'failed' and row['attempts'] < MAX_ATTEMPTS)]
+        """Failed posts (nothing went live) stay due on every run until they succeed; see MAX_ATTEMPTS for the alert."""
+        return [row for row in self.posts() if row['state'] in ('queued', 'failed')]
 
     def _move(self, source_key, channel, allowed, **values):
         values['updated_at'] = datetime.now(timezone.utc)
@@ -110,7 +110,7 @@ class SocialOutbox:
         with self.sessions.begin() as session:
             result = session.execute(update(SocialPost).where(
                 SocialPost.source_key == source_key, SocialPost.channel == channel,
-                (SocialPost.state == 'queued') | ((SocialPost.state == 'failed') & (SocialPost.attempts < MAX_ATTEMPTS))
+                SocialPost.state.in_(['queued', 'failed'])
             ).values(state='publishing', started_at=now, attempts=SocialPost.attempts + 1, updated_at=now))
             return result.rowcount == 1
 

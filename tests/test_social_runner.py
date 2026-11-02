@@ -36,7 +36,7 @@ class World:
         self.rows[(row['productType'], row['code'])] = row
 
     def sources(self, since):
-        return [row for row in self.rows.values() if datetime.fromisoformat(row['updatedAt']) > since]
+        return [row for row in self.rows.values() if since is None or datetime.fromisoformat(row['updatedAt']) > since]
 
     def current(self, kind, code):
         return self.rows.get((kind, code))
@@ -56,11 +56,35 @@ class World:
                         now=now, notify=lambda channel, reason: self.notices.append((channel, reason)))
 
 
-def test_first_run_records_a_baseline_and_does_not_backfill(outbox):
+def test_latest_revision_of_every_analysis_is_posted_even_if_it_predates_the_first_run(outbox):
+    """2026-11-02: every stock's and the macro's latest analysis must have been posted; no baseline skip."""
+    world = World()
+    world.add(analysis('2330', 4, T0 - timedelta(days=30)))
+    world.add(analysis('US', 7, T0 - timedelta(days=1), kind='macro'))
+    world.run(outbox, T0)
+    assert sorted(world.posted) == sorted((channel, source) for channel in ('facebook', 'instagram', 'threads')
+                                          for source in ('stock:2330:4', 'macro:US:7'))
+    world.run(outbox, T0 + timedelta(hours=1))
+    assert len(world.posted) == 6  # already posted: never again
+
+
+def test_coverage_reports_each_latest_analysis_per_channel(outbox):
+    from maya_sawa.services.social.runner import coverage
     world = World()
     world.add(analysis('2330', 4, T0 - timedelta(days=1)))
-    assert world.run(outbox, T0)['baseline']
-    assert world.posted == []
+    world.add(analysis('2408', 2, T0 - timedelta(days=1)))
+    world.behaviour['threads'] = Rejected('temporary')
+    world.run(outbox, T0)
+    report = coverage(outbox, world.sources(None), ['facebook', 'threads'])
+    assert report['complete'] is False
+    assert {row['id']: row['channels'] for row in report['sources']} == {
+        'stock:2330:4': {'facebook': 'published', 'threads': 'failed'},
+        'stock:2408:2': {'facebook': 'published', 'threads': 'failed'}}
+    world.add(analysis('2330', 5, T0 + timedelta(minutes=1)))  # saved, not yet run
+    assert coverage(outbox, world.sources(None), ['facebook'])['sources'][0]['channels'] == {'facebook': 'missing'}
+    world.behaviour.clear()
+    world.run(outbox, T0 + timedelta(hours=1))
+    assert coverage(outbox, world.sources(None), ['facebook', 'instagram', 'threads'])['complete'] is True
 
 
 def test_new_revisions_go_to_every_channel_oldest_first_and_only_once(outbox):
@@ -78,18 +102,19 @@ def test_new_revisions_go_to_every_channel_oldest_first_and_only_once(outbox):
     assert len(world.posted) == 6
 
 
-def test_rejected_post_is_retried_up_to_three_attempts(outbox):
+def test_rejected_post_keeps_being_retried_until_posted_and_alerts_once_after_three_failures(outbox):
     world = World()
     world.run(outbox, T0)
     world.add(analysis('2330', 5, T0 + timedelta(hours=1)))
     world.behaviour['instagram'] = Rejected('image not reachable')
-    for day in (2, 4, 6, 8):
-        world.run(outbox, T0 + timedelta(days=day))
+    for hour in (2, 3, 4, 5, 6):
+        world.run(outbox, T0 + timedelta(hours=hour))
     row = next(row for row in outbox.posts() if row['channel'] == 'instagram')
-    assert row['state'] == 'failed' and row['attempts'] == 3
+    assert row['state'] == 'failed' and row['attempts'] == 5
+    assert world.notices == [('instagram', 'failing')]  # once, not every hour
     world.behaviour.clear()
-    world.run(outbox, T0 + timedelta(days=10))
-    assert ('instagram', 'stock:2330:5') not in world.posted
+    world.run(outbox, T0 + timedelta(hours=7))
+    assert ('instagram', 'stock:2330:5') in world.posted
 
 
 def test_ambiguous_outcome_goes_to_review_is_never_resent_and_alerts(outbox):
@@ -227,6 +252,20 @@ def test_only_channels_with_credentials_are_published(outbox, monkeypatch):
     assert set(runner.build_publishers(outbox)) == {'facebook', 'instagram'}
     monkeypatch.setenv('THREADS_ACCESS_TOKEN', 't')
     assert set(runner.build_publishers(outbox)) == {'facebook', 'instagram', 'threads'}
+
+
+def test_facebook_and_instagram_post_with_the_page_token_found_from_a_user_token(outbox, monkeypatch):
+    from maya_sawa.services.social import meta, runner
+    for name in ('META_PAGE_ID', 'INSTAGRAM_USER_ID', 'THREADS_ACCESS_TOKEN'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('META_PAGE_ACCESS_TOKEN', 'USER-TOKEN')
+    monkeypatch.setattr(runner, 'threads_token', lambda outbox: None)
+    monkeypatch.setattr(meta, 'discover_page', lambda token: {'page_id': '1', 'instagram_id': '2', 'page_token': 'PAGE-TOKEN'})
+    used = []
+    monkeypatch.setattr(meta, 'FacebookPage', lambda page_id, token: used.append(('facebook', token)))
+    monkeypatch.setattr(meta, 'Instagram', lambda ig_id, token: used.append(('instagram', token)))
+    runner.build_publishers(outbox)
+    assert used == [('facebook', 'PAGE-TOKEN'), ('instagram', 'PAGE-TOKEN')]
 
 
 def test_ids_from_the_environment_win_and_a_failed_lookup_only_skips_that_channel(outbox, monkeypatch):
