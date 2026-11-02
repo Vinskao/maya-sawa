@@ -1,5 +1,7 @@
 # Maya Sawa
 
+GPT weekly opportunity discovery: [flow, validation and cloud task setup](docs/GPT_WEEKLY_OPPORTUNITIES.md).
+
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-blue.svg) ![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)
 
 > A Multi-AI Agent Q&A System integrating role-play, document retrieval, Vector semantics, and FastAPI.

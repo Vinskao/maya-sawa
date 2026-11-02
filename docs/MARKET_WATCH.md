@@ -36,6 +36,8 @@
 
 ## 排程怎麼用
 
+GPT 的每週專職發掘流程與雲端接線狀態見 [GPT_WEEKLY_OPPORTUNITIES.md](GPT_WEEKLY_OPPORTUNITIES.md)。
+
 提名規則寫在公開的 `market-ai.md`（「Watchlist nominations」一節），排程每輪開頭都會讀，不需要改排程提示詞。
 排程讀 `claims` 時看到報告點名、而儀表板沒有的台股，就依規則提名；每輪最多 3 檔，並先讀 `GET /market/watch` 避免重複。
 

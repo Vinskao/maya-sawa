@@ -326,6 +326,43 @@ class WatchNomination(BaseModel):
     conviction: str = Field(default="normal", pattern="^(normal|high)$")
 
 
+class WeeklyOpportunity(BaseModel):
+    code: str = Field(pattern=r"^\d{4}$")
+    reportIds: list[str] = Field(min_length=2, max_length=10)
+    reason: str = Field(min_length=10, max_length=180)
+    risk: str = Field(min_length=1, max_length=100)
+    macroReason: str = Field(min_length=1, max_length=100)
+    macroSourceIds: list[str] = Field(min_length=1, max_length=5)
+
+
+class WeeklyOpportunityBatch(BaseModel):
+    proposals: list[WeeklyOpportunity] = Field(max_length=3)
+    dryRun: bool = True
+
+
+@router.post("/watch/weekly")
+async def nominate_weekly_opportunities(body: WeeklyOpportunityBatch, request: Request):
+    """GPT cloud job: preview by default; validate every proposal before any nomination."""
+    _verify_agent_key(request)
+    from ..services.weekly_opportunities import validate_proposals, week_key
+    now = datetime.now(ZoneInfo("UTC"))
+    try:
+        claims = await asyncio.to_thread(market_reports_db.list_claims)
+        macro = await market_macro_service.get(12)
+        macro_ids = {item["code"] for item in macro.get("indicators", []) if item.get("history")}
+        nominations = validate_proposals([item.model_dump() for item in body.proposals], claims,
+                                         _held_stock_codes(), macro_ids, now)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if body.dryRun:
+        return {"week": week_key(now), "dryRun": True, "nominations": nominations, "results": []}
+    results = []
+    for nomination in nominations:
+        # Reuse report visibility, contract verification, lifecycle and downstream history/analysis.
+        results.append(await nominate_watch(WatchNomination(**nomination), request))
+    return {"week": week_key(now), "dryRun": False, "results": results}
+
+
 def _held_stock_codes() -> set[str]:
     return {str(item.get("code", "")).upper() for item in market_dashboard_db.latest_auto().get("positions", [])}
 

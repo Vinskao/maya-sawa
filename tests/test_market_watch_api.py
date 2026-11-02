@@ -69,6 +69,28 @@ def client(db, monkeypatch, reports=("r1", "r2", "r3"), known=True):
 BODY = {"code": "3711", "reason": "ASE 先進封裝 2027 年產能再擴，兩份報告都點名", "reportIds": ["r1", "r2"]}
 
 
+def test_weekly_gpt_batch_validates_evidence_before_writing_and_defaults_to_dry_run(db, monkeypatch):
+    from maya_sawa.api import market
+    web, started = client(db, monkeypatch)
+    today = datetime.now(timezone.utc).date().isoformat()
+    monkeypatch.setattr(market.market_reports_db.__class__, "list_claims", lambda self: [
+        {"report_id": rid, "codes": ["3711"], "published_at": today} for rid in ("r1", "r2")], raising=False)
+    async def macro(months):
+        return {"indicators": [{"code": "US_FED", "history": [{"value": 4.0}]}]}
+    monkeypatch.setattr(market.market_macro_service, "get", macro)
+    payload = {"proposals": [{**BODY, "risk": "Demand risk", "macroReason": "Funding costs", "macroSourceIds": ["US_FED"]}]}
+    assert web.post('/market/watch/weekly', json=payload).status_code == 401
+    preview = web.post('/market/watch/weekly', json=payload, headers={"x-market-agent-key": "k"})
+    assert preview.status_code == 200 and preview.json()['dryRun'] is True
+    assert db.load() == [] and started == []
+    invalid = {"proposals": [payload['proposals'][0], {**payload['proposals'][0], "code": "2330"}], "dryRun": False}
+    assert web.post('/market/watch/weekly', json=invalid, headers={"x-market-agent-key": "k"}).status_code == 422
+    assert db.load() == []
+    result = web.post('/market/watch/weekly', json={**payload, "dryRun": False}, headers={"x-market-agent-key": "k"})
+    assert result.status_code == 200 and result.json()['results'][0]['promoted'] is True
+    assert started == [("history", ["3711"]), ("analysis", ["3711"])]
+
+
 def test_only_the_agent_key_nominates_and_a_promotion_starts_the_data_and_first_analysis(db, monkeypatch):
     web, started = client(db, monkeypatch)
     assert web.post("/market/watch", json=BODY).status_code == 401
