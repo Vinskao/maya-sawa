@@ -1258,3 +1258,7 @@ https://localhost:5000/
 - OKE 內部實際服務仍是 `https://ibkr-gw:5000`
 - `https://localhost:5000/` 只是在本機做登入用的臨時轉發
 - 登入完成後，session 會留在 pod 記憶體，前端之後只讀 Redis cache
+
+## Job alerts (Gmail / Cake)
+
+See `docs/JOB_ALERTS_GMAIL.md` (salary gate NT$1.3M/yr, read-only Gmail polling).
