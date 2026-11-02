@@ -138,3 +138,11 @@ ChatGPT's Metricool tools could only schedule posts, not publish and return a ve
 never got past `ready`. Posting moved to Maya Sawa itself, to Facebook, Instagram and Threads: see
 [SOCIAL_PUBLISHING.md](SOCIAL_PUBLISHING.md). The MCP connector and `birch_sources` remain but are no longer needed
 for posting.
+
+## Legacy monitor disabled (2026-11-02)
+
+Telegram kept sending 「Birch Threads 發文待處理 · 14 篇」: the old 15-minute monitor (`social_publish_queue.monitor`) still ran
+and alerted on the 14 `pending_auth` jobs from the ChatGPT/Metricool era, which nothing will ever resume. Posting is
+done by `services/social` (see SOCIAL_PUBLISHING.md), so the monitor now starts only when
+`LEGACY_PUBLISH_MONITOR_ENABLED=true` (default off). Test: `test_legacy_chatgpt_monitor_is_off_by_default`
+(red → green). The 14 old rows stay in the table untouched; real alerts for the new path come from `services/social`.

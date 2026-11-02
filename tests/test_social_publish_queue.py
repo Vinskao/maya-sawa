@@ -93,9 +93,22 @@ def test_failed_notice_remains_eligible_for_monitor_retry(queue):
     assert queue.check_stalled()
 
 
+def test_legacy_chatgpt_monitor_is_off_by_default(monkeypatch, queue):
+    """Posting moved to services/social; the old ChatGPT/Metricool monitor kept alerting on 14 stale pending_auth jobs."""
+    import asyncio
+    from maya_sawa.services import social_publish_queue as service
+    monkeypatch.delenv('LEGACY_PUBLISH_MONITOR_ENABLED', raising=False)
+    monkeypatch.setattr(service, 'publishing_queue', lambda: queue)
+    async def lifecycle():
+        service.start_monitor()
+        assert service._monitor is None
+    asyncio.run(lifecycle())
+
+
 def test_monitor_lifecycle_starts_once_and_can_be_stopped(monkeypatch, queue):
     import asyncio
     from maya_sawa.services import social_publish_queue as service
+    monkeypatch.setenv('LEGACY_PUBLISH_MONITOR_ENABLED', 'true')
     monkeypatch.setattr(service, 'publishing_queue', lambda: queue)
     async def lifecycle():
         service.start_monitor()

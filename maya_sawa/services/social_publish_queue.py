@@ -1,6 +1,7 @@
 """Durable Threads outbox. Credentials and Telegram routing stay on the server."""
 import asyncio
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -225,7 +226,11 @@ async def monitor():
 
 
 def start_monitor():
+    """Legacy ChatGPT/Metricool alerting. Off unless LEGACY_PUBLISH_MONITOR_ENABLED=true: posting now runs in
+    services/social, and this monitor kept re-alerting on old pending_auth jobs that nothing will ever resume."""
     global _monitor
+    if os.getenv('LEGACY_PUBLISH_MONITOR_ENABLED', '').lower() != 'true':
+        return
     if _monitor is None or _monitor.done():
         _monitor = asyncio.create_task(monitor())
 
