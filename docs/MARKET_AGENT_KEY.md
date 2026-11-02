@@ -52,6 +52,9 @@ To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string an
 
 ## Routines (claude.ai/code/routines, environment "Default")
 
+Since 2026-11-02 the instructions of eight of these routines live in `routines/*.md` (the routine's own prompt is a pointer
+to its file): see [ROUTINE_PROMPTS.md](ROUTINE_PROMPTS.md). The network secret is for `tymultiverse.cc/maya-sawa/` only.
+
 | Routine | When (Taipei) | Cron (UTC) | Scope |
 |---|---|---|---|
 | Market report claim extraction `trig_018MeBwwU74WvydGHRaRt6Wd` | Daily 20:30 | `30 12 * * *` | Extract report claims without OpenAI; subscription Claude Code routine |
