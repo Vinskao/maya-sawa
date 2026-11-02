@@ -30,11 +30,11 @@ class Ambiguous(PublishError):
     pass
 
 
-def _call(client, method, url, token, final=False, **fields):
+def _call(client, method, endpoint, token, final=False, **fields):
     params = {**fields, 'access_token': token}
     try:
-        response = (client.post(url, data=params, timeout=30) if method == 'POST'
-                    else client.get(url, params=params, timeout=30))
+        response = (client.post(endpoint, data=params, timeout=30) if method == 'POST'
+                    else client.get(endpoint, params=params, timeout=30))
     except httpx.HTTPError as exc:
         raise (Ambiguous if final else Rejected)(type(exc).__name__) from exc
     try:
@@ -75,9 +75,9 @@ class Threads:
     def __init__(self, user_id, token, client=None, sleep=time.sleep):
         self.user_id, self.token, self.client, self.sleep = user_id, token, client or httpx.Client(), sleep
 
-    def publish(self, text):
-        container = _call(self.client, 'POST', f'{THREADS}/{self.user_id}/threads', self.token,
-                          media_type='TEXT', text=text)['id']
+    def publish(self, text, image_url=None):
+        fields = {'media_type': 'IMAGE', 'image_url': image_url} if image_url else {'media_type': 'TEXT'}
+        container = _call(self.client, 'POST', f'{THREADS}/{self.user_id}/threads', self.token, text=text, **fields)['id']
         _wait_ready(self.client, THREADS, container, self.token, 'status', self.sleep)
         media = _call(self.client, 'POST', f'{THREADS}/{self.user_id}/threads_publish', self.token, final=True,
                       creation_id=container)['id']
@@ -88,8 +88,13 @@ class FacebookPage:
     def __init__(self, page_id, token, client=None):
         self.page_id, self.token, self.client = page_id, token, client or httpx.Client()
 
-    def publish(self, text):
-        post = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/feed', self.token, final=True, message=text)['id']
+    def publish(self, text, image_url=None):
+        if image_url:  # photo post: the card with the analysis text as its caption
+            body = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/photos', self.token, final=True,
+                         url=image_url, message=text)
+            post = body.get('post_id') or body['id']
+        else:
+            post = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/feed', self.token, final=True, message=text)['id']
         return {'id': post, 'url': _permalink(self.client, GRAPH, post, self.token, 'permalink_url')}
 
 

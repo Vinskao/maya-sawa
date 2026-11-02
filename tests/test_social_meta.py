@@ -146,3 +146,26 @@ def test_threads_token_discovers_its_user_id():
     from maya_sawa.services.social.meta import discover_threads_user
     routes = {'GET /v1.0/me': (200, FIXTURES['threads_me'])}
     assert discover_threads_user('tok', client(routes, [])) == '111'
+
+
+def test_threads_can_publish_an_image_post_with_text():
+    calls = []
+    routes = {
+        'POST /v1.0/111/threads': (200, FIXTURES['threads_container']),
+        'GET /v1.0/178': (200, {'status': 'FINISHED', 'id': '178'}),
+        'POST /v1.0/111/threads_publish': (200, FIXTURES['threads_publish']),
+        'GET /v1.0/179': (200, FIXTURES['threads_permalink']),
+    }
+    Threads('111', 'tok', client(routes, calls), sleep=lambda s: None).publish('hello', 'https://tymultiverse.cc/card.png')
+    assert 'media_type=IMAGE' in calls[0][3] and 'image_url=https' in calls[0][3] and 'text=hello' in calls[0][3]
+
+
+def test_facebook_photo_post_uses_the_photos_edge_and_returns_the_post_permalink():
+    calls = []
+    routes = {'POST /v23.0/222/photos': (200, {'id': '901', 'post_id': '222_333'}),
+              'GET /v23.0/222_333': (200, FIXTURES['facebook_permalink'])}
+    result = FacebookPage('222', 'tok', client(routes, calls)).publish('hello', 'https://tymultiverse.cc/card.png')
+    assert result == {'id': '222_333', 'url': 'https://www.facebook.com/222/posts/333'}
+    assert 'url=https' in calls[0][3] and 'message=hello' in calls[0][3]
+    with pytest.raises(Ambiguous):
+        FacebookPage('222', 'tok', client({'POST /v23.0/222/photos': (500, FIXTURES['error_unknown'])}, [])).publish('x', 'https://a/b.png')

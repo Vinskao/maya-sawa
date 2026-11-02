@@ -1,4 +1,5 @@
-"""Instagram needs an image on every post, so each analysis gets a plain text card rendered from its public content."""
+"""Every post (Facebook, Instagram, Threads) carries one summary card rendered from the analysis: ticker, name, data date,
+verdict, tags, close."""
 import io
 import os
 import re
@@ -12,7 +13,7 @@ CARD_SIZE = (1080, 1350)
 TAIPEI = ZoneInfo('Asia/Taipei')
 FONT_DIR = os.getenv('SOCIAL_CARD_FONT_DIR', '/usr/share/fonts/noto-tc')
 TOKEN = re.compile(r'[A-Za-z0-9.,%+\-/:]+ ?|.', re.S)
-BACKGROUND, INK, MUTED, ACCENT = (20, 35, 28), (241, 236, 224), (170, 182, 172), (214, 178, 94)
+BG, WHITE, DIM, LINE = (10, 10, 11), (244, 244, 244), (150, 150, 155), (70, 70, 76)  # the black card of the owner's reference image
 MARGIN = 88
 
 
@@ -38,6 +39,42 @@ def card_text(source):
             'body': source['content'].strip()}
 
 
+FOOTER_URL = 'tymultiverse.cc'
+VERDICT = re.compile(r'結論[：:]\s*([^。\n]+)。?([^\n]*)')
+HEADER_VERDICT = re.compile(r'^【結論】\s*(\S+)')
+AS_OF = re.compile(r'資料截點[：:]\s*本站\s*(\d{4})-(\d{2})-(\d{2})')
+CLOSE = re.compile(r'(\d{1,2}/\d{1,2})\s*收\s*([\d,\.]+)\s*[（(]([+\-−]?[\d\.]+%)[）)]')
+
+
+def parse_card(source):
+    """Fields of the owner's card (ticker, name, data date, verdict, tags, close) read from the analysis text.
+    Missing pieces come back empty so the card still renders."""
+    content = source['content'].strip()
+    lines = [line.strip() for line in content.split('\n') if line.strip()]
+    updated = datetime.fromisoformat(source['updatedAt']).astimezone(TAIPEI)
+    macro = source['productType'] == 'macro'
+    verdict = tags = close = name = ''
+    match = VERDICT.search(content)
+    if match:
+        verdict = match.group(1).strip()
+        rest = match.group(2)
+        tags = ' · '.join(part.strip() for part in re.split(r'[、，,]', rest.split('時機')[0].strip(' 。')) if part.strip())
+    elif lines and HEADER_VERDICT.match(lines[0]):
+        verdict = HEADER_VERDICT.match(lines[0]).group(1)
+    price = CLOSE.search(content)
+    if price:
+        close = f'{price.group(1)} 收盤  {price.group(2)}  （{price.group(3)}）'
+    if not macro:
+        for line in lines[:3]:
+            if '｜' in line and not line.startswith('【'):
+                name = line.split('｜', 1)[0].strip()
+                break
+    as_of = AS_OF.search(content)
+    date = '.'.join(as_of.groups()) if as_of else f'{updated:%Y.%m.%d}'
+    return {'code': '總經評論' if macro else source['code'], 'name': name, 'asOf': date, 'verdict': verdict,
+            'tags': tags, 'close': close}
+
+
 @lru_cache(maxsize=8)
 def _font(weight, size):
     path = os.path.join(FONT_DIR, f'NotoSansTC-{weight}.otf')
@@ -47,26 +84,27 @@ def _font(weight, size):
 
 
 def render_card(source):
-    text = card_text(source)
-    image = Image.new('RGB', CARD_SIZE, BACKGROUND)
+    card = parse_card(source)
+    image = Image.new('RGB', CARD_SIZE, BG)
     draw = ImageDraw.Draw(image)
     width = CARD_SIZE[0] - 2 * MARGIN
-    draw.rectangle([MARGIN, 96, MARGIN + 72, 104], fill=ACCENT)
-    draw.text((MARGIN, 128), 'BIRCH INVESTMENTS', font=_font('Bold', 34), fill=ACCENT)
-    draw.text((MARGIN, 196), text['title'], font=_font('Bold', 88), fill=INK)
-    draw.text((MARGIN, 318), text['meta'], font=_font('Regular', 34), fill=MUTED)
-    body_font = _font('Regular', 40)
-    line_height = 62
-    top, bottom = 410, CARD_SIZE[1] - 170
-    lines = [line for line in wrap(text['body'], width, lambda value: draw.textlength(value, font=body_font))]
-    room = (bottom - top) // line_height
-    if len(lines) > room:
-        lines = lines[:room]
-        lines[-1] = lines[-1].rstrip()[:-1] + '…' if lines[-1].strip() else '…'
-    for index, line in enumerate(lines):
-        draw.text((MARGIN, top + index * line_height), line, font=body_font, fill=INK)
-    draw.line([MARGIN, CARD_SIZE[1] - 140, CARD_SIZE[0] - MARGIN, CARD_SIZE[1] - 140], fill=MUTED, width=2)
-    draw.text((MARGIN, CARD_SIZE[1] - 112), 'AI 輔助研究 · 非投資建議 · tymultiverse.cc', font=_font('Regular', 30), fill=MUTED)
+    draw.rounded_rectangle([40, 40, CARD_SIZE[0] - 40, CARD_SIZE[1] - 40], radius=28, outline=LINE, width=3)
+    left = MARGIN
+    draw.text((left, 100), 'BIRCH INVESTMENTS', font=_font('Bold', 44), fill=WHITE)
+    draw.text((left, 164), '樺樹資本工具', font=_font('Regular', 32), fill=DIM)
+    draw.line([left, 236, left + width, 236], fill=LINE, width=2)
+    headline = f"{card['code']}    {card['name']}".rstrip()
+    draw.text((left, 276), headline, font=_font('Bold', 84), fill=WHITE)
+    draw.text((left, 400), f"DATA AS OF {card['asOf']}", font=_font('Regular', 30), fill=DIM)
+    verdict_font = _font('Bold', 150 if len(card['verdict']) <= 6 else 110)
+    draw.text((left, 480), card['verdict'] or '—', font=verdict_font, fill=WHITE)
+    draw.text((left, 690), card['tags'].replace(' · ', '  ·  '), font=_font('Regular', 38), fill=DIM)
+    draw.line([left, 790, left + width, 790], fill=LINE, width=2)
+    if card['close']:
+        draw.text((left, 830), card['close'], font=_font('Regular', 48), fill=WHITE)
+    draw.text((left, 1090), '完整研究與資料來源', font=_font('Regular', 32), fill=DIM)
+    draw.text((left, 1146), FOOTER_URL, font=_font('Regular', 38), fill=WHITE)
+    draw.text((left, 1236), 'TY MARKET LAB · TY MULTIVERSE', font=_font('Regular', 26), fill=DIM)
     buffer = io.BytesIO()
     image.save(buffer, format='PNG', optimize=True)
     return buffer.getvalue()

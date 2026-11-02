@@ -2,7 +2,11 @@ import io
 
 from PIL import Image
 
-from maya_sawa.services.social.card import CARD_SIZE, card_text, render_card, wrap
+from pathlib import Path
+
+from maya_sawa.services.social.card import CARD_SIZE, card_text, parse_card, render_card, wrap
+
+ANALYSIS_6187 = (Path(__file__).parent / 'fixtures' / 'analysis_6187.txt').read_text(encoding='utf-8')
 
 
 def test_wrap_breaks_cjk_by_character_and_keeps_latin_words_whole():
@@ -28,3 +32,31 @@ def test_render_card_returns_a_portrait_png_even_for_long_text():
     image = Image.open(io.BytesIO(render_card(source)))
     assert image.format == 'PNG'
     assert image.size == CARD_SIZE == (1080, 1350)
+
+
+def test_parse_card_reads_name_verdict_tags_date_and_close_from_a_real_analysis():
+    """The card the owner wants on every platform (2026-11-02): 6187 萬潤 / DATA AS OF / 買（維持） / tags / 收盤."""
+    source = {'productType': 'stock', 'code': '6187', 'revision': 13, 'updatedAt': '2026-10-28T12:00:00+00:00',
+              'content': ANALYSIS_6187}
+    assert parse_card(source) == {
+        'code': '6187', 'name': '萬潤', 'asOf': '2026.10.28', 'verdict': '買（維持）',
+        'tags': '循環順風 · 技術力中性 · 交貨順風', 'close': '10/28 收盤  1,345  （+4.67%）'}
+
+
+def test_parse_card_degrades_gracefully_when_fields_are_missing():
+    source = {'productType': 'stock', 'code': '2330', 'revision': 1, 'updatedAt': '2026-10-30T10:00:00+00:00',
+              'content': '沒有結論格式的文字'}
+    card = parse_card(source)
+    assert card['code'] == '2330' and card['verdict'] == '' and card['close'] == '' and card['tags'] == ''
+    assert card['asOf'] == '2026.10.30'  # falls back to the revision date (Taipei)
+    macro = {'productType': 'macro', 'code': 'US', 'revision': 9, 'updatedAt': '2026-10-27T10:00:00+00:00',
+             'content': '結論：中性。通膨降溫。'}
+    assert parse_card(macro)['code'] == '總經評論' and parse_card(macro)['verdict'] == '中性'
+
+
+def test_card_footer_uses_the_new_domain_and_the_card_still_renders_for_a_real_analysis():
+    source = {'productType': 'stock', 'code': '6187', 'revision': 13, 'updatedAt': '2026-10-28T12:00:00+00:00',
+              'content': ANALYSIS_6187}
+    assert Image.open(io.BytesIO(render_card(source))).size == CARD_SIZE
+    from maya_sawa.services.social import card
+    assert card.FOOTER_URL == 'tymultiverse.cc' and 'tatdvsonorth' not in card.FOOTER_URL

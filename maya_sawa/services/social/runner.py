@@ -180,7 +180,7 @@ def build_publishers(outbox, notify=None):
         _instagram_link_alert(outbox, notify, linked=bool(ig_user), checked=looked_up or bool(ig_user))
         if page_id:
             page = meta.FacebookPage(page_id, page_token)
-            publishers['facebook'] = lambda source: page.publish(build_post(source, 'facebook'))
+            publishers['facebook'] = lambda source: page.publish(build_post(source, 'facebook'), card_url(source))
         if page_id and ig_user:
             ig = meta.Instagram(ig_user, page_token)
             publishers['instagram'] = lambda source: ig.publish(build_post(source, 'instagram'), card_url(source))
@@ -194,7 +194,7 @@ def build_publishers(outbox, notify=None):
                 logger.warning('Threads user lookup failed; Threads skipped this run')
         if threads_user:
             threads = meta.Threads(threads_user, token)
-            publishers['threads'] = lambda source: threads.publish(build_post(source, 'threads'))
+            publishers['threads'] = lambda source: threads.publish(build_post(source, 'threads'), card_url(source))
     return publishers
 
 

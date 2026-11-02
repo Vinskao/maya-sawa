@@ -25,10 +25,14 @@ Metricool connector could only schedule posts and never return a verified post U
   「總經評論｜所有個股分析共用」; a stock gets its code in front only if the first line lacks it. Over the limit
   (Threads 500, Instagram 2,200, Facebook none) the front is kept, cut at a sentence or line end, and
   「更多請至我的網站：https://tymultiverse.cc/」 is appended unless the kept text already links the site.
-- **Instagram image:** IG has no text-only posts. Each post uses a 1080×1350 text card
-  (`services/social/card.py`) served publicly at
+- **Image on every platform (2026-11-02):** every post carries the same summary card (1080×1350, black, as in the owner's
+  reference image): ticker + name, `DATA AS OF`, verdict (e.g. 買（維持）), the three tags, the close, `tymultiverse.cc`.
+  The fields are read from the analysis text by `card.parse_card` (`【結論】`/`結論：`, `資料截點：本站`, `M/D 收 X（±Y%）`);
+  missing fields stay empty and the card still renders. Facebook gets a photo post (`/photos`, text as caption),
+  Instagram a single image, Threads an `IMAGE` post. The card is served publicly at
   `/maya-sawa/market/publishing/cards/{stock|macro}/{code}/{revision}.png` (current revision only, else 404).
-  The image uses Noto Sans TC (two OTF weights downloaded and checksum-verified in the Dockerfile).
+  Not done yet: extra images (the research report's Mermaid diagrams) in a carousel, which needs a server-side
+  Mermaid renderer.
 - **Order and pacing:** oldest revision first, Facebook → Instagram → Threads, 20 seconds between posts.
 
 ## Never posting twice
