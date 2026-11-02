@@ -90,3 +90,11 @@ def test_wide_top_to_bottom_diagrams_are_flipped_so_they_fill_a_portrait_card():
 def test_to_dot_can_override_the_direction():
     assert 'rankdir=LR' in to_dot('flowchart TB\n  A --> B', direction='LR')
     assert 'rankdir=TB' in to_dot('flowchart TB\n  A --> B')
+
+
+def test_wrapping_never_splits_a_latin_word_or_number():
+    """2026-11-02 production: 'S1' was cut into 'S' and '1' on two lines."""
+    from maya_sawa.services.social.diagram import _wrap
+    lines = _wrap('萬潤自動化設備｜整合定位／點膠 S1', 16)
+    assert not any(line.endswith('S') for line in lines) and any('S1' in line for line in lines)
+    assert ''.join(lines) == '萬潤自動化設備｜整合定位／點膠 S1'

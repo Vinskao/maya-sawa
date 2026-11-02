@@ -80,7 +80,8 @@ def _wrap(label, width=16):
     lines, current, used = [], '', 0
     for char in label:
         size = 2 if ord(char) > 0x2E80 else 1
-        if used + size > width * 2 and current:
+        inside_word = char.isascii() and char.isalnum() and current[-1:].isascii() and current[-1:].isalnum()
+        if used + size > width * 2 and current and not inside_word:  # never cut 'S1' into 'S' and '1'
             lines.append(current)
             current, used = '', 0
         current += char
