@@ -79,8 +79,11 @@ def test_weekly_gpt_batch_validates_evidence_before_writing_and_defaults_to_dry_
         return {"indicators": [{"code": "US_FED", "history": [{"value": 4.0}]}]}
     monkeypatch.setattr(market.market_macro_service, "get", macro)
     payload = {"proposals": [{**BODY, "risk": "Demand risk", "macroReason": "Funding costs", "macroSourceIds": ["US_FED"]}]}
-    assert web.post('/market/watch/weekly', json=payload).status_code == 401
-    preview = web.post('/market/watch/weekly', json=payload, headers={"x-market-agent-key": "k"})
+    # Cloud research can preview without a secret; it cannot publish without one.
+    assert web.post('/market/watch/weekly', json={**payload, "dryRun": False}).status_code == 401
+    assert web.post('/market/watch/weekly', json={**payload, "dryRun": False},
+                    headers={"x-market-agent-key": "wrong"}).status_code == 401
+    preview = web.post('/market/watch/weekly', json=payload)
     assert preview.status_code == 200 and preview.json()['dryRun'] is True
     assert db.load() == [] and started == []
     invalid = {"proposals": [payload['proposals'][0], {**payload['proposals'][0], "code": "2330"}], "dryRun": False}
@@ -89,6 +92,93 @@ def test_weekly_gpt_batch_validates_evidence_before_writing_and_defaults_to_dry_
     result = web.post('/market/watch/weekly', json={**payload, "dryRun": False}, headers={"x-market-agent-key": "k"})
     assert result.status_code == 200 and result.json()['results'][0]['promoted'] is True
     assert started == [("history", ["3711"]), ("analysis", ["3711"])]
+
+
+PROPOSAL = {**BODY, "risk": "Demand risk", "macroReason": "Funding costs", "macroSourceIds": ["US_FED"]}
+KEY = {"x-market-agent-key": "k"}
+INBOX = "/market/watch/weekly/proposals"
+
+
+def weekly_client(db, monkeypatch, evidence=("r1", "r2")):
+    """The GPT job posts to the inbox without a key; the keyed Claude routine reviews what it left there."""
+    from maya_sawa.api import market
+    from maya_sawa.databases.market_weekly_proposals_db import WeeklyProposalDatabase
+    web, started = client(db, monkeypatch)
+    set_evidence(monkeypatch, evidence)
+
+    async def macro(months):
+        return {"indicators": [{"code": "US_FED", "history": [{"value": 4.0}]}]}
+    monkeypatch.setattr(market.market_macro_service, "get", macro)
+    inbox = WeeklyProposalDatabase(create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool))
+    monkeypatch.setattr(market, "market_weekly_proposals_db", inbox)
+    return web, started, inbox
+
+
+def set_evidence(monkeypatch, report_ids):
+    from maya_sawa.api import market
+    today = datetime.now(timezone.utc).date().isoformat()
+    monkeypatch.setattr(market.market_reports_db.__class__, "list_claims", lambda self: [
+        {"report_id": rid, "codes": ["3711"], "published_at": today} for rid in report_ids], raising=False)
+
+
+def test_gpt_leaves_proposals_without_a_key_and_nothing_is_nominated_until_review(db, monkeypatch):
+    web, started, inbox = weekly_client(db, monkeypatch)
+    sent = web.post(INBOX, json={"proposals": [PROPOSAL], "dryRun": True})   # GPT may echo dryRun; it is ignored
+    assert sent.status_code == 200 and sent.json()["stored"] is True and sent.json()["status"] == "pending"
+    assert db.load() == [] and started == []                                  # the watch list is untouched
+    again = web.post(INBOX, json={"proposals": [PROPOSAL]})                   # a re-run in the same week
+    assert again.json()["stored"] is False and again.json()["id"] == sent.json()["id"]
+    assert web.get(INBOX).status_code == 401                                  # untrusted text is not republished
+    pending = web.get(INBOX, headers=KEY).json()["proposals"]
+    assert [item["id"] for item in pending] == [sent.json()["id"]]
+    assert pending[0]["proposals"][0]["code"] == "3711" and pending[0]["status"] == "pending"
+
+
+def test_unsupported_or_empty_submissions_are_not_stored(db, monkeypatch):
+    web, _, inbox = weekly_client(db, monkeypatch)
+    assert web.post(INBOX, json={"proposals": [{**PROPOSAL, "reportIds": ["r1", "nope"]}]}).status_code == 422
+    assert web.post(INBOX, json={"proposals": [{**PROPOSAL, "code": "2330"}]}).status_code == 422  # a holding
+    assert web.post(INBOX, json={"proposals": [{**PROPOSAL, "macroSourceIds": ["MADE_UP"]}]}).status_code == 422
+    assert web.post(INBOX, json={"proposals": [PROPOSAL] * 4}).status_code == 422
+    empty = web.post(INBOX, json={"proposals": []})
+    assert empty.status_code == 200 and empty.json()["stored"] is False
+    assert inbox.list() == []
+
+
+def test_review_applies_a_proposal_once_and_a_rejection_leaves_the_watch_list(db, monkeypatch):
+    web, started, inbox = weekly_client(db, monkeypatch)
+    first = web.post(INBOX, json={"proposals": [PROPOSAL]}).json()["id"]
+    assert web.post(f"{INBOX}/{first}/review", json={"action": "apply"}).status_code == 401
+    applied = web.post(f"{INBOX}/{first}/review", json={"action": "apply"}, headers=KEY)
+    assert applied.status_code == 200 and applied.json()["status"] == "applied"
+    assert applied.json()["results"][0]["promoted"] is True
+    assert started == [("history", ["3711"]), ("analysis", ["3711"])]
+    assert web.post(f"{INBOX}/{first}/review", json={"action": "apply"}, headers=KEY).status_code == 409
+    assert web.post(f"{INBOX}/missing/review", json={"action": "apply"}, headers=KEY).status_code == 404
+    second = web.post(INBOX, json={"proposals": [{**PROPOSAL, "reason": "另一個理由：先進封裝訂單外溢到 2027"}]}).json()["id"]
+    rejected = web.post(f"{INBOX}/{second}/review", json={"action": "reject", "note": "重複催化"}, headers=KEY)
+    assert rejected.json()["status"] == "rejected" and len(started) == 2
+    assert web.get(INBOX, headers=KEY).json()["proposals"] == []              # default view: pending only
+    history = {item["id"]: item["status"] for item in web.get(INBOX + "?status=all", headers=KEY).json()["proposals"]}
+    assert history == {first: "applied", second: "rejected"}
+
+
+def test_applying_rechecks_the_evidence_as_it_stands_at_review_time(db, monkeypatch):
+    web, started, _ = weekly_client(db, monkeypatch)
+    pending = web.post(INBOX, json={"proposals": [PROPOSAL]}).json()["id"]
+    set_evidence(monkeypatch, ("r1",))                                        # a report was withdrawn meanwhile
+    result = web.post(f"{INBOX}/{pending}/review", json={"action": "apply"}, headers=KEY).json()
+    assert result["status"] == "rejected" and "Two recent public reports" in result["detail"]
+    assert db.load() == [] and started == []
+
+
+def test_the_inbox_holds_a_bounded_number_of_batches_per_week(db, monkeypatch):
+    from maya_sawa.api import market
+    web, _, _ = weekly_client(db, monkeypatch)
+    monkeypatch.setattr(market, "WEEKLY_INBOX_LIMIT", 2)
+    send = lambda n: web.post(INBOX, json={"proposals": [{**PROPOSAL, "reason": f"第 {n} 次送出的研究理由，內容不同"}]})
+    assert send(1).status_code == 200 and send(2).status_code == 200
+    assert send(3).status_code == 429
 
 
 def test_only_the_agent_key_nominates_and_a_promotion_starts_the_data_and_first_analysis(db, monkeypatch):

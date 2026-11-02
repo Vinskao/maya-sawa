@@ -40,6 +40,7 @@ from ..databases.analysis_timestamp_db import analysis_timestamp_db
 from ..databases.market_price_target_db import market_price_target_db
 from ..databases.market_notification_db import market_notification_db
 from ..databases.market_watch_db import market_watch_db
+from ..databases.market_weekly_proposals_db import market_weekly_proposals_db, InboxFull
 from ..databases.market_reports_db import market_reports_db
 from ..services import market_price_targets
 from ..services.market_research import validate_research_content, list_research
@@ -343,15 +344,12 @@ class WeeklyOpportunityBatch(BaseModel):
 @router.post("/watch/weekly")
 async def nominate_weekly_opportunities(body: WeeklyOpportunityBatch, request: Request):
     """GPT cloud job: preview by default; validate every proposal before any nomination."""
-    _verify_agent_key(request)
-    from ..services.weekly_opportunities import validate_proposals, week_key
+    if not body.dryRun:
+        _verify_agent_key(request)
+    from ..services.weekly_opportunities import week_key
     now = datetime.now(ZoneInfo("UTC"))
     try:
-        claims = await asyncio.to_thread(market_reports_db.list_claims)
-        macro = await market_macro_service.get(12)
-        macro_ids = {item["code"] for item in macro.get("indicators", []) if item.get("history")}
-        nominations = validate_proposals([item.model_dump() for item in body.proposals], claims,
-                                         _held_stock_codes(), macro_ids, now)
+        nominations = await _validated_weekly([item.model_dump() for item in body.proposals], now)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if body.dryRun:
@@ -361,6 +359,94 @@ async def nominate_weekly_opportunities(body: WeeklyOpportunityBatch, request: R
         # Reuse report visibility, contract verification, lifecycle and downstream history/analysis.
         results.append(await nominate_watch(WatchNomination(**nomination), request))
     return {"week": week_key(now), "dryRun": False, "results": results}
+
+
+async def _validated_weekly(proposals: list[dict], now: datetime) -> list[dict]:
+    """Check proposals against the public, ready report claims, the holdings and the macro snapshot as they are now."""
+    from ..services.weekly_opportunities import validate_proposals
+    claims = await asyncio.to_thread(market_reports_db.list_claims)
+    macro = await market_macro_service.get(12)
+    macro_ids = {item["code"] for item in macro.get("indicators", []) if item.get("history")}
+    return validate_proposals(proposals, claims, _held_stock_codes(), macro_ids, now)
+
+
+WEEKLY_INBOX_LIMIT = 10  # batches a week; the GPT job sends one, re-runs of the same text are deduplicated
+
+
+class WeeklyProposalSubmission(BaseModel):
+    proposals: list[WeeklyOpportunity] = Field(max_length=3)
+
+
+class WeeklyProposalReview(BaseModel):
+    action: str = Field(pattern="^(apply|reject)$")
+    note: str = Field(default="", max_length=300)
+
+
+@router.post("/watch/weekly/proposals")
+async def submit_weekly_proposals(body: WeeklyProposalSubmission):
+    """GPT cloud job hand-off, no key: the batch is validated and parked as pending. It changes nothing on the site;
+    the keyed Claude routine reviews it (POST /watch/weekly/proposals/{id}/review)."""
+    from ..services.weekly_opportunities import week_key
+    now = datetime.now(ZoneInfo("UTC"))
+    proposals = [item.model_dump() for item in body.proposals]
+    if not proposals:
+        return {"stored": False, "week": week_key(now), "detail": "No proposals this week"}
+    try:
+        await _validated_weekly(proposals, now)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        row, stored = await asyncio.to_thread(market_weekly_proposals_db.submit, week_key(now), proposals, now,
+                                              WEEKLY_INBOX_LIMIT)
+    except InboxFull as exc:
+        raise HTTPException(status_code=429, detail="This week's proposal inbox is full") from exc
+    except Exception as exc:
+        logger.exception("Weekly proposal save failed")
+        raise HTTPException(status_code=503, detail="Proposal inbox unavailable") from exc
+    return {"stored": stored, "id": row["id"], "week": row["week"], "status": row["status"]}
+
+
+@router.get("/watch/weekly/proposals")
+async def list_weekly_proposals(request: Request, status: str = "pending"):
+    """For the reviewing routine (agent key): the text came from an unauthenticated post, so it is not public."""
+    _verify_agent_key(request)
+    try:
+        rows = await asyncio.to_thread(market_weekly_proposals_db.list, None if status == "all" else status)
+    except Exception as exc:
+        logger.exception("Weekly proposal read failed")
+        raise HTTPException(status_code=503, detail="Proposal inbox unavailable") from exc
+    return {"proposals": rows}
+
+
+@router.post("/watch/weekly/proposals/{proposal_id}/review")
+async def review_weekly_proposal(proposal_id: str, body: WeeklyProposalReview, request: Request):
+    """Agent key. 'apply' re-validates against today's evidence and nominates through POST /watch; 'reject' records
+    why. A row is reviewed once."""
+    _verify_agent_key(request)
+    now = datetime.now(ZoneInfo("UTC"))
+    row = await asyncio.to_thread(market_weekly_proposals_db.claim, proposal_id)
+    if not row:
+        exists = await asyncio.to_thread(market_weekly_proposals_db.get, proposal_id)
+        raise HTTPException(status_code=409 if exists else 404,
+                            detail="Proposal already reviewed" if exists else "Unknown proposal")
+
+    async def finish(status: str, review: dict) -> dict:
+        saved = await asyncio.to_thread(market_weekly_proposals_db.finish, proposal_id, status, review, now)
+        return {"id": proposal_id, "status": saved["status"], **review}
+
+    if body.action == "reject":
+        return await finish("rejected", {"note": body.note})
+    try:
+        nominations = await _validated_weekly(row["proposals"], now)
+    except ValueError as exc:
+        return await finish("rejected", {"note": body.note, "detail": str(exc)})
+    results = []
+    try:
+        for nomination in nominations:
+            results.append(await nominate_watch(WatchNomination(**nomination), request))
+    except HTTPException as exc:  # earlier stocks in the batch may be in; the routine re-reads GET /watch
+        return await finish("failed", {"note": body.note, "detail": str(exc.detail), "results": results})
+    return await finish("applied", {"note": body.note, "results": results})
 
 
 def _held_stock_codes() -> set[str]:
