@@ -364,7 +364,7 @@ TELEGRAM_CHAT_ID=%s
                         script {
                             sh 'rm -f /tmp/social-publish.env'
                             ['SOCIAL_PUBLISH_ENABLED', 'META_PAGE_ID', 'META_PAGE_ACCESS_TOKEN', 'INSTAGRAM_USER_ID',
-                             'THREADS_USER_ID', 'THREADS_ACCESS_TOKEN'].each { key ->
+                             'THREADS_USER_ID', 'THREADS_ACCESS_TOKEN', 'LINKEDIN_ACCESS_TOKEN', 'LINKEDIN_PERSON_URN'].each { key ->
                                 try {
                                     withCredentials([string(credentialsId: key, variable: 'SOCIAL_VALUE')]) {
                                         sh "printf '%s=%s\\n' '${key}' \"\$SOCIAL_VALUE\" >> /tmp/social-publish.env"

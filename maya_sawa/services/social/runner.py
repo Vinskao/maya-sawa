@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from .meta import Ambiguous, AuthError, PublishError
+from . import linkedin
 from .outbox import MAX_ATTEMPTS
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def run_once(outbox, *, sources, current, publishers, now, notify, pause=lambda 
     """One pass. `sources(None)` lists the latest public analysis of every stock plus macro:US; each must end up
     published on every configured channel, so anything not yet posted (including old backlog) is queued and sent."""
     outbox.stall(now)
-    channels = [channel for channel in ('facebook', 'instagram', 'threads') if channel in publishers]
+    channels = [channel for channel in ('facebook', 'instagram', 'threads', 'linkedin') if channel in publishers]
     last_run = outbox.get(CURSOR)
     fresh = set()  # saved since the previous run: posted at once; everything else is backlog, paced
     for source in sorted(sources(None), key=lambda row: row['updatedAt']):
@@ -195,6 +196,17 @@ def build_publishers(outbox, notify=None):
         if threads_user:
             threads = meta.Threads(threads_user, token)
             publishers['threads'] = lambda source: threads.publish(build_post(source, 'threads'), card_url(source))
+    linkedin_token = os.getenv('LINKEDIN_ACCESS_TOKEN', '').strip()
+    if linkedin_token:
+        author = os.getenv('LINKEDIN_PERSON_URN', '').strip()
+        if not author:
+            try:
+                author = linkedin.discover_person(linkedin_token)
+            except PublishError:
+                logger.warning('LinkedIn member lookup failed; LinkedIn skipped this run')
+        if author:
+            profile = linkedin.LinkedIn(author, linkedin_token)
+            publishers['linkedin'] = lambda source: profile.publish(build_post(source, 'linkedin'), [card_url(source)])
     return publishers
 
 
@@ -211,7 +223,7 @@ def _instagram_link_alert(outbox, notify, linked, checked):
 
 def notify_owner(channel, reason):
     from .. import telegram_notify
-    names = {'facebook': 'Facebook 粉專', 'instagram': 'Instagram', 'threads': 'Threads'}
+    names = {'facebook': 'Facebook 粉專', 'instagram': 'Instagram', 'threads': 'Threads', 'linkedin': 'LinkedIn'}
     name = names.get(channel, channel)
     if reason == 'auth':
         body = (f'{name} 授權失效，該平台貼文已保留在佇列、不會遺失。\n'

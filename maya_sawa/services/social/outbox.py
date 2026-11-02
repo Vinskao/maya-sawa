@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
-CHANNEL_ORDER = ('facebook', 'instagram', 'threads')
+CHANNEL_ORDER = ('facebook', 'instagram', 'threads', 'linkedin')
 MAX_ATTEMPTS = 3  # after this many failed attempts the owner is alerted once; retries continue on every run
 STALL = timedelta(minutes=30)
 

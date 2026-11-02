@@ -359,3 +359,18 @@ def test_owner_message_for_a_missing_instagram_link_says_what_to_do(monkeypatch)
     runner.notify_owner('instagram', 'not_linked')
     kind, title, body = sent[0]
     assert kind == 'attention' and 'Instagram' in body and '粉專' in body and '略過' in body
+
+
+def test_linkedin_is_published_only_when_its_token_is_configured(outbox, monkeypatch):
+    from maya_sawa.services.social import linkedin, runner
+    for name in ('META_PAGE_ACCESS_TOKEN', 'THREADS_ACCESS_TOKEN', 'LINKEDIN_ACCESS_TOKEN', 'LINKEDIN_PERSON_URN'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(runner, 'threads_token', lambda outbox: None)
+    assert runner.build_publishers(outbox) == {}
+    monkeypatch.setenv('LINKEDIN_ACCESS_TOKEN', 'tok')
+    monkeypatch.setattr(linkedin, 'discover_person', lambda token: 'urn:li:person:42')
+    assert set(runner.build_publishers(outbox)) == {'linkedin'}
+    monkeypatch.setattr(linkedin, 'discover_person', lambda token: (_ for _ in ()).throw(linkedin.Rejected('x')))
+    assert runner.build_publishers(outbox) == {}  # a failed lookup only skips LinkedIn this run
+    monkeypatch.setenv('LINKEDIN_PERSON_URN', 'urn:li:person:42')
+    assert set(runner.build_publishers(outbox)) == {'linkedin'}  # the configured URN needs no lookup

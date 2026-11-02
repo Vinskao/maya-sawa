@@ -233,6 +233,18 @@ spec:
               name: social-publish
               key: THREADS_ACCESS_TOKEN
               optional: true
+        - name: LINKEDIN_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: social-publish
+              key: LINKEDIN_ACCESS_TOKEN
+              optional: true
+        - name: LINKEDIN_PERSON_URN
+          valueFrom:
+            secretKeyRef:
+              name: social-publish
+              key: LINKEDIN_PERSON_URN
+              optional: true
         - name: BLS_API_KEY
           valueFrom:
             secretKeyRef:

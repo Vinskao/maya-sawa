@@ -1,4 +1,4 @@
-# Social publishing (Facebook Page, Instagram, Threads)
+# Social publishing (Facebook Page, Instagram, Threads, LinkedIn)
 
 Maya Sawa itself posts every new public AI analysis revision to the Birch Investments Facebook Page, Instagram and
 Threads. No ChatGPT task or Metricool is involved: the post text is the analysis verbatim, so no model is needed.
@@ -90,6 +90,22 @@ prompts or screenshots.
    `GET https://graph.threads.net/v1.0/me?fields=id,username` returns the user id.
 5. Save the six values as Jenkins Secret text credentials, then rebuild maya-sawa. Check
    `/social/status`; the first scheduled run (or `POST /social/run`) records the baseline.
+
+## LinkedIn (personal profile, added 2026-11-02)
+
+`services/social/linkedin.py` posts as the owner's own profile through "Share on LinkedIn" (`w_member_social`, self-serve;
+`POST /v2/ugcPosts`, images via `/v2/assets?action=registerUpload`). The post is the analysis text (limit 3,000) with the
+same summary card. Posting as a company Page would need the Community Management API (LinkedIn review), not done.
+
+| Jenkins credential ID | Value |
+|---|---|
+| `LINKEDIN_ACCESS_TOKEN` | OAuth token with `w_member_social` (+ `openid profile` to look up the member). **Expires in ~60 days, no refresh token for self-serve apps: re-authorize about every two months** |
+| `LINKEDIN_PERSON_URN` | optional, `urn:li:person:<id>`; otherwise looked up from `/v2/userinfo` |
+
+Setup (owner): developers.linkedin.com → Create app (needs a LinkedIn Company Page association, which cannot be changed
+later, an app logo, and acceptance of LinkedIn's terms) → Products: add *Share on LinkedIn* and *Sign In with LinkedIn
+using OpenID Connect* → Auth tab: generate a token with scopes `openid profile w_member_social` → save as the Jenkins
+Secret text above and rebuild. A 401 puts the post back in `queued` and sends one Telegram alert, like the other channels.
 
 ## Tests
 

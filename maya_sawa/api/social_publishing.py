@@ -36,7 +36,8 @@ async def status(user=Depends(require_manage_users_request)):
     outbox = await asyncio.to_thread(_outbox)
     page = bool(os.getenv('META_PAGE_ACCESS_TOKEN'))
     configured = {'facebook': page, 'instagram': page, 'threads': bool(os.getenv('THREADS_ACCESS_TOKEN')
-                                                                       or outbox.get('threads_token'))}
+                                                                       or outbox.get('threads_token')),
+                  'linkedin': bool(os.getenv('LINKEDIN_ACCESS_TOKEN'))}
     from ..services.social.sources import public_sources
     sources = (await asyncio.to_thread(public_sources, None, None))['sources']
     channels = [channel for channel, ready in configured.items() if ready]

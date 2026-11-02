@@ -3,7 +3,7 @@
 SITE = 'tymultiverse.cc'
 SITE_LINE = '更多請至我的網站：https://tymultiverse.cc/'
 MACRO_TITLE = '總經評論｜所有個股分析共用'
-LIMITS = {'threads': 500, 'instagram': 2200, 'facebook': None}
+LIMITS = {'threads': 500, 'instagram': 2200, 'facebook': None, 'linkedin': 3000}
 BOUNDARIES = '\n。！？；'
 
 
