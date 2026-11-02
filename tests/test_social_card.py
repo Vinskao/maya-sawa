@@ -60,3 +60,26 @@ def test_card_footer_uses_the_new_domain_and_the_card_still_renders_for_a_real_a
     assert Image.open(io.BytesIO(render_card(source))).size == CARD_SIZE
     from maya_sawa.services.social import card
     assert card.FOOTER_URL == 'tymultiverse.cc' and 'tatdvsonorth' not in card.FOOTER_URL
+
+
+def test_fit_size_shrinks_text_until_it_fits_the_card_width_but_never_below_the_minimum():
+    """2026-11-02 production (8996): '中立（由買改為中立）' at a fixed size ran off the right edge of the card."""
+    from maya_sawa.services.social.card import fit_size
+    cjk = lambda text, size: len(text) * size  # every character is a full-width square
+    assert fit_size('買（維持）', 150, 48, 904, cjk) == 150  # short text keeps the big size
+    size = fit_size('中立（由買改為中立）', 150, 48, 904, cjk)
+    assert 48 <= size < 150 and cjk('中立（由買改為中立）', size) <= 904
+    assert fit_size('很長' * 40, 150, 48, 904, cjk) == 48  # at the floor it stops (caller wraps or clips)
+
+
+def test_card_text_sizes_all_fit_inside_the_margins_for_the_longest_real_verdict():
+    from maya_sawa.services.social.card import CARD_SIZE, MARGIN, card_font_sizes
+    cjk = lambda text, size: len(text) * size
+    card = {'code': '8996', 'name': '高力熱處理工業', 'asOf': '2026.10.28', 'verdict': '中立（由買改為中立）',
+            'tags': '循環順風 · 技術力中性 · 交貨中性', 'close': '10/28 收盤  1,585  （+8.19%）'}
+    sizes = card_font_sizes(card, cjk)
+    width = CARD_SIZE[0] - 2 * MARGIN
+    assert cjk(card['verdict'], sizes['verdict']) <= width
+    assert cjk(f"{card['code']}    {card['name']}", sizes['headline']) <= width
+    assert cjk(card['tags'].replace(' · ', '  ·  '), sizes['tags']) <= width
+    assert cjk(card['close'], sizes['close']) <= width

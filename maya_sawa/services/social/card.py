@@ -83,25 +83,48 @@ def _font(weight, size):
     return ImageFont.load_default(size)  # tests and local runs without the bundled CJK font
 
 
+def fit_size(text, max_size, min_size, width, measure):
+    """The largest font size (stepping down by 2) at which `measure(text, size)` fits in `width`; not below min_size."""
+    size = max_size
+    while size > min_size and measure(text, size) > width:
+        size -= 2
+    return size
+
+
+def card_font_sizes(card, measure):
+    """Font sizes for the card lines, each shrunk so long text (e.g. 中立（由買改為中立）) stays inside the margins."""
+    width = CARD_SIZE[0] - 2 * MARGIN
+    return {
+        'headline': fit_size(f"{card['code']}    {card['name']}".rstrip(), 84, 40, width, measure),
+        'verdict': fit_size(card['verdict'] or '—', 150, 48, width, measure),
+        'tags': fit_size(card['tags'].replace(' · ', '  ·  '), 38, 22, width, measure),
+        'close': fit_size(card['close'], 48, 26, width, measure),
+    }
+
+
 def render_card(source):
     card = parse_card(source)
     image = Image.new('RGB', CARD_SIZE, BG)
     draw = ImageDraw.Draw(image)
     width = CARD_SIZE[0] - 2 * MARGIN
+    sizes = card_font_sizes(card, lambda text, size: draw.textlength(text, font=_font('Bold', size)))
+    sizes['tags'] = fit_size(card['tags'].replace(' · ', '  ·  '), 38, 22, width,
+                             lambda text, size: draw.textlength(text, font=_font('Regular', size)))
+    sizes['close'] = fit_size(card['close'], 48, 26, width,
+                              lambda text, size: draw.textlength(text, font=_font('Regular', size)))
     draw.rounded_rectangle([40, 40, CARD_SIZE[0] - 40, CARD_SIZE[1] - 40], radius=28, outline=LINE, width=3)
     left = MARGIN
     draw.text((left, 100), 'BIRCH INVESTMENTS', font=_font('Bold', 44), fill=WHITE)
     draw.text((left, 164), '樺樹資本工具', font=_font('Regular', 32), fill=DIM)
     draw.line([left, 236, left + width, 236], fill=LINE, width=2)
     headline = f"{card['code']}    {card['name']}".rstrip()
-    draw.text((left, 276), headline, font=_font('Bold', 84), fill=WHITE)
+    draw.text((left, 276), headline, font=_font('Bold', sizes['headline']), fill=WHITE)
     draw.text((left, 400), f"DATA AS OF {card['asOf']}", font=_font('Regular', 30), fill=DIM)
-    verdict_font = _font('Bold', 150 if len(card['verdict']) <= 6 else 110)
-    draw.text((left, 480), card['verdict'] or '—', font=verdict_font, fill=WHITE)
-    draw.text((left, 690), card['tags'].replace(' · ', '  ·  '), font=_font('Regular', 38), fill=DIM)
+    draw.text((left, 480), card['verdict'] or '—', font=_font('Bold', sizes['verdict']), fill=WHITE)
+    draw.text((left, 690), card['tags'].replace(' · ', '  ·  '), font=_font('Regular', sizes['tags']), fill=DIM)
     draw.line([left, 790, left + width, 790], fill=LINE, width=2)
     if card['close']:
-        draw.text((left, 830), card['close'], font=_font('Regular', 48), fill=WHITE)
+        draw.text((left, 830), card['close'], font=_font('Regular', sizes['close']), fill=WHITE)
     draw.text((left, 1090), '完整研究與資料來源', font=_font('Regular', 32), fill=DIM)
     draw.text((left, 1146), FOOTER_URL, font=_font('Regular', 38), fill=WHITE)
     draw.text((left, 1236), 'TY MARKET LAB · TY MULTIVERSE', font=_font('Regular', 26), fill=DIM)

@@ -7,7 +7,7 @@ import subprocess
 
 from PIL import Image, ImageDraw
 
-from .card import BG, CARD_SIZE, DIM, FOOTER_URL, WHITE, _font
+from .card import BG, CARD_SIZE, DIM, FOOTER_URL, WHITE, _font, fit_size
 
 FLOW = re.compile(r'^\s*(flowchart|graph)\s+(TB|TD|BT|LR|RL)\b', re.I)
 ARROW = re.compile(r'\s*(-\.->|-->|==>|---)\s*(?:\|([^|]*)\|\s*)?')
@@ -153,7 +153,8 @@ def render_diagram_card(title, source):
     draw = ImageDraw.Draw(image)
     margin = 64
     draw.text((margin, 64), 'BIRCH INVESTMENTS', font=_font('Bold', 34), fill=WHITE)
-    draw.text((margin, 118), title, font=_font('Bold', 52), fill=WHITE)
+    title_size = fit_size(title, 52, 28, CARD_SIZE[0] - 2 * margin, lambda text, size: draw.textlength(text, font=_font('Bold', size)))
+    draw.text((margin, 118), title, font=_font('Bold', title_size), fill=WHITE)
     top, bottom = 220, CARD_SIZE[1] - 150
     box = (CARD_SIZE[0] - 2 * margin, bottom - top)
     scale = min(box[0] / diagram.width, box[1] / diagram.height, 1.6)
