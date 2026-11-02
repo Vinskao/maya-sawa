@@ -169,7 +169,7 @@ spec:
               optional: true
         # SHA-256 of the scheduled analysis routine's write key (not the key itself); see docs/MARKET_AGENT_KEY.md
         - name: MARKET_AGENT_KEY_SHA256
-          value: "7765262f9c8c415680a394cfb488f60cb9bbea9daf61ae707a28eb65173b75c7"
+          value: "29d818d0c562f10ae617790b91bd48efbce40acda652128bcf2bef0c41ce6f5d"
         - name: MARKET_INTERNAL_SECRET
           valueFrom:
             secretKeyRef:

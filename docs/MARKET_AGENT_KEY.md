@@ -31,9 +31,22 @@ reconciliation run. The routine has no Keycloak login, so it writes with a dedic
 
 ## Rotate or revoke
 
-1. Generate a new random key, for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
-2. Put `sha256(key)` in `MARKET_AGENT_KEY_SHA256` and deploy maya-sawa.
-3. In the cloud environment, delete the network secret and add it again with the new value.
+The plaintext exists only where you saved it and inside the claude.ai network secrets (which cannot be read back).
+Keep a copy in a password manager when you generate a key; if it is lost, rotate.
+
+1. Generate a new random key into a file outside the repository (never print it into a chat or log):
+   `python -c "import secrets,hashlib; k=secrets.token_urlsafe(32); open('NEW_AGENT_KEY.txt','w').write(k); print(hashlib.sha256(k.encode()).hexdigest())"`.
+2. **First** put the new key into the cloud environment's network secrets (claude.ai/code → environment "Default" → gear →
+   網絡密鑰): header `X-Market-Agent-Key`, empty prefix, path prefix `/maya-sawa/`, one entry per host the routines call
+   (`peoplesystem.tatdvsonorth.com`, and `tymultiverse.cc` once the environment allows it); delete the old entries.
+3. Put `sha256(key)` in `MARKET_AGENT_KEY_SHA256` in `k8s/deployment.yaml` and push `main`: the Jenkins pipeline runs
+   `envsubst < k8s/deployment.yaml | kubectl apply` and waits for the rollout. Between steps 2 and 3 the routines' calls get 401,
+   so do it away from a scheduled run (daily 20:30 claim extraction, Tue–Sat 07:30 US/macro, Fri 21:15 Taiwan, Sun 20:30 inbox review).
+4. Check: `curl -s -o /dev/null -w '%{http_code}' -X POST .../market/watch/weekly/proposals/x/review -H 'X-Market-Agent-Key: <new>' ...`
+   returns 404 (key accepted, id unknown), the old key returns 401, then run one routine by hand and read its log.
+5. Delete the local key file once it is in the password manager.
+
+Rotated 2026-11-02 (the previous plaintext was no longer on hand when the cloud environment needed a second host entry).
 
 To revoke without a new key, set `MARKET_AGENT_KEY_SHA256` to an empty string and deploy.
 
