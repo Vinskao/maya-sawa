@@ -52,11 +52,13 @@ def test_main_never_fails_the_routine(monkeypatch, tmp_path, capsys):
     assert script.main(["萃取主張"]) == 0 and "not reported" in capsys.readouterr().out
 
 
-def test_the_default_url_is_the_host_the_cloud_proxy_reaches_and_adds_the_agent_key_for():
-    """2026-11-02: both daily routines printed 'usage not reported: URLError'. Their cloud environment cannot reach
-    tymultiverse.cc (the proxy answers 403) and only adds X-Market-Agent-Key for peoplesystem.tatdvsonorth.com, the host
-    every other routine call already uses."""
-    assert script.URL.startswith("https://peoplesystem.tatdvsonorth.com/maya-sawa/market/")
+def test_the_default_url_is_the_current_site_the_cloud_proxy_reaches_and_adds_the_agent_key_for():
+    """2026-11-02: both daily routines printed 'usage not reported: URLError'. The cloud environment's network secret and
+    allowed domain were still the retired peoplesystem.tatdvsonorth.com, so tymultiverse.cc was blocked (proxy 403). After the
+    key rotation the environment holds the key for tymultiverse.cc/maya-sawa/ only, and the retired host is blocked
+    ('Tunnel connection failed: 403 Forbidden', seen in a routine run), so the script must call the current site."""
+    assert script.URL.startswith("https://tymultiverse.cc/maya-sawa/market/")
+    assert "peoplesystem" not in script.URL
     assert script.URL.endswith("/routine-usage")
 
 

@@ -12,9 +12,9 @@ import os
 import sys
 import urllib.request
 
-# The routines' cloud environment reaches only peoplesystem.tatdvsonorth.com (its proxy adds X-Market-Agent-Key there);
-# tymultiverse.cc answers 403 from that environment. Override with ROUTINE_USAGE_URL when running elsewhere.
-URL = os.environ.get("ROUTINE_USAGE_URL", "https://peoplesystem.tatdvsonorth.com/maya-sawa/market/routine-usage")
+# The routines' cloud environment holds the agent key as a network secret for tymultiverse.cc/maya-sawa/ (its proxy adds
+# X-Market-Agent-Key); the retired peoplesystem.tatdvsonorth.com is blocked there. Override with ROUTINE_USAGE_URL elsewhere.
+URL = os.environ.get("ROUTINE_USAGE_URL", "https://tymultiverse.cc/maya-sawa/market/routine-usage")
 ROOTS = [os.path.expanduser("~/.claude/projects")]
 FIELDS = (("input_tokens", "input"), ("output_tokens", "output"),
           ("cache_creation_input_tokens", "cacheCreation"), ("cache_read_input_tokens", "cacheRead"))
