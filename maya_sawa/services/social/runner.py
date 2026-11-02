@@ -17,7 +17,7 @@ CURSOR = 'cursor'
 TRIGGER_DELAY_SECONDS = 30  # saves within this window go out in one run
 CATCHUP_SECONDS = 600  # sweep: retries and the next backlog item
 BACKLOG_AT = 'backlog_at'
-BACKLOG_GAP = timedelta(minutes=10)  # unposted older analyses go out one at a time, this far apart (spam risk)
+BACKLOG_GAP = timedelta(minutes=9)  # backlog goes out one analysis per sweep (10 min); 9 min so a sweep a moment early still counts
 
 
 class RunTrigger:

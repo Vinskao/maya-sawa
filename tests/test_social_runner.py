@@ -391,3 +391,13 @@ def test_every_post_carries_the_card_plus_the_diagrams_of_the_current_research_r
     def broken(code):
         raise RuntimeError('db down')
     assert image_urls(source, read_research=broken) == [urls[0]]  # a failed lookup never blocks the post
+
+
+def test_backlog_sweep_that_runs_a_moment_early_still_posts_the_next_item(outbox):
+    """2026-11-02: the 10-minute sweep fired 0.5 s short of a 10-minute gap and the next post waited a whole extra sweep."""
+    world = World()
+    for code in ('1111', '2222'):
+        world.add(analysis(code, 1, T0 - timedelta(days=3)))
+    world.run(outbox, T0)
+    world.run(outbox, T0 + timedelta(minutes=9, seconds=59))  # one sweep later, half a second early
+    assert {source for _, source in world.posted} == {'stock:1111:1', 'stock:2222:1'}
