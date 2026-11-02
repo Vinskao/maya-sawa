@@ -237,3 +237,31 @@ def test_a_failed_extra_image_stops_before_anything_is_published():
     with pytest.raises(Rejected):
         FacebookPage('222', 'tok', recording_client(routes, calls)).publish('hello', IMAGES)
     assert not any(call[1] == '/v23.0/222/feed' for call in calls)
+
+
+def test_instagram_login_api_uses_graph_instagram_com_and_publishes_the_same_way():
+    """2026-11-02: the Page cannot be linked (Meta restricts the profile), so Instagram posts via its own login API."""
+    from maya_sawa.services.social.meta import INSTAGRAM_LOGIN
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.host, request.url.path))
+        key = f'{request.method} {request.url.path}'
+        body = {'POST /v23.0/555/media': {'id': '444'}, 'GET /v23.0/444': {'status_code': 'FINISHED'},
+                'POST /v23.0/555/media_publish': {'id': '666'}, 'GET /v23.0/666': FIXTURES['instagram_permalink']}[key]
+        return httpx.Response(200, json=body)
+
+    ig = Instagram('555', 'tok', httpx.Client(transport=httpx.MockTransport(handler)), sleep=lambda s: None, base=INSTAGRAM_LOGIN)
+    assert ig.publish('caption', 'https://tymultiverse.cc/card.png')['url'] == 'https://www.instagram.com/p/DXyz789/'
+    assert {host for host, _ in seen} == {'graph.instagram.com'}
+
+
+def test_instagram_login_token_refresh_and_account_lookup():
+    from maya_sawa.services.social.meta import discover_instagram_user, refresh_instagram_token
+    calls = []
+    routes = {'GET /refresh_access_token': (200, {'access_token': 'IGNEW', 'token_type': 'bearer', 'expires_in': 5184000}),
+              'GET /v23.0/me': (200, {'user_id': '17841400000000000', 'username': 'birch_investments'})}
+    assert refresh_instagram_token('old', client(routes, calls)) == 'IGNEW'
+    assert calls[0][2]['grant_type'] == 'ig_refresh_token'
+    assert discover_instagram_user('tok', client(routes, calls)) == '17841400000000000'
+    assert 'user_id' in calls[1][2]['fields']

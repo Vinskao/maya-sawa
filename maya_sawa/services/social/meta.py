@@ -12,6 +12,7 @@ import httpx
 
 GRAPH = 'https://graph.facebook.com/v23.0'
 THREADS = 'https://graph.threads.net/v1.0'
+INSTAGRAM_LOGIN = 'https://graph.instagram.com/v23.0'  # Instagram API with Instagram Login: no Facebook Page needed
 AUTH_CODES = {102, 190}
 
 
@@ -130,12 +131,13 @@ class FacebookPage:
 class Instagram:
     MAX_ITEMS = 10
 
-    def __init__(self, user_id, token, client=None, sleep=time.sleep):
+    def __init__(self, user_id, token, client=None, sleep=time.sleep, base=GRAPH):
         self.user_id, self.token, self.client, self.sleep = user_id, token, client or httpx.Client(), sleep
+        self.base = base
 
     def _container(self, **fields):
-        container = _call(self.client, 'POST', f'{GRAPH}/{self.user_id}/media', self.token, **fields)['id']
-        _wait_ready(self.client, GRAPH, container, self.token, 'status_code', self.sleep)
+        container = _call(self.client, 'POST', f'{self.base}/{self.user_id}/media', self.token, **fields)['id']
+        _wait_ready(self.client, self.base, container, self.token, 'status_code', self.sleep)
         return container
 
     def publish(self, caption, images):
@@ -145,9 +147,21 @@ class Instagram:
             container = self._container(media_type='CAROUSEL', children=','.join(children), caption=caption)
         else:
             container = self._container(image_url=images[0], caption=caption)
-        media = _call(self.client, 'POST', f'{GRAPH}/{self.user_id}/media_publish', self.token, final=True,
+        media = _call(self.client, 'POST', f'{self.base}/{self.user_id}/media_publish', self.token, final=True,
                       creation_id=container)['id']
-        return {'id': media, 'url': _permalink(self.client, GRAPH, media, self.token, 'permalink')}
+        return {'id': media, 'url': _permalink(self.client, self.base, media, self.token, 'permalink')}
+
+
+def refresh_instagram_token(token, client=None):
+    """Long-lived Instagram Login tokens last 60 days; refreshing returns a new one valid for another 60."""
+    body = _call(client or httpx.Client(), 'GET', 'https://graph.instagram.com/refresh_access_token', token,
+                 grant_type='ig_refresh_token')
+    return body['access_token']
+
+
+def discover_instagram_user(token, client=None):
+    """The professional account id behind an Instagram Login token."""
+    return _call(client or httpx.Client(), 'GET', f'{INSTAGRAM_LOGIN}/me', token, fields='user_id,username')['user_id']
 
 
 def refresh_threads_token(token, client=None):

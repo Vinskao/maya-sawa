@@ -401,3 +401,32 @@ def test_backlog_sweep_that_runs_a_moment_early_still_posts_the_next_item(outbox
     world.run(outbox, T0)
     world.run(outbox, T0 + timedelta(minutes=9, seconds=59))  # one sweep later, half a second early
     assert {source for _, source in world.posted} == {'stock:1111:1', 'stock:2222:1'}
+
+
+def test_instagram_posts_through_its_own_login_token_even_when_the_page_is_not_linked(outbox, monkeypatch):
+    from maya_sawa.services.social import meta, runner
+    for name in ('META_PAGE_ACCESS_TOKEN', 'THREADS_ACCESS_TOKEN', 'LINKEDIN_ACCESS_TOKEN', 'INSTAGRAM_USER_ID'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(runner, 'threads_token', lambda outbox: None)
+    monkeypatch.setattr(runner, 'instagram_token', lambda outbox: os.environ.get('INSTAGRAM_ACCESS_TOKEN'))
+    assert runner.build_publishers(outbox) == {}
+    monkeypatch.setenv('INSTAGRAM_ACCESS_TOKEN', 'igtok')
+    monkeypatch.setattr(meta, 'discover_instagram_user', lambda token: '1784')
+    made = []
+    monkeypatch.setattr(meta, 'Instagram', lambda user, token, **kw: made.append((user, token, kw.get('base'))))
+    assert set(runner.build_publishers(outbox)) == {'instagram'}
+    assert made == [('1784', 'igtok', meta.INSTAGRAM_LOGIN)]
+    monkeypatch.setattr(meta, 'discover_instagram_user', lambda token: (_ for _ in ()).throw(meta.Rejected('x')))
+    assert runner.build_publishers(outbox) == {}  # a failed lookup only skips Instagram this run
+
+
+def test_instagram_token_is_seeded_from_the_secret_then_refreshed_weekly_into_the_database(outbox, monkeypatch):
+    from maya_sawa.services.social import runner
+    monkeypatch.setenv('INSTAGRAM_ACCESS_TOKEN', 'SEED')
+    refreshed = []
+    refresh = lambda token: refreshed.append(token) or token + '+1'
+    assert runner.instagram_token(outbox, refresh, T0) == 'SEED+1'
+    assert runner.instagram_token(outbox, refresh, T0 + timedelta(days=1)) == 'SEED+1'  # stored, not refreshed again
+    assert refreshed == ['SEED']
+    monkeypatch.delenv('INSTAGRAM_ACCESS_TOKEN')
+    assert runner.instagram_token(outbox, refresh, T0) == 'SEED+1'  # the stored token keeps working

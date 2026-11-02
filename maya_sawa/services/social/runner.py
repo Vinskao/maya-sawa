@@ -180,6 +180,23 @@ def threads_token(outbox, refresh=None, now=None):
     return token
 
 
+def instagram_token(outbox, refresh=None, now=None):
+    """Instagram Login token: seed from the secret once, then keep the refreshed 60-day token in the database."""
+    from .meta import refresh_instagram_token
+    now = now or datetime.now(timezone.utc)
+    token = outbox.get('instagram_token') or os.getenv('INSTAGRAM_ACCESS_TOKEN', '').strip()
+    if not token:
+        return None
+    refreshed = outbox.updated_at('instagram_token')
+    if refreshed is None or now - refreshed > timedelta(days=7):
+        try:
+            token = (refresh or refresh_instagram_token)(token)
+            outbox.set('instagram_token', token)
+        except PublishError:
+            logger.warning('Instagram token refresh failed; using the current token')
+    return token
+
+
 def build_publishers(outbox, notify=None):
     """Only two secrets are required (Page token, Threads token); ids come from the environment or the tokens.
 
@@ -206,6 +223,16 @@ def build_publishers(outbox, notify=None):
         if page_id and ig_user:
             ig = meta.Instagram(ig_user, page_token)
             publishers['instagram'] = lambda source: ig.publish(build_post(source, 'instagram'), image_urls(source))
+    ig_login_token = instagram_token(outbox)
+    if ig_login_token:  # Instagram Login API: independent of the Page link, so it replaces the Page-based publisher
+        try:
+            login_user = meta.discover_instagram_user(ig_login_token)
+        except meta.PublishError:
+            logger.warning('Instagram Login lookup failed; Instagram skipped this run')
+        else:
+            ig_direct = meta.Instagram(login_user, ig_login_token, base=meta.INSTAGRAM_LOGIN)
+            publishers['instagram'] = lambda source: ig_direct.publish(build_post(source, 'instagram'), image_urls(source))
+            outbox.delete('alerted:instagram_link')
     token = threads_token(outbox)
     if token:
         threads_user = os.getenv('THREADS_USER_ID', '').strip()
