@@ -69,3 +69,24 @@ def test_rendering_returns_a_portrait_card_png():
     from maya_sawa.services.social.diagram import render_diagram_card
     image = Image.open(io.BytesIO(render_diagram_card('6187 萬潤 · 供應鏈', DIAGRAMS['6187'][0])))
     assert image.size == (1080, 1350)
+
+
+def test_long_labels_break_with_a_dot_newline_not_a_visible_backslash_n():
+    """2026-11-02 production: nodes showed a literal 'S\n1' because the line break was escaped twice."""
+    dot = to_dot('flowchart TB\n  A["' + '很長的中文標籤' * 6 + ' S1"]')
+    label = next(line for line in dot.split('\n') if line.strip().startswith('"A" [label='))
+    assert '\\n' in label and '\\\\n' not in label  # DOT's single backslash-n break, never a doubled one
+
+
+def test_wide_top_to_bottom_diagrams_are_flipped_so_they_fill_a_portrait_card():
+    """2026-11-02 production: a 5-wide diagram was drawn 900px wide and 100px tall, unreadable on a 1080x1350 card."""
+    from maya_sawa.services.social.diagram import choose_direction
+    assert choose_direction('TB', width=1800, height=200) == 'LR'
+    assert choose_direction('TB', width=600, height=900) == 'TB'
+    assert choose_direction('LR', width=1800, height=200) == 'LR'  # LR graphs are already left to right: unchanged
+    assert choose_direction('TB', width=1000, height=1000) == 'TB'
+
+
+def test_to_dot_can_override_the_direction():
+    assert 'rankdir=LR' in to_dot('flowchart TB\n  A --> B', direction='LR')
+    assert 'rankdir=TB' in to_dot('flowchart TB\n  A --> B')

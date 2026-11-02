@@ -85,31 +85,45 @@ def _wrap(label, width=16):
             current, used = '', 0
         current += char
         used += size
-    return '\\n'.join(lines + [current])  # a literal backslash-n: DOT's own line break
+    return lines + [current]
 
 
 def _q(text):
     return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 
-def to_dot(source):
+def _label(text, width=16):
+    """A quoted DOT label: each wrapped line escaped on its own, then joined with DOT's own break (backslash + n).
+    Escaping after joining would turn that break into a visible backslash-n."""
+    return '"' + '\\n'.join(line.replace('\\', '\\\\').replace('"', '\\"') for line in _wrap(text, width)) + '"'
+
+
+def choose_direction(direction, width, height):
+    """A wide top-to-bottom drawing (many siblings in one rank) is flipped to left-to-right so it becomes tall and its
+    text stays readable once scaled into a portrait card."""
+    if direction in ('TB', 'TD', 'BT') and width > height * 1.4:
+        return 'LR'
+    return direction
+
+
+def to_dot(source, direction=None):
     graph = parse_flowchart(source)
     font = 'Noto Sans TC'
-    out = ['digraph G {', f'  rankdir={graph["direction"]}; bgcolor="#0a0a0b"; pad=0.2; nodesep=0.35; ranksep=0.45;',
+    out = ['digraph G {', f'  rankdir={direction or graph["direction"]}; bgcolor="#0a0a0b"; pad=0.2; nodesep=0.35; ranksep=0.45;',
            f'  node [shape=box style="rounded,filled" fillcolor="#1c1c20" color="#46464c" fontcolor="#f4f4f4" fontname={_q(font)} fontsize=14 margin="0.18,0.1"];',
            f'  edge [color="#8a8a90" fontcolor="#b4b4b9" fontname={_q(font)} fontsize=11 arrowsize=0.7];']
     clustered = {key for cluster in graph['clusters'] for key in cluster['nodes']}
     for key, label in graph['nodes'].items():
         if key not in clustered:
-            out.append(f'  {_q(key)} [label={_q(_wrap(label))}];')
+            out.append(f'  {_q(key)} [label={_label(label)}];')
     for cluster in graph['clusters']:
-        out.append(f'  subgraph cluster_{cluster["id"]} {{ label={_q(_wrap(cluster["title"], 22))}; style="rounded,dashed"; '
+        out.append(f'  subgraph cluster_{cluster["id"]} {{ label={_label(cluster["title"], 22)}; style="rounded,dashed"; '
                    f'color="#5a5a60"; fontcolor="#d0d0d4"; fontname={_q(font)}; fontsize=13;')
         for key in cluster['nodes']:
-            out.append(f'    {_q(key)} [label={_q(_wrap(graph["nodes"][key]))}];')
+            out.append(f'    {_q(key)} [label={_label(graph["nodes"][key])}];')
         out.append('  }')
     for a, b, label, dashed in graph['edges']:
-        attrs = [f'label={_q(_wrap(label, 18))}'] if label else []
+        attrs = [f'label={_label(label, 18)}'] if label else []
         if dashed:
             attrs.append('style=dashed')
         out.append(f'  {_q(a)} -> {_q(b)}' + (f' [{" ".join(attrs)}]' if attrs else '') + ';')
@@ -117,15 +131,23 @@ def to_dot(source):
     return '\n'.join(out)
 
 
-def render_diagram_card(title, source):
-    """The diagram on a 1080x1350 card with a heading; raises RuntimeError if Graphviz fails."""
+def _draw(source, direction=None):
     try:
-        done = subprocess.run(['dot', '-Tpng', '-Gdpi=130'], input=to_dot(source).encode(), capture_output=True, timeout=30)
+        done = subprocess.run(['dot', '-Tpng', '-Gdpi=130'], input=to_dot(source, direction).encode(),
+                              capture_output=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError(f'Graphviz unavailable: {type(exc).__name__}') from exc
     if done.returncode != 0:
         raise RuntimeError(f'Graphviz failed: {done.stderr.decode(errors="replace")[:200]}')
-    diagram = Image.open(io.BytesIO(done.stdout)).convert('RGB')
+    return Image.open(io.BytesIO(done.stdout)).convert('RGB')
+
+
+def render_diagram_card(title, source):
+    """The diagram on a 1080x1350 card with a heading; raises RuntimeError if Graphviz fails."""
+    diagram = _draw(source)
+    wanted = choose_direction(parse_flowchart(source)['direction'], diagram.width, diagram.height)
+    if wanted != parse_flowchart(source)['direction']:
+        diagram = _draw(source, wanted)
     image = Image.new('RGB', CARD_SIZE, BG)
     draw = ImageDraw.Draw(image)
     margin = 64
