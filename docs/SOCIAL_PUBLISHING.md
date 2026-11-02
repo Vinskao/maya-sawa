@@ -9,13 +9,16 @@ Metricool connector could only schedule posts and never return a verified post U
 
 - **When:** as soon as an analysis is saved (2026-11-02; was Wed/Fri/Sun 21:30). `market_ai_analysis_db.save` calls its
   listeners after commit; `runner.on_analysis_saved` fires `RunTrigger`, which waits 30 s so a batch of saves goes out
-  in one run, and never runs two passes at once. An hourly catch-up sweep retries `queued`/`failed` posts. Only the
+  in one run, and never runs two passes at once. A catch-up sweep every 10 minutes retries `queued`/`failed` posts. Only the
   current revision of each analysis is posted; older revisions saved in between are `superseded`.
 - **Sources:** the current `stock` analyses and `macro:US`, exactly what `/dashboard/analysis/{code}` serves
   publicly (`services/social/sources.py`). Never holdings, costs or private reports.
 - **Coverage (2026-11-02):** every run takes the **latest** revision of every stock analysis and `macro:US` and makes
   sure it is published on every configured channel. Anything not yet posted, including analyses older than the first
-  run, is queued and sent in the same run, one after another, until all are out. There is no baseline skip any more.
+  run, is queued and sent until all are out. There is no baseline skip any more.
+- **Pacing:** analyses saved since the previous run go out at once (20 s between posts). Older unposted analyses
+  (backlog, e.g. 27 at roll-out) go out **one analysis per 10 minutes** on every channel, so the account is not flagged
+  as spam; never-tried backlog first, then retries of failed posts. The catch-up sweep runs every 10 minutes.
   `GET /social/status` returns `coverage` (per latest analysis, the state on each channel, `missing` if not queued yet)
   and `complete` (all published).
 - **Text** (`services/social/post_text.py`): the analysis verbatim. Macro gets the title
@@ -103,7 +106,7 @@ flowchart LR
     end
     subgraph Maya["maya-sawa（FastAPI，K8s）"]
         W["market_ai_analysis_db.save<br/>新 revision commit 後"] -->|"listener"| G["RunTrigger<br/>30 秒合併、不重疊"]
-        S["catch-up sweep<br/>每小時"] --> G
+        S["catch-up sweep<br/>每 10 分鐘（補發一篇＋重試）"] --> G
         G --> R["runner.run_once"]
         R -->|"cursor 之後有更新的 revision"| O[("maya_sawa_social_post<br/>outbox：每 revision × 平台一列")]
         O -->|"claim（原子）"| P["post_text<br/>各平台字數規則"]
@@ -142,7 +145,7 @@ stateDiagram-v2
 5. **先上線「只記基準線」再開始發。** 第一次排程只記 cursor，確認狀態端點與通知都正常後，下一輪才真的發。
 6. **平台限制寫成可測的純函式。** 字數上限、截斷位置、IG 文字卡尺寸都在 `post_text.py` / `card.py`，不寫在排程裡。
 7. **失敗要通知、且只通知一次。** 授權失效、結果不明、IG 未連結都發 Telegram，用 outbox 的 `alerted:*` 鍵去重，情況恢復後重新武裝。
-8. **觸發改成事件驅動（2026-11-02）。** 不再靠 GPT 排程，所以改為分析一存檔就發：DB 層只提供 listener 清單（不 import 社群模組），runner 啟用時才註冊；listener 出錯不影響存檔；`RunTrigger` 先寫測試（合併、失敗後仍可再觸發）。保留每小時 sweep 補重試。
+8. **觸發改成事件驅動（2026-11-02）。** 不再靠 GPT 排程，所以改為分析一存檔就發：DB 層只提供 listener 清單（不 import 社群模組），runner 啟用時才註冊；listener 出錯不影響存檔；`RunTrigger` 先寫測試（合併、失敗後仍可再觸發）。保留每 10 分鐘 sweep 補重試；積壓的舊分析每 10 分鐘只發一篇（擔心 Threads 判定 spam，由使用者選擇）。
 9. **覆蓋率取代基準線（2026-11-02）。** 需求改為「每個標的與總經的最新一篇都要發過」，所以拿掉第一次只記基準線的設計，每輪以全部最新 revision 為準補齊；`coverage()` 先寫測試，再接到 status。
 10. **Token 類型不要假設。** 線上發現存的是 user token；先用真實錯誤回應（#100 nonexisting field）寫失敗測試，再讓 `discover_page` 兩種都吃。
 11. **文件與架構圖同一個 commit。** 見工作區 `AGENTS.md`「新流程／架構要畫圖並記錄方法」。

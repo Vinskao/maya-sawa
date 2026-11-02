@@ -62,10 +62,28 @@ def test_latest_revision_of_every_analysis_is_posted_even_if_it_predates_the_fir
     world.add(analysis('2330', 4, T0 - timedelta(days=30)))
     world.add(analysis('US', 7, T0 - timedelta(days=1), kind='macro'))
     world.run(outbox, T0)
+    world.run(outbox, T0 + timedelta(minutes=10))
     assert sorted(world.posted) == sorted((channel, source) for channel in ('facebook', 'instagram', 'threads')
                                           for source in ('stock:2330:4', 'macro:US:7'))
     world.run(outbox, T0 + timedelta(hours=1))
     assert len(world.posted) == 6  # already posted: never again
+
+
+def test_backlog_goes_out_one_analysis_per_ten_minutes_while_new_saves_post_at_once(outbox):
+    """Owner's choice 2026-11-02: 27 unposted analyses in one burst could get Threads flagged as spam."""
+    world = World()
+    for code in ('1111', '2222', '3333'):
+        world.add(analysis(code, 1, T0 - timedelta(days=3)))
+    world.run(outbox, T0)
+    assert {source for _, source in world.posted} == {'stock:1111:1'}  # oldest backlog item, every channel
+    world.add(analysis('9999', 1, T0 + timedelta(minutes=2)))  # a new save
+    world.run(outbox, T0 + timedelta(minutes=3))
+    assert {source for _, source in world.posted} == {'stock:1111:1', 'stock:9999:1'}  # fresh: no 10-minute wait
+    world.run(outbox, T0 + timedelta(minutes=10))
+    assert 'stock:2222:1' in {source for _, source in world.posted}
+    assert 'stock:3333:1' not in {source for _, source in world.posted}
+    world.run(outbox, T0 + timedelta(minutes=20))
+    assert len(world.posted) == 4 * 3
 
 
 def test_coverage_reports_each_latest_analysis_per_channel(outbox):
@@ -75,6 +93,7 @@ def test_coverage_reports_each_latest_analysis_per_channel(outbox):
     world.add(analysis('2408', 2, T0 - timedelta(days=1)))
     world.behaviour['threads'] = Rejected('temporary')
     world.run(outbox, T0)
+    world.run(outbox, T0 + timedelta(minutes=10))  # backlog: one analysis per 10 minutes
     report = coverage(outbox, world.sources(None), ['facebook', 'threads'])
     assert report['complete'] is False
     assert {row['id']: row['channels'] for row in report['sources']} == {
@@ -83,7 +102,8 @@ def test_coverage_reports_each_latest_analysis_per_channel(outbox):
     world.add(analysis('2330', 5, T0 + timedelta(minutes=1)))  # saved, not yet run
     assert coverage(outbox, world.sources(None), ['facebook'])['sources'][0]['channels'] == {'facebook': 'missing'}
     world.behaviour.clear()
-    world.run(outbox, T0 + timedelta(hours=1))
+    for minutes in (60, 70, 80):
+        world.run(outbox, T0 + timedelta(minutes=minutes))
     assert coverage(outbox, world.sources(None), ['facebook', 'instagram', 'threads'])['complete'] is True
 
 
@@ -144,6 +164,7 @@ def test_auth_failure_pauses_only_that_channel_alerts_once_and_recovers(outbox):
     assert all(row['state'] == 'queued' and row['attempts'] == 0 for row in facebook)
     world.behaviour.clear()
     world.run(outbox, T0 + timedelta(days=6))
+    world.run(outbox, T0 + timedelta(days=6, minutes=10))  # held-back posts are backlog now: one per 10 minutes
     assert [source for channel, source in world.posted if channel == 'facebook'] == ['stock:2330:5', 'stock:2408:2']
     world.behaviour['facebook'] = AuthError('expired again')
     world.add(analysis('2330', 6, T0 + timedelta(days=7)))

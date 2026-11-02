@@ -13,7 +13,9 @@ from .outbox import MAX_ATTEMPTS
 logger = logging.getLogger(__name__)
 CURSOR = 'cursor'
 TRIGGER_DELAY_SECONDS = 30  # saves within this window go out in one run
-CATCHUP_SECONDS = 3600
+CATCHUP_SECONDS = 600  # sweep: retries and the next backlog item
+BACKLOG_AT = 'backlog_at'
+BACKLOG_GAP = timedelta(minutes=10)  # unposted older analyses go out one at a time, this far apart (spam risk)
 
 
 class RunTrigger:
@@ -48,15 +50,31 @@ def run_once(outbox, *, sources, current, publishers, now, notify, pause=lambda 
     published on every configured channel, so anything not yet posted (including old backlog) is queued and sent."""
     outbox.stall(now)
     channels = [channel for channel in ('facebook', 'instagram', 'threads') if channel in publishers]
+    last_run = outbox.get(CURSOR)
+    fresh = set()  # saved since the previous run: posted at once; everything else is backlog, paced
     for source in sorted(sources(None), key=lambda row: row['updatedAt']):
-        outbox.ensure(source['id'], channels, datetime.fromisoformat(source['updatedAt']))
-    outbox.set(CURSOR, now.isoformat())  # last run time, for the status page only
+        updated = datetime.fromisoformat(source['updatedAt'])
+        outbox.ensure(source['id'], channels, updated)
+        if last_run and updated > datetime.fromisoformat(last_run):
+            fresh.add(source['id'])
+    outbox.set(CURSOR, now.isoformat())
 
+    backlog_at = outbox.get(BACKLOG_AT)
+    backlog_open = backlog_at is None or now - datetime.fromisoformat(backlog_at) >= BACKLOG_GAP
+    backlog_item = None
+    # stable sort: fresh saves first, then never-tried backlog, then retries of failed posts; oldest first within each
+    due = sorted(outbox.due(), key=lambda row: (row['id'] not in fresh, row['state'] == 'failed'))
     blocked, published, first = set(), 0, True
-    for row in outbox.due():
+    for row in due:
         channel = row['channel']
         if channel in blocked or channel not in publishers:
             continue
+        if row['id'] not in fresh:
+            if not backlog_open or (backlog_item and backlog_item != row['id']):
+                continue
+            if backlog_item is None:
+                backlog_item = row['id']
+                outbox.set(BACKLOG_AT, now.isoformat())
         kind, code, revision = row['id'].split(':')
         source = current(kind, code)
         if not source or source['revision'] != int(revision):
