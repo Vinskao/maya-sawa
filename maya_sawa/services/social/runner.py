@@ -1,27 +1,45 @@
-"""Scheduled publisher: Wed/Fri/Sun 21:30 Asia/Taipei, every new public analysis revision to every configured channel."""
+"""Publisher: every new public analysis revision goes to every configured channel as soon as it is saved.
+
+A save fires `RunTrigger` (coalesced over a short delay); an hourly catch-up sweep retries failed/queued posts."""
 import asyncio
 import logging
 import os
+import threading
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 from .meta import Ambiguous, AuthError, PublishError
 
 logger = logging.getLogger(__name__)
-TAIPEI = ZoneInfo('Asia/Taipei')
-RUN_DAYS = {2, 4, 6}  # Monday=0: Wednesday, Friday, Sunday
-RUN_AT = (21, 30)
 CURSOR = 'cursor'
+TRIGGER_DELAY_SECONDS = 30  # saves within this window go out in one run
+CATCHUP_SECONDS = 3600
 
 
-def next_run(now):
-    local = now.astimezone(TAIPEI)
-    for offset in range(8):
-        day = (local + timedelta(days=offset)).date()
-        candidate = datetime(day.year, day.month, day.day, *RUN_AT, tzinfo=TAIPEI)
-        if candidate.weekday() in RUN_DAYS and candidate > local:
-            return candidate
-    raise RuntimeError('No run day within a week')
+class RunTrigger:
+    """Run `run` once, `delay` seconds after the first fire; fires while one is pending join it. Runs never overlap."""
+
+    def __init__(self, run, delay=TRIGGER_DELAY_SECONDS):
+        self.run, self.delay = run, delay
+        self._lock, self._running = threading.Lock(), threading.Lock()
+        self._pending = False
+
+    def fire(self):
+        with self._lock:
+            if self._pending:
+                return
+            self._pending = True
+        timer = threading.Timer(self.delay, self._go)
+        timer.daemon = True
+        timer.start()
+
+    def _go(self):
+        with self._running:
+            with self._lock:
+                self._pending = False  # a save during this run schedules the next one
+            try:
+                self.run()
+            except Exception:
+                logger.exception('Triggered social publish run failed')
 
 
 def run_once(outbox, *, sources, current, publishers, now, notify, pause=lambda seconds: None):
@@ -195,22 +213,39 @@ def run_now():
                     pause=lambda seconds: __import__('time').sleep(seconds))
 
 
+def _logged_run():
+    logger.info('Social publish run: %s', run_now())
+
+
+trigger = RunTrigger(_logged_run)
+
+
+def on_analysis_saved(product_type, code, revision):
+    """Listener for market_ai_analysis_db: post the new revision right away."""
+    if enabled():
+        trigger.fire()
+
+
 async def scheduler():
+    """Catch-up sweep: retries failed/queued posts and anything a lost trigger missed."""
     while True:
-        wait = (next_run(datetime.now(timezone.utc)) - datetime.now(TAIPEI)).total_seconds()
-        await asyncio.sleep(max(wait, 1))
         try:
-            result = await asyncio.to_thread(run_now)
-            logger.info('Social publish run: %s', result)
+            await asyncio.to_thread(trigger.fire)
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception('Social publish run failed')
+            logger.exception('Social publish sweep failed')
+        await asyncio.sleep(CATCHUP_SECONDS)
 
 
 def start():
     global _task
-    if enabled() and (_task is None or _task.done()):
+    if not enabled():
+        return
+    from ...databases.market_ai_analysis_db import market_ai_analysis_db
+    if on_analysis_saved not in market_ai_analysis_db.listeners:
+        market_ai_analysis_db.listeners.append(on_analysis_saved)
+    if _task is None or _task.done():
         _task = asyncio.create_task(scheduler())
 
 

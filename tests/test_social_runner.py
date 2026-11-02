@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from maya_sawa.services.social.meta import Ambiguous, AuthError, Rejected
 from maya_sawa.services.social.outbox import SocialOutbox
-from maya_sawa.services.social.runner import next_run, run_once
+from maya_sawa.services.social.runner import CATCHUP_SECONDS, RunTrigger, run_once
 
 T0 = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -150,13 +150,50 @@ def test_post_stuck_in_publishing_moves_to_review(outbox):
     assert not outbox.claim('stock:2330:5', 'threads', T0 + timedelta(hours=1))
 
 
-def test_next_run_is_wednesday_friday_sunday_at_2130_taipei():
-    taipei = ZoneInfo('Asia/Taipei')
-    monday = datetime(2026, 11, 2, 10, 0, tzinfo=taipei)
-    assert next_run(monday) == datetime(2026, 11, 4, 21, 30, tzinfo=taipei)
-    assert next_run(datetime(2026, 11, 4, 21, 30, tzinfo=taipei)) == datetime(2026, 11, 6, 21, 30, tzinfo=taipei)
-    assert next_run(datetime(2026, 11, 6, 22, 0, tzinfo=taipei)) == datetime(2026, 11, 8, 21, 30, tzinfo=taipei)
-    assert next_run(datetime(2026, 11, 8, 23, 0, tzinfo=taipei)) == datetime(2026, 11, 11, 21, 30, tzinfo=taipei)
+def test_a_new_analysis_revision_triggers_one_coalesced_run():
+    """The owner wants a post as soon as an analysis is updated, not on a weekly slot."""
+    import threading
+    ran, done = [], threading.Event()
+    trigger = RunTrigger(lambda: (ran.append(1), done.set()), delay=0.05)
+    for _ in range(5):  # a batch of saves inside the delay window
+        trigger.fire()
+    assert done.wait(2)
+    done.clear()
+    trigger.fire()  # a later save schedules a new run
+    assert done.wait(2)
+    assert len(ran) == 2
+
+
+def test_a_failing_run_does_not_stop_later_triggers():
+    import threading
+    done, calls = threading.Event(), []
+    def run():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError('boom')
+        done.set()
+    trigger = RunTrigger(run, delay=0.01)
+    trigger.fire()
+    while len(calls) < 1:
+        pass
+    trigger.fire()
+    assert done.wait(2)
+
+
+def test_catch_up_sweep_retries_failed_posts_at_least_hourly():
+    assert 0 < CATCHUP_SECONDS <= 3600
+
+
+def test_saving_an_analysis_notifies_listeners_only_for_a_new_revision(tmp_path):
+    from maya_sawa.databases.market_ai_analysis_db import MarketAiAnalysisDatabase
+    db = MarketAiAnalysisDatabase(create_engine(f"sqlite:///{tmp_path / 'a.db'}"))
+    seen = []
+    db.listeners.append(lambda product_type, code, revision: seen.append((product_type, code, revision)))
+    first = db.save('stock', '2330', 'm', '中立', 0, 'agent')
+    assert seen == [('stock', '2330', 1)]
+    db.listeners.insert(0, lambda *args: (_ for _ in ()).throw(RuntimeError('listener bug')))
+    db.save('stock', '2330', 'm', '偏多', first['revision'], 'agent')  # a broken listener never fails the save
+    assert seen[-1] == ('stock', '2330', 2)
 
 
 def test_threads_token_is_seeded_from_the_secret_then_refreshed_weekly_into_the_database(outbox, monkeypatch):

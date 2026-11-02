@@ -7,7 +7,10 @@ Metricool connector could only schedule posts and never return a verified post U
 
 ## What gets posted, when
 
-- **Schedule:** Wednesday, Friday and Sunday at 21:30 Asia/Taipei (`services/social/runner.py`).
+- **When:** as soon as an analysis is saved (2026-11-02; was Wed/Fri/Sun 21:30). `market_ai_analysis_db.save` calls its
+  listeners after commit; `runner.on_analysis_saved` fires `RunTrigger`, which waits 30 s so a batch of saves goes out
+  in one run, and never runs two passes at once. An hourly catch-up sweep retries `queued`/`failed` posts. Only the
+  current revision of each analysis is posted; older revisions saved in between are `superseded`.
 - **Sources:** the current `stock` analyses and `macro:US`, exactly what `/dashboard/analysis/{code}` serves
   publicly (`services/social/sources.py`). Never holdings, costs or private reports.
 - **First run:** records a baseline and posts nothing; only revisions updated after it are posted.
@@ -81,6 +84,9 @@ prompts or screenshots.
 
 `poetry run python -m pytest tests/test_social_post_text.py tests/test_social_card.py tests/test_social_meta.py tests/test_social_runner.py tests/test_social_api.py -q`
 
+Trigger tests: `test_a_new_analysis_revision_triggers_one_coalesced_run`, `test_a_failing_run_does_not_stop_later_triggers`,
+`test_saving_an_analysis_notifies_listeners_only_for_a_new_revision`.
+
 The Meta responses in `tests/fixtures/meta_responses.json` follow Meta's documentation. Replace them with trimmed live
 captures (no tokens) after the first real run.
 
@@ -92,7 +98,9 @@ flowchart LR
         A[("market_ai_analysis<br/>個股分析 + macro:US")]
     end
     subgraph Maya["maya-sawa（FastAPI，K8s）"]
-        S["scheduler<br/>週三/五/日 21:30 台北"] --> R["runner.run_once"]
+        W["market_ai_analysis_db.save<br/>新 revision commit 後"] -->|"listener"| G["RunTrigger<br/>30 秒合併、不重疊"]
+        S["catch-up sweep<br/>每小時"] --> G
+        G --> R["runner.run_once"]
         R -->|"cursor 之後有更新的 revision"| O[("maya_sawa_social_post<br/>outbox：每 revision × 平台一列")]
         O -->|"claim（原子）"| P["post_text<br/>各平台字數規則"]
         P --> M["meta.py<br/>Graph / Threads client"]
@@ -130,4 +138,5 @@ stateDiagram-v2
 5. **先上線「只記基準線」再開始發。** 第一次排程只記 cursor，確認狀態端點與通知都正常後，下一輪才真的發。
 6. **平台限制寫成可測的純函式。** 字數上限、截斷位置、IG 文字卡尺寸都在 `post_text.py` / `card.py`，不寫在排程裡。
 7. **失敗要通知、且只通知一次。** 授權失效、結果不明、IG 未連結都發 Telegram，用 outbox 的 `alerted:*` 鍵去重，情況恢復後重新武裝。
-8. **文件與架構圖同一個 commit。** 見工作區 `AGENTS.md`「新流程／架構要畫圖並記錄方法」。
+8. **觸發改成事件驅動（2026-11-02）。** 不再靠 GPT 排程，所以改為分析一存檔就發：DB 層只提供 listener 清單（不 import 社群模組），runner 啟用時才註冊；listener 出錯不影響存檔；`RunTrigger` 先寫測試（合併、失敗後仍可再觸發）。保留每小時 sweep 補重試。
+9. **文件與架構圖同一個 commit。** 見工作區 `AGENTS.md`「新流程／架構要畫圖並記錄方法」。

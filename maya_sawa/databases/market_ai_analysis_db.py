@@ -1,5 +1,6 @@
 """Current AI commentary and immutable revision history, stored in Postgres."""
 from datetime import datetime, timezone
+import logging
 import re
 
 from sqlalchemy import Column, DateTime, Integer, Text, update
@@ -46,6 +47,7 @@ def public_analysis(row):
 class MarketAiAnalysisDatabase:
     def __init__(self, engine):
         self.sessions = sessionmaker(bind=engine) if engine else None
+        self.listeners = []  # called as listener(product_type, code, revision) after a new revision is committed
         if engine:
             Base.metadata.create_all(engine)
 
@@ -102,7 +104,14 @@ class MarketAiAnalysisDatabase:
                 raise AnalysisConflict("Analysis changed; reload the current revision before updating")
             session.add(MarketAiAnalysisRevision(product_type=product_type, code=code, **values))
             session.flush()
-            return public_analysis(session.get(MarketAiAnalysis, (product_type, code)))
+            result = public_analysis(session.get(MarketAiAnalysis, (product_type, code)))
+        # After commit: tell listeners (e.g. social publishing) about the new revision. A listener bug never fails the save.
+        for listener in list(self.listeners):
+            try:
+                listener(product_type, code, values['revision'])
+            except Exception:
+                logging.getLogger(__name__).exception('Analysis saved listener failed')
+        return result
 
 
 market_ai_analysis_db = MarketAiAnalysisDatabase(market_dashboard_db.engine)
