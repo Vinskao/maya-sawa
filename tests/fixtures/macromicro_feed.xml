@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+<rss  xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+	<channel>
+		<title><![CDATA[ MacroMicro 財經M平方 ]]></title>
+		<link>https://www.macromicro.me/</link>
+		<description><![CDATA[ 致力於整合全球總經數據，試圖發覺景氣循環的蛛絲馬跡，相信所有金融商品的投資決策都應回歸基本面。期待協助大家找到屬於自己的投資地圖! ]]></description>
+		<language>zh</language>
+		<copyright>Copyright 2026 MacroMicro.me</copyright>
+		<lastBuildDate>Mon, 02 Nov 2026 22:55:19 +0800</lastBuildDate>
+		<webMaster>web@macromicro.me</webMaster>
+		<atom:link href="https://www.macromicro.me/feed" rel="self" type="application/rss+xml"/>
+		<ttl>60</ttl>
+
+    <item>
+      <title><![CDATA[【MM一週盤前】巨頭財報引發巨震，本週美國期中選舉揭曉！]]></title>
+      <description><![CDATA[ 
+【 MM 一週盤前】美歐日三大央行維持利率不變、三大 CSP 財報表現分岐，MM 研究員帶你回顧過往一週發生的大事，3 分鐘速讀市場！
+
+
+
+上週科技巨頭財報再度引發市場對現金流的疑慮、疊加 Intel 財測不如預期，科技與通訊板塊領跌，美國四大指數回落，台灣加權指數亦走低 -1.8% 。 WTI 油價仍落在百元上方，美國 PCE 物價顯示通膨壓力仍未完全解除，金價進一步跌破每盎司 4,000 美元關口。
+所幸上週三大央行均宣佈暫停升息、維持利率不變，聯準會表示有空間觀望，美國公債殖利率止穩於 5% 之下，資金開始回流債市；匯市方面，美元指數大致持平，巴西里爾則因國內選舉引發財政擔憂，重挫 -8.47% 。
+
+資料統計期間：2026/10/23 ~ 2026/10/30
+備註：美金 / 台幣、美金 / 日圓屬於美式報價，當數字下跌代表台幣、日圓相對美元升值
+
+
+在本月的 創辦人撰文 中，Rachel 想跟訂閱用戶分享： 
+
+
+市場的壓力測試：10 月的波動主要源自三則消息接連引爆。首先是通膨再燃，美國 9 月核心 CPI 月增率已連續第二個月高於預期；其次是 AI 融資的信用風險，新雲端業者 CoreWeave 股價重挫，科技巨頭公佈的現金流也持續惡化；最後是終端變現的疑慮，Anthropic 營收季增率大幅放緩，IPO 估值隨之下修，上述因素共同促使市場重新定價。
+
+
+我們的觀察：這波通膨僵固性通膨仍在低位，預估通膨壓力最大的時點就在今年 Q4，因此引發的回檔可視為機會；信用方面，現金流壓力集中在中游 CSP 與 Neocloud 等高槓桿企業，屬於局部風險的重新定價，而非 AI 超級循環的系統性退潮；基本面上，AI 需求並未鬆動，但終端競爭已趨白熱化，價值將往上游移動，中下游則以分散投資為原則。
+
+
+點擊下方進入本月投資月報，查看 M平方對行情、經濟基本面的最新判斷，以及後續資產的配置邏輯。
+進階閱讀：【創辦人撰文】拆解市場壓力測試，AI 超級循環並未退潮！
+
+在最新 11 月投資月報  中， M平方研究團隊評析內容涵蓋：
+
+【美國】聯準會按兵不動，美國經濟仍具
+
+本週關注重點
+Apple 財報（11/2）
+美國 &amp;amp; 台灣製造業 PMI（11/2）
+ ]]></description>
+      <link>https://www.macromicro.me/blog/mm-weekly-premarket-update-three-major-central-banks-keep-interest-rates-unchanged-corporate-earnings-reports-show-divergent-trends-focus-this-week-on-nonfarm-payrolls</link>
+      <guid isPermaLink="false">post-1592</guid>
+      <category><![CDATA[一週盤前]]></category>      <dc:creator><![CDATA[MacroMicro]]></dc:creator>
+      <media:content url="https://cdn.macromicro.me/blog/825/5a529e9a-80502.jpg" medium="image"/><media:thumbnail url="https://cdn.macromicro.me/blog/825/5a529e9a-80502.jpg" width="1280" height="720" />      <pubDate>Sun, 01 Nov 2026 20:09:49 +0800</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[【行情快報】聯準會暫停升息，宣布明年起減少利率決策場次！]]></title>
+      <description><![CDATA[ 
+我們想讓你知道的是：
+2026/10 FOMC 會議，聯準會維持政策利率不變在 3.75 ~ 4.00% 區間，Warsh 於記者會表示，明年起將削減利率投票場次，M平方重點解讀本次會議！
+
+本文重點: 
+
+本次會議以 10 : 2 通過維持利率不變在 3.75 ~ 4.00% 區間，聲明稿新增需要累積更多資訊決定適當地貨幣政策立場，未進一步鷹派。
+資金流動性部分，聯準會維持充足準備金，財政部 TGA 水位如我們預期 9 月中旬收到企業稅收後回升到 1.02 兆水準，配合財政部 Q4 底現金餘額目標為 8,500 億（前 9,500 億），年底 TGA 有將近 1,000 ~ 2,000 億的資金流出，給予市場資金流動性挹注機會。
+Warsh 表示經濟強勁、就業樂觀，降低通膨仍是主要目標，9 月升息後金融環境已有所收緊，但仍不願稱之為緊縮，並強調沒有軟性或隱性通膨目標。
+宣布重要資訊：生產力研究小組將於 11/16 召開聽證會，明後年聯準會 FOMC 八次會議中，2027 年將有 1 次、 2028 年將有 2 次不針對利率進行投票，而是專門討論經濟及貨幣政策，預計將於秋季開始實施。
+
+
+
+一、 聯準會 10 月暫停升息，等待累積更多資訊
+本次會議，聯準會票委以 10 : 2 通過聲明稿內容，維持政策利率在 3.75 ~ 4.00% 區間，聲明稿重申雖然地緣政治局勢仍導致高度不確定性，但將經濟從「穩健」上調至「強勁」，我們摘要聲明稿重點如下：
+本次會議重點：利率按兵不動、維持充足儲備不變
+聯準會以 10 : 2 通過本次聲明稿發布，決定維持政策利率在 3.75 ~ 4.00 ]]></description>
+      <link>https://www.macromicro.me/blog/market-update-the-federal-reserve-has-paused-interest-rate-hikes-and-announced-a-reduction-in-the-number-of-interest-rate-decisionmaking-sessions-starting-next-year</link>
+      <guid isPermaLink="false">post-1589</guid>
+      <category><![CDATA[聯準會]]></category><category><![CDATA[美國]]></category><category><![CDATA[行情快報]]></category>      <dc:creator><![CDATA[MacroMicro]]></dc:creator>
+      <media:content url="https://cdn.macromicro.me/blog/1589/68050fb0-791145.jpg" medium="image"/><media:thumbnail url="https://cdn.macromicro.me/blog/1589/68050fb0-791145.jpg" width="1280" height="720" />      <pubDate>Thu, 29 Oct 2026 07:59:55 +0800</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[【行情快報】好財報換不到掌聲？寫在台積法說後的關鍵三問！]]></title>
+      <description><![CDATA[ 
+我們想讓你知道的是： 
+近兩週費城半導體指數波動劇烈，亞洲股市也同步受到牽連，台股恐懼貪婪指數甚至回落至恐懼區間。同時，ASML 與台積電於上週先後公佈了第三季的財報，均擊敗前季公司給出的財測值，卻無法給市場一劑強心針。本篇文章將帶你解析，在台積電的財報後，哪些細節影響了市場的變化？是否有額外的雜音正在隱隱作祟、亦或其實當前正是佈局時機？我們透過三大提問，分析台股後續走勢與供應鏈影響。
+
+
+本文重點: 
+
+資本支出樂觀擴張，為何本次市場不買單？
+產能不夠用、擴廠稀釋毛利率，外包策略讓利至其餘供應鏈？
+台股是否只剩台積電支撐？台股估值是否太貴？
+
+
+
+現在加入 Max 年繳，立即閱讀本篇完整報告！更加碼解鎖兩大「期間限定」功能與內容：AI 供應鏈專區、最新影音專題《 AI 兆元趨勢浪潮》掌握佈局關鍵。
+一鍵訂閱！鎖定現價優惠，享有不斷升級的 AI 服務。
+
+
+Q1：資本支出樂觀擴張，台積電能否消化未來折舊壓力？
+Q3 法說會上，雖台積電維持今年資本支出 在 600～640 億美元，但重申 2026～2028 年的資本支出規模將顯著高於過去三年。根據法人預估，2027 、 2028 年資本支出甚至有望進一步攀升至約 830 億及 900 億美元的歷史高檔。
+然而，隨著 AI 投資規模持續擴張，市場關注焦點也逐漸從「資本支出能否帶動成長」，轉向「龐大的資本支出能否創造足夠的投資回報」 ]]></description>
+      <link>https://www.macromicro.me/blog/market-update-good-earnings-report-fails-to-bring-applause-three-key-questions-after-tsmc-s-earnings-call</link>
+      <guid isPermaLink="false">post-1585</guid>
+      <category><![CDATA[產業]]></category><category><![CDATA[台積電]]></category><category><![CDATA[行情快報]]></category>      <dc:creator><![CDATA[MacroMicro]]></dc:creator>
+      <media:content url="https://cdn.macromicro.me/blog/1585/caca6f06-231783.jpg" medium="image"/><media:thumbnail url="https://cdn.macromicro.me/blog/1585/caca6f06-231783.jpg" width="1280" height="720" />      <pubDate>Thu, 22 Oct 2026 14:17:54 +0800</pubDate>
+    </item>
+  </channel>
+</rss>

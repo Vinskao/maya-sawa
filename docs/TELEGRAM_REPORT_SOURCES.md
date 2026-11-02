@@ -126,3 +126,44 @@ TechNews 的貼文是標題彙整，每個標題接一條 `pse.is` 短網址。�
 
 **範圍限制。** 為避免第一次收集把多年歷史丟進萃取佇列，`technews_tw` 只讀最近 30 天、`bloomberg` 最近 60 天（`CHANNEL_SETTINGS`）。
 Bloomberg 的連結不跟（付費牆，且貼文本身就是標題與摘要）。
+
+## 2026-11-02：MacroMicro 財經M平方（RSS，不是 /quickie 頁面）
+
+**為什麼是 RSS。** `https://www.macromicro.me/quickie` 與 `/blog/...` 頁面被 Cloudflare 機器人挑戰擋下（HTTP 403、
+`cf-mitigated: challenge`，2026-11-02 實測）。收集器不嘗試繞過驗證。`https://www.macromicro.me/feed` 是開放的 RSS
+（`robots.txt` 只禁 `/user/*`、`/shared_chart*`、`/api/keepalive`），目前 10 則（行情快報、MM 一週盤前、創辦人撰文），
+每則有 600–2200 字摘要。**限制：** 只有摘要沒有全文；我無法確認它涵蓋了 `/quickie` 頁面上的所有內容。
+
+```mermaid
+flowchart TD
+    Daily[Telegram 收集器每日一輪] --> Pass1[Telegram 四個頻道]
+    Daily --> Feed[GET macromicro.me/feed<br/>誠實的 User-Agent，不跟轉址]
+    Feed -->|403 挑戰頁／連線失敗| Err[回報 error 或 unreadable，不影響其他來源]
+    Feed -->|RSS| Parse[parse_feed：標題、連結、guid、+0800 發布時間、摘要]
+    Parse --> Skip{摘要 ≥ 100 字？}
+    Skip -->|否| Skipped[skipped]
+    Skip -->|是| Save[save_extracted：公開報告<br/>出版者 MacroMicro 財經M平方，附原文連結]
+    Save -->|14 天內| Pending[claims_pending]
+    Save -->|更早| Backlog[backlog，每天放行]
+    Pending --> Routine[每日 20:30 主張萃取排程]
+    Backlog --> Routine
+    Routine --> Claims[主張與「查看原文」連結顯示在網站]
+```
+
+- 以 feed 的 `guid` 去重（`sha256("macromicro:"+guid)`），每天讀一次，重跑不會重複入庫。
+- 併入 `TelegramPostCollector.collect_now`（同一個每日流程），失敗只在回傳寫 `error`／`unreadable`。
+- 網站只顯示主張與原文連結，不顯示摘要全文（同 TechNews／Bloomberg）。MacroMicro 的付費內容未被讀取。
+
+### 開發方法
+
+1. 先實測來源：`/quickie` 403（挑戰頁）→ 不繞過；找公開入口，`/feed` 回 200 且 `robots.txt` 不禁止。
+2. 存一份真實回應當範例檔 `tests/fixtures/macromicro_feed.xml`（3 則、內文截短、保留真實的 `&amp;amp;` 雙重跳脫），
+   邊界案例用小段 XML 造：挑戰頁、空字串、缺日期／缺連結／壞日期、短到沒內容的項目、舊項目進 backlog。
+3. 先寫失敗測試（模組不存在），再實作 `services/macromicro_feed.py`；抓取（`fetch_feed`）與解析、入庫分開，測試不連網。
+4. 併入既有每日流程而不是另開排程，主張萃取排程不需要改。
+5. 用真實線上 feed 手動解析一次驗證（10 則、無殘留 `&amp;`）；部署後看 `GET /market/reports/collector`
+   是否出現 `MacroMicro 財經M平方`，隔天 20:30 後確認 `claims_pending` 轉為 `ready`。
+6. 下次接新的公開來源：先確認 robots 與是否有挑戰頁；有挑戰就找 RSS／官方 API，沒有就不接，並把限制寫進文件。
+
+測試：`poetry run python -m pytest tests/test_macromicro_feed.py tests/test_telegram_posts.py -q`（27 passed）。
+已知缺口：部署後的真實入庫與隔日萃取尚未驗證；前端報告清單是否正確顯示新出版者尚未檢查。

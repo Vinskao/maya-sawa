@@ -204,6 +204,9 @@ class TelegramPostCollector:
             return {}
         await asyncio.to_thread(market_reports_db.make_collector_posts_public)  # repairs rows from the first (owner-only) version
         counts = await asyncio.to_thread(collect, market_reports_db, CHANNELS, fetch_page, enrich=fetch_article)
+        # MacroMicro is not a Telegram channel but joins the same daily pass; its failure is reported, never fatal.
+        from . import macromicro_feed
+        counts["macromicro"] = await asyncio.to_thread(macromicro_feed.collect, market_reports_db, macromicro_feed.fetch_feed)
         # The report list shows each channel's latest posts, so those are extracted first; the rest drain daily.
         counts["released"] = (await asyncio.to_thread(market_reports_db.promote_latest_per_channel, COLLECTOR_LISTED_PER_CHANNEL)
                               + await asyncio.to_thread(market_reports_db.promote_backlog, BACKLOG_PER_DAY))
