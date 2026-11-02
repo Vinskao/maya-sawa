@@ -52,6 +52,27 @@ def test_main_never_fails_the_routine(monkeypatch, tmp_path, capsys):
     assert script.main(["萃取主張"]) == 0 and "not reported" in capsys.readouterr().out
 
 
+def test_the_default_url_is_the_host_the_cloud_proxy_reaches_and_adds_the_agent_key_for():
+    """2026-11-02: both daily routines printed 'usage not reported: URLError'. Their cloud environment cannot reach
+    tymultiverse.cc (the proxy answers 403) and only adds X-Market-Agent-Key for peoplesystem.tatdvsonorth.com, the host
+    every other routine call already uses."""
+    assert script.URL.startswith("https://peoplesystem.tatdvsonorth.com/maya-sawa/market/")
+    assert script.URL.endswith("/routine-usage")
+
+
+def test_a_failed_report_says_why_so_the_next_failure_can_be_diagnosed(monkeypatch, tmp_path, capsys):
+    import urllib.error
+    monkeypatch.setattr(script, "ROOTS", [str(tmp_path)])
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "s.jsonl").write_text(FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    refused = urllib.error.HTTPError(script.URL, 403, "Forbidden", {}, None)
+    monkeypatch.setattr(script, "post", lambda body: (_ for _ in ()).throw(refused))
+    assert script.main(["x"]) == 0 and "HTTPError 403" in capsys.readouterr().out
+    unreachable = urllib.error.URLError(OSError("Tunnel connection failed: 403 Forbidden"))
+    monkeypatch.setattr(script, "post", lambda body: (_ for _ in ()).throw(unreachable))
+    assert script.main(["x"]) == 0 and "Tunnel connection failed" in capsys.readouterr().out
+
+
 @pytest.fixture
 def web(monkeypatch):
     from maya_sawa.api import market

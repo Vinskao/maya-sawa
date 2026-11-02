@@ -56,6 +56,11 @@
 4. 端點如實回報下游有沒有收下（`{"recorded": n, "failed": {...}}`），腳本據此印出「usage reported」或「usage not recorded」。
 
 要點：
+- **預設網址是 `https://peoplesystem.tatdvsonorth.com/maya-sawa/market/routine-usage`（2026-11-02 修正）。** 雲端環境連不到
+  `tymultiverse.cc`（代理回 403），也只對 peoplesystem 這個主機加寫入 key；先前預設指向 `tymultiverse.cc`，所以兩個每日排程
+  都印 `usage not reported: URLError`、費用線沒有資料。失敗訊息現在會帶原因（`HTTPError 403`、`URLError: <原因>`），不含任何金鑰。
+  在別的環境（例如本機）執行時用 `ROUTINE_USAGE_URL` 覆寫。測試：`tests/test_routine_usage.py`（先紅後綠）。
+  **已知缺口：** 在雲端環境實際回報成功要等下一次排程（今晚 20:30 的萃取排程）才能確認，目前只驗證了網址可達（未帶 key 回 401）。
 - **腳本必須在排程的倉庫目錄裡執行**。排程要在 `sources` 附上 `Vinskao/maya-sawa`。從網路下載再 `| python3` 會被雲端的安全分類器擋下（「從外部下載並執行程式碼」），
   所以 `GET /market/routine-usage.py` 雖然存在，排程不該用它。
 - 腳本放在套件目錄 `maya_sawa/public_scripts/`，不能放 `scripts/`：Docker 映像用 `.dockerignore` 排除了 `scripts/`。

@@ -12,7 +12,9 @@ import os
 import sys
 import urllib.request
 
-URL = os.environ.get("ROUTINE_USAGE_URL", "https://tymultiverse.cc/maya-sawa/market/routine-usage")
+# The routines' cloud environment reaches only peoplesystem.tatdvsonorth.com (its proxy adds X-Market-Agent-Key there);
+# tymultiverse.cc answers 403 from that environment. Override with ROUTINE_USAGE_URL when running elsewhere.
+URL = os.environ.get("ROUTINE_USAGE_URL", "https://peoplesystem.tatdvsonorth.com/maya-sawa/market/routine-usage")
 ROOTS = [os.path.expanduser("~/.claude/projects")]
 FIELDS = (("input_tokens", "input"), ("output_tokens", "output"),
           ("cache_creation_input_tokens", "cacheCreation"), ("cache_read_input_tokens", "cacheRead"))
@@ -59,6 +61,14 @@ def post(body: dict) -> dict:
         return json.loads(response.read().decode() or "{}")
 
 
+def describe(error: Exception) -> str:
+    """Name the failure and its cause (HTTP status, or why the connection failed) without echoing any secret."""
+    status = getattr(error, "code", None)
+    reason = getattr(error, "reason", None)
+    detail = f" {status}" if status else (f": {reason}" if reason else "")
+    return f"{type(error).__name__}{detail}"[:200]
+
+
 def main(argv) -> int:
     label = argv[0] if argv else "routine"
     path = latest_transcript(ROOTS)
@@ -77,7 +87,7 @@ def main(argv) -> int:
         else:
             print(f"usage not recorded: the usage service answered {reply.get('failed')}")
     except Exception as error:  # a routine must not fail because the dashboard could not be told
-        print(f"usage not reported: {type(error).__name__}")
+        print(f"usage not reported: {describe(error)}")
     return 0
 
 
