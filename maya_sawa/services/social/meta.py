@@ -5,6 +5,7 @@ Error classes decide what the outbox may do next:
 - Rejected: failed before the final publish call. Nothing posted; safe to retry later.
 - Ambiguous: the final publish call timed out or returned a server error. The post may be live; never resend automatically.
 """
+import json
 import time
 
 import httpx
@@ -71,27 +72,55 @@ def _wait_ready(client, base, container, token, field, sleep, tries=10):
     raise Rejected('Container not ready')
 
 
+def _urls(images):
+    """One url, a list of urls or nothing, as a list."""
+    if not images:
+        return []
+    return [images] if isinstance(images, str) else list(images)
+
+
 class Threads:
+    MAX_ITEMS = 20
+
     def __init__(self, user_id, token, client=None, sleep=time.sleep):
         self.user_id, self.token, self.client, self.sleep = user_id, token, client or httpx.Client(), sleep
 
-    def publish(self, text, image_url=None):
-        fields = {'media_type': 'IMAGE', 'image_url': image_url} if image_url else {'media_type': 'TEXT'}
-        container = _call(self.client, 'POST', f'{THREADS}/{self.user_id}/threads', self.token, text=text, **fields)['id']
+    def _container(self, **fields):
+        container = _call(self.client, 'POST', f'{THREADS}/{self.user_id}/threads', self.token, **fields)['id']
         _wait_ready(self.client, THREADS, container, self.token, 'status', self.sleep)
+        return container
+
+    def publish(self, text, images=None):
+        images = _urls(images)[:self.MAX_ITEMS]
+        if len(images) > 1:  # carousel: item containers first, then one carousel container holding the text
+            children = [self._container(media_type='IMAGE', image_url=url, is_carousel_item='true') for url in images]
+            container = self._container(media_type='CAROUSEL', children=','.join(children), text=text)
+        elif images:
+            container = self._container(media_type='IMAGE', image_url=images[0], text=text)
+        else:
+            container = self._container(media_type='TEXT', text=text)
         media = _call(self.client, 'POST', f'{THREADS}/{self.user_id}/threads_publish', self.token, final=True,
                       creation_id=container)['id']
         return {'id': media, 'url': _permalink(self.client, THREADS, media, self.token, 'permalink')}
 
 
 class FacebookPage:
+    MAX_PHOTOS = 10
+
     def __init__(self, page_id, token, client=None):
         self.page_id, self.token, self.client = page_id, token, client or httpx.Client()
 
-    def publish(self, text, image_url=None):
-        if image_url:  # photo post: the card with the analysis text as its caption
+    def publish(self, text, images=None):
+        images = _urls(images)[:self.MAX_PHOTOS]
+        if len(images) > 1:  # unpublished photos first (nothing is live), then one feed post attaching them all
+            photos = [_call(self.client, 'POST', f'{GRAPH}/{self.page_id}/photos', self.token, url=url,
+                            published='false')['id'] for url in images]
+            attached = {f'attached_media[{index}]': json.dumps({'media_fbid': photo}) for index, photo in enumerate(photos)}
+            post = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/feed', self.token, final=True, message=text,
+                         **attached)['id']
+        elif images:  # photo post: the card with the analysis text as its caption
             body = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/photos', self.token, final=True,
-                         url=image_url, message=text)
+                         url=images[0], message=text)
             post = body.get('post_id') or body['id']
         else:
             post = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/feed', self.token, final=True, message=text)['id']
@@ -99,13 +128,23 @@ class FacebookPage:
 
 
 class Instagram:
+    MAX_ITEMS = 10
+
     def __init__(self, user_id, token, client=None, sleep=time.sleep):
         self.user_id, self.token, self.client, self.sleep = user_id, token, client or httpx.Client(), sleep
 
-    def publish(self, caption, image_url):
-        container = _call(self.client, 'POST', f'{GRAPH}/{self.user_id}/media', self.token,
-                          image_url=image_url, caption=caption)['id']
+    def _container(self, **fields):
+        container = _call(self.client, 'POST', f'{GRAPH}/{self.user_id}/media', self.token, **fields)['id']
         _wait_ready(self.client, GRAPH, container, self.token, 'status_code', self.sleep)
+        return container
+
+    def publish(self, caption, images):
+        images = _urls(images)[:self.MAX_ITEMS]
+        if len(images) > 1:
+            children = [self._container(image_url=url, is_carousel_item='true') for url in images]
+            container = self._container(media_type='CAROUSEL', children=','.join(children), caption=caption)
+        else:
+            container = self._container(image_url=images[0], caption=caption)
         media = _call(self.client, 'POST', f'{GRAPH}/{self.user_id}/media_publish', self.token, final=True,
                       creation_id=container)['id']
         return {'id': media, 'url': _permalink(self.client, GRAPH, media, self.token, 'permalink')}

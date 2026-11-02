@@ -31,8 +31,17 @@ Metricool connector could only schedule posts and never return a verified post U
   missing fields stay empty and the card still renders. Facebook gets a photo post (`/photos`, text as caption),
   Instagram a single image, Threads an `IMAGE` post. The card is served publicly at
   `/maya-sawa/market/publishing/cards/{stock|macro}/{code}/{revision}.png` (current revision only, else 404).
-  Not done yet: extra images (the research report's Mermaid diagrams) in a carousel, which needs a server-side
-  Mermaid renderer.
+- **Research diagrams as extra images (2026-11-02):** a stock's current `research` record holds Mermaid flowcharts (supply
+  chain, technology). `diagram.mermaid_sources` walks the whole JSON and takes every string that is a flowchart, so no
+  field names are assumed (25 stocks x 2 = 50 diagrams today; the ETF record has none). `parse_flowchart` reads the subset the
+  records use (nodes in `[ ] ( ) { }`, `-->` `-.->` `==>` with `|labels|`, subgraphs with or without an id, nodes defined
+  inline in edges), `to_dot` converts it, Graphviz `dot` lays it out (installed in the Dockerfile), and Pillow puts it on
+  a 1080x1350 card with a heading. The pictures are public at
+  `/maya-sawa/market/publishing/diagrams/{code}/{research_revision}/{n}.png` (current revision only, else 404).
+  `runner.image_urls` returns card + diagrams: Facebook posts several photos in one post (unpublished uploads attached to
+  one `/feed` post, max 10), Instagram and Threads post a carousel (IG max 10, Threads max 20), LinkedIn several images.
+  Macro has no research record, so it gets the card alone. If the research lookup fails the post still goes out with the card.
+  Instagram crops all carousel images to the first one's ratio, which is why every image is 1080x1350.
 - **Order and pacing:** oldest revision first, Facebook → Instagram → Threads, 20 seconds between posts.
 
 ## Never posting twice
@@ -106,6 +115,11 @@ Setup (owner): developers.linkedin.com → Create app (needs a LinkedIn Company 
 later, an app logo, and acceptance of LinkedIn's terms) → Products: add *Share on LinkedIn* and *Sign In with LinkedIn
 using OpenID Connect* → Auth tab: generate a token with scopes `openid profile w_member_social` → save as the Jenkins
 Secret text above and rebuild. A 401 puts the post back in `queued` and sends one Telegram alert, like the other channels.
+
+## Tests (diagrams)
+
+`tests/test_social_diagram.py` parses all 50 real diagrams (`tests/fixtures/research_diagrams.json`, public data); its
+rendering test needs Graphviz and is skipped on machines without it (it runs in a Docker image with `dot`).
 
 ## Tests
 

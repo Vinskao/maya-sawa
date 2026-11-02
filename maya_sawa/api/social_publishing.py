@@ -7,7 +7,10 @@ from fastapi.responses import Response
 
 from ..core.auth.keycloak import require_manage_users_request
 from ..databases.market_ai_analysis_db import market_ai_analysis_db
+import json
+
 from ..services.social.card import render_card
+from ..services.social.diagram import diagram_title, mermaid_sources, render_diagram_card
 
 router = APIRouter(prefix='/market/publishing', tags=['publishing'])
 
@@ -21,6 +24,28 @@ async def card(kind: str, code: str, revision: int):
     if not current or current['revision'] != revision:
         raise HTTPException(404, 'No such card')
     image = await asyncio.to_thread(render_card, current)
+    return Response(image, media_type='image/png', headers={'Cache-Control': 'public, max-age=86400'})
+
+
+@router.get('/diagrams/{code}/{revision}/{index}.png', include_in_schema=False)
+async def diagram(code: str, revision: int, index: int):
+    """The index-th Mermaid flowchart of the current public research record, drawn on a card (same size as the summary
+    card). Only the current research revision; research records are public (/dashboard/research)."""
+    record = (await asyncio.to_thread(market_ai_analysis_db.read, 'research', code)).get('analysis')
+    if not record or record['revision'] != revision:
+        raise HTTPException(404, 'No such diagram')
+    try:
+        content = json.loads(record['content'])
+    except ValueError:
+        raise HTTPException(404, 'No such diagram') from None
+    sources = mermaid_sources(content)
+    if not 0 <= index < len(sources):
+        raise HTTPException(404, 'No such diagram')
+    path, source = sources[index]
+    try:
+        image = await asyncio.to_thread(render_diagram_card, f"{code} {diagram_title(content, path)}", source)
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(503, 'Diagram could not be drawn') from exc
     return Response(image, media_type='image/png', headers={'Cache-Control': 'public, max-age=86400'})
 
 

@@ -2,6 +2,7 @@
 
 A save fires `RunTrigger` (coalesced over a short delay); an hourly catch-up sweep retries failed/queued posts."""
 import asyncio
+import json
 import logging
 import os
 import threading
@@ -142,6 +143,26 @@ def card_url(source):
     return f"{base}/{source['productType']}/{source['code']}/{source['revision']}.png"
 
 
+def image_urls(source, read_research=None):
+    """The card first, then every Mermaid diagram of the stock's current research record (macro has no research)."""
+    urls = [card_url(source)]
+    if source['productType'] != 'stock':
+        return urls
+    try:
+        if read_research is None:
+            from ...databases.market_ai_analysis_db import market_ai_analysis_db
+            read_research = lambda code: market_ai_analysis_db.read('research', code).get('analysis')
+        record = read_research(source['code'])
+        if record:
+            from .diagram import mermaid_sources
+            base = card_url(source).rsplit('/cards/', 1)[0]
+            count = len(mermaid_sources(json.loads(record['content'])))
+            urls += [f"{base}/diagrams/{source['code']}/{record['revision']}/{index}.png" for index in range(count)]
+    except Exception:
+        logger.warning('Research diagrams unavailable for %s; posting the card alone', source['code'])
+    return urls
+
+
 def threads_token(outbox, refresh=None, now=None):
     """Seed from the secret once, then keep the refreshed 60-day token in the database; refresh weekly."""
     from .meta import refresh_threads_token
@@ -181,10 +202,10 @@ def build_publishers(outbox, notify=None):
         _instagram_link_alert(outbox, notify, linked=bool(ig_user), checked=looked_up or bool(ig_user))
         if page_id:
             page = meta.FacebookPage(page_id, page_token)
-            publishers['facebook'] = lambda source: page.publish(build_post(source, 'facebook'), card_url(source))
+            publishers['facebook'] = lambda source: page.publish(build_post(source, 'facebook'), image_urls(source))
         if page_id and ig_user:
             ig = meta.Instagram(ig_user, page_token)
-            publishers['instagram'] = lambda source: ig.publish(build_post(source, 'instagram'), card_url(source))
+            publishers['instagram'] = lambda source: ig.publish(build_post(source, 'instagram'), image_urls(source))
     token = threads_token(outbox)
     if token:
         threads_user = os.getenv('THREADS_USER_ID', '').strip()
@@ -195,7 +216,7 @@ def build_publishers(outbox, notify=None):
                 logger.warning('Threads user lookup failed; Threads skipped this run')
         if threads_user:
             threads = meta.Threads(threads_user, token)
-            publishers['threads'] = lambda source: threads.publish(build_post(source, 'threads'), card_url(source))
+            publishers['threads'] = lambda source: threads.publish(build_post(source, 'threads'), image_urls(source))
     linkedin_token = os.getenv('LINKEDIN_ACCESS_TOKEN', '').strip()
     if linkedin_token:
         author = os.getenv('LINKEDIN_PERSON_URN', '').strip()
@@ -206,7 +227,7 @@ def build_publishers(outbox, notify=None):
                 logger.warning('LinkedIn member lookup failed; LinkedIn skipped this run')
         if author:
             profile = linkedin.LinkedIn(author, linkedin_token)
-            publishers['linkedin'] = lambda source: profile.publish(build_post(source, 'linkedin'), [card_url(source)])
+            publishers['linkedin'] = lambda source: profile.publish(build_post(source, 'linkedin'), image_urls(source))
     return publishers
 
 

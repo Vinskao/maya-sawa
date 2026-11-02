@@ -374,3 +374,20 @@ def test_linkedin_is_published_only_when_its_token_is_configured(outbox, monkeyp
     assert runner.build_publishers(outbox) == {}  # a failed lookup only skips LinkedIn this run
     monkeypatch.setenv('LINKEDIN_PERSON_URN', 'urn:li:person:42')
     assert set(runner.build_publishers(outbox)) == {'linkedin'}  # the configured URN needs no lookup
+
+
+def test_every_post_carries_the_card_plus_the_diagrams_of_the_current_research_record():
+    import json
+    from maya_sawa.services.social.runner import image_urls
+    research = {'revision': 3, 'content': json.dumps({'name': 'x', 'supplyChain': 'flowchart TB\n A-->B',
+                                                       'technology': 'flowchart LR\n C-->D'})}
+    source = {'productType': 'stock', 'code': '2330', 'revision': 5}
+    urls = image_urls(source, read_research=lambda code: research)
+    base = 'https://tymultiverse.cc/maya-sawa/market/publishing'
+    assert urls == [f'{base}/cards/stock/2330/5.png', f'{base}/diagrams/2330/3/0.png', f'{base}/diagrams/2330/3/1.png']
+    assert image_urls(source, read_research=lambda code: None) == [urls[0]]  # no research record: the card alone
+    assert image_urls({'productType': 'macro', 'code': 'US', 'revision': 9},
+                      read_research=lambda code: research) == [f'{base}/cards/macro/US/9.png']
+    def broken(code):
+        raise RuntimeError('db down')
+    assert image_urls(source, read_research=broken) == [urls[0]]  # a failed lookup never blocks the post

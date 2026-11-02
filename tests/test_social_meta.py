@@ -169,3 +169,71 @@ def test_facebook_photo_post_uses_the_photos_edge_and_returns_the_post_permalink
     assert 'url=https' in calls[0][3] and 'message=hello' in calls[0][3]
     with pytest.raises(Ambiguous):
         FacebookPage('222', 'tok', client({'POST /v23.0/222/photos': (500, FIXTURES['error_unknown'])}, [])).publish('x', 'https://a/b.png')
+
+
+def recording_client(routes, calls):
+    """Like client(), but routes may be callables so repeated POSTs to one path can return different ids."""
+    counters = {}
+
+    def handler(request):
+        calls.append((request.method, request.url.path, dict(request.url.params), request.content.decode()))
+        key = f'{request.method} {request.url.path}'
+        response = routes[key]
+        if callable(response):
+            counters[key] = counters.get(key, 0) + 1
+            response = response(counters[key])
+        status, body = response
+        return httpx.Response(status, json=body)
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+IMAGES = ['https://tymultiverse.cc/card.png', 'https://tymultiverse.cc/d1.png', 'https://tymultiverse.cc/d2.png']
+
+
+def test_threads_carousel_creates_item_containers_then_a_carousel_container_with_the_text():
+    calls = []
+    routes = {'POST /v1.0/111/threads': lambda n: (200, {'id': f'item{n}' if n <= 3 else 'carousel'}),
+              'GET /v1.0/item1': (200, {'status': 'FINISHED'}), 'GET /v1.0/item2': (200, {'status': 'FINISHED'}),
+              'GET /v1.0/item3': (200, {'status': 'FINISHED'}), 'GET /v1.0/carousel': (200, {'status': 'FINISHED'}),
+              'POST /v1.0/111/threads_publish': (200, {'id': '179'}),
+              'GET /v1.0/179': (200, FIXTURES['threads_permalink'])}
+    result = Threads('111', 'tok', recording_client(routes, calls), sleep=lambda s: None).publish('hello', IMAGES)
+    assert result['url'].startswith('https://www.threads.com/')
+    posts = [call[3] for call in calls if call[1] == '/v1.0/111/threads']
+    assert all('is_carousel_item=true' in body and 'media_type=IMAGE' in body for body in posts[:3])
+    assert 'media_type=CAROUSEL' in posts[3] and 'children=item1%2Citem2%2Citem3' in posts[3] and 'text=hello' in posts[3]
+
+
+def test_instagram_carousel_creates_children_then_a_carousel_parent_with_the_caption():
+    calls = []
+    routes = {'POST /v23.0/555/media': lambda n: (200, {'id': f'c{n}' if n <= 3 else 'parent'}),
+              'GET /v23.0/c1': (200, {'status_code': 'FINISHED'}), 'GET /v23.0/c2': (200, {'status_code': 'FINISHED'}),
+              'GET /v23.0/c3': (200, {'status_code': 'FINISHED'}), 'GET /v23.0/parent': (200, {'status_code': 'FINISHED'}),
+              'POST /v23.0/555/media_publish': (200, {'id': '666'}),
+              'GET /v23.0/666': (200, FIXTURES['instagram_permalink'])}
+    Instagram('555', 'tok', recording_client(routes, calls), sleep=lambda s: None).publish('caption', IMAGES)
+    posts = [call[3] for call in calls if call[1] == '/v23.0/555/media']
+    assert all('is_carousel_item=true' in body for body in posts[:3])
+    assert 'media_type=CAROUSEL' in posts[3] and 'children=c1%2Cc2%2Cc3' in posts[3] and 'caption=caption' in posts[3]
+
+
+def test_facebook_multi_photo_post_uploads_unpublished_photos_then_attaches_them_to_one_feed_post():
+    calls = []
+    routes = {'POST /v23.0/222/photos': lambda n: (200, {'id': f'p{n}'}),
+              'POST /v23.0/222/feed': (200, {'id': '222_333'}),
+              'GET /v23.0/222_333': (200, FIXTURES['facebook_permalink'])}
+    result = FacebookPage('222', 'tok', recording_client(routes, calls)).publish('hello', IMAGES)
+    assert result['url'] == 'https://www.facebook.com/222/posts/333'
+    photos = [call[3] for call in calls if call[1] == '/v23.0/222/photos']
+    assert len(photos) == 3 and all('published=false' in body for body in photos)
+    feed = next(call[3] for call in calls if call[1] == '/v23.0/222/feed')
+    assert 'attached_media%5B0%5D=' in feed and 'p1' in feed and 'p3' in feed and 'message=hello' in feed
+
+
+def test_a_failed_extra_image_stops_before_anything_is_published():
+    calls = []
+    routes = {'POST /v23.0/222/photos': lambda n: (200, {'id': 'p1'}) if n == 1 else (400, FIXTURES['error_invalid_parameter']),
+              'POST /v23.0/222/feed': (200, {'id': 'never'})}
+    with pytest.raises(Rejected):
+        FacebookPage('222', 'tok', recording_client(routes, calls)).publish('hello', IMAGES)
+    assert not any(call[1] == '/v23.0/222/feed' for call in calls)
