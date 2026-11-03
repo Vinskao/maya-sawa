@@ -41,6 +41,6 @@ NG 就重寫開頭，最多兩次。這是詞表檢查，抓得到「標題或�
 4. 這次不重寫既有分析；下一次各標的更新時就會套用新開頭。前端 `public/market-ai.md` 在 `dev` 分支，推送後 Jenkins 部署，排程 clone 的就是 `dev`。
 5. 下次要換發文長度或欄位：改 `LIMIT`、規則文字與測試，三處一起改。
 
-測試：`poetry run python -m pytest tests/test_analysis_lead.py tests/test_routine_prompts.py -q`（23 個通過）。
+測試：`poetry run python -m pytest tests/market/test_analysis_lead.py tests/automation/test_routine_prompts.py -q`（23 個通過）。
 已知缺口：檢查是詞表；尚未看過排程用新規則寫出的真實分析（要等下一輪排程，週二 07:30 美股／總經最早）；
 網站首頁「研究提示」若另有一份複本不在 `market-ai.md` 裡，我沒有找到、沒有改；Birch／Threads 實際取前 200 字的程式不在這個 repo，沒有驗證。

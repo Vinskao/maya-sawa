@@ -4,7 +4,7 @@ TDnet keeps about a month of disclosures, so releases are stored as they appear 
 rebuilt from everything stored. Japan dropped statutory quarterly reports in 2024; 決算短信 still report
 year-to-date figures each quarter, so a single quarter is either reported as three months (Q1) or derived
 as the difference of two consecutive year-to-date releases (marked derivedFromYtd). Amounts are JPY, not
-millions; EPS is JPY/share. Covered by tests/test_tdnet_financials.py with real TDnet fixtures.
+millions; EPS is JPY/share. Covered by tests/integrations/test_tdnet_financials.py with real TDnet fixtures.
 """
 from __future__ import annotations
 

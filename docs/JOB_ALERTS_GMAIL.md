@@ -44,6 +44,6 @@ poetry run python scripts/job_alerts_gmail.py poll   # 列出新信的職缺與�
 
 ## 測試
 
-`poetry run python -m pytest tests/test_job_alerts_salary.py tests/test_job_alerts_cake_parser.py tests/test_job_alerts_poller.py`
+`poetry run python -m pytest tests/job_alerts/test_job_alerts_salary.py tests/job_alerts/test_job_alerts_cake_parser.py tests/job_alerts/test_job_alerts_poller.py`
 
 已知缺口：未對真實 Gmail 做端到端（需先完成 `auth`）；Cake「查看 N 筆」摘要連結不解析；多單位（如 13 個月）不換算。

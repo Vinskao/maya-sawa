@@ -145,8 +145,11 @@ YAHOO_SERIES = {
     "US_DOLLAR_INDEX": ("ICE U.S. Dollar Index (DXY), daily close", "index points", "daily"),
     "US_VIX": ("CBOE Volatility Index (VIX), daily close", "index points", "daily"),
     "EUR_USD": ("EUR/USD (U.S. dollars per euro), daily close", "USD/EUR", "daily"),
+    # FRED's WTI (DCOILWTICO, EIA) trails by about a week (2026-11-03: last day 10-27); the oil node reads this one first.
+    "WTI_CRUDE_USD": ("WTI crude oil futures (front month) daily close", "USD/barrel", "daily"),
 }
-YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB", "US_VIX": "^VIX", "EUR_USD": "EURUSD=X"}
+YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB", "US_VIX": "^VIX", "EUR_USD": "EURUSD=X",
+                 "WTI_CRUDE_USD": "CL=F"}
 # TWSE publishes no market-wide margin maintenance ratio; it is estimated from two public tables (margin_maintenance).
 TWSE_MARGIN_SERIES = {
     "TW_MARGIN_MAINTENANCE": ("Taiwan listed-market margin maintenance ratio (TWSE: collateral value / margin loans)", "percent", "daily"),
@@ -332,6 +335,43 @@ def _scaled(value: str, scale: float) -> str:
     if scale == 1:
         return value
     return f"{float(value) * scale:.10f}".rstrip("0").rstrip(".")
+
+
+# U.S. Treasury daily par / real yield curves: the same constant-maturity yields FRED republishes as DGS* / DFII10 (H.15),
+# but out the same day instead of the next evening. They only extend FRED by the days it does not have yet.
+TREASURY_CURVE_URL = ("https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/"
+                      "{year}/all?type={kind}&field_tdr_date_value={year}&page&_format=csv")
+TREASURY_PAR_COLUMNS = {"DGS3MO": "3 Mo", "DGS2": "2 Yr", "DGS10": "10 Yr"}
+TREASURY_REAL_COLUMNS = {"DFII10": "10 YR"}
+
+
+def treasury_curve_rows(raw: bytes | str, columns: dict[str, str]) -> dict[str, list[dict]]:
+    """Treasury curve CSV (one row per day, MM/DD/YYYY, one column per maturity) -> {series code: rows, oldest first}.
+    Blank / N/A cells, unparseable dates and columns that are absent are skipped; anything that is not the CSV gives {}."""
+    text = raw.decode("utf-8-sig", errors="replace") if isinstance(raw, bytes) else raw
+    out: dict[str, list[dict]] = {}
+    try:
+        for item in csv.DictReader(io.StringIO(text)):
+            try:
+                period = datetime.strptime(str(item.get("Date") or "").strip(), "%m/%d/%Y").date().isoformat()
+            except ValueError:
+                continue
+            for code, column in columns.items():
+                value = str(item.get(column) or "").strip()
+                try:
+                    float(value)
+                except ValueError:
+                    continue
+                out.setdefault(code, []).append({"code": code, "period": period, "value": _scaled(value, 1)})
+    except csv.Error:
+        return {}
+    return {code: sorted(rows, key=lambda row: row["period"]) for code, rows in out.items()}
+
+
+def merge_newer_rows(rows: list[dict], extra: list[dict]) -> list[dict]:
+    """rows plus the extra rows that are newer than the newest of rows; rows already there are never overwritten."""
+    last = max((row["period"] for row in rows), default="")
+    return rows + [row for row in extra if row["period"] > last]
 
 
 def fred_observation_rows(code: str, observations: list, frequency: str, scale: float = 1) -> list[dict]:
@@ -801,6 +841,19 @@ class MarketMacroService:
             raise RuntimeError("fred_release_dates_all_failed")
         return count
 
+    def _treasury_latest(self) -> dict[str, list[dict]]:
+        """This year's Treasury par and real yield rows; any failure leaves FRED's own data untouched."""
+        out: dict[str, list[dict]] = {}
+        year = date.today().year
+        for kind, columns in (("daily_treasury_yield_curve", TREASURY_PAR_COLUMNS), ("daily_treasury_real_yield_curve", TREASURY_REAL_COLUMNS)):
+            try:
+                url = TREASURY_CURVE_URL.format(year=year, kind=kind)
+                _status, raw = _request_free_cached(f"treasury:{kind}:{year}", url, ttl_seconds=3600, extra_headers=BROWSER_AGENT)
+                out.update(treasury_curve_rows(raw, columns))
+            except Exception as exc:
+                logger.warning("Treasury %s unavailable: %s", kind, str(exc)[:60])
+        return out
+
     def _fetch_fred_observations(self) -> int:
         count = 0
         if market_macro_db.sessions:
@@ -810,6 +863,7 @@ class MarketMacroService:
                     session.merge(MacroSeries(code=code, name=name, unit=unit, frequency=frequency, source="FRED"))
         failures = 0
         attempted = 0
+        treasury = self._treasury_latest()
         cache = {code: _macro_local_cache.get(f"series:{code}") if code in FREE_CACHE_CODES else None for code in FRED_SERIES}
         # Persisted series already have rows in PostgreSQL, so they never jump ahead of a series with no data at all.
         for code in fred_fetch_order(list(FRED_SERIES),
@@ -834,6 +888,8 @@ class MarketMacroService:
                 observations = payload.get("observations")
                 if not isinstance(observations, list): raise RuntimeError("fred_observation_response_invalid")
                 rows = fred_observation_rows(code, observations, FRED_SERIES[code][2], FRED_SCALE.get(code, 1))
+                if code in treasury:
+                    rows = merge_newer_rows(rows, treasury[code])
                 if code in FREE_CACHE_CODES:
                     # Low-frequency series are refetched daily, so they count as stale only after two missed days.
                     saved = self._cache_free_series(rows, FRED_SERIES, FRED_SOURCE_LABELS.get(code, "FRED"),

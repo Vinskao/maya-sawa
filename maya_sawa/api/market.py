@@ -175,14 +175,15 @@ AGENT_PRODUCT_TYPES = {"stock", "futures", "macro", "macro-node", "research"}
 
 
 async def analysis_editor(request: Request) -> str:
-    """Who is writing an AI analysis: a signed-in user, or the scheduled analysis routine.
+    """Who is writing an AI analysis: the signed-in owner, or the scheduled analysis routine. Any other signed-in account
+    (every registered member) is refused: the analysis is published on the site under the editor's name.
 
     The routine has no Keycloak login. It sends X-Market-Agent-Key, and the server keeps only that key's SHA-256
     (MARKET_AGENT_KEY_SHA256), so the deployment config holds no usable secret. The key writes only this endpoint.
     """
     key = request.headers.get("x-market-agent-key")
     if key is None:
-        claims = await require_authenticated(request)
+        claims = await require_manage_users_request(request)
         if not claims.get("sub"):
             raise HTTPException(status_code=401, detail="Authenticated identity required")
         return str(claims["sub"])
@@ -646,7 +647,7 @@ async def list_market_industries(code: str | None = None):
 
 
 @router.put("/dashboard/industries/{group_id}")
-async def put_market_industry(group_id: str, body: dict, claims: dict = Depends(require_authenticated)):
+async def put_market_industry(group_id: str, body: dict, claims: dict = Depends(require_manage_users_request)):
     if body.get("id") != group_id:
         raise HTTPException(status_code=422, detail="Group id in the body must match the URL")
     try:

@@ -143,7 +143,7 @@ apply 回 rejected 代表伺服器重新驗證失敗，照實回報 detail；fai
    確認收件匣有 pending → 建 Claude 20:30 routine，第一次先人工看結果再放手。
 10. 下次做「外部 AI 交給內部 AI」的整合：外部只寫入隔離的待審表，內部持權限者重新驗證後才走既有寫入路徑。
 
-測試命令：`poetry run python -m pytest tests/test_weekly_opportunities.py tests/test_market_watch.py tests/test_market_watch_api.py -q`（35 passed）。
+測試命令：`poetry run python -m pytest tests/market/watch/test_weekly_opportunities.py tests/market/watch/test_market_watch.py tests/market/watch/test_market_watch_api.py -q`（35 passed）。
 全套 `poetry run python -m pytest -q`：835 passed；5 個既有失敗與本變更無關（4 個需本機 Redis、
 `test_market_industry` 的研究紀錄 `009811` 未歸產業分組）。
 

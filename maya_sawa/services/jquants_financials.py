@@ -5,7 +5,7 @@ TDnet keeps only a month of disclosures, so a holding added today would have no 
 TDnet covers what came after. Each summary is the year to date (Q1 is three months), the same shape TDnet
 releases have, so both merge in tdnet_financials.build_financials. Every field is a string; "" is no value.
 Amounts are JPY, EPS is JPY/share. The key goes in the x-api-key header and is never logged, stored or
-returned. Covered by tests/test_jquants_financials.py with real responses.
+returned. Covered by tests/integrations/test_jquants_financials.py with real responses.
 """
 from __future__ import annotations
 

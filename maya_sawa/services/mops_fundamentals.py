@@ -10,7 +10,7 @@ One request returns every listed (sii) or OTC (otc) company for one month or one
 Values are stored in yuan with FinMind's dataset and item names, so `build_fundamental_metrics` reads them unchanged.
 Single-quarter income is the difference of consecutive year-to-date values; a quarter whose previous quarter is missing is
 skipped rather than estimated. Inventory and capex are not in the summaries. Pure parsing here; the collector loop is
-`MopsCollector`. Covered by tests/test_mops_fundamentals.py; docs: ty-multiverse-frontend/docs/FUNDAMENTALS_HISTORY_COVERAGE.md.
+`MopsCollector`. Covered by tests/integrations/test_mops_fundamentals.py; docs: ty-multiverse-frontend/docs/FUNDAMENTALS_HISTORY_COVERAGE.md.
 """
 from __future__ import annotations
 

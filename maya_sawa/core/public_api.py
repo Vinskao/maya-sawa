@@ -5,7 +5,7 @@ A route is public only when its decorator says so, and then it shows up on the p
 
     @router.get("/dashboard/foo", **public_data("中文說明", "分組名稱"))
 
-tests/test_public_api.py checks every marked route is a GET with no login, key or internal secret.
+tests/api/test_public_api.py checks every marked route is a GET with no login, key or internal secret.
 """
 import copy
 

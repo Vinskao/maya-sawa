@@ -1,0 +1,100 @@
+"""Mermaid flowcharts from the research records, drawn as images for the social posts."""
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+
+from maya_sawa.services.social.diagram import mermaid_sources, parse_flowchart, to_dot
+
+DIAGRAMS = json.loads((Path(__file__).parents[1] / 'fixtures' / 'research_diagrams.json').read_text(encoding='utf-8'))
+
+
+def test_every_mermaid_diagram_in_a_research_record_is_found_without_naming_fields():
+    """Unified lookup (2026-11-02): walk the JSON, take every string that is a flowchart; ETF records may have none."""
+    record = {'name': 'x', 'summary': 'flowchart is a word', 'supplyChain': 'flowchart TB\n  A["a"] --> B["b"]',
+              'nested': {'deep': [{'technology': 'graph LR\n  A --> B'}]}, 'watch': ['flowchart-ish text']}
+    assert [(path, source.split('\n')[0]) for path, source in mermaid_sources(record)] == [
+        ('supplyChain', 'flowchart TB'), ('nested.deep.0.technology', 'graph LR')]
+    assert mermaid_sources({'kind': 'etf', 'name': 'x'}) == []
+
+
+def test_parse_handles_nodes_labelled_edges_subgraphs_and_inline_definitions():
+    graph = parse_flowchart('''flowchart TB
+  N0["封裝廠製程需求｜投資決策"]
+  N1["萬潤自動化設備"]
+  N0 -->|功能／需求傳導，非訂單證明| N1
+  subgraph G0["並行製程能力 S1"]
+    T0["精密對位"]
+    T1[未加引號的標籤]
+  end
+  N1 --> T0 --> T1
+  N1 -.->|待驗證| X["行內定義"]''')
+    assert graph['direction'] == 'TB'
+    assert graph['nodes']['N0'] == '封裝廠製程需求｜投資決策' and graph['nodes']['T1'] == '未加引號的標籤'
+    assert graph['nodes']['X'] == '行內定義'
+    assert graph['clusters'] == [{'id': 'G0', 'title': '並行製程能力 S1', 'nodes': ['T0', 'T1']}]
+    assert graph['edges'] == [('N0', 'N1', '功能／需求傳導，非訂單證明', False), ('N1', 'T0', '', False),
+                              ('T0', 'T1', '', False), ('N1', 'X', '待驗證', True)]
+
+
+def test_dot_output_is_escaped_and_keeps_clusters_and_dashed_edges():
+    dot = to_dot('flowchart LR\n  A[he said "hi" ok] -.->|x| B\n  subgraph G["組"]\n    B\n  end')
+    assert dot.startswith('digraph') and 'rankdir=LR' in dot
+    assert 'subgraph cluster_G' in dot and 'style=dashed' in dot
+    assert 'he said \\"hi\\" ok' in dot
+
+
+def test_a_subgraph_without_an_id_uses_the_whole_text_as_its_title():
+    graph = parse_flowchart('flowchart TB\n  subgraph 並行製程能力\n    A["a"]\n  end')
+    assert graph['clusters'][0]['title'] == '並行製程能力' and graph['clusters'][0]['nodes'] == ['A']
+
+
+def test_all_fifty_real_research_diagrams_parse_into_connected_nodes_and_dot():
+    count = 0
+    for code, sources in DIAGRAMS.items():
+        for source in sources:
+            graph = parse_flowchart(source)
+            assert graph['nodes'], code
+            assert all(a in graph['nodes'] and b in graph['nodes'] for a, b, _, _ in graph['edges']), code
+            assert to_dot(source).count('->') == len(graph['edges'])
+            count += 1
+    assert count == 50
+
+
+@pytest.mark.skipif(shutil.which('dot') is None, reason='Graphviz is installed in the Docker image, not on this machine')
+def test_rendering_returns_a_portrait_card_png():
+    import io
+    from PIL import Image
+    from maya_sawa.services.social.diagram import render_diagram_card
+    image = Image.open(io.BytesIO(render_diagram_card('6187 萬潤 · 供應鏈', DIAGRAMS['6187'][0])))
+    assert image.size == (1080, 1350)
+
+
+def test_long_labels_break_with_a_dot_newline_not_a_visible_backslash_n():
+    """2026-11-02 production: nodes showed a literal 'S\n1' because the line break was escaped twice."""
+    dot = to_dot('flowchart TB\n  A["' + '很長的中文標籤' * 6 + ' S1"]')
+    label = next(line for line in dot.split('\n') if line.strip().startswith('"A" [label='))
+    assert '\\n' in label and '\\\\n' not in label  # DOT's single backslash-n break, never a doubled one
+
+
+def test_wide_top_to_bottom_diagrams_are_flipped_so_they_fill_a_portrait_card():
+    """2026-11-02 production: a 5-wide diagram was drawn 900px wide and 100px tall, unreadable on a 1080x1350 card."""
+    from maya_sawa.services.social.diagram import choose_direction
+    assert choose_direction('TB', width=1800, height=200) == 'LR'
+    assert choose_direction('TB', width=600, height=900) == 'TB'
+    assert choose_direction('LR', width=1800, height=200) == 'LR'  # LR graphs are already left to right: unchanged
+    assert choose_direction('TB', width=1000, height=1000) == 'TB'
+
+
+def test_to_dot_can_override_the_direction():
+    assert 'rankdir=LR' in to_dot('flowchart TB\n  A --> B', direction='LR')
+    assert 'rankdir=TB' in to_dot('flowchart TB\n  A --> B')
+
+
+def test_wrapping_never_splits_a_latin_word_or_number():
+    """2026-11-02 production: 'S1' was cut into 'S' and '1' on two lines."""
+    from maya_sawa.services.social.diagram import _wrap
+    lines = _wrap('萬潤自動化設備｜整合定位／點膠 S1', 16)
+    assert not any(line.endswith('S') for line in lines) and any('S1' in line for line in lines)
+    assert ''.join(lines) == '萬潤自動化設備｜整合定位／點膠 S1'

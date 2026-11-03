@@ -20,7 +20,7 @@
 新內容測試先因舊日期與缺 CPO 證據分級而失敗，再更新至綠。命令：
 
 ```text
-poetry run python -m pytest tests/test_largan_cpo_research.py tests/test_research_review_20261025.py tests/test_market_research.py tests/test_research_etf.py -q
+poetry run python -m pytest tests/market/test_largan_cpo_research.py tests/market/test_research_review_20261025.py tests/market/test_market_research.py tests/market/test_research_etf.py -q
 <bundled-node> node_modules/vitest/vitest.mjs run tests/market/researchMermaid.test.ts tests/market/researchMap.test.ts
 ```
 

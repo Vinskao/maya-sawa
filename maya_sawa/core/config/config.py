@@ -218,6 +218,9 @@ class Config:
     AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_ANONYMOUS_PER_MINUTE", "1"))
     AI_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("AI_RATE_LIMIT_WINDOW_SECONDS", "60"))
     GIT_COMMIT_REQUIRED_ROLE = os.getenv("GIT_COMMIT_REQUIRED_ROLE", "manage-users")
+    # Every self-registered account gets this realm role (default role in Keycloak): it may upload reports (held for the owner's
+    # review) and take /learn, nothing else. See docs/USER_PERMISSIONS.md.
+    MEMBER_ROLE = os.getenv("MEMBER_ROLE", "member")
     GIT_COMMIT_TRIVIAL_MIN_LINES = int(os.getenv("GIT_COMMIT_TRIVIAL_MIN_LINES", "5"))
     GIT_COMMIT_TRIVIAL_KEYWORDS = [
         item.strip().lower()

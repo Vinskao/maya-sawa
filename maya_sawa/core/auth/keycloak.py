@@ -201,3 +201,12 @@ async def require_manage_users_request(request: Request) -> Dict[str, Any]:
     if required_role not in set(payload.get("_roles", [])):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Requires {required_role} role")
     return payload
+
+
+async def require_member_request(request: Request) -> Dict[str, Any]:
+    """A signed-in member (every registered account) or the owner. A signed-in user with neither role is refused."""
+    payload = await require_authenticated(request)
+    roles = set(payload.get("_roles", []))
+    if not roles & {Config.MEMBER_ROLE, Config.GIT_COMMIT_REQUIRED_ROLE}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Requires {Config.MEMBER_ROLE} role")
+    return payload

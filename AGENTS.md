@@ -174,11 +174,13 @@ maya_sawa/
 
 ## TDD / 測試驅動開發
 
+測試依功能領域分類，目錄與連線測試注意事項見 [tests/README.md](tests/README.md)。
+
 Follow the workspace TDD rules (`../AGENTS.md`, "Test-driven development"): failing test first for bugs, test first for new logic, and backfill tests for any untested code you touch, without waiting to be asked.
 
-- Run: `poetry run python -m pytest` (single file: `poetry run python -m pytest tests/test_market_macro_sources.py -q`).
-- Source fetchers: monkeypatch `market_macro._request_free_cached` (or `_request`) with a trimmed real payload, stub `market_macro_db.reserve_source_call` / `finish_source_call`, and capture `_cache_free_series` rows. See `tests/test_market_macro_sources.py`. Never call the real network or a real database in unit tests.
-- API routes: build a `FastAPI()` with the router, override `require_authenticated`, and inject a SQLite-backed database (see `tests/test_market_ai_analysis.py`).
+- Run: `poetry run python -m pytest` (single file: `poetry run python -m pytest tests/market/macro/test_market_macro_sources.py -q`).
+- Source fetchers: monkeypatch `market_macro._request_free_cached` (or `_request`) with a trimmed real payload, stub `market_macro_db.reserve_source_call` / `finish_source_call`, and capture `_cache_free_series` rows. See `tests/market/macro/test_market_macro_sources.py`. Never call the real network or a real database in unit tests.
+- API routes: build a `FastAPI()` with the router, override `require_authenticated`, and inject a SQLite-backed database (see `tests/market/test_market_ai_analysis.py`).
 - Macro source coverage: DGBAS employment and COMEX gold are tested. BLS, FRED (dates/observations), CBC, Taiwan customs, TPEx gold, Taiwan PPI, PMI, UMich, World Bank gold, Fed calendar and the consensus calendar have no tests. Add one with a fixture when you touch any of them.
 
 ## Agent 開發注意事項

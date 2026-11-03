@@ -31,7 +31,7 @@
 - **持股**：`/market/portfolio`（`_portfolio_with_ibkr`）旁邊加一個 Binance 來源，作法跟 IBKR 一樣：失敗不影響台股持股、owner 才看得到（`require_manage_users_request`）、寫進 `portfolio_history` 快照累積時間序列。
 - **計價**：幣價以 USDT 計，再用既有的 `CBC_USD_TWD` 匯率換成台幣，跟海外持股同一套。
 - **報價與圖表**：新增市場 `CRYPTO`（例如 `BTC`、`ETH`），日線由公開 K 線收集進現有的歷史資料表；前端行情圖（K 線、成交量、時間範圍）直接沿用。這部分是公開資料，可以加進公開 API 分頁。
-- **新程式位置**：`maya_sawa/services/binance_market.py`（簽名、呼叫、轉換）、測試 `tests/test_binance_market.py`，用去掉個資的真實回應當 fixture（依 AGENTS.md 的 TDD 規則）。
+- **新程式位置**：`maya_sawa/services/binance_market.py`（簽名、呼叫、轉換）、測試 `tests/integrations/test_binance_market.py`，用去掉個資的真實回應當 fixture（依 AGENTS.md 的 TDD 規則）。
 
 ## 開工前要先確認
 
@@ -47,7 +47,7 @@
 - 公開端點：`/market/dashboard` 新增 `crypto` 清單；`/market/dashboard/overseas/{code}?market=CRYPTO` 回日線、報價與資料狀態（未收集的幣回 404）。AI 分析可用 `productType=crypto`、代碼 `BTC-CRYPTO`。
 - 前端：持股頁新增「加密貨幣 · Binance 現貨（USDT）」清單，詳情只開價格、研究、AI 分析分頁；成交量單位是幣本身，不疊加本益比和券商目標價。
 - 環境變數：`BINANCE_SYMBOLS`（預設 `BTC,ETH`）、`BINANCE_MARKET_ENABLED`（預設 `true`）、`BINANCE_API_BASE`（預設 `https://api.binance.com`）。
-- 測試：`tests/test_binance_market.py`、`tests/test_market_dashboard.py`（crypto 部分）；前端 `tests/market/priceChart.test.ts`、`overseasResearch.test.ts`、`instrumentIdentity.test.ts`。
+- 測試：`tests/integrations/test_binance_market.py`、`tests/market/test_market_dashboard.py`（crypto 部分）；前端 `tests/market/priceChart.test.ts`、`overseasResearch.test.ts`、`instrumentIdentity.test.ts`。
 - 唯讀 key 已存進 Jenkins credential `BINANCE_API_KEY`、`BINANCE_API_SECRET`（第二階段才接進部署）。尚未設定 IP 白名單。
 - 連線：2026-10-28 部署後確認 pod（OCI 新加坡）連得到 Binance，`coverage.quote` 與 `coverage.history_raw` 都是 `ok`。日後若出現 `status=unavailable`、`reason=BinanceRegionRestricted`，就是被地區限制擋了。
 

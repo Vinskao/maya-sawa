@@ -115,9 +115,9 @@ publish=true
 後端測試命令：
 
 ```text
-poetry run python -m pytest tests/test_blog.py tests/test_blog_postgres.py tests/test_blog_markdown.py tests/test_blog_import.py tests/test_blog_legacy_guard.py -q
+poetry run python -m pytest tests/blog/test_blog.py tests/blog/test_blog_postgres.py tests/blog/test_blog_markdown.py tests/blog/test_blog_import.py tests/blog/test_blog_legacy_guard.py -q
 ```
 
-涵蓋生命週期、授權、MD 匯入、真實舊文、CAS、修訂、交易 rollback、來源與 QA 正文一致、舊向量清除、工作重試與舊 sync 保護。另以 `tests/integration_blog_postgres.py` 在獨立 PostgreSQL schema 實測 JSONB、原 ID／向量保留、multipart CRUD、真實向量 SQL 搜尋及下架過濾；測試結束只清除此測試 schema。
+涵蓋生命週期、授權、MD 匯入、真實舊文、CAS、修訂、交易 rollback、來源與 QA 正文一致、舊向量清除、工作重試與舊 sync 保護。另以 `tests/infrastructure/integration_blog_postgres.py` 在獨立 PostgreSQL schema 實測 JSONB、原 ID／向量保留、multipart CRUD、真實向量 SQL 搜尋及下架過濾；測試結束只清除此測試 schema。
 
 前端：`<bundled-node> node_modules/vitest/vitest.mjs run tests/work`。本機視覺預覽使用明確的暫存測試資料，不是正式 DB，也未呼叫付費向量 API。

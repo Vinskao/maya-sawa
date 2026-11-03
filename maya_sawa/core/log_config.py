@@ -1,4 +1,4 @@
-"""Process-wide logging setup (called once from main.py; covered by tests/test_log_config.py).
+"""Process-wide logging setup (called once from main.py; covered by tests/infrastructure/test_log_config.py).
 
 The app logs at DEBUG, but the HTTP client libraries log every request URL at INFO and every header exchange at
 DEBUG. OpenDART takes its key as the crtfc_key query parameter, so those lines would put the key in the pod log

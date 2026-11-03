@@ -3,7 +3,7 @@
 Each analysis routine has an Opus twin on the same cron. Both start with this script; the one whose model is not
 printed stops at once, so every scheduled day gets exactly one analysis. Runs are counted on the routine's own cron
 days (Taipei) from Monday 2026-10-26, so the cadence holds across weekends and month ends. Covered by
-tests/test_routine_turn.py.
+tests/automation/test_routine_turn.py.
 
     python3 maya_sawa/public_scripts/routine_turn.py taiwan     # prints "sonnet 4" or "opus 6"
 """

@@ -214,6 +214,44 @@ class MarketReportsDatabase:
                 return duplicate, True
             raise
 
+    def count_uploads_since(self, uploaded_by: str, since: datetime) -> int:
+        """How many reports this person has uploaded since a moment (the daily limit for members)."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions() as session:
+            return session.query(MarketReport).filter(MarketReport.uploaded_by == uploaded_by, MarketReport.received_at >= since).count()
+
+    def review_queue(self) -> list[dict]:
+        """Member uploads held for the owner: private to the uploader (visibility "owner") and processed (awaiting_review)."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions() as session:
+            rows = (session.query(MarketReport)
+                    .filter(MarketReport.visibility == "owner", MarketReport.status == "awaiting_review",
+                            MarketReport.uploaded_by != COLLECTOR_UPLOADER)
+                    .order_by(MarketReport.received_at.asc()).all())
+            return [{"id": row.id, "title": row.title, "publisher": row.publisher, "page_count": row.page_count,
+                     "status": row.status, "received_at": row.received_at.isoformat() if row.received_at else None,
+                     "published_at": row.published_at.isoformat() if row.published_at else None, "uploaded_by": row.uploaded_by}
+                    for row in rows]
+
+    def set_review(self, report_id: str, decision: str):
+        """Apply the owner's decision to a report awaiting review. Returns (outcome, uploaded_by, status) where outcome is
+        "ok", "missing" or "conflict" (not waiting for review, e.g. already decided)."""
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions.begin() as session:
+            report = session.get(MarketReport, report_id)
+            if report is None:
+                return "missing", None, None
+            if report.visibility != "owner" or report.status != "awaiting_review":
+                return "conflict", report.uploaded_by, report.status
+            if decision == "approve":
+                report.visibility, report.status = "public", "claims_pending"   # published, and now in the claim extraction queue
+            else:
+                report.status = "rejected"                                      # stays private to the uploader
+            return "ok", report.uploaded_by, report.status
+
     def set_upload_status(self, report_id, status, failure_reason=None):
         """Update the durable status of an upload handled by the backend worker."""
         if not self.sessions:

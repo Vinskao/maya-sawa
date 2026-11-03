@@ -22,14 +22,14 @@
 - 成功：`update`，標題寫排程名稱，內文列更新了哪些標的／節點。
 - 登入或權限問題：`attention`，寫哪個排程、哪一步。
 - **代號自動補名稱（2026-10-28）：** 排程常只寫代號（`3008 賣→中立`）。`POST /market/notify` 轉發前用儀表板標的清單（持倉、自訂、AI 觀察）把代號補成「代號 名稱」（`3008 大立光 賣→中立`），Telegram 與網站鈴鐺都一樣。已寫名稱的不重複加；不在清單的代號、數字裡的數字（`3008.5`、日期、`2330天`）不動；同一代號對到兩個不同名稱（東京 6857 與台灣 6857）時不補。名稱讀取失敗就照原文送出。
-測試：`tests/test_telegram_notify.py`、`tests/test_market_ai_analysis.py::test_notify_endpoint_requires_agent_key_and_relays`。
+測試：`tests/automation/test_telegram_notify.py`、`tests/market/test_market_ai_analysis.py::test_notify_endpoint_requires_agent_key_and_relays`。
 
 ## 排程 token 用量記錄（費用第二軸）
 - 排程（Claude Code 雲端 routine）可匯出 OpenTelemetry 指標：`POST /maya-sawa/otel/v1/metrics`（OTLP http/json）。
 - 驗證：排程的網路代理會自動加上 `X-Market-Agent-Key`（和寫分析同一把），所以排程環境**不需要放任何新密鑰**。通過後用量以 `claude-routine` 記入 `/ai-usage`；本機 Claude Code 仍是 `claude`（需 ingest token）。
 - 排程要設的環境變數（非機密）：`CLAUDE_CODE_ENABLE_TELEMETRY=1`、`OTEL_METRICS_EXPORTER=otlp`、`OTEL_EXPORTER_OTLP_PROTOCOL=http/json`、`OTEL_EXPORTER_OTLP_ENDPOINT=https://tymultiverse.cc/maya-sawa/otel`。
 - 首頁報酬率圖的第二軸只加總 `claude-routine`。
-- 測試：`tests/test_otel_usage.py`。
+- 測試：`tests/infrastructure/test_otel_usage.py`。
 
 ## 通知歷史（網站鈴鐺）與頻道貼文清單（2026-10-27）
 
@@ -61,7 +61,7 @@
   `peoplesystem.tatdvsonorth.com`，`tymultiverse.cc` 被代理擋下（403）；腳本因此一度改指 peoplesystem。之後換 agent key，
   環境的 network secret 改成只給 `tymultiverse.cc/maya-sawa/`，peoplesystem 被擋（`Tunnel connection failed: 403 Forbidden`，
   審核排程的實際紀錄），預設網址改回 `tymultiverse.cc`。失敗訊息會帶原因（`HTTPError 403`、`URLError: <原因>`），不含任何金鑰。
-  在別的環境（例如本機）執行時用 `ROUTINE_USAGE_URL` 覆寫。測試：`tests/test_routine_usage.py`（先紅後綠）。
+  在別的環境（例如本機）執行時用 `ROUTINE_USAGE_URL` 覆寫。測試：`tests/automation/test_routine_usage.py`（先紅後綠）。
   **已知缺口：** 雲端環境實際回報成功，要等部署後的下一次排程才能確認。
 - **腳本必須在排程的倉庫目錄裡執行**。排程要在 `sources` 附上 `Vinskao/maya-sawa`。從網路下載再 `| python3` 會被雲端的安全分類器擋下（「從外部下載並執行程式碼」），
   所以 `GET /market/routine-usage.py` 雖然存在，排程不該用它。

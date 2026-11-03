@@ -6,7 +6,7 @@ Consolidated figures win; parent-only (_NonConsolidatedMember) fill in only when
 EDINET lists documents by day only, so the collector walks back day by day until every Japan holding's latest annual
 report is found, and rechecks the last few days on later passes. The key (EDINET_API_KEY, a Jenkins credential)
 is sent only as a request parameter and never stored or logged. Releases feed tdnet_financials.build_financials with
-TDnet and J-Quants. Covered by tests/test_edinet_financials.py.
+TDnet and J-Quants. Covered by tests/integrations/test_edinet_financials.py.
 """
 from __future__ import annotations
 

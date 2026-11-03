@@ -17,7 +17,7 @@ async def get_foo(code: str): ...
 - 分組名稱就是頁面上的標題；沒出現過的名稱會自動變成新的一組。
 - 沒有加標記的路由永遠不會公開。FastAPI 內建的 `/openapi.json` 列出全部 100 多個端點（含內部、管理與 agent key 的路由），公開頁面不用它，
   改讀 `GET /maya-sawa/public-openapi.json`（只含有標記的 GET，不含請求內容與資料結構）。
-- `tests/test_public_api.py` 在每次測試時檢查所有有標記的路由：必須是 GET、沒有登入／agent key／內部密鑰的依賴（含在函式裡直接讀標頭的情況）、
+- `tests/api/test_public_api.py` 在每次測試時檢查所有有標記的路由：必須是 GET、沒有登入／agent key／內部密鑰的依賴（含在函式裡直接讀標頭的情況）、
   有中文說明；持股、用量、通知、上傳、搜尋等都不能被標記。標錯了測試會失敗。
 
 ## 認證現況（Python 服務）
@@ -66,11 +66,11 @@ flowchart LR
     B --> J["GET /public-openapi.json"]
     J --> F["前端 publicSpec.ts<br/>publicOperations / schemaRows / groupExamples"]
     F --> P["/api-reference/ 分頁：參數、各平台範例、回應結構"]
-    T["tests/test_public_api.py<br/>範例必須屬於該路由、參數合法"] -.守門.-> D
+    T["tests/api/test_public_api.py<br/>範例必須屬於該路由、參數合法"] -.守門.-> D
 ```
 
 ## 開發方法
 
 1. 先到正式站打公開端點，取得真實回應，再寫 schema；不憑程式碼猜欄位（Binance 的代號是 `BTC` 而不是 `BTCUSDT`，就是這樣發現的）。
-2. 測試先行：`tests/test_public_api.py` 檢查每個範例都落在對應路由、query 參數有宣告、`market` 值合法；測試不呼叫 handler（避免連資料庫或官方來源）。
+2. 測試先行：`tests/api/test_public_api.py` 檢查每個範例都落在對應路由、query 參數有宣告、`market` 值合法；測試不呼叫 handler（避免連資料庫或官方來源）。
 3. 前端把「攤平 schema」「依平台分組」「組 curl」寫成純函式並測試（`tests/api/publicSpec.test.ts`），頁面只負責畫。

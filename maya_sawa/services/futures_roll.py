@@ -6,7 +6,7 @@
 
 D is the index points of cash dividends going ex in (near expiry, next expiry]: cash per share x shares issued / divisor,
 with divisor = listed market value / TAIEX on a reference day. A dividend that goes ex on the near expiry is already in
-the near contract's settlement, so it is not in the window. Covered by tests/test_futures_roll.py; the market-macro
+the near contract's settlement, so it is not in the window. Covered by tests/market/test_futures_roll.py; the market-macro
 service fetches the inputs (`MarketMacroService._fetch_tx_roll_spread`).
 """
 from __future__ import annotations

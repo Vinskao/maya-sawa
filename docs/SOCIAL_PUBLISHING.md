@@ -118,12 +118,12 @@ Secret text above and rebuild. A 401 puts the post back in `queued` and sends on
 
 ## Tests (diagrams)
 
-`tests/test_social_diagram.py` parses all 50 real diagrams (`tests/fixtures/research_diagrams.json`, public data); its
+`tests/social/test_social_diagram.py` parses all 50 real diagrams (`tests/fixtures/research_diagrams.json`, public data); its
 rendering test needs Graphviz and is skipped on machines without it (it runs in a Docker image with `dot`).
 
 ## Tests
 
-`poetry run python -m pytest tests/test_social_post_text.py tests/test_social_card.py tests/test_social_meta.py tests/test_social_runner.py tests/test_social_api.py -q`
+`poetry run python -m pytest tests/social/test_social_post_text.py tests/social/test_social_card.py tests/social/test_social_meta.py tests/social/test_social_runner.py tests/social/test_social_api.py -q`
 
 Trigger tests: `test_a_new_analysis_revision_triggers_one_coalesced_run`, `test_a_failing_run_does_not_stop_later_triggers`,
 `test_saving_an_analysis_notifies_listeners_only_for_a_new_revision`.

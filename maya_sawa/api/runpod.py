@@ -10,7 +10,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..core.auth.internal import require_internal_secret
-from ..core.auth.keycloak import require_authenticated
+from ..core.auth.keycloak import require_manage_users_request
 from ..services.runpod_cost import (
     RunpodNotConfiguredError,
     RunpodUnavailableError,
@@ -44,7 +44,7 @@ async def _cost_overview() -> dict:
 
 
 @router.get("/cost")
-async def get_runpod_cost(_claims: dict = Depends(require_authenticated)):
+async def get_runpod_cost(_claims: dict = Depends(require_manage_users_request)):
     return await _cost_overview()
 
 

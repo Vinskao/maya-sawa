@@ -79,7 +79,7 @@ References: [ChatGPT custom MCP](https://developers.openai.com/api/docs/guides/c
 
 ## Verification
 
-`poetry run python -m pytest tests/test_social_publish_queue.py tests/test_publisher_auth.py tests/test_publisher_mcp.py tests/test_market_notifications.py tests/test_telegram_notify.py tests/test_public_api.py -q`
+`poetry run python -m pytest tests/social/test_social_publish_queue.py tests/social/test_publisher_auth.py tests/social/test_publisher_mcp.py tests/market/test_market_notifications.py tests/automation/test_telegram_notify.py tests/api/test_public_api.py -q`
 
 Full suite on 2026-10-29: 689 passed, 18 skipped, 5 existing failures (Redis/connection utility tests and missing
 industry membership for 009811). Resource-token isolation, owner scope, denied unauthenticated requests, persistence,

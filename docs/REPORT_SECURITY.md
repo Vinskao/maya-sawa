@@ -29,4 +29,4 @@ stateDiagram-v2
 4. 隔離文件目前顯示「安全審查：已隔離」，尚無審核或解鎖介面；擁有者可刪除並處理原始檔後重新上傳。不要直接把隔離狀態改為可處理來繞過檢查。
 5. 既有 Keycloak 與資料庫憑證沿用服務環境設定，不寫入檔案。先用本地假資料與測試執行基準，部署前以無害測試文件驗證狀態及不進入排程；沒有自動啟用新的雲端憑證或排程。
 
-測試：Maya Sawa 執行 `poetry run python -m pytest tests/test_market_reports.py -q`；前端使用 Codex Node 執行 `node_modules/vitest/vitest.mjs run tests/market/reports.test.ts`。尚未測試正式資料庫、正式 PDF 或瀏覽器，也未部署。未來應加入真實良性樣本量測誤判率及獨立的無工具權限審查流程。
+測試：Maya Sawa 執行 `poetry run python -m pytest tests/market/reports/test_market_reports.py -q`；前端使用 Codex Node 執行 `node_modules/vitest/vitest.mjs run tests/market/reports.test.ts`。尚未測試正式資料庫、正式 PDF 或瀏覽器，也未部署。未來應加入真實良性樣本量測誤判率及獨立的無工具權限審查流程。

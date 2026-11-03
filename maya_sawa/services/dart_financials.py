@@ -4,7 +4,7 @@ fnlttSinglAcntAll returns each account with the reported quarter (thstrm_amount)
 (thstrm_add_amount), the same quarter and year to date a year earlier, and balance-sheet period ends. The
 annual report has only the full year, so the fourth quarter is derived from the third-quarter year to date
 (tdnet_financials.build_financials, marked derivedFromYtd). Amounts are KRW, not millions; EPS is KRW/share.
-The key never leaves the request: it is not logged, stored or returned. Covered by tests/test_dart_financials.py.
+The key never leaves the request: it is not logged, stored or returned. Covered by tests/integrations/test_dart_financials.py.
 """
 from __future__ import annotations
 

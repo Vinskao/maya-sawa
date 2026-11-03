@@ -1,7 +1,7 @@
 # Telegram and YouTube as view sources (analysis, 2026-10-27)
 
 Status (2026-10-27): **implemented without a login, for `t.me/ieobserve` and `t.me/Gooaye`** (`services/telegram_posts.py`,
-tests `tests/test_telegram_posts.py`). The MTProto analysis below stays as the fallback if the public preview ever stops
+tests `tests/market/reports/test_telegram_posts.py`). The MTProto analysis below stays as the fallback if the public preview ever stops
 working or a private channel is needed.
 
 ## What is recorded (implemented)
@@ -70,7 +70,7 @@ posts as HTML but not reliably the files; usable for text-only posts.
 - The Targets tab draws views as diamonds under the chart (red tailwind, green headwind). Clicking a broker's dot or
   table row shows that call's reasoning, its source, and the claims from the same report (by `reportId`, else the same
   publisher on the same day). All views are listed below the broker table.
-- Tests: `tests/test_market_price_targets.py`; frontend `tests/market/priceTargets.test.ts`.
+- Tests: `tests/market/test_market_price_targets.py`; frontend `tests/market/priceTargets.test.ts`.
 
 ## YouTube transcripts (analysis, 2026-10-27; not implemented)
 
@@ -165,5 +165,5 @@ flowchart TD
    是否出現 `MacroMicro 財經M平方`，隔天 20:30 後確認 `claims_pending` 轉為 `ready`。
 6. 下次接新的公開來源：先確認 robots 與是否有挑戰頁；有挑戰就找 RSS／官方 API，沒有就不接，並把限制寫進文件。
 
-測試：`poetry run python -m pytest tests/test_macromicro_feed.py tests/test_telegram_posts.py -q`（27 passed）。
+測試：`poetry run python -m pytest tests/market/reports/test_macromicro_feed.py tests/market/reports/test_telegram_posts.py -q`（27 passed）。
 已知缺口：部署後的真實入庫與隔日萃取尚未驗證；前端報告清單是否正確顯示新出版者尚未檢查。

@@ -7,7 +7,8 @@ import hmac
 import logging
 import os
 import asyncio
-from datetime import date
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -15,9 +16,10 @@ from pydantic import BaseModel, Field
 import httpx
 
 from ..core.public_api import public_data
-from ..core.auth.keycloak import require_manage_users_request
+from ..core.auth.keycloak import require_manage_users_request, require_member_request
 from ..core.config.config import Config
 from ..databases.market_reports_db import market_reports_db
+from ..databases.user_activity_db import user_activity_db
 from ..services import sec_filings
 from ..services.embedding_service import get_embedding_service
 from ..services.report_security import review_report_pages
@@ -36,18 +38,44 @@ from ..services.market_reports import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market/reports", tags=["market-reports"])
 
+MEMBER_DAILY_UPLOADS = 5  # reports a member may upload per Taipei day; the owner has no limit
+TAIPEI = ZoneInfo("Asia/Taipei")
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _taipei_day_start(now: datetime) -> datetime:
+    local = now.astimezone(TAIPEI)
+    return datetime(local.year, local.month, local.day, tzinfo=TAIPEI).astimezone(timezone.utc)
+
+
+def _is_owner(claims: dict) -> bool:
+    return Config.GIT_COMMIT_REQUIRED_ROLE in set(claims.get("_roles", []))
+
+
+async def _audit(claims: dict, action: str, resource_type: str, resource_id: str, detail: dict | None = None) -> None:
+    """Write who did what to the activity log. A logging failure is reported but does not undo the action."""
+    try:
+        sub = str(claims.get("sub") or "")
+        name = str(claims.get("preferred_username") or claims.get("name") or "")
+        await asyncio.to_thread(user_activity_db.touch_user, sub, name)
+        await asyncio.to_thread(user_activity_db.record, sub, name, action, resource_type, resource_id, detail or {})
+    except Exception:
+        logger.exception("User activity could not be recorded (%s %s %s)", action, resource_type, resource_id)
+
 
 async def _optional_owner(authorization: str | None = Header(None)):
-    """Public listing supports anonymous readers; invalid or expired bearers are anonymous."""
+    """The signed-in viewer (a member or the owner), or None. Public listing supports anonymous readers; invalid or
+    expired bearers are anonymous. A viewer sees public reports and their own uploads."""
     if not authorization or not authorization.lower().startswith("bearer "):
         return None
     from ..core.auth.keycloak import verify_bearer_token
 
     try:
         payload = verify_bearer_token(authorization.split(None, 1)[1])
-        if Config.GIT_COMMIT_REQUIRED_ROLE not in set(payload.get("_roles", [])):
-            return None
-        return payload
+        return payload if payload.get("sub") else None
     except Exception:
         return None
 
@@ -77,15 +105,22 @@ async def upload_report(
     published_at: date | None = Form(None),
     visibility: str = Form("public"),
     background_tasks: BackgroundTasks = None,
-    claims: dict = Depends(require_manage_users_request),
+    claims: dict = Depends(require_member_request),
 ):
     uploaded_by = _owner(claims)
-    if visibility != "public":
+    owner = _is_owner(claims)
+    if owner and visibility != "public":
         raise HTTPException(
             status_code=422, detail="Reports must be public"
         )
     if not title.strip() or len(title) > 300 or len(publisher) > 200:
         raise HTTPException(status_code=422, detail="Invalid report title or publisher")
+    if not owner:
+        # A member's upload is private to them until the owner approves it, whatever visibility they asked for.
+        visibility = "owner"
+        used = await asyncio.to_thread(market_reports_db.count_uploads_since, uploaded_by, _taipei_day_start(_now()))
+        if used >= MEMBER_DAILY_UPLOADS:
+            raise HTTPException(status_code=429, detail=f"Daily upload limit reached ({MEMBER_DAILY_UPLOADS} reports per day)")
     data = await file.read(MAX_REPORT_BYTES + 1)
     try:
         validate_pdf(file.filename or "", file.content_type or "", data)
@@ -133,6 +168,7 @@ async def upload_report(
         ) from exc
     if duplicate:
         return {"report": report_for_viewer(report, uploaded_by), "duplicate": True}
+    await _audit(claims, "C", "report", report["id"], {"title": title.strip()[:200], "visibility": visibility, "bytes": len(data)})
     if background_tasks is None:
         # FastAPI always injects this parameter in an HTTP request. Keep direct callers
         # from creating a permanently queued record if they omit the task collector.
@@ -179,7 +215,9 @@ async def process_queued_report(report_id: str) -> None:
                 report_id,
                 type(exc).__name__,
             )
-        await asyncio.to_thread(market_reports_db.set_upload_status, report_id, "claims_pending")
+        # A member's upload stays out of the claim extraction queue (and so out of the public analyses) until the owner approves it.
+        held = report.get("visibility") == "owner"
+        await asyncio.to_thread(market_reports_db.set_upload_status, report_id, "awaiting_review" if held else "claims_pending")
     except Exception as exc:
         logger.exception("Background processing failed for market report %s", report_id)
         try:
@@ -319,6 +357,32 @@ async def pending_reports(x_market_agent_key: str | None = Header(None)):
     return {"reports": market_reports_db.pending_claims()}
 
 
+@router.get("/review-queue")
+async def review_queue(claims: dict = Depends(require_manage_users_request)):
+    """Owner only: member uploads waiting for a decision (no text, no PDF)."""
+    queue = await asyncio.to_thread(market_reports_db.review_queue)
+    names = await asyncio.to_thread(user_activity_db.usernames, [row["uploaded_by"] for row in queue])
+    return {"reports": [{key: value for key, value in {**row, "uploadedBy": names.get(row["uploaded_by"]) or row["uploaded_by"]}.items()
+                         if key != "uploaded_by"} for row in queue]}
+
+
+class ReviewBody(BaseModel):
+    action: str = Field(pattern="^(approve|reject)$")
+    note: str = Field(default="", max_length=300)
+
+
+@router.post("/{report_id}/review")
+async def review_report(report_id: str, body: ReviewBody, claims: dict = Depends(require_manage_users_request)):
+    """Owner only: approve (publish and queue claim extraction) or reject a member upload. Decided once."""
+    outcome, uploader, status = await asyncio.to_thread(market_reports_db.set_review, report_id, body.action)
+    if outcome == "missing":
+        raise HTTPException(status_code=404, detail="Report not found")
+    if outcome == "conflict":
+        raise HTTPException(status_code=409, detail="Report is not waiting for review")
+    await _audit(claims, "U", "report", report_id, {"decision": body.action, "note": body.note, "uploader": uploader})
+    return {"id": report_id, "status": status}
+
+
 @router.get("/{report_id}", **public_data("單一報告內容與其萃取出的主張", "研究報告與主張"))
 async def get_report(
     report_id: str,
@@ -358,6 +422,7 @@ async def delete_report(
 ):
     if not market_reports_db.delete_owned(report_id, _owner(claims)):
         raise HTTPException(status_code=404, detail="Report not found")
+    await _audit(claims, "D", "report", report_id)
     return {"deleted": True}
 
 

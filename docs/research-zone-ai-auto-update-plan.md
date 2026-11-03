@@ -357,6 +357,6 @@ malformed 輸出最多重試一次（`max_attempts=2`），仍失敗就讓 `gene
 節點乾淨失敗，不會退回「猜一個」。prompt 只包含相關 rack part 的現況與精煉證據，
 模型看不到完整 production mapping。
 
-真實模型 smoke test 位於 `tests/test_research_pipeline_llm_smoke.py`，
+真實模型 smoke test 位於 `tests/research_pipeline/test_research_pipeline_llm_smoke.py`，
 預設 skip，需 `RESEARCH_PIPELINE_LLM_SMOKE=true`；只送一份證據、一次呼叫、
 限制 output token，且只驗證 schema 相容性，不驗證文字品質。

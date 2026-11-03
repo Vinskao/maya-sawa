@@ -59,6 +59,7 @@ from .api.git_commits import router as git_commits_router
 from .api.otel_usage import router as otel_usage_router
 from .api.market import router as market_router
 from .api.market_reports import router as market_reports_router
+from .api.admin_users import router as admin_users_router
 from .api.publisher_mcp import router as publisher_mcp_router
 from .api.social_publishing import router as social_publishing_router
 from .services.social import runner as social_runner
@@ -199,6 +200,7 @@ app.include_router(otel_usage_router)
 # Read-only market quote endpoints backed by Shioaji.
 app.include_router(market_router)
 app.include_router(market_reports_router)
+app.include_router(admin_users_router)
 app.include_router(publisher_mcp_router)
 app.include_router(social_publishing_router)
 

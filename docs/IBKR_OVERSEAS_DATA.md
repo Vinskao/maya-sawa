@@ -30,7 +30,7 @@ SEC CIK mappings currently cover META and LITE; additional US holdings require a
 
 ## Tests and sources
 
-Tests: `poetry run python -m pytest tests/test_overseas_financials.py tests/test_ibkr_research.py tests/test_market_dashboard.py tests/test_market_brief.py -q`.
+Tests: `poetry run python -m pytest tests/integrations/test_overseas_financials.py tests/integrations/test_ibkr_research.py tests/market/test_market_dashboard.py tests/market/test_market_brief.py -q`.
 
 Tests cover real trimmed source samples, units/timezones, source identity, missing values, invalid bars, Redis-loss replay, failure preservation, source TTL, public-field allowlisting, source timestamps, financial fiscal periods/YTD separation, restatements, Lumentum's including-tax revenue tag and content-addressed archive identity. Unit-test HTTP responses are mocked.
 

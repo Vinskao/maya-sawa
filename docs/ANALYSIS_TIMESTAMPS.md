@@ -2,7 +2,7 @@
 
 目的：證明某天的 AI 分析在那天就已經寫好，之後一字未改。資料庫是站方自己的，日期可以事後改；把指紋錨定在比特幣上，就不需要信任站方。
 
-程式：`maya_sawa/services/analysis_timestamps.py`（`.ots` 解析與排程）、`maya_sawa/databases/analysis_timestamp_db.py`（資料表 `maya_sawa_analysis_timestamp`）。測試：`tests/test_analysis_timestamps.py`。
+程式：`maya_sawa/services/analysis_timestamps.py`（`.ots` 解析與排程）、`maya_sawa/databases/analysis_timestamp_db.py`（資料表 `maya_sawa_analysis_timestamp`）。測試：`tests/market/test_analysis_timestamps.py`。
 
 ## 名詞
 

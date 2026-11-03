@@ -82,7 +82,7 @@ to its file): see [ROUTINE_PROMPTS.md](ROUTINE_PROMPTS.md). The network secret i
   Monday 2026-10-26 and prints `opus` on every third run; the twin that is not on turn stops at once (it only reports
   usage). Catch-up, new-instrument, and evidence-event fires (`catch-up`, `new-instrument`, `event update`) go to the Sonnet routine and skip the turn check.
   If the script fails, the Sonnet routine runs and the Opus twin stops, so no day is missed. The Opus twins have no
-  connectors, like the originals. Tests: `tests/test_routine_turn.py`.
+  connectors, like the originals. Tests: `tests/automation/test_routine_turn.py`.
 - **Environment setup:** the cloud environment needs only the network secret. Its host is reachable even at the
   default **Trusted** network level.
 
@@ -129,6 +129,6 @@ Flow (asynchronous, human in the loop):
   fires the Taiwan routine for just those codes, so the first analysis doesn't wait for 21:15. Each code fires at most
   once per Taipei day (`AutomationFire.run` = `added:<productType>:<code>`); a failed fire is released and the next save
   retries. Without `MARKET_ROUTINE_TAIWAN_TOKEN` the data is still filled and only the analysis waits for the schedule.
-  Code: `market_automation.analyze_added`; tests: `tests/test_market_custom_added.py`.
+  Code: `market_automation.analyze_added`; tests: `tests/market/test_market_custom_added.py`.
 - **States reported:** `no-session`, `scheduled` (the cron run covers it), `waiting-ib` (missed, waiting for the
   login and bars), `fired`, `done`, `not-configured`, `error` (released and retried on the next check).

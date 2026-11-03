@@ -143,7 +143,7 @@ pending attestation 裡的 URI 來自外部回應。不檢查的話，惡意或�
 
 ## 驗證
 
-測試在 `tests/test_analysis_timestamps.py`，共 12 個，全部通過。其中幾個：
+測試在 `tests/market/test_analysis_timestamps.py`，共 12 個，全部通過。其中幾個：
 
 - `test_reads_and_rewrites_the_official_example_proof_byte_for_byte`：官方範例 `hello-world.txt.ots` 解析後寫回逐位元組相同，並讀出比特幣區塊 358391。
 - `test_a_proof_from_three_calendars_waits_on_each_of_them`：用 2026-10-28 三個 calendar 的真實回應當 fixture，合併後列出三個 pending。

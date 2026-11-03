@@ -36,7 +36,7 @@ flowchart TD
 ## 開發方法
 
 1. 先量問題：列出每個排程提示詞出現舊網域的次數與段落（兩個美股／台股組各 13–17 處，其餘 1–3 處）。
-2. 先寫測試（`tests/test_routine_prompts.py`）：每個遷移的排程有指示檔；指示檔不得出現舊網域（唯一例外是一句說它已棄用）；
+2. 先寫測試（`tests/automation/test_routine_prompts.py`）：每個遷移的排程有指示檔；指示檔不得出現舊網域（唯一例外是一句說它已棄用）；
    API 呼叫都指向 `tymultiverse.cc/maya-sawa/`；檔案不含金鑰樣式、也不教排程自己設驗證標頭；寫入類排程保留「代理加 key」說明與用量回報步驟。
    確認紅（目錄不存在）後再產生檔案。
 3. 用腳本從排程當下的提示詞產生檔案（網址、「網址」段落、「network secret 送往哪個主機」一句由程式替換，不靠手打），再跑測試。
@@ -45,4 +45,4 @@ flowchart TD
 6. 之後改規則或網址：改 `routines/*.md`、跑測試、推 `main`，不需要再動排程。
 
 **限制與風險：** 排程若讀不到檔案就不會做事（指標要求它停止並用 attention 通知）。指示檔在 `main`，所以改它等於改排程行為，推送前要有測試與審查。
-測試：`poetry run python -m pytest tests/test_routine_prompts.py -q`。
+測試：`poetry run python -m pytest tests/automation/test_routine_prompts.py -q`。
