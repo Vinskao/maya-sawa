@@ -131,3 +131,23 @@ def test_claim_proposal_api_is_publicly_bounded_and_review_is_agent_key_protecte
     assert client.post(f"/market/reports/claim-proposals/{pid}/review", json={"action": "apply"},
                        headers={"X-Market-Agent-Key": key}).json()["status"] == "applied"
     assert client.get("/market/reports/claim-proposals", headers={"X-Market-Agent-Key": key}).json()["proposals"] == []
+
+
+def test_public_pending_index_excludes_private_and_processed_reports(monkeypatch, tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+
+    reports, engine, report_id = _reports(tmp_path)
+    for visibility, status, digest in [("owner", "claims_pending", "private"), ("public", "ready", "ready")]:
+        item, _ = reports.save_extracted(title=digest, publisher="Research", published_at=date(2026, 11, 3),
+                                         visibility=visibility, uploaded_by="owner", digest=digest,
+                                         pdf=b"%PDF-test", pages=["=====PAGE 1=====\ntext"])
+        with reports.sessions.begin() as session:
+            session.get(MarketReport, item["id"]).status = status
+    monkeypatch.setattr(market_reports, "market_reports_db", reports)
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    response = TestClient(app).get("/market/reports/claim-proposals/sources")
+    assert response.status_code == 200
+    assert response.json() == {"reports": [{"id": report_id}]}

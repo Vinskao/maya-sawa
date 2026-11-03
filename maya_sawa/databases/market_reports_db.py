@@ -446,6 +446,18 @@ class MarketReportsDatabase:
             session.delete(report)
             return True
 
+    def public_pending_claim_ids(self):
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions() as session:
+            rows = session.query(MarketReport.id).filter(
+                MarketReport.visibility == "public",
+                (MarketReport.status == "claims_pending") | (
+                    (MarketReport.status == "failed") & (MarketReport.page_count > 0) & (MarketReport.text != "")
+                ),
+            ).order_by(MarketReport.received_at).all()
+            return [{"id": row.id} for row in rows]
+
     def pending_claims(self):
         if not self.sessions:
             raise RuntimeError("Market reports database unavailable")

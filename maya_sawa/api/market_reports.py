@@ -363,6 +363,11 @@ async def pending_reports(x_market_agent_key: str | None = Header(None)):
     return {"reports": market_reports_db.pending_claims()}
 
 
+@router.get("/claim-proposals/sources")
+async def gpt_claim_sources():
+    return {"reports": await asyncio.to_thread(market_reports_db.public_pending_claim_ids)}
+
+
 @router.get("/claim-proposals/source/{report_id}")
 async def gpt_claim_source(report_id: str):
     """GPT receives only one public, currently pending report at a time."""
