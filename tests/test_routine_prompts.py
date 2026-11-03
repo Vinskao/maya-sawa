@@ -50,6 +50,16 @@ def test_the_files_that_write_say_the_proxy_adds_the_key_for_the_current_host():
         assert "tymultiverse.cc/maya-sawa/" in text and ("network secret" in text or "代理" in text), name
 
 
+def test_market_analysis_routines_check_the_opening_200_characters_before_every_save():
+    """2026-11-03: the opening 200 characters become the Threads post, so they lead with the new evidence, not price action."""
+    for name in ("market-us-macro-sonnet.md", "market-us-macro-opus.md", "market-taiwan-sonnet.md", "market-taiwan-opus.md"):
+        text = (ROOT / "routines" / name).read_text(encoding="utf-8")
+        assert "check_analysis_lead.py" in text and "前 200 字" in text, name
+        script_at, put_at = text.index("check_analysis_lead.py"), text.index("curl -sS -X PUT")
+        assert text.index("前 200 字") < put_at or script_at < put_at + 2000, name
+    assert (ROOT / "maya_sawa" / "public_scripts" / "check_analysis_lead.py").is_file()
+
+
 def test_the_usage_report_step_is_kept_where_a_routine_had_one():
     for name in ("market-us-macro-sonnet.md", "market-us-macro-opus.md", "market-taiwan-sonnet.md", "market-taiwan-opus.md",
                  "report-claim-extraction.md"):

@@ -35,7 +35,12 @@ kubectl rollout restart deployment/ibkr-gw -n default
 IBKR has **no headless login** for retail accounts. Each time the session lapses
 (hard expiry ~24h, or a pod restart), a human must log in through a browser.
 
-From Windows, one step (from the maya-sawa repo root):
+From Windows, double-click `ibkr-gateway\IB登入.cmd` (a desktop shortcut to it works too). It runs the same script as the
+command below, keeps the window open and tells you whether the login finished. You still type your IB user name and
+password and approve 2FA on your phone: IBKR has no headless login, and the gateway has no public address, so nothing on
+the website can start it for you.
+
+Or from a terminal, one step (from the maya-sawa repo root):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ibkr-gateway\login.ps1

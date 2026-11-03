@@ -33,6 +33,7 @@ GET https://tymultiverse.cc/maya-sawa/market/dashboard 與 /maya-sawa/market/das
 這個雲端環境設定了 network secret：送往 tymultiverse.cc/maya-sawa/ 的請求，會由代理自動加上寫入 key。你看不到 key、也不需要它，不要自己加任何驗證標頭。用 curl 送出：
 curl -sS -X PUT "https://tymultiverse.cc/maya-sawa/market/dashboard/analysis/{code}?productType={type}" -H "Content-Type: application/json" --data-binary @body.json
 body.json = {"model": "Claude Opus 5.5（排程：台股收盤後）", "content": "...", "expectedRevision": <GET 到的 revision，無紀錄才用 0>}（用 python json.dump 產生，確保跳脫正確）。
+- **開頭 200 字（硬性，細節見 market-ai.md「開頭 200 字規則」）**：每份個股、期貨與總經評論的前 200 字要先講「哪一份報告、財報或總經數字（附數字與期間）帶來什麼新 insight，因此維持或改變買賣建議」，不得以股價漲跌、均線、RSI、成交量、籌碼或資料截點標題開頭（這些是進場時機，放在重點之後）。第一行 `【結論】買／中立／賣`（可括號寫維持或由X改為Y），第二行寫重點。送出 PUT 之前先執行 `python3 maya_sawa/public_scripts/check_analysis_lead.py body.json`（總經評論加 `--kind macro`；總經節點短評不適用）；印出 NG 就重寫開頭再檢查，最多重寫兩次，仍是 NG 就照寫入並在最後回報註明。
 - 409：重新 GET、合併後再送。401：停止並回報「寫入 key 未設定或失效（環境的 network secret）」。503：稍後重試一次，仍失敗就回報，不要說已儲存。
 - 存完再 GET 一次確認 revision 增加、內容是你寫的。
 
