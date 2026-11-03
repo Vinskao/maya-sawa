@@ -563,12 +563,14 @@ class MarketReportsDatabase:
                 raise ValueError("Report not found")
             return row.page_count
 
-    def replace_claims(self, report_id, claims, extracted_by):
+    def replace_claims(self, report_id, claims, extracted_by, *, require_pending=False):
         if not self.sessions:
             raise RuntimeError("Market reports database unavailable")
         with self.sessions.begin() as session:
             report = session.get(MarketReport, report_id)
             if not report:
+                return False
+            if require_pending and not self._claim_queue_eligible(report):
                 return False
             report.claims.clear()
             extracted_at = datetime.now(timezone.utc)
@@ -594,6 +596,13 @@ class MarketReportsDatabase:
             report.status = "ready"
             report.failure_reason = None
             return True
+
+    @staticmethod
+    def _claim_queue_eligible(report):
+        return report.visibility == "public" and (
+            report.status == "claims_pending"
+            or (report.status == "failed" and report.page_count > 0 and bool(report.text))
+        )
 
     @staticmethod
     def public_report(report):

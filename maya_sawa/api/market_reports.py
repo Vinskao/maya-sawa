@@ -19,6 +19,9 @@ from ..core.public_api import public_data
 from ..core.auth.keycloak import require_manage_users_request, require_member_request
 from ..core.config.config import Config
 from ..databases.market_reports_db import market_reports_db
+from ..databases.market_report_claims_inbox_db import (
+    ClaimInboxDatabase, InvalidClaimProposal,
+)
 from ..databases.user_activity_db import user_activity_db
 from ..services import sec_filings
 from ..services.embedding_service import get_embedding_service
@@ -37,6 +40,9 @@ from ..services.market_reports import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market/reports", tags=["market-reports"])
+market_report_claims_inbox_db = ClaimInboxDatabase(
+    market_reports_db.sessions.kw["bind"] if market_reports_db.sessions else None
+)
 
 MEMBER_DAILY_UPLOADS = 5  # reports a member may upload per Taipei day; the owner has no limit
 TAIPEI = ZoneInfo("Asia/Taipei")
@@ -357,6 +363,103 @@ async def pending_reports(x_market_agent_key: str | None = Header(None)):
     return {"reports": market_reports_db.pending_claims()}
 
 
+@router.get("/claim-proposals/source/{report_id}")
+async def gpt_claim_source(report_id: str):
+    """GPT receives only one public, currently pending report at a time."""
+    try:
+        report = await asyncio.to_thread(market_report_claims_inbox_db.source_report, report_id, market_reports_db)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Public pending report not found") from exc
+    return {"report": report}
+
+
+class ClaimProposalBody(BaseModel):
+    claims: list[dict] = Field(max_length=300)
+
+
+class ClaimProposalReviewBody(BaseModel):
+    action: str = Field(pattern="^(apply|reject)$")
+    note: str = Field(default="", max_length=300)
+
+
+@router.post("/claim-proposals/{report_id}")
+async def submit_gpt_claim_proposal(report_id: str, body: ClaimProposalBody):
+    """Store untrusted model output for keyed review; this never changes live claims."""
+    try:
+        proposal, created = await asyncio.to_thread(
+            market_report_claims_inbox_db.submit, report_id, body.claims, market_reports_db
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Public pending report not found") from exc
+    except InvalidClaimProposal as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OverflowError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    return {"stored": True, "created": created, "proposal": proposal}
+
+
+@router.get("/claim-proposals")
+async def list_gpt_claim_proposals(
+    status: str = "pending", limit: int = 50,
+    x_market_agent_key: str | None = Header(None),
+):
+    _verify_agent(x_market_agent_key)
+    if status not in {"pending", "applying", "applied", "rejected", "failed", "all"}:
+        raise HTTPException(status_code=422, detail="Invalid proposal status")
+    return {"proposals": await asyncio.to_thread(
+        market_report_claims_inbox_db.list, None if status == "all" else status, limit
+    )}
+
+
+@router.post("/claim-proposals/{proposal_id}/review")
+async def review_gpt_claim_proposal(
+    proposal_id: str, body: ClaimProposalReviewBody, background_tasks: BackgroundTasks,
+    x_market_agent_key: str | None = Header(None),
+):
+    _verify_agent(x_market_agent_key)
+    proposal = await asyncio.to_thread(market_report_claims_inbox_db.claim, proposal_id)
+    if not proposal:
+        if not await asyncio.to_thread(market_report_claims_inbox_db.get, proposal_id):
+            raise HTTPException(status_code=404, detail="Proposal not found")
+        raise HTTPException(status_code=409, detail="Proposal is not pending")
+    if body.action == "reject":
+        result = await asyncio.to_thread(
+            market_report_claims_inbox_db.finish, proposal_id, "rejected", {"note": body.note}
+        )
+        if not result:
+            raise HTTPException(status_code=409, detail="Proposal review lease was lost")
+        return result
+    try:
+        report = await asyncio.to_thread(market_report_claims_inbox_db.source_report,
+                                         proposal["reportId"], market_reports_db)
+        validated = validate_claims(proposal["claims"], report["page_count"])
+    except (LookupError, ValueError) as exc:
+        result = await asyncio.to_thread(market_report_claims_inbox_db.finish, proposal_id, "rejected",
+                                         {"note": f"Source no longer pending or proposal invalid: {exc}"})
+        if not result:
+            raise HTTPException(status_code=409, detail="Proposal review lease was lost")
+        return result
+    saved = await asyncio.to_thread(market_reports_db.replace_claims, proposal["reportId"], validated,
+                                    "GPT (Claude review)", require_pending=True)
+    if not saved:
+        result = await asyncio.to_thread(market_report_claims_inbox_db.finish, proposal_id, "rejected",
+                                         {"note": "Report is no longer public and pending"})
+        if not result:
+            raise HTTPException(status_code=409, detail="Proposal review lease was lost")
+        return result
+    related_codes = sorted({code.strip() for claim in validated for code in claim.get("codes", [])
+                            if isinstance(code, str) and len(code.strip()) == 4 and code.strip().isdigit()})
+    if related_codes and background_tasks:
+        background_tasks.add_task(market_automation.fire_analysis_event,
+            market_automation.automation_store(), event_key=f"report:{proposal['reportId']}:claims",
+            codes=related_codes, reason=f"研究報告 {proposal['reportId']} 的主張已完成擷取")
+    result = await asyncio.to_thread(market_report_claims_inbox_db.finish, proposal_id, "applied",
+                                     {"claimCount": len(validated)})
+    if not result:
+        raise HTTPException(status_code=409, detail="Claims saved but proposal review lease was lost")
+    return result
+
+
 @router.get("/review-queue")
 async def review_queue(claims: dict = Depends(require_manage_users_request)):
     """Owner only: member uploads waiting for a decision (no text, no PDF)."""
@@ -442,11 +545,12 @@ async def put_claims(
             report_id,
             validate_claims(body.claims, market_reports_db.page_count(report_id)),
             body.extracted_by,
+            require_pending=True,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not saved:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=404, detail="Public pending report not found")
     related_codes = sorted({code.strip() for claim in body.claims
                             for code in claim.get("codes", [])
                             if isinstance(code, str) and len(code.strip()) == 4 and code.strip().isdigit()})

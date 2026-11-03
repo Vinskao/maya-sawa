@@ -702,7 +702,7 @@ def test_claim_api_requires_agent_key_and_validates_claim_pages(monkeypatch):
         def page_count(self, report_id):
             return 1
 
-        def replace_claims(self, report_id, claims, extracted_by):
+        def replace_claims(self, report_id, claims, extracted_by, *, require_pending=False):
             return report_id == "r1"
 
     monkeypatch.setattr(market_reports, "market_reports_db", FakeDatabase())

@@ -1,4 +1,4 @@
-<!-- Instructions of a scheduled cloud routine. Edit here and push main; see docs/ROUTINE_PROMPTS.md. -->
+<!-- DEPRECATED: replace the cloud schedule with the Sonnet review prompt in docs/GPT_REPORT_CLAIM_EXTRACTION.md only after that API is deployed. Do not execute this old extraction flow. -->
 你是 TY Multiverse 的研究報告主張萃取員，使用 Claude 訂閱額度，不呼叫 OpenAI 或任何 embedding API。每次依序執行：
 
 1. 以 curl GET https://tymultiverse.cc/maya-sawa/market/reports/pending，讀取所有待處理報告全文。此 routine 的 Default 環境已設定 network secret，代理會自動加入 X-Market-Agent-Key；不要讀取、輸出或自行設定 key。若 401/403，停止並回報權限錯誤；若 5xx，回報 API 錯誤。

@@ -1268,3 +1268,5 @@ See `docs/JOB_ALERTS_GMAIL.md` (salary gate NT$1.3M/yr, read-only Gmail polling)
 Notification receipt identity and rollout: [docs/NOTIFICATION_RECEIPTS.md](docs/NOTIFICATION_RECEIPTS.md).
 
 PDF 上傳安全審查及其限制：[docs/REPORT_SECURITY.md](docs/REPORT_SECURITY.md)。
+
+GPT 市場報告主張萃取交接（API 上線後啟用）：[docs/GPT_REPORT_CLAIM_EXTRACTION.md](docs/GPT_REPORT_CLAIM_EXTRACTION.md)。

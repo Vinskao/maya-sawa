@@ -27,6 +27,7 @@ flowchart TD
 | `market-taiwan-sonnet.md` / `market-taiwan-opus.md` | 市場 AI 分析｜台股收盤後（Sonnet／Opus 輪班），週五 21:15 |
 | `weekly-maintenance-{backend,maya-sawa,frontend}.md` | 每週維護，各自週三／週六／週日 01:00 |
 | `report-claim-extraction.md` | 市場報告｜萃取主張，每天 20:30 |
+| `GPT_REPORT_CLAIM_EXTRACTION.md` | GPT 萃取並提交隔離提案；Claude 只做審核與資料庫寫入。API 部署後才切換雲端排程 |
 
 **未遷移（原因）：**
 - 日記敘事：打的是 `/tymb/diary/agent`（另一個後端），而 agent key 的 network secret 路徑前綴只限 `/maya-sawa/`；要先決定它的 key 怎麼給。
