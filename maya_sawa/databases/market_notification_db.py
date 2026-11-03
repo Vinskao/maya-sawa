@@ -6,6 +6,9 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
 KEEP = 500
+# Read receipts kept per user (newest first). Never below KEEP: a user can see that many notifications, and diary receipts
+# cannot be matched to a stored notification here, so this cap is what bounds them.
+RECEIPTS_PER_USER = 1000
 
 # Sent to Telegram (and read) before notifications were stored; added once so the bell shows them too.
 HISTORY_BEFORE_STORAGE = [
@@ -27,6 +30,15 @@ class MarketNotification(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
 
 
+class NotificationReceipt(Base):
+    """One read notification for one user. The user is the Keycloak `sub` only: the token issuer is a URL (it changed with the
+    2026-10-31 domain move) and the backend accepts exactly one issuer at a time, so keying on it only risks orphaning receipts."""
+    __tablename__ = "maya_sawa_notification_receipt"
+    subject = Column(Text, primary_key=True)
+    notification_id = Column(Text, primary_key=True)
+    read_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class MarketNotificationDatabase:
     def __init__(self, engine):
         self.sessions = sessionmaker(bind=engine) if engine else None
@@ -43,8 +55,37 @@ class MarketNotificationDatabase:
             row_id = row.id
             stale = session.query(MarketNotification.id).order_by(MarketNotification.id.desc()).offset(keep).all()
             if stale:
-                session.query(MarketNotification).filter(MarketNotification.id.in_([r.id for r in stale])).delete(synchronize_session=False)
+                stale_ids = [r.id for r in stale]
+                session.query(MarketNotification).filter(MarketNotification.id.in_(stale_ids)).delete(synchronize_session=False)
+                # A receipt for a notification that no longer exists is dead weight (diary receipts cannot be checked here; the cap bounds them).
+                session.query(NotificationReceipt).filter(
+                    NotificationReceipt.notification_id.in_([f"routine:{row_id}" for row_id in stale_ids])).delete(synchronize_session=False)
             return row_id
+
+    def read_ids(self, subject: str) -> list[str]:
+        if not self.sessions:
+            raise RuntimeError("Notification database unavailable")
+        with self.sessions() as session:
+            rows = session.query(NotificationReceipt.notification_id).filter_by(subject=subject).all()
+            return sorted(row[0] for row in rows)
+
+    def mark_read(self, subject: str, ids: list[str], now: datetime | None = None, cap: int = RECEIPTS_PER_USER) -> None:
+        if not self.sessions:
+            raise RuntimeError("Notification database unavailable")
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+        with self.sessions.begin() as session:
+            insert = pg_insert if session.bind.dialect.name == 'postgresql' else sqlite_insert
+            read_at = now or datetime.now(timezone.utc)
+            for notification_id in set(ids):
+                statement = insert(NotificationReceipt).values(subject=subject, notification_id=notification_id, read_at=read_at)
+                session.execute(statement.on_conflict_do_nothing())
+            # Keep only this user's newest `cap` receipts.
+            excess = (session.query(NotificationReceipt.notification_id).filter_by(subject=subject)
+                      .order_by(NotificationReceipt.read_at.desc(), NotificationReceipt.notification_id.desc()).offset(cap).all())
+            if excess:
+                session.query(NotificationReceipt).filter(NotificationReceipt.subject == subject,
+                    NotificationReceipt.notification_id.in_([row[0] for row in excess])).delete(synchronize_session=False)
 
     def seed_if_empty(self, rows: list[dict]) -> int:
         """Add history that predates storage, once: only into an empty table, oldest first."""

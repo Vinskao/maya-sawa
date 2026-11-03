@@ -20,6 +20,7 @@ from ..core.config.config import Config
 from ..databases.market_reports_db import market_reports_db
 from ..services import sec_filings
 from ..services.embedding_service import get_embedding_service
+from ..services.report_security import review_report_pages
 from ..services import market_automation
 from ..services.market_reports import (
     MAX_REPORT_BYTES,
@@ -79,9 +80,9 @@ async def upload_report(
     claims: dict = Depends(require_manage_users_request),
 ):
     uploaded_by = _owner(claims)
-    if visibility not in {"public", "owner"}:
+    if visibility != "public":
         raise HTTPException(
-            status_code=422, detail="visibility must be public or owner"
+            status_code=422, detail="Reports must be public"
         )
     if not title.strip() or len(title) > 300 or len(publisher) > 200:
         raise HTTPException(status_code=422, detail="Invalid report title or publisher")
@@ -159,6 +160,11 @@ async def process_queued_report(report_id: str) -> None:
             # Scanned documents still expose the page count in the failure record.
             if page_count:
                 await asyncio.to_thread(market_reports_db.set_upload_page_count, report_id, page_count)
+            return
+        review = await asyncio.to_thread(review_report_pages, [report.get('title') or '', report.get('publisher') or '', *pages])
+        if review.flagged:
+            await asyncio.to_thread(market_reports_db.set_upload_status, report_id, "quarantined", "PDF 內容含可疑指令或隱藏字元，已隔離待審查")
+            logger.warning("Report %s quarantined: %s", report_id, review.reason)
             return
         await asyncio.to_thread(market_reports_db.update_upload_extracted, report_id, pages)
         chunks = chunk_pages(pages)

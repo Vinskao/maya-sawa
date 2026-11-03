@@ -98,3 +98,69 @@ def test_messages_sent_before_history_was_kept_are_backfilled_once(db):
     other = MarketNotificationDatabase(db.sessions.kw["bind"])
     other.add("update", "新的", "")
     assert other.seed_if_empty(HISTORY_BEFORE_STORAGE) == 0         # nor does it touch a table that already has rows
+
+def test_receipts_persist_per_keycloak_user_across_database_instances(db):
+    db.mark_read('alice', ['routine:42', 'diary:2026-11-03'])
+    db.mark_read('alice', ['routine:42'])
+    assert set(MarketNotificationDatabase(db.sessions.kw['bind']).read_ids('alice')) == {'routine:42', 'diary:2026-11-03'}
+    assert db.read_ids('bob') == []
+
+
+def test_receipts_are_keyed_on_the_user_id_only_so_an_issuer_change_cannot_orphan_them(db, monkeypatch):
+    """2026-10-31 moved the site to tymultiverse.cc and the Keycloak issuer URL changed with it; it may change again. The
+    backend accepts a single issuer at a time, so the issuer never told two users apart. The stable user id (sub) is the key."""
+    from maya_sawa.api import market
+    from maya_sawa.core.auth.keycloak import require_authenticated
+    monkeypatch.setattr(market, 'market_notification_db', db)
+    app = FastAPI()
+    app.include_router(market.router)
+    client = TestClient(app)
+    app.dependency_overrides[require_authenticated] = lambda: {'iss': 'https://peoplesystem.example/sso/realms/PeopleSystem', 'sub': 'alice'}
+    assert client.post('/market/notification-receipts', json={'ids': ['routine:42']}).status_code == 200
+    app.dependency_overrides[require_authenticated] = lambda: {'iss': 'https://tymultiverse.cc/sso/realms/PeopleSystem', 'sub': 'alice'}
+    assert client.get('/market/notification-receipts').json() == {'ids': ['routine:42']}     # same user after an issuer change
+    app.dependency_overrides[require_authenticated] = lambda: {'sub': 'alice'}                # an issuer claim is no longer needed
+    assert client.get('/market/notification-receipts').status_code == 200
+    app.dependency_overrides[require_authenticated] = lambda: {'iss': 'https://tymultiverse.cc/sso/realms/PeopleSystem'}
+    assert client.get('/market/notification-receipts').status_code == 401                    # no user id: no receipts
+
+
+def test_receipt_api_requires_auth_and_isolates_users(db, monkeypatch):
+    from maya_sawa.api import market
+    from maya_sawa.core.auth.keycloak import require_authenticated
+    monkeypatch.setattr(market, 'market_notification_db', db)
+    app = FastAPI()
+    app.include_router(market.router)
+    client = TestClient(app)
+    assert client.get('/market/notification-receipts').status_code == 401
+    app.dependency_overrides[require_authenticated] = lambda: {'iss': 'issuer', 'sub': 'alice'}
+    assert client.post('/market/notification-receipts', json={'ids': ['routine:42']}).status_code == 200
+    assert client.get('/market/notification-receipts').json() == {'ids': ['routine:42']}
+    app.dependency_overrides[require_authenticated] = lambda: {'iss': 'issuer', 'sub': 'bob'}
+    assert client.get('/market/notification-receipts').json() == {'ids': []}
+    assert client.post('/market/notification-receipts', json={'ids': ['bad']}).status_code == 422
+
+
+def test_pruning_a_notification_also_removes_the_receipts_that_point_at_it(db):
+    first = db.add("update", "一", "", keep=2)
+    db.add("update", "二", "", keep=2)
+    db.mark_read('alice', [f'routine:{first}', 'diary:2026-11-03'])
+    db.mark_read('bob', [f'routine:{first}'])
+    db.add("update", "三", "", keep=2)                                  # the oldest notification is pruned
+    assert db.read_ids('alice') == ['diary:2026-11-03']                  # its receipts go with it; a diary receipt cannot be checked here and stays
+    assert db.read_ids('bob') == []
+    third = db.recent(1)[0]["id"]
+    db.mark_read('alice', [f'routine:{third}'])
+    assert f'routine:{third}' in db.read_ids('alice')                    # a live notification keeps its receipt
+
+
+def test_a_user_keeps_at_most_the_newest_receipts(db):
+    from datetime import datetime, timedelta, timezone
+    start = datetime(2026, 11, 3, tzinfo=timezone.utc)
+    for number in range(5):
+        db.mark_read('alice', [f'diary:day-{number}'], now=start + timedelta(minutes=number), cap=3)
+    assert db.read_ids('alice') == ['diary:day-2', 'diary:day-3', 'diary:day-4']
+    db.mark_read('bob', ['diary:only'], now=start, cap=3)
+    assert db.read_ids('bob') == ['diary:only']                          # the cap is per user
+    from maya_sawa.databases.market_notification_db import RECEIPTS_PER_USER
+    assert RECEIPTS_PER_USER >= 500                                      # never smaller than the notifications a user can see

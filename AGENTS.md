@@ -1262,3 +1262,7 @@ https://localhost:5000/
 ## Job alerts (Gmail / Cake)
 
 See `docs/JOB_ALERTS_GMAIL.md` (salary gate NT$1.3M/yr, read-only Gmail polling).
+
+Notification receipt identity and rollout: [docs/NOTIFICATION_RECEIPTS.md](docs/NOTIFICATION_RECEIPTS.md).
+
+PDF 上傳安全審查及其限制：[docs/REPORT_SECURITY.md](docs/REPORT_SECURITY.md)。

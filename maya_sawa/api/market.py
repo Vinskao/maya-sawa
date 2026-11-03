@@ -275,6 +275,46 @@ async def list_notifications(limit: int = 100, owner: dict | None = Depends(opti
         raise HTTPException(status_code=503, detail="Notification database unavailable") from exc
 
 
+class ReceiptBody(BaseModel):
+    ids: list[str] = Field(max_length=200)
+
+    @field_validator('ids')
+    @classmethod
+    def validate_ids(cls, ids):
+        if any(len(value) > 200 or not re.fullmatch(r'(?:routine:\d+|diary:[A-Za-z0-9:.+_-]+)', value) for value in ids):
+            raise ValueError('Invalid notification ID')
+        return ids
+
+
+def receipt_identity(claims: dict) -> str:
+    """The verified token's `sub`. The issuer was already checked by require_authenticated; it is not part of the key."""
+    subject = claims.get('sub')
+    if not isinstance(subject, str) or not subject:
+        raise HTTPException(status_code=401, detail='Token identity missing')
+    return subject
+
+
+@router.get('/notification-receipts')
+async def get_notification_receipts(claims: dict = Depends(require_authenticated)):
+    subject = receipt_identity(claims)
+    try:
+        return {'ids': await asyncio.to_thread(market_notification_db.read_ids, subject)}
+    except Exception as exc:
+        logger.exception('Notification receipts read failed')
+        raise HTTPException(status_code=503, detail='Notification receipts unavailable') from exc
+
+
+@router.post('/notification-receipts')
+async def save_notification_receipts(body: ReceiptBody, claims: dict = Depends(require_authenticated)):
+    subject = receipt_identity(claims)
+    try:
+        await asyncio.to_thread(market_notification_db.mark_read, subject, body.ids)
+        return {'saved': True}
+    except Exception as exc:
+        logger.exception('Notification receipts save failed')
+        raise HTTPException(status_code=503, detail='Notification receipts unavailable') from exc
+
+
 class RoutineModelUsage(BaseModel):
     model: str = Field(min_length=1, max_length=80)
     input: int = Field(ge=0, le=10**10)
