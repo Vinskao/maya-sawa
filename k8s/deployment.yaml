@@ -50,6 +50,21 @@ spec:
           value: "${OPENAI_API_KEY}"
         - name: OPENAI_ORGANIZATION
           value: "${OPENAI_ORGANIZATION}"
+        # Azure Speech credential is injected by the Jenkins credential-to-Kubernetes secret stage.
+        - name: AZURE_SPEECH_KEY
+          valueFrom:
+            secretKeyRef:
+              name: azure-speech-credentials
+              key: AZURE_SPEECH_KEY
+        - name: MARKET_AUDIO_SPEECH_REGION
+          value: "eastus"
+        # Real synthesis can be exercised explicitly, but unattended generation stays disabled by default.
+        - name: MARKET_AUDIO_AZURE_ENABLED
+          value: "false"
+        - name: MARKET_AUDIO_AUTOGEN_ENABLED
+          value: "false"
+        - name: MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT
+          value: "0"
         - name: OPENAI_API_BASE
           value: "https://api.openai.com/v1"
         - name: DB_HOST

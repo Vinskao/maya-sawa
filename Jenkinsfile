@@ -440,6 +440,21 @@ TELEGRAM_CHAT_ID=%s
             }
         }
 
+        stage('Configure Azure Speech Key') {
+            // The secret is required by the deployment, but this does not enable automatic synthesis.
+            steps {
+                container('kubectl') {
+                    withCredentials([string(credentialsId: 'AZURE_SPEECH_KEY', variable: 'AZURE_SPEECH_KEY')]) {
+                        sh '''
+                            set +x
+                            set -e
+                            printf 'AZURE_SPEECH_KEY=%s\n' "$AZURE_SPEECH_KEY" | kubectl create secret generic azure-speech-credentials --from-env-file=/dev/stdin -n default --dry-run=client -o yaml | kubectl apply -f -
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {
