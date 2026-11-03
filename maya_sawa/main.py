@@ -200,6 +200,62 @@ app.include_router(otel_usage_router)
 # Read-only market quote endpoints backed by Shioaji.
 app.include_router(market_router)
 app.include_router(market_reports_router)
+from .api.daily_maya import make_router as make_daily_maya_router
+from .api.market import _verify_agent_key
+from .databases.daily_maya_db import DailyMayaDatabase
+from .databases.market_audio_db import MarketAudioDatabase
+from .databases.market_dashboard_db import market_dashboard_db
+from .databases.market_ai_analysis_db import market_ai_analysis_db
+from .api.market_audio import make_router as make_market_audio_router
+from .services.azure_speech_rest import AzureSpeechRestProvider
+from .services.market_audio_worker import MarketAudioWorker, audio_autogen_is_configured
+
+market_audio_db = MarketAudioDatabase(market_dashboard_db.engine)
+
+def _enqueue_analysis_audio(product_type, code, revision):
+    if product_type not in {'stock', 'macro'}:
+        return
+    history = market_ai_analysis_db.read(product_type, code)['history']
+    analysis = next((item for item in history if item['revision'] == revision), None)
+    if analysis:
+        market_audio_db.enqueue(product_type, code, revision, analysis['content'])
+
+market_ai_analysis_db.listeners.append(_enqueue_analysis_audio)
+_market_audio_worker_task = None
+_market_audio_worker_lock = None
+
+async def _market_audio_worker_loop(worker):
+    while True:
+        try:
+            result = await asyncio.to_thread(worker.process_one)
+        except Exception:
+            logger.exception('Market audio worker failed')
+            result = None
+        if result is None:
+            await asyncio.sleep(30)
+
+async def _start_market_audio_worker_if_configured():
+    global _market_audio_worker_task, _market_audio_worker_lock
+    if _market_audio_worker_task or not audio_autogen_is_configured():
+        return
+    _market_audio_worker_lock = market_audio_db.acquire_worker_lock()
+    if _market_audio_worker_lock is None:
+        logger.info('Market audio worker not started: another pod owns the database lease')
+        return
+    provider = AzureSpeechRestProvider()
+    worker = MarketAudioWorker(market_audio_db, provider, enabled=True,
+                               monthly_char_limit=os.environ['MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT'])
+    _market_audio_worker_task = asyncio.create_task(_market_audio_worker_loop(worker))
+    logger.warning('Market audio autogeneration is enabled with the configured local character cap')
+
+def _daily_maya_authorized(request):
+    _verify_agent_key(request)
+    return True
+
+app.include_router(make_daily_maya_router(DailyMayaDatabase(market_dashboard_db.engine),
+                                         market_ai_analysis_db, _daily_maya_authorized,
+                                         on_approved=lambda row: market_audio_db.enqueue('daily', row['id'], 1, row['content'])))
+app.include_router(make_market_audio_router(market_audio_db))
 app.include_router(admin_users_router)
 app.include_router(publisher_mcp_router)
 app.include_router(social_publishing_router)
@@ -229,6 +285,7 @@ async def _startup_event():
     5. 記錄啟動日誌
     """
     try:
+        await _start_market_audio_worker_if_configured()
         # 檢查配置
         missing_config = Config.validate_required_config()
         if missing_config:
@@ -390,6 +447,14 @@ async def _shutdown_event():
     4. 記錄關閉日誌
     """
     try:
+        global _market_audio_worker_task, _market_audio_worker_lock
+        if _market_audio_worker_task:
+            _market_audio_worker_task.cancel()
+            await asyncio.gather(_market_audio_worker_task, return_exceptions=True)
+            _market_audio_worker_task = None
+        if _market_audio_worker_lock:
+            market_audio_db.release_worker_lock(_market_audio_worker_lock)
+            _market_audio_worker_lock = None
         # 停止定期同步任務，避免資源洩漏
         await scheduler.stop_periodic_sync()
         

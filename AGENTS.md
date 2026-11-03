@@ -1,5 +1,8 @@
 # Maya Sawa - Agent 開發指南
 
+市場快報語音的設計、測試與未完成事項：[docs/MARKET_AUDIO.md](docs/MARKET_AUDIO.md)。
+Maya 每日精讀的編輯規則、流程與未完成事項：[docs/DAILY_MAYA_BRIEF.md](docs/DAILY_MAYA_BRIEF.md)。
+
 ## 專案概述
 
 Maya Sawa 是一個**統一的 FastAPI 後端服務**，整合了三個原本獨立的專案：
