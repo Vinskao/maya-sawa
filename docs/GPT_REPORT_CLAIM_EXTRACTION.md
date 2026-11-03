@@ -74,8 +74,8 @@ GET https://tymultiverse.cc/maya-sawa/market/reports/claim-proposals 取得 pend
 ## 測試與尚未完成
 
 - `poetry run python -m pytest tests/market/reports/test_claim_inbox.py tests/market/reports/test_market_reports.py -q`：34 passed。
-- 2026-11-03 同一指令：35 passed；新增公開待處理索引的匿名存取、私人及已處理報告排除測試，修正前回傳 405、修正後通過。尚未部署此索引。
+- 2026-11-03 同一指令：35 passed；新增公開待處理索引的匿名存取、私人及已處理報告排除測試，修正前回傳 405、修正後通過。
 - 2026-11-03 全套 `poetry run python -m pytest -q`：924 passed、19 skipped、5 failed；四項 infrastructure 測試涉及本機 Redis／連線池與測試回傳值，另有產業群組資料覆蓋測試失敗，均不在本次報告交接修改範圍。
-- 尚需：全套 pytest、PostgreSQL schema startup 實測、正式 deployment、端點 smoke test、建立 ChatGPT daily task、將 Claude task 提示詞切至審核專用、立即執行一次端到端試跑。
+- 2026-11-03：Jenkins #265 部署 `018eb22`，總經收集及 IBKR Gateway 參數均為 false；公開索引和單份來源回 200，匿名審核清單回 401，PostgreSQL 提案表存在。GPT 每日 20:00 排程已啟用，Claude Sonnet 審核每日 20:30 已啟用。以一份公開報告人工試跑：GPT POST 一筆含一項主張的 pending 提案；Claude 審核後因代碼及敘述不受原文支持而 reject，資料庫確認 rejected，來源仍為 pending。此試跑驗證拒絕路徑，正式環境 apply 路徑與第一次自動排程結果尚待核對。
 - 啟發式文字限制不是完整 prompt-injection 防護。需要高保證時應改用隔離且無工具權限的萃取模型執行環境，並檢視已存在的 claims_pending 文件安全狀態。
 
