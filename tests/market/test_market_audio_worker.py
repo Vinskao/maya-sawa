@@ -79,7 +79,7 @@ def test_audio_worker_leader_lock_fails_closed_on_non_postgres_database():
     assert db.acquire_worker_lock() is None
 
 
-def test_monthly_local_character_budget_blocks_before_provider_call():
+def test_monthly_local_character_budget_blocks_before_provider_call(caplog):
     db = database()
     db.enqueue('daily', 'brief-budget', 1, '年增5%')
     class Provider:
@@ -97,6 +97,7 @@ def test_monthly_local_character_budget_blocks_before_provider_call():
     assert worker.process_one() == 'budget_blocked'
     assert not provider.called
     assert db.job('daily', 'brief-budget', 1)['status'] == 'blocked'
+    assert 'blocked' in caplog.text and 'brief-budget' in caplog.text
 
 
 def test_monthly_budget_reserves_every_attempt_and_never_exceeds_limit():
@@ -114,7 +115,8 @@ def test_monthly_budget_reserves_every_attempt_and_never_exceeds_limit():
     assert db.monthly_reserved_characters() <= 5
 
 
-def test_worker_synthesizes_full_text_and_persists_audio():
+def test_worker_synthesizes_full_text_and_persists_audio(caplog):
+    caplog.set_level('INFO')
     db = database()
     full_text = '第一段。\n\n第二段，完整版本。'
     db.enqueue('daily', 'brief-1', 1, full_text)
@@ -131,6 +133,9 @@ def test_worker_synthesizes_full_text_and_persists_audio():
     assert seen == ['第一段。 第二段，完整版本。']
     assert db.audio('daily', 'brief-1', 1) == (b'complete-audio', 'audio/mpeg')
     assert db.job('daily', 'brief-1', 1)['status'] == 'ready'
+    assert 'estimated_list_usd' in caplog.text
+    assert 'ready' in caplog.text
+    assert full_text not in caplog.text
 
 
 def test_worker_blocks_document_style_daily_maya_before_provider_call():
@@ -168,7 +173,7 @@ def test_daily_spoken_guard_does_not_change_macro_or_stock_audio_sources():
     assert seen == [text]
 
 
-def test_worker_records_failure_then_retries_same_complete_revision():
+def test_worker_records_failure_then_retries_same_complete_revision(caplog):
     db = database()
     text = '完整文章，不是增量。'
     db.enqueue('daily', 'brief-2', 1, text)
@@ -187,6 +192,7 @@ def test_worker_records_failure_then_retries_same_complete_revision():
     assert worker.process_one() == 'retry'
     failed_attempt = db.job('daily', 'brief-2', 1)
     assert failed_attempt['status'] == 'retry' and failed_attempt['errorType'] == 'RuntimeError'
+    assert 'retry' in caplog.text and 'RuntimeError' in caplog.text
     assert 'NEVER-STORE-THIS' not in str(failed_attempt)
     assert worker.process_one() == 'ready'
     assert db.job('daily', 'brief-2', 1)['attempts'] == 2

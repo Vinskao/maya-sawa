@@ -1,9 +1,13 @@
 """One-job worker; automatic invocation is deliberately controlled by deployment config."""
 import hashlib
+import logging
 import os
 
 from ..databases.market_audio_db import AudioBudgetExceeded
 from .daily_maya_speech import InvalidSpokenTranscript, prepare_spoken_transcript
+
+logger = logging.getLogger(__name__)
+ESTIMATED_USD_PER_MILLION_CHARACTERS = 15.0
 
 
 def audio_autogen_is_configured(environ=None):
@@ -55,23 +59,42 @@ class MarketAudioWorker:
             if not callable(character_counter):
                 raise ValueError('Speech provider must supply a billable character counter')
             try:
-                self.database.reserve_monthly_characters(character_counter(spoken_text), self.monthly_char_limit)
+                billable_characters = character_counter(spoken_text)
+                self.database.reserve_monthly_characters(billable_characters, self.monthly_char_limit)
             except AudioBudgetExceeded:
                 self.database.finish_job(job['productType'], job['code'], job['revision'], 'blocked', 'AudioBudgetExceeded')
+                logger.warning('Market audio job blocked product=%s code=%s revision=%s attempts=%d monthly_cap_chars=%d',
+                               job['productType'], job['code'], job['revision'], job['attempts'], self.monthly_char_limit)
                 return 'budget_blocked'
+            monthly_reserved = self.database.monthly_reserved_characters()
+            logger.info(
+                'Market audio estimated_list_usd product=%s code=%s revision=%s attempt=%d billable_chars=%d '
+                'attempt_estimate_usd=%.6f month_reserved_chars=%d month_estimate_usd=%.6f cap_chars=%d rate_usd_per_million=%.2f',
+                job['productType'], job['code'], job['revision'], job['attempts'], billable_characters,
+                billable_characters * ESTIMATED_USD_PER_MILLION_CHARACTERS / 1_000_000,
+                monthly_reserved,
+                monthly_reserved * ESTIMATED_USD_PER_MILLION_CHARACTERS / 1_000_000,
+                self.monthly_char_limit, ESTIMATED_USD_PER_MILLION_CHARACTERS)
             audio, content_type, voice = self.provider.synthesize(spoken_text)
             if not audio or not content_type or not voice:
                 raise ValueError('Provider returned incomplete audio')
             self.database.save(job['productType'], job['code'], job['revision'], source_text,
                                audio, content_type, voice)
             self.database.finish_job(job['productType'], job['code'], job['revision'], 'ready')
+            logger.info('Market audio job ready product=%s code=%s revision=%s attempts=%d',
+                        job['productType'], job['code'], job['revision'], job['attempts'])
             return 'ready'
         except InvalidSpokenTranscript as exc:
             self.database.finish_job(job['productType'], job['code'], job['revision'], 'failed', type(exc).__name__[:80])
+            logger.error('Market audio job failed product=%s code=%s revision=%s attempts=%d error_type=%s',
+                         job['productType'], job['code'], job['revision'], job['attempts'], type(exc).__name__)
             return 'failed'
         except Exception as exc:
             status = 'retry' if job['attempts'] < self.max_attempts else 'failed'
             # Persist only the exception class, never provider messages that may contain credentials.
             self.database.finish_job(job['productType'], job['code'], job['revision'], status,
                                      type(exc).__name__[:80])
+            logger.warning('Market audio job %s product=%s code=%s revision=%s attempts=%d/%d error_type=%s',
+                           status, job['productType'], job['code'], job['revision'], job['attempts'],
+                           self.max_attempts, type(exc).__name__)
             return status
