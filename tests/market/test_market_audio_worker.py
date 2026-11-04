@@ -39,7 +39,7 @@ def test_audio_worker_leader_lock_fails_closed_on_non_postgres_database():
 
 def test_monthly_local_character_budget_blocks_before_provider_call():
     db = database()
-    db.enqueue('daily', 'brief-budget', 1, 'A & B')
+    db.enqueue('daily', 'brief-budget', 1, '年增5%')
     class Provider:
         @staticmethod
         def billable_characters(text):
@@ -50,8 +50,8 @@ def test_monthly_local_character_budget_blocks_before_provider_call():
             self.called = True
             return b'ok', 'audio/mpeg', 'test-voice'
     provider = Provider()
-    # Escaping the ampersand expands the billable source to 9 chars.
-    worker = MarketAudioWorker(db, provider, enabled=True, monthly_char_limit=8)
+    # Converting percent notation to spoken Mandarin expands the text to 6 characters.
+    worker = MarketAudioWorker(db, provider, enabled=True, monthly_char_limit=5)
     assert worker.process_one() == 'budget_blocked'
     assert not provider.called
     assert db.job('daily', 'brief-budget', 1)['status'] == 'blocked'
@@ -86,9 +86,44 @@ def test_worker_synthesizes_full_text_and_persists_audio():
             return b'complete-audio', 'audio/mpeg', 'test-voice'
 
     assert MarketAudioWorker(db, Provider(), enabled=True, monthly_char_limit=10000).process_one() == 'ready'
-    assert seen == [full_text]
+    assert seen == ['第一段。 第二段，完整版本。']
     assert db.audio('daily', 'brief-1', 1) == (b'complete-audio', 'audio/mpeg')
     assert db.job('daily', 'brief-1', 1)['status'] == 'ready'
+
+
+def test_worker_blocks_document_style_daily_maya_before_provider_call():
+    db = database()
+    unsafe = '分析版本更新時間為2026-11-03 07:36，資料截至10月28日。'
+    db.enqueue('daily', 'brief-metadata', 1, unsafe)
+    class Provider:
+        called = False
+        @staticmethod
+        def billable_characters(text): return len(text)
+        def synthesize(self, text):
+            self.called = True
+            return b'ok', 'audio/mpeg', 'test-voice'
+    provider = Provider()
+    worker = MarketAudioWorker(db, provider, enabled=True, monthly_char_limit=10000)
+    assert worker.process_one() == 'failed'
+    assert not provider.called
+    assert db.job('daily', 'brief-metadata', 1)['status'] == 'failed'
+    assert db.job('daily', 'brief-metadata', 1)['errorType'] == 'InvalidSpokenTranscript'
+
+
+def test_daily_spoken_guard_does_not_change_macro_or_stock_audio_sources():
+    db = database()
+    text = 'EPS & capex analysis: 5.19%.'
+    db.enqueue('stock', '2454', 3, text)
+    seen = []
+    class Provider:
+        @staticmethod
+        def billable_characters(value): return len(value)
+        def synthesize(self, value):
+            seen.append(value)
+            return b'ok', 'audio/mpeg', 'test-voice'
+    worker = MarketAudioWorker(db, Provider(), enabled=True, monthly_char_limit=10000)
+    assert worker.process_one() == 'ready'
+    assert seen == [text]
 
 
 def test_worker_records_failure_then_retries_same_complete_revision():
