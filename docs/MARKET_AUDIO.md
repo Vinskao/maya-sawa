@@ -48,6 +48,13 @@ stateDiagram-v2
 3. Azure key 由 Speech resource 取得後只存 Jenkins `vinskao` folder Secret text credential `AZURE_SPEECH_KEY`；Jenkins 綁定時不開 shell trace，以 stdin `--from-env-file=/dev/stdin` 建立 `azure-speech-credentials` Secret，deployment 只透過 SecretKeyRef 引用。禁止把值寫進原始碼、命令列參數、建置日誌或回報。Azure 網路 allowlist 僅保留 `140.245.44.81`。自動合成仍關閉；試音使用 OKE 節點上的單次請求，先核對 SKU 免費用量和費率，不以試音成功推定後續用量免費。
 4. 新分析版/已審核每日精讀會排入持久化工作，worker 有重試與失敗上限，REST provider 可注入；自動 worker 預設關閉，且只允許取得 PostgreSQL leader lock 的 pod 啟動。單次試音先從 OKE 節點送短句至 regional TTS endpoint，確認 HTTP、音訊格式和完整解碼後再人工試聽；全文驗證還要比對 source digest，經 Learn 播放到 ended。2026-11-04 已以 34 個中文字取得 41,904-byte MP3，ffprobe 驗證 6.984 秒；按公開 USD $15/M list rate 的非免費估算約 $0.00051，實際是否從 F0 免費額度扣抵尚未核實。只有確認此 voice 的免費 entitlement、訂閱費率和能接受的月字數後，才評估設定自動化旗標及上限。若需 $1 美元硬上限，先以可核對的實際費率做原子美元帳本；字數 cap 不等於美元 cap。
 
+## 2026-11-04 新版每日精讀重製
+
+- 核准稿 `64bf7afc-3cf3-42c3-aaa6-a07cf055f713` 已發布，來源 520 字元。正式 `maya-sawa:272` 的 `prepare_spoken_transcript` 驗證通過，清理結果只合併空白、沒有改變口播文字；計費 516 字元。手動 worker 取得 PostgreSQL advisory lock，只 claim 此一筆並限制單次 ledger ceiling 為 1,466 字元（既有 950 + 本稿 516）。中途一次因手動驗證連線池只有一個連線而在 claim 前 timeout，job 仍為 pending/0 attempts、帳本不變；擴成兩個連線後只成功呼叫 Azure 一次。部署中的兩個 worker flags 仍為 false，環境月上限仍為 0。
+- DB job 現為 `ready`、attempt 1，來源 digest 與核准稿一致；voice `zh-CN-Xiaoyu:DragonHDFlashLatestNeural`，`audio/mpeg`，606,960 bytes。`ffprobe` 為 101.160 秒，FFmpeg 完整解碼成功。本機音檔：[新版 520 字每日精讀 MP3](../../.local-evidence/azure-speech-daily-64bf7afc-520char-20261104.mp3)。公開音訊 GET 回 HTTP 200、`audio/mpeg`、606,960 bytes；Learn 清單將新版列在第一筆。
+- Learn 頁原生播放器已開始播放，但兩度在約 40 秒及 65 秒附近停住；最後觀察為 `paused=true`、`ended=false`、`duration=null`、`readyState=4`。因此已證實音檔可完整解碼並可由公開路由播放，**尚未證實 Learn 播放器全程到結尾**。不要將此輪寫成完整播放器試聽成功。
+- 若以 East US USD $15/M list rate 估算，這次 516 字約 $0.00774，累計保留 1,466 字約 $0.02199；非實際帳單與免費額度認定。HD Flash 的 F0 50 萬免費 entitlement 及本資源實際費率仍無帳戶用量/帳單佐證，自動合成繼續關閉。
+
 官方核對（2026-11-03）：[HD Flash voice 清單與 API 適用性](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/high-definition-voices)、[Speech TTS REST endpoint 與 request 格式](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech)、[Azure Speech 價目](https://azure.microsoft.com/en-us/pricing/details/speech/)、[East US Azure Speech 零售費率 API](https://prices.azure.com/api/retail/prices?$filter=armRegionName%20eq%20%27eastus%27%20and%20contains(productName,%27Azure%20Speech%27)、[Private Endpoint 的 custom-domain 規則](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-services-private-link)。官方公開額度不會顯示本資源剩餘免費量；F0 是否免費涵蓋 HD Flash 仍需帳戶用量/帳單佐證。
 
 ## 2026-11-04 正式環境即時合成驗證
