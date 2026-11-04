@@ -58,13 +58,13 @@ spec:
               key: AZURE_SPEECH_KEY
         - name: MARKET_AUDIO_SPEECH_REGION
           value: "eastus"
-        # Real synthesis can be exercised explicitly, but unattended generation stays disabled by default.
+        # Automatic synthesis is limited to approved daily briefs; monthly local ceiling is 50k chars.
         - name: MARKET_AUDIO_AZURE_ENABLED
-          value: "false"
+          value: "true"
         - name: MARKET_AUDIO_AUTOGEN_ENABLED
-          value: "false"
+          value: "true"
         - name: MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT
-          value: "0"
+          value: "50000"
         - name: OPENAI_API_BASE
           value: "https://api.openai.com/v1"
         - name: DB_HOST

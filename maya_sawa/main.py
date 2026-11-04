@@ -23,6 +23,8 @@ import os
 import logging
 import asyncio
 import pathlib
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 
 # 第三方庫導入
@@ -211,6 +213,11 @@ from .services.azure_speech_rest import AzureSpeechRestProvider
 from .services.market_audio_worker import MarketAudioWorker, audio_autogen_is_configured
 
 market_audio_db = MarketAudioDatabase(market_dashboard_db.engine)
+daily_maya_db = DailyMayaDatabase(market_dashboard_db.engine)
+
+def _today_approved_daily_audio_ids():
+    today = datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
+    return {row['id'] for row in daily_maya_db.published() if row['day'] == today}
 
 def _enqueue_analysis_audio(product_type, code, revision):
     if product_type not in {'stock', 'macro'}:
@@ -244,7 +251,9 @@ async def _start_market_audio_worker_if_configured():
         return
     provider = AzureSpeechRestProvider()
     worker = MarketAudioWorker(market_audio_db, provider, enabled=True,
-                               monthly_char_limit=os.environ['MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT'])
+                               monthly_char_limit=os.environ['MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT'],
+                               daily_only=True,
+                               eligible_daily_codes=_today_approved_daily_audio_ids)
     _market_audio_worker_task = asyncio.create_task(_market_audio_worker_loop(worker))
     logger.warning('Market audio autogeneration is enabled with the configured local character cap')
 
@@ -252,7 +261,7 @@ def _daily_maya_authorized(request):
     _verify_agent_key(request)
     return True
 
-app.include_router(make_daily_maya_router(DailyMayaDatabase(market_dashboard_db.engine),
+app.include_router(make_daily_maya_router(daily_maya_db,
                                          market_ai_analysis_db, _daily_maya_authorized,
                                          on_approved=lambda row: market_audio_db.enqueue('daily', row['id'], 1, row['content'])))
 app.include_router(make_market_audio_router(market_audio_db))

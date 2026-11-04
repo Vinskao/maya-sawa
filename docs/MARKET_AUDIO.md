@@ -43,6 +43,41 @@ stateDiagram-v2
 
 ## 開發方法
 
+### Automatic approved daily brief synthesis (2026-11-04)
+
+```mermaid
+flowchart LR
+    GPT[08:30 GPT daily draft] --> P[Pending proposal API]
+    P --> C[09:00 Claude review]
+    C -->|approved only| A[Review API commits approval]
+    A --> Q[(Deduplicated daily audio job)]
+    Q --> W[Single PostgreSQL leader worker]
+    W -->|today's approved ID only| S[Azure Speech REST]
+    S --> D[(Complete MP3 in database)]
+    D --> L[Learn list and player]
+    C -->|rejected or pending| X[No synthesis]
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: Claude proposal submitted
+    pending --> approved: authenticated review API
+    pending --> rejected: authenticated review API
+    approved --> queued: idempotent enqueue
+    queued --> processing: leader claims daily job
+    processing --> ready: full audio persisted
+    processing --> retry: provider failure under retry limit
+    retry --> processing
+    processing --> failed: retry limit or invalid spoken text
+    processing --> blocked: monthly character ceiling reached
+```
+
+Production auto-generation is enabled for the current Taipei day's approved daily brief only. The worker requires the proposal ID to appear in the daily database's approved records for today's date and filters claims to those IDs; old daily jobs and stock/macro jobs remain queued. A monthly local ceiling of 50,000 billable characters is configured. At the public East US $15/M list rate this is an approximate $0.75 ceiling, before any applicable free quota; it is not an account-level USD hard stop or a guarantee about the actual invoice. Azure usage and billing for Neural HD Flash/F0 must still be checked in the subscription.
+
+Repeat this rollout by testing that macro/stock and non-current-day daily jobs remain pending when daily auto-generation is enabled, reviewing the approved-only API callback and duplicate behavior, then deploying the feature flags and a positive character ceiling together. Trigger the normal authenticated proposal/review APIs with a source-verified, non-public test proposal; verify the resulting job, complete database audio row and Learn player. Do not call `process_one` or a targeted worker as a substitute for the API flow. Failed provider attempts are recorded by exception class and count against the monthly character ledger; transient errors retry up to the configured attempt limit, so attempted text is counted even if a retry is needed.
+
+Tests: `poetry run python -m pytest tests/market/test_market_audio_worker.py tests/market/test_market_audio_deployment_secret.py tests/market/test_daily_maya_api.py -q`. API-based production verification is still required after deployment.
+
 1. 先固定分段不切壞數值、音訊必須有完整原文等測試，再做資料庫與唯讀 API；後端啟動時用既有市場資料庫 engine 初始化音訊表並註冊路由。
 2. 前端只經同源 Astro server routes 讀公開清單及音訊串流，避免把後端內網位址暴露給瀏覽器；播放器使用 `preload=none`，不會自動下載或觸發 TTS 費用。
 3. Azure key 由 Speech resource 取得後只存 Jenkins `vinskao` folder Secret text credential `AZURE_SPEECH_KEY`；Jenkins 綁定時不開 shell trace，以 stdin `--from-env-file=/dev/stdin` 建立 `azure-speech-credentials` Secret，deployment 只透過 SecretKeyRef 引用。禁止把值寫進原始碼、命令列參數、建置日誌或回報。Azure 網路 allowlist 僅保留 `140.245.44.81`。自動合成仍關閉；試音使用 OKE 節點上的單次請求，先核對 SKU 免費用量和費率，不以試音成功推定後續用量免費。
@@ -71,3 +106,10 @@ stateDiagram-v2
 - `/api/market/daily-maya` 的最新 `items[0]` 為同一 ID、916 字且 approved；首頁實作也呈現 `items[0]`，確認全文對應目前首頁最新精讀。Learn 播放器以使用者介面實際播放到結尾：`currentTime=188.304`、`duration=188.304`、`ended=true`、`readyState=4`。公開音訊 GET 回 HTTP 200、`audio/mpeg`、1,129,968 bytes。
 - Learn 曾列出文章但公開音訊 proxy 因 UUID 驗證過窄而回 404。已先新增會重現錯誤的 frontend 測試（紅），再修正 route 僅對 daily 接受格式正確 UUID；`tests/market/dailyMayaRoutes.test.ts` 3/3 通過，commit `65ca043` 部署至 frontend image `461`，rollout Ready 1/1。這是每日精讀的公開音訊 proxy 修正；不會啟動音訊自動合成。
 - 確認正式 deployment `MARKET_AUDIO_AZURE_ENABLED=false`、`MARKET_AUDIO_AUTOGEN_ENABLED=false`、`MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT=0`。自動化尚未啟用；HD Flash 是否適用 F0 50 萬免費額度及實際發票費率仍未獲帳戶用量/帳單佐證。未確認 entitlement、帳單率及經授權的正數月字元 cap 前，不應啟用排程；若需要美元硬上限，需先實作按核實費率計帳的原子美元預留，而非把字元 cap 當美元上限。
+
+## 2026-11-04 新核准每日精讀音檔
+
+- 公開 `GET /market/daily-maya` 的最新核准稿 `de296397-93e6-4d6f-9697-2185d199b930`，前半討論淨流動性與估值傳導，後半討論聯發科 AI 專案出貨及毛利驗證。公開稿與音訊工作列來源 SHA-256 完全相同：`2adbc3255a8fc9fc840bd4d861c236167cffd18b4e833927923af202f9cdc5e4`；原文 595 字元，口播整理後 591 計費字元。
+- 手動程序取得 PostgreSQL worker advisory lock，確認工作是 `pending`、0 次嘗試且沒有音檔後，只 claim 此 UUID/revision 1。一次性 ledger ceiling 為 2,057 字元（既有 1,466 + 本稿 591）；完成後帳本為 2,057。工作為 `ready`、attempt 1，沒有重試或處理其他工作。Azure opt-in 只在手動程序內暫時覆寫；正式環境 flags 維持 false/false、月 cap 0。
+- DB 保存 `audio/mpeg`、719,136 bytes。公開音訊 proxy GET 為 HTTP 200、同 MIME 與大小；下載檔 `ffprobe` 為 119.856 秒，FFmpeg 全檔解碼成功。Learn 原生播放器實際播到結尾，`currentTime=119.832`、`duration=119.832`、`ended=true`、`readyState=4`、無播放錯誤。
+- 按 East US Neural HD Flash 公開 USD $15/M list rate 估算，591 計費字元約 USD $0.00887；這不是實際帳單費率或免費額度證明。HD Flash 是否適用 F0 免費額度與本資源實際帳單仍未核實，不承諾免費。

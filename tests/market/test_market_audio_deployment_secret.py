@@ -14,7 +14,7 @@ def _deployment_env():
     }
 
 
-def test_speech_key_comes_from_kubernetes_secret_and_worker_stays_disabled():
+def test_speech_key_is_secret_injected_and_daily_audio_autogen_has_bounded_cap():
     env = _deployment_env()
 
     assert env['AZURE_SPEECH_KEY']['valueFrom']['secretKeyRef'] == {
@@ -22,9 +22,9 @@ def test_speech_key_comes_from_kubernetes_secret_and_worker_stays_disabled():
         'key': 'AZURE_SPEECH_KEY',
     }
     assert env['MARKET_AUDIO_SPEECH_REGION']['value'] == 'eastus'
-    assert env['MARKET_AUDIO_AZURE_ENABLED']['value'].lower() == 'false'
-    assert env['MARKET_AUDIO_AUTOGEN_ENABLED']['value'].lower() == 'false'
-    assert env['MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT']['value'] == '0'
+    assert env['MARKET_AUDIO_AZURE_ENABLED']['value'].lower() == 'true'
+    assert env['MARKET_AUDIO_AUTOGEN_ENABLED']['value'].lower() == 'true'
+    assert env['MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT']['value'] == '50000'
 
 
 def test_jenkins_injects_speech_key_without_putting_it_in_command_arguments():

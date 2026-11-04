@@ -21,11 +21,14 @@ def audio_autogen_is_configured(environ=None):
 
 
 class MarketAudioWorker:
-    def __init__(self, database, provider, max_attempts=3, enabled=False, monthly_char_limit=None):
+    def __init__(self, database, provider, max_attempts=3, enabled=False, monthly_char_limit=None,
+                 daily_only=False, eligible_daily_codes=None):
         self.database = database
         self.provider = provider
         self.max_attempts = max_attempts
         self.enabled = enabled
+        self.daily_only = daily_only
+        self.eligible_daily_codes = eligible_daily_codes
         configured_limit = monthly_char_limit if monthly_char_limit is not None else os.getenv('MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT', '0')
         self.monthly_char_limit = int(configured_limit)
         if enabled and self.monthly_char_limit < 1:
@@ -34,7 +37,11 @@ class MarketAudioWorker:
     def process_one(self):
         if not self.enabled:
             return None
-        job = self.database.claim(self.max_attempts)
+        eligible_codes = self.eligible_daily_codes() if self.daily_only and self.eligible_daily_codes else None
+        if self.daily_only and eligible_codes is None:
+            return None
+        job = self.database.claim(self.max_attempts, product_type='daily' if self.daily_only else None,
+                                  codes=eligible_codes if self.daily_only else None)
         if job is None:
             return None
         try:

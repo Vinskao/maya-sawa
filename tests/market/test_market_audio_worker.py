@@ -20,6 +20,48 @@ def test_worker_is_disabled_by_default_and_does_not_claim_or_spend():
     assert db.job('daily', 'brief-disabled', 1)['status'] == 'pending'
 
 
+def test_daily_autogen_worker_never_claims_macro_or_stock_jobs():
+    db = database()
+    db.enqueue('stock', '2454', 3, 'stock analysis')
+    db.enqueue('macro', 'NET-LIQUIDITY', 2, 'macro analysis')
+    db.enqueue('daily', 'approved-brief', 1, 'approved daily brief')
+    seen = []
+
+    class Provider:
+        @staticmethod
+        def billable_characters(text): return len(text)
+        def synthesize(self, text):
+            seen.append(text)
+            return b'audio', 'audio/mpeg', 'test-voice'
+
+    worker = MarketAudioWorker(db, Provider(), enabled=True, monthly_char_limit=50000, daily_only=True,
+                               eligible_daily_codes=lambda: {'approved-brief'})
+    assert worker.process_one() == 'ready'
+    assert seen == ['approved daily brief']
+    assert db.job('stock', '2454', 3)['status'] == 'pending'
+    assert db.job('macro', 'NET-LIQUIDITY', 2)['status'] == 'pending'
+
+
+def test_daily_autogen_worker_only_claims_explicitly_approved_current_day_ids():
+    db = database()
+    db.enqueue('daily', 'older-approved', 1, 'older approved brief')
+    db.enqueue('daily', 'today-approved', 1, 'today approved brief')
+    seen = []
+
+    class Provider:
+        @staticmethod
+        def billable_characters(text): return len(text)
+        def synthesize(self, text):
+            seen.append(text)
+            return b'audio', 'audio/mpeg', 'test-voice'
+
+    worker = MarketAudioWorker(db, Provider(), enabled=True, monthly_char_limit=50000,
+                               daily_only=True, eligible_daily_codes=lambda: {'today-approved'})
+    assert worker.process_one() == 'ready'
+    assert seen == ['today approved brief']
+    assert db.job('daily', 'older-approved', 1)['status'] == 'pending'
+
+
 def test_autogen_requires_two_explicit_flags_credential_region_and_monthly_cap():
     base = {'MARKET_AUDIO_AUTOGEN_ENABLED': 'true', 'MARKET_AUDIO_AZURE_ENABLED': 'true',
             'AZURE_SPEECH_KEY': 'secret', 'MARKET_AUDIO_SPEECH_REGION': 'eastus',

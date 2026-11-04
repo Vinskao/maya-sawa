@@ -103,13 +103,19 @@ class MarketAudioDatabase:
                                        attempts=0, updated_at=datetime.now(timezone.utc)))
         return True
 
-    def claim(self, max_attempts=3):
+    def claim(self, max_attempts=3, product_type=None, codes=None):
         if not self.sessions:
             raise RuntimeError('Audio database unavailable')
         with self.sessions.begin() as session:
             query = select(MarketAudioJob).where(
                 MarketAudioJob.status.in_(['pending', 'retry']), MarketAudioJob.attempts < max_attempts
             ).order_by(MarketAudioJob.updated_at).with_for_update(skip_locked=True)
+            if product_type is not None:
+                query = query.where(MarketAudioJob.product_type == product_type)
+            if codes is not None:
+                if not codes:
+                    return None
+                query = query.where(MarketAudioJob.code.in_(codes))
             row = session.execute(query).scalars().first()
             if row is None:
                 return None
