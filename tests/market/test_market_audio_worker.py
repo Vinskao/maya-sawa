@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import create_engine
 
 from maya_sawa.databases.market_audio_db import MarketAudioDatabase
@@ -60,6 +62,28 @@ def test_daily_autogen_worker_only_claims_explicitly_approved_current_day_ids():
     assert worker.process_one() == 'ready'
     assert seen == ['today approved brief']
     assert db.job('daily', 'older-approved', 1)['status'] == 'pending'
+
+
+def test_daily_worker_uses_scheduled_presenter_voice_but_analysis_keeps_default():
+    db = database()
+    brief_id = 'a1e3f5d0-7401-46e9-a110-a20261103001'
+    db.enqueue('daily', brief_id, 1, '今天市場的第一段內容。')
+    calls = []
+
+    class Provider:
+        @staticmethod
+        def billable_characters(text): return len(text)
+        def synthesize(self, text, voice=None):
+            calls.append(voice)
+            return b'audio', 'audio/mpeg', voice or 'legacy-maya-voice'
+
+    worker = MarketAudioWorker(db, Provider(), enabled=True, monthly_char_limit=10000,
+                               daily_brief_day=lambda code: date(2026, 11, 3) if code == brief_id else None)
+    assert worker.process_one() == 'ready'
+    assert calls == ['zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural']
+    assert db.enqueue('stock', '2454', 3, 'stock report') is True
+    assert worker.process_one() == 'ready'
+    assert calls == ['zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural', None]
 
 
 def test_autogen_requires_two_explicit_flags_credential_region_and_monthly_cap():

@@ -43,6 +43,23 @@ stateDiagram-v2
 
 ## 開發方法
 
+### Presenter schedule and voice selection
+
+```mermaid
+flowchart LR
+  A[核准 daily brief] --> B[依 brief 日期查 presenter 設定]
+  B --> C[選擇 Maya 或 Uiobbeci voice]
+  C --> D[Azure Speech SSML]
+  D --> E[音訊保存 voice metadata]
+  E --> F[Learn 依 voice 選同主播影片與標題]
+  G[前端集中 presenter 設定] --> B
+  G --> F
+```
+
+設定唯一來源：`config/market-presenters.json`（maya-sawa repo）。每週索引為星期一至星期日，預設 Maya、Uiobbeci、Maya、Uiobbeci、Maya、Uiobbeci、Maya；影片檔名與 voice 也在同一設定檔中。後端清單 API 回傳此設定供前端套用；daily worker 以已核准 proposal 的日期挑 voice，舊音訊記錄保留原有 voice metadata；沒有 voice metadata 的舊記錄依相容規則視為 Maya。Azure provider 的預設音色仍是 Maya，只有 daily worker 明確傳入排程音色時才使用新音色，個股與總經音訊不變。
+
+先新增日期排班、voice SSML、worker 分流與前端即時設定套用測試，再接入 provider。執行前端 `node_modules/vitest/vitest.mjs run tests/learn --maxWorkers=1` 與後端 `poetry run python -m pytest tests/market/test_market_audio_azure.py tests/market/test_market_audio_worker.py tests/market/test_market_presenters.py -q`。不用把任何金鑰寫入設定或原始碼；語音 key 仍由 Jenkins Secret 注入。影片檔應分別上傳為 `reporterMaya.mp4` 和 `reporterUiobbeci.mp4`，再用公開 HEAD/GET 和瀏覽器播放確認。不要用非核准稿生成語音；今天沒有已核准稿時，應先完成提案和審稿流程，再由單次受限工作合成，並遵守既有字元預算與 F0 entitlement 限制。
+
 ### Automatic approved daily brief synthesis (2026-11-04)
 
 ```mermaid

@@ -1,6 +1,6 @@
 import pytest
 
-from maya_sawa.services.azure_speech_rest import AzureSpeechRestProvider
+from maya_sawa.services.azure_speech_rest import AzureSpeechRestProvider, VOICE
 
 
 def test_provider_is_disabled_without_explicit_opt_in(monkeypatch):
@@ -37,6 +37,28 @@ def test_rest_provider_posts_escaped_ssml_to_regional_endpoint(monkeypatch):
     assert captured['headers']['Ocp-apim-subscription-key'] == 'do-not-print-this'
     assert '<voice name="zh-CN-Xiaoyu:DragonHDFlashLatestNeural">A &amp; B &lt;C&gt;</voice>' in captured['body']
     assert captured['headers']['X-microsoft-outputformat'] == 'audio-24khz-48kbitrate-mono-mp3'
+
+
+def test_provider_accepts_configured_uiobbeci_voice(monkeypatch):
+    monkeypatch.setenv('MARKET_AUDIO_AZURE_ENABLED', 'true')
+    monkeypatch.setenv('AZURE_SPEECH_KEY', 'fake-key')
+    monkeypatch.setenv('MARKET_AUDIO_SPEECH_REGION', 'eastus')
+    captured = []
+
+    def fake_urlopen(request, timeout):
+        captured.append(request.data.decode())
+        class Response:
+            headers = {'Content-Type': 'audio/mpeg'}
+            def read(self): return b'mp3-data'
+            def __enter__(self): return self
+            def __exit__(self, *args): return None
+        return Response()
+
+    monkeypatch.setattr('maya_sawa.services.azure_speech_rest.urllib.request.urlopen', fake_urlopen)
+    audio, mime, voice = AzureSpeechRestProvider(voice='zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural').synthesize('你好')
+    assert (audio, mime, voice) == (b'mp3-data', 'audio/mpeg', 'zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural')
+    assert '<voice name="zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural">你好</voice>' in captured[0]
+    assert VOICE == 'zh-CN-Xiaoyu:DragonHDFlashLatestNeural'
 
 
 def test_provider_rejects_unsupported_region_and_missing_key(monkeypatch):

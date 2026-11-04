@@ -1,0 +1,15 @@
+{
+  "maya": {
+    "id": "maya",
+    "name": "Maya",
+    "videoFile": "reporterMaya.mp4",
+    "voice": "zh-CN-Xiaoyu:DragonHDFlashLatestNeural"
+  },
+  "uiobbeci": {
+    "id": "uiobbeci",
+    "name": "Uiobbeci",
+    "videoFile": "reporterUiobbeci.mp4",
+    "voice": "zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural"
+  },
+  "weeklyPresenterIds": ["maya", "uiobbeci", "maya", "uiobbeci", "maya", "uiobbeci", "maya"]
+}

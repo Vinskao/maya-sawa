@@ -4,6 +4,7 @@ import re
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
+from ..services.market_presenters import public_presenter_settings
 
 
 def make_router(db):
@@ -12,7 +13,7 @@ def make_router(db):
     @router.get('')
     async def catalog():
         try:
-            return {'items': await asyncio.to_thread(db.list_ready)}
+            return {'items': await asyncio.to_thread(db.list_ready), 'presenterSettings': public_presenter_settings()}
         except Exception as exc:
             raise HTTPException(503, 'Audio database unavailable') from exc
 

@@ -2,9 +2,11 @@
 import hashlib
 import logging
 import os
+from datetime import date
 
 from ..databases.market_audio_db import AudioBudgetExceeded
 from .daily_maya_speech import InvalidSpokenTranscript, prepare_spoken_transcript
+from .market_presenters import presenter_for_day
 
 logger = logging.getLogger(__name__)
 ESTIMATED_USD_PER_MILLION_CHARACTERS = 15.0
@@ -26,13 +28,14 @@ def audio_autogen_is_configured(environ=None):
 
 class MarketAudioWorker:
     def __init__(self, database, provider, max_attempts=3, enabled=False, monthly_char_limit=None,
-                 daily_only=False, eligible_daily_codes=None):
+                 daily_only=False, eligible_daily_codes=None, daily_brief_day=None):
         self.database = database
         self.provider = provider
         self.max_attempts = max_attempts
         self.enabled = enabled
         self.daily_only = daily_only
         self.eligible_daily_codes = eligible_daily_codes
+        self.daily_brief_day = daily_brief_day
         configured_limit = monthly_char_limit if monthly_char_limit is not None else os.getenv('MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT', '0')
         self.monthly_char_limit = int(configured_limit)
         if enabled and self.monthly_char_limit < 1:
@@ -75,7 +78,21 @@ class MarketAudioWorker:
                 monthly_reserved,
                 monthly_reserved * ESTIMATED_USD_PER_MILLION_CHARACTERS / 1_000_000,
                 self.monthly_char_limit, ESTIMATED_USD_PER_MILLION_CHARACTERS)
-            audio, content_type, voice = self.provider.synthesize(spoken_text)
+            brief_day = None
+            if job['productType'] == 'daily' and self.daily_brief_day:
+                brief_day = self.daily_brief_day(job['code'])
+            elif job['productType'] == 'daily':
+                try:
+                    brief_day = date.fromisoformat(job['code'])
+                except ValueError:
+                    brief_day = None
+            presenter = presenter_for_day(brief_day) if brief_day else None
+            try:
+                audio, content_type, voice = self.provider.synthesize(spoken_text, voice=presenter['voice']) if presenter else self.provider.synthesize(spoken_text)
+            except TypeError as exc:
+                if presenter:
+                    raise RuntimeError('Speech provider does not support presenter voice selection') from exc
+                raise
             if not audio or not content_type or not voice:
                 raise ValueError('Provider returned incomplete audio')
             self.database.save(job['productType'], job['code'], job['revision'], source_text,

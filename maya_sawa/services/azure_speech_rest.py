@@ -46,7 +46,7 @@ def merge_mp3_parts(parts, ffmpeg=None):
 class AzureSpeechRestProvider:
     def __init__(self, environ=None, opener=None, timeout=30, chunk_limit=2000,
                  min_request_interval=3.1, sleep=time.sleep, monotonic=time.monotonic,
-                 merge_parts=merge_mp3_parts):
+                 merge_parts=merge_mp3_parts, voice=None):
         self.environ = environ if environ is not None else os.environ
         self.opener = opener or urllib.request.urlopen
         self.timeout = timeout
@@ -55,6 +55,7 @@ class AzureSpeechRestProvider:
         self.sleep = sleep
         self.monotonic = monotonic
         self.merge_parts = merge_parts
+        self.voice = voice or VOICE
         self.last_request_at = None
 
     @property
@@ -66,7 +67,7 @@ class AzureSpeechRestProvider:
         # SSML contains only the required speak/voice wrappers; metered text is XML escaped.
         return len(escape(text, quote=False))
 
-    def synthesize(self, text):
+    def synthesize(self, text, voice=None):
         if not self.enabled:
             raise RuntimeError('Azure Speech provider is disabled')
         if not isinstance(text, str) or not text.strip():
@@ -79,6 +80,9 @@ class AzureSpeechRestProvider:
             raise RuntimeError('Azure Speech credential is not configured')
         if self.chunk_limit < 1:
             raise ValueError('Speech chunk limit must be positive')
+        voice = voice or self.voice
+        if not isinstance(voice, str) or not voice.strip() or len(voice) > 128:
+            raise ValueError('Speech voice is invalid')
         chunks = split_speech_text(text, self.chunk_limit)
         audio_parts = []
         for chunk in chunks:
@@ -88,7 +92,7 @@ class AzureSpeechRestProvider:
                     self.sleep(wait)
             ssml = (
                 '<speak version="1.0" xml:lang="zh-CN">'
-                f'<voice name="{VOICE}">{escape(chunk, quote=False)}</voice>'
+                f'<voice name="{escape(voice, quote=True)}">{escape(chunk, quote=False)}</voice>'
                 '</speak>'
             )
             request = urllib.request.Request(
@@ -114,4 +118,4 @@ class AzureSpeechRestProvider:
             if content_type not in {'audio/mpeg', 'audio/mp3'}:
                 raise RuntimeError('Azure Speech returned an unexpected audio format')
             audio_parts.append(audio)
-        return self.merge_parts(audio_parts), 'audio/mpeg', VOICE
+        return self.merge_parts(audio_parts), 'audio/mpeg', voice

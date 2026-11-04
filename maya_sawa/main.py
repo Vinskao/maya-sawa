@@ -211,6 +211,7 @@ from .databases.market_ai_analysis_db import market_ai_analysis_db
 from .api.market_audio import make_router as make_market_audio_router
 from .services.azure_speech_rest import AzureSpeechRestProvider
 from .services.market_audio_worker import MarketAudioWorker, audio_autogen_is_configured
+from .services.market_presenters import presenter_for_day
 
 market_audio_db = MarketAudioDatabase(market_dashboard_db.engine)
 daily_maya_db = DailyMayaDatabase(market_dashboard_db.engine)
@@ -218,6 +219,10 @@ daily_maya_db = DailyMayaDatabase(market_dashboard_db.engine)
 def _today_approved_daily_audio_ids():
     today = datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
     return {row['id'] for row in daily_maya_db.published() if row['day'] == today}
+
+def _daily_brief_day(proposal_id):
+    row = daily_maya_db.get(proposal_id)
+    return datetime.fromisoformat(row['day']).date() if row else None
 
 def _enqueue_analysis_audio(product_type, code, revision):
     if product_type not in {'stock', 'macro'}:
@@ -253,7 +258,8 @@ async def _start_market_audio_worker_if_configured():
     worker = MarketAudioWorker(market_audio_db, provider, enabled=True,
                                monthly_char_limit=os.environ['MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT'],
                                daily_only=True,
-                               eligible_daily_codes=_today_approved_daily_audio_ids)
+                               eligible_daily_codes=_today_approved_daily_audio_ids,
+                               daily_brief_day=_daily_brief_day)
     _market_audio_worker_task = asyncio.create_task(_market_audio_worker_loop(worker))
     logger.warning('Market audio autogeneration is enabled with the configured local character cap')
 
