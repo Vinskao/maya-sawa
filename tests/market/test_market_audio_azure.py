@@ -32,10 +32,10 @@ def test_rest_provider_posts_escaped_ssml_to_regional_endpoint(monkeypatch):
     monkeypatch.setattr('maya_sawa.services.azure_speech_rest.urllib.request.urlopen', fake_urlopen)
     audio, mime, voice = AzureSpeechRestProvider().synthesize('A & B <C>')
     assert audio == b'mp3-data' and mime == 'audio/mpeg'
-    assert voice == 'zh-CN-Xiaoyu:DragonHDFlashLatestNeural'
+    assert voice == 'zh-CN-Xiaoqi:DragonHDFlashLatestNeural'
     assert captured['url'] == 'https://eastus.tts.speech.microsoft.com/cognitiveservices/v1'
     assert captured['headers']['Ocp-apim-subscription-key'] == 'do-not-print-this'
-    assert '<voice name="zh-CN-Xiaoyu:DragonHDFlashLatestNeural">A &amp; B &lt;C&gt;</voice>' in captured['body']
+    assert '<voice name="zh-CN-Xiaoqi:DragonHDFlashLatestNeural">A &amp; B &lt;C&gt;</voice>' in captured['body']
     assert captured['headers']['X-microsoft-outputformat'] == 'audio-24khz-48kbitrate-mono-mp3'
 
 
@@ -58,7 +58,7 @@ def test_provider_accepts_configured_uiobbeci_voice(monkeypatch):
     audio, mime, voice = AzureSpeechRestProvider(voice='zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural').synthesize('你好')
     assert (audio, mime, voice) == (b'mp3-data', 'audio/mpeg', 'zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural')
     assert '<voice name="zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural">你好</voice>' in captured[0]
-    assert VOICE == 'zh-CN-Xiaoyu:DragonHDFlashLatestNeural'
+    assert VOICE == 'zh-CN-Xiaoqi:DragonHDFlashLatestNeural'
 
 
 def test_provider_rejects_unsupported_region_and_missing_key(monkeypatch):
@@ -93,7 +93,7 @@ def test_long_text_is_split_under_request_limit_without_losing_any_content(monke
     audio, _, _ = provider.synthesize(source)
     assert len(chunks) > 1
     assert all(len(body) < 3000 for body in chunks)
-    inner_text = ''.join(body.split('<voice name="' + 'zh-CN-Xiaoyu:DragonHDFlashLatestNeural' + '">')[1].split('</voice>')[0] for body in chunks)
+    inner_text = ''.join(body.split('<voice name="' + VOICE + '">')[1].split('</voice>')[0] for body in chunks)
     from html import unescape
     assert unescape(inner_text) == source
     assert audio == b''.join(f'part-{index}|'.encode() for index in range(1, len(chunks) + 1))

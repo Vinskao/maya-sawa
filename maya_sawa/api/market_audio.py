@@ -7,13 +7,19 @@ from fastapi.responses import Response
 from ..services.market_presenters import public_presenter_settings
 
 
-def make_router(db):
+def make_router(db, daily_db=None):
     router = APIRouter(prefix='/market/audio', tags=['market audio'])
 
     @router.get('')
     async def catalog():
         try:
-            return {'items': await asyncio.to_thread(db.list_ready), 'presenterSettings': public_presenter_settings()}
+            items = await asyncio.to_thread(db.list_ready)
+            if daily_db:
+                days = {row['id']: row['day'] for row in await asyncio.to_thread(daily_db.published)}
+                for item in items:
+                    if item['productType'] == 'daily' and item['code'] in days:
+                        item['day'] = days[item['code']]
+            return {'items': items, 'presenterSettings': public_presenter_settings()}
         except Exception as exc:
             raise HTTPException(503, 'Audio database unavailable') from exc
 

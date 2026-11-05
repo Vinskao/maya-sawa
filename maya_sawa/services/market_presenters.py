@@ -11,17 +11,18 @@ with _SETTINGS_PATH.open(encoding='utf-8') as settings_file:
 PRESENTERS = {
     key: {**value, 'video_file': value['videoFile']}
     for key, value in _SETTINGS.items()
-    if key in {'maya', 'uiobbeci'}
+    if key in {'maya', 'uiobbeci', 'duo'}
 }
 WEEKLY_PRESENTER_IDS = tuple(_SETTINGS['weeklyPresenterIds'])
 
 
 def presenter_for_day(day: date):
-    return PRESENTERS[WEEKLY_PRESENTER_IDS[day.weekday()]]
+    presenter = PRESENTERS[WEEKLY_PRESENTER_IDS[day.weekday()]]
+    return {**presenter, 'voice': PRESENTERS[presenter['speaker']]['voice']} if presenter.get('speaker') else presenter
 
 
 def presenter_for_voice(voice: str | None):
-    return next((presenter for presenter in PRESENTERS.values() if presenter['voice'] == voice), PRESENTERS['maya'])
+    return next((presenter for presenter in PRESENTERS.values() if voice and presenter.get('voice') == voice), PRESENTERS['maya'])
 
 
 def public_presenter_settings():
@@ -30,5 +31,6 @@ def public_presenter_settings():
                  'videoFile': PRESENTERS['maya']['videoFile'], 'voice': PRESENTERS['maya']['voice']},
         'uiobbeci': {'id': PRESENTERS['uiobbeci']['id'], 'name': PRESENTERS['uiobbeci']['name'],
                      'videoFile': PRESENTERS['uiobbeci']['videoFile'], 'voice': PRESENTERS['uiobbeci']['voice']},
+        'duo': {key: PRESENTERS['duo'][key] for key in ('id', 'name', 'videoFile', 'speaker', 'mayaStatus')},
         'weeklyPresenterIds': list(WEEKLY_PRESENTER_IDS),
     }

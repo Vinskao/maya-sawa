@@ -270,7 +270,7 @@ def _daily_maya_authorized(request):
 app.include_router(make_daily_maya_router(daily_maya_db,
                                          market_ai_analysis_db, _daily_maya_authorized,
                                          on_approved=lambda row: market_audio_db.enqueue('daily', row['id'], 1, row['content'])))
-app.include_router(make_market_audio_router(market_audio_db))
+app.include_router(make_market_audio_router(market_audio_db, daily_maya_db))
 app.include_router(admin_users_router)
 app.include_router(publisher_mcp_router)
 app.include_router(social_publishing_router)

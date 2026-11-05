@@ -43,6 +43,24 @@ stateDiagram-v2
 
 ## 開發方法
 
+### 每日主播與雙人日市場稿（2026-11-05）
+
+```mermaid
+flowchart LR
+  A[已核准日報與台北日期] --> B[market-presenters.json 每週排班]
+  B -->|週一三五| C[Maya Xiaoqi 合成]
+  B -->|週四六| D[Uiobbeci Xiaoyi 合成]
+  B -->|週二日| E[Uiobbeci 先讀市場分析]
+  E --> F[Maya 雙人稿 pending]
+  C --> G[(音訊及聲音 metadata)]
+  D --> G
+  F --> G
+  G --> H[API 傳回原日報日期]
+  H --> I[Learn 顯示主播與 pending]
+```
+
+以 `config/market-presenters.json` 為設定來源：Maya `zh-CN-Xiaoqi:DragonHDFlashLatestNeural`，Uiobbeci `zh-CN-XiaoyiNeural`；週二、週日為 Duo，市場稿先以 Uiobbeci 發聲並記為 `duo:uiobbeci:maya-pending`，未生成 Maya 稿。已核准稿的原始日期由公開音訊 API 附上，重製時間不影響排班。先測七日排班、Duo 聲音與 pending metadata，再以 Azure 真實短句驗證 Xiaoqi；金鑰來自既有 Kubernetes Secret，不寫日誌或 Git。重製歷史稿時先備份現有完整音檔，再驗證稿件與合成，所有新音檔完成後才可在單一資料庫交易中替換；保留舊來源與新的計費字元預留，避免中途失敗讓清單空白。兩篇不符口播檢查的舊稿必須人工整理成保留不確定性與限制的摘要，保留稿件 ID 和來源，不將文件語句直接送 TTS。測試 `poetry run python -m pytest tests/market/test_market_presenters.py tests/market/test_market_audio_worker.py tests/market/test_market_audio_api.py tests/market/test_market_audio_azure.py -q`。Duo 的 Maya 片段、稿件以及雙人逐段切換仍待後續定義。
+
 ### Presenter schedule and voice selection
 
 2026-11-05 修正：使用者提供的 Speech Studio 截圖為「曉伊」，風格為預設及 `affectionate`、`angry`、`cheerful`、`disgruntled`、`embarrassed`、`fearful`、`gentle`、`sad`、`serious`，對應標準音色 `zh-CN-XiaoyiNeural`。Uiobbeci 的唯一設定改為該音色；先前 `Xiaoxiao2` 試音並非截圖音色。先以設定測試重現錯誤，再更新 JSON、worker 和 API 測試。使用既有 Azure Secret 合成兩筆測試的 revision 2：單人使用曉伊，雙人前半使用 Maya 的 Xiaoyu、後半使用曉伊，兩段各約 10.73 秒；先鎖住音訊工作表並確認無 processing 工作，每次合成前依原有帳本預留字元。原 revision 1 保留以便追溯。兩個公開音檔 HTTP 可讀且 FFmpeg 全檔解碼成功；前端僅對 `test:` 錄音顯示最新 revision。語音依照截圖使用預設風格，截圖的「傷心」按鈕不作持續套用。測試：`poetry run python -m pytest tests/market/test_market_presenters.py tests/market/test_market_audio_worker.py tests/market/test_market_audio_api.py tests/market/test_market_audio_azure.py -q`；真實排程仍須在部署後確認新設定已生效。

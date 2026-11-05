@@ -12,13 +12,16 @@ def test_public_catalog_and_audio():
     db.save('macro', 'US', 10, '全文', b'ID3test', 'audio/mpeg', 'voice')
     db.save('daily', 'brief-1', 1, '每日完整精讀', b'daily-audio', 'audio/mpeg', 'voice')
     app = FastAPI()
-    app.include_router(make_router(db))
+    class Daily:
+        def published(self): return [{'id': 'brief-1', 'day': '2026-11-03'}]
+    app.include_router(make_router(db, Daily()))
     client = TestClient(app)
     catalog = client.get('/market/audio').json()
     items = catalog['items']
     assert catalog['presenterSettings']['maya']['videoFile'] == 'reporterMaya.mp4'
     assert catalog['presenterSettings']['uiobbeci']['voice'] == 'zh-CN-XiaoyiNeural'
     assert any(item['productType'] == 'macro' and item['revision'] == 10 for item in items)
+    assert next(item for item in items if item['code'] == 'brief-1')['day'] == '2026-11-03'
     response = client.get('/market/audio/macro/US/10')
     assert response.content == b'ID3test'
     assert response.headers['content-type'] == 'audio/mpeg'

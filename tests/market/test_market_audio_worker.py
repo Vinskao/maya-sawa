@@ -81,6 +81,7 @@ def test_daily_worker_uses_scheduled_presenter_voice_but_analysis_keeps_default(
                                daily_brief_day=lambda code: date(2026, 11, 3) if code == brief_id else None)
     assert worker.process_one() == 'ready'
     assert calls == ['zh-CN-XiaoyiNeural']
+    assert db.list_ready()[0]['voice'] == 'duo:uiobbeci:maya-pending'
     assert db.enqueue('stock', '2454', 3, 'stock report') is True
     assert worker.process_one() == 'ready'
     assert calls == ['zh-CN-XiaoyiNeural', None]

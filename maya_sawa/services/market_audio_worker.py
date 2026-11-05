@@ -95,6 +95,8 @@ class MarketAudioWorker:
                 raise
             if not audio or not content_type or not voice:
                 raise ValueError('Provider returned incomplete audio')
+            if presenter and presenter['id'] == 'duo':
+                voice = 'duo:uiobbeci:maya-pending'
             self.database.save(job['productType'], job['code'], job['revision'], source_text,
                                audio, content_type, voice)
             self.database.finish_job(job['productType'], job['code'], job['revision'], 'ready')

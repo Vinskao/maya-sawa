@@ -8,9 +8,10 @@ import time
 import urllib.error
 import urllib.request
 from .market_audio_text import split_speech_text
+from .market_presenters import PRESENTERS
 
 
-VOICE = 'zh-CN-Xiaoyu:DragonHDFlashLatestNeural'
+VOICE = PRESENTERS['maya']['voice']
 SUPPORTED_REGIONS = {'eastus', 'westeurope', 'southeastasia', 'chinanorth3'}
 OUTPUT_FORMAT = 'audio-24khz-48kbitrate-mono-mp3'
 

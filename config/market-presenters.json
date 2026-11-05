@@ -3,7 +3,7 @@
     "id": "maya",
     "name": "Maya",
     "videoFile": "reporterMaya.mp4",
-    "voice": "zh-CN-Xiaoyu:DragonHDFlashLatestNeural"
+    "voice": "zh-CN-Xiaoqi:DragonHDFlashLatestNeural"
   },
   "uiobbeci": {
     "id": "uiobbeci",
@@ -11,5 +11,12 @@
     "videoFile": "reporterUiobbeci.mp4",
     "voice": "zh-CN-XiaoyiNeural"
   },
-  "weeklyPresenterIds": ["maya", "uiobbeci", "maya", "uiobbeci", "maya", "uiobbeci", "maya"]
+  "duo": {
+    "id": "duo",
+    "name": "Maya & Uiobbeci",
+    "videoFile": "reporterDuoUiobbeci.mp4",
+    "speaker": "uiobbeci",
+    "mayaStatus": "pending"
+  },
+  "weeklyPresenterIds": ["maya", "duo", "maya", "uiobbeci", "maya", "uiobbeci", "duo"]
 }
