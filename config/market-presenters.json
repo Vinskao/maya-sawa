@@ -9,7 +9,7 @@
     "id": "uiobbeci",
     "name": "Uiobbeci",
     "videoFile": "reporterUiobbeci.mp4",
-    "voice": "zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural"
+    "voice": "zh-CN-XiaoyiNeural"
   },
   "weeklyPresenterIds": ["maya", "uiobbeci", "maya", "uiobbeci", "maya", "uiobbeci", "maya"]
 }

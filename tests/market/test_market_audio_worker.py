@@ -80,10 +80,10 @@ def test_daily_worker_uses_scheduled_presenter_voice_but_analysis_keeps_default(
     worker = MarketAudioWorker(db, Provider(), enabled=True, monthly_char_limit=10000,
                                daily_brief_day=lambda code: date(2026, 11, 3) if code == brief_id else None)
     assert worker.process_one() == 'ready'
-    assert calls == ['zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural']
+    assert calls == ['zh-CN-XiaoyiNeural']
     assert db.enqueue('stock', '2454', 3, 'stock report') is True
     assert worker.process_one() == 'ready'
-    assert calls == ['zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural', None]
+    assert calls == ['zh-CN-XiaoyiNeural', None]
 
 
 def test_autogen_requires_two_explicit_flags_credential_region_and_monthly_cap():

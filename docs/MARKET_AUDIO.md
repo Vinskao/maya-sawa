@@ -45,6 +45,8 @@ stateDiagram-v2
 
 ### Presenter schedule and voice selection
 
+2026-11-05 修正：使用者提供的 Speech Studio 截圖為「曉伊」，風格為預設及 `affectionate`、`angry`、`cheerful`、`disgruntled`、`embarrassed`、`fearful`、`gentle`、`sad`、`serious`，對應標準音色 `zh-CN-XiaoyiNeural`。Uiobbeci 的唯一設定改為該音色；先前 `Xiaoxiao2` 試音並非截圖音色。先以設定測試重現錯誤，再更新 JSON、worker 和 API 測試。使用既有 Azure Secret 合成兩筆測試的 revision 2：單人使用曉伊，雙人前半使用 Maya 的 Xiaoyu、後半使用曉伊，兩段各約 10.73 秒；先鎖住音訊工作表並確認無 processing 工作，每次合成前依原有帳本預留字元。原 revision 1 保留以便追溯。兩個公開音檔 HTTP 可讀且 FFmpeg 全檔解碼成功；前端僅對 `test:` 錄音顯示最新 revision。語音依照截圖使用預設風格，截圖的「傷心」按鈕不作持續套用。測試：`poetry run python -m pytest tests/market/test_market_presenters.py tests/market/test_market_audio_worker.py tests/market/test_market_audio_api.py tests/market/test_market_audio_azure.py -q`；真實排程仍須在部署後確認新設定已生效。
+
 ```mermaid
 flowchart LR
   A[核准 daily brief] --> B[依 brief 日期查 presenter 設定]

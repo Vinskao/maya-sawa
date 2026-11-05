@@ -17,7 +17,7 @@ def test_public_catalog_and_audio():
     catalog = client.get('/market/audio').json()
     items = catalog['items']
     assert catalog['presenterSettings']['maya']['videoFile'] == 'reporterMaya.mp4'
-    assert catalog['presenterSettings']['uiobbeci']['voice'] == 'zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural'
+    assert catalog['presenterSettings']['uiobbeci']['voice'] == 'zh-CN-XiaoyiNeural'
     assert any(item['productType'] == 'macro' and item['revision'] == 10 for item in items)
     response = client.get('/market/audio/macro/US/10')
     assert response.content == b'ID3test'

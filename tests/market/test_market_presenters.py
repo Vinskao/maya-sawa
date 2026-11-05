@@ -9,6 +9,7 @@ def test_daily_presenter_schedule_and_media_are_centralized():
     ]
     assert PRESENTERS['maya']['video_file'] == 'reporterMaya.mp4'
     assert PRESENTERS['uiobbeci']['video_file'] == 'reporterUiobbeci.mp4'
+    assert PRESENTERS['uiobbeci']['voice'] == 'zh-CN-XiaoyiNeural'
     assert presenter_for_voice(PRESENTERS['uiobbeci']['voice'])['id'] == 'uiobbeci'
     assert presenter_for_voice(None)['id'] == 'maya'
     assert public_presenter_settings()['weeklyPresenterIds'][1] == 'uiobbeci'
