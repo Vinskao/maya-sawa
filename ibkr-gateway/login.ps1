@@ -30,7 +30,14 @@ function Invoke-Gateway([string]$Method, [string]$Path, $Body = @{}) {
     $request = @{ Method = $Method; Uri = "$api$Path"; TimeoutSec = 15; UseBasicParsing = $true }
     # IBKR answers a POST without Content-Length with 411, so POSTs always carry a JSON body.
     if ($Method -eq "POST") { $request.Body = ($Body | ConvertTo-Json -Compress); $request.ContentType = "application/json" }
-    try { return Invoke-RestMethod @request } catch { return $null }
+    # $script:LastHttpStatus: 0 = no answer at all (tunnel not ready), otherwise the HTTP status. A logged-out gateway
+    # answers 401, which means "reachable, not signed in", not "unreachable".
+    $script:LastHttpStatus = 0
+    try { $result = Invoke-RestMethod @request; $script:LastHttpStatus = 200; return $result }
+    catch {
+        if ($_.Exception.Response) { $script:LastHttpStatus = [int]$_.Exception.Response.StatusCode }
+        return $null
+    }
 }
 
 if (Test-NetConnection localhost -Port $Port -InformationLevel Quiet -WarningAction SilentlyContinue) {
@@ -44,9 +51,11 @@ $tunnel = Start-Process ssh -ArgumentList @("-L", "${Port}:localhost:$Port", $Ss
     "timeout $(($TimeoutMinutes + 2) * 60) $forward") -PassThru -WindowStyle Hidden
 try {
     # The local port opens before the node's port-forward is ready; wait for the gateway itself to answer.
-    # /iserver/auth/status answers 200 whether or not anyone is logged in.
+    # /iserver/auth/status answers 200 when signed in and 401 when not; both mean the gateway is up.
     $deadline = (Get-Date).AddSeconds(45)
-    while (-not ($status = Invoke-Gateway POST "/iserver/auth/status")) {
+    while ($true) {
+        $status = Invoke-Gateway POST "/iserver/auth/status"
+        if ($script:LastHttpStatus -gt 0) { break }
         if ($tunnel.HasExited -or (Get-Date) -gt $deadline) { throw "Gateway not reachable (is 'ssh $SshHost' working?)" }
         Start-Sleep -Seconds 2
     }
