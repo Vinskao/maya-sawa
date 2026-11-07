@@ -133,3 +133,12 @@ GPT 08:30 與 Claude Sonnet 09:00（台北）既有排程已修改，重新載�
 - 第五輪：ChatGPT 執行環境 unavailable，未提交（外部問題，非提示問題）。
 
 開發方法：每輪用 `RemoteTrigger list_runs / get_run_log` 讀審核者的退回理由，再把理由逐項寫回草稿提示，不憑猜測；手動重跑會把「立即運行」接在同一個對話串後面，舊測試指令可能影響結果，必要時新建乾淨排程。已知缺口：審核者以 dashboard 最新一期為準而草稿讀個股分析文字的舊一期，兩邊資料來源要一致；ChatGPT 排程無法由 API 控制，只能用瀏覽器操作。
+
+
+## 2026-11-07 Learn 清單去重與排序
+
+問題：Learn 同一天出現多筆（11/3 兩筆、11/4 三筆），且因 2026-11-05 重製音檔時 `created_at` 幾乎相同，清單依建立時間排序導致順序混亂、新日期沒在最上面。
+
+處理：每個報告日只保留一筆。11/3 留 `16d80368`（916 字，最完整），11/4 留 `6667f960`（當日最後核准）。刪除 `f4b01241`、`64bf7afc`、`de296397` 在 `maya_sawa_market_audio`、`maya_sawa_market_audio_job`、`maya_sawa_daily_maya_proposal` 的列（單一交易），刪前以 `pg_dump` 備份三張表。前端新增 `newestMarketAudioFirst`（先依報告日、再依建立時間遞減），測試在 `tests/learn/marketAudioPresentation.test.ts`。
+
+11/5–11/7 仍無核准稿：`efc22e62`、`e4dc850a`、`f8b58b2d`、`57e98025`、`c65ea8e8`、`1b97aadc` 全被審核退回（退回理由見各稿 `review_note`：漏當日重大事件、數字用舊一期、行情數字堆砌、製程用語、sources 缺標的版本）。
