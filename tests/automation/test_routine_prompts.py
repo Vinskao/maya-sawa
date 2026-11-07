@@ -12,7 +12,7 @@ FILES = sorted((ROOT / "routines").glob("*.md")) if (ROOT / "routines").is_dir()
 EXPECTED = {
     "market-us-macro-sonnet.md", "market-us-macro-opus.md", "market-taiwan-sonnet.md", "market-taiwan-opus.md",
     "weekly-maintenance-frontend.md", "weekly-maintenance-maya-sawa.md", "weekly-maintenance-backend.md",
-    "report-claim-extraction.md",
+    "report-claim-extraction.md", "maya-daily-fallback.md",
 }
 
 
@@ -64,3 +64,10 @@ def test_the_usage_report_step_is_kept_where_a_routine_had_one():
     for name in ("market-us-macro-sonnet.md", "market-us-macro-opus.md", "market-taiwan-sonnet.md", "market-taiwan-opus.md",
                  "report-claim-extraction.md"):
         assert "report_routine_usage.py" in (ROOT / "routines" / name).read_text(encoding="utf-8"), name
+
+
+def test_daily_fallback_routine_skips_when_today_is_already_approved_and_self_reviews_before_approving():
+    text = (ROOT / "routines" / "maya-daily-fallback.md").read_text(encoding="utf-8")
+    assert text.index("已有 day == D 的已核准稿") < text.index("POST /market/daily-maya/proposals")
+    assert "備援自審" in text and "嚴格審稿" in text and "不得核准" in text
+    assert "PushNotification" in text and "/market/audio" in text
