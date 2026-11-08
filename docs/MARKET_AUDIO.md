@@ -150,3 +150,7 @@ Tests: `poetry run python -m pytest tests/market/test_market_audio_worker.py tes
 - 手動程序取得 PostgreSQL worker advisory lock，確認工作是 `pending`、0 次嘗試且沒有音檔後，只 claim 此 UUID/revision 1。一次性 ledger ceiling 為 2,057 字元（既有 1,466 + 本稿 591）；完成後帳本為 2,057。工作為 `ready`、attempt 1，沒有重試或處理其他工作。Azure opt-in 只在手動程序內暫時覆寫；正式環境 flags 維持 false/false、月 cap 0。
 - DB 保存 `audio/mpeg`、719,136 bytes。公開音訊 proxy GET 為 HTTP 200、同 MIME 與大小；下載檔 `ffprobe` 為 119.856 秒，FFmpeg 全檔解碼成功。Learn 原生播放器實際播到結尾，`currentTime=119.832`、`duration=119.832`、`ended=true`、`readyState=4`、無播放錯誤。
 - 按 East US Neural HD Flash 公開 USD $15/M list rate 估算，591 計費字元約 USD $0.00887；這不是實際帳單費率或免費額度證明。HD Flash 是否適用 F0 免費額度與本資源實際帳單仍未核實，不承諾免費。
+
+## 2026-11-08 手機顯示「現場直播」與播放器影片停住
+
+原因：前端音訊代理把後端串流原樣轉出，沒有 `Content-Length`，`Range` 請求也回 200 整檔，手機瀏覽器因此視為直播，無法顯示長度或拖曳。修正：代理先取完整音檔，回傳固定 `Content-Length`、`Accept-Ranges: bytes`，並支援 `Range`（206／416）。測試 `tests/market/dailyMayaRoutes.test.ts`。另外播放器影片加看門狗：語音播放中影片停滯約 2 秒就從頭重播（`tests/learn/marketAudioPlayback.test.ts`）。Learn 總覽頁影片改為 walking.mp4 → hiking.mp4 接續播放並淡入淡出、重複（`tests/learn/catalogVideo.test.ts`）；`hiking.mp4` 須放在 `https://tymultiverse.cc/images/people/hiking.mp4`，缺檔時自動只循環 walking.mp4。
