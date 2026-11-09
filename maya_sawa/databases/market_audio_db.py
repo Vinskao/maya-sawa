@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 import hashlib
 
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, Text, select, text, update
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, Text, func, select, text, update
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
@@ -182,9 +182,12 @@ class MarketAudioDatabase:
         with self.sessions() as session:
             rows = session.execute(select(MarketAudio.product_type, MarketAudio.code,
                                           MarketAudio.revision, MarketAudio.voice,
-                                          MarketAudio.created_at).order_by(MarketAudio.created_at.desc())).all()
+                                          MarketAudio.created_at,
+                                          func.length(MarketAudio.audio_data).label('size')
+                                          ).order_by(MarketAudio.created_at.desc())).all()
             return [{'productType': row.product_type, 'code': row.code, 'revision': row.revision,
-                     'voice': row.voice, 'createdAt': row.created_at.isoformat()} for row in rows]
+                     'voice': row.voice, 'createdAt': row.created_at.isoformat(),
+                     'size': row.size or 0} for row in rows]
 
     def audio(self, product_type, code, revision):
         if not self.sessions:

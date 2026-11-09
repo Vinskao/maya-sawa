@@ -209,6 +209,7 @@ from .databases.market_audio_db import MarketAudioDatabase
 from .databases.market_dashboard_db import market_dashboard_db
 from .databases.market_ai_analysis_db import market_ai_analysis_db
 from .api.market_audio import make_router as make_market_audio_router
+from .api.podcast import make_router as make_podcast_router
 from .services.azure_speech_rest import AzureSpeechRestProvider
 from .services.market_audio_worker import MarketAudioWorker, audio_autogen_is_configured
 from .services.market_presenters import presenter_for_day
@@ -271,6 +272,7 @@ app.include_router(make_daily_maya_router(daily_maya_db,
                                          market_ai_analysis_db, _daily_maya_authorized,
                                          on_approved=lambda row: market_audio_db.enqueue('daily', row['id'], 1, row['content'])))
 app.include_router(make_market_audio_router(market_audio_db, daily_maya_db))
+app.include_router(make_podcast_router(market_audio_db, daily_maya_db))
 app.include_router(admin_users_router)
 app.include_router(publisher_mcp_router)
 app.include_router(social_publishing_router)

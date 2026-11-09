@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 
-from sqlalchemy import Column, DateTime, Text, UniqueConstraint, update, text
+from sqlalchemy import Column, DateTime, Text, UniqueConstraint, inspect, update, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
@@ -22,13 +22,15 @@ class DailyMayaProposal(Base):
     submitted_at = Column(DateTime(timezone=True), nullable=False)
     reviewed_at = Column(DateTime(timezone=True))
     review_note = Column(Text)
+    # Public episode title (podcast feed and Learn list). Nullable: older rows have none.
+    title = Column(Text)
 
 
 def _row(row):
     return {'id': row.id, 'day': row.day, 'content': row.content, 'sources': json.loads(row.sources),
             'status': row.status, 'submittedAt': row.submitted_at.isoformat(),
             'reviewedAt': row.reviewed_at.isoformat() if row.reviewed_at else None,
-            'reviewNote': row.review_note}
+            'reviewNote': row.review_note, 'title': row.title}
 
 
 class DailyMayaDatabase:
@@ -36,8 +38,17 @@ class DailyMayaDatabase:
         self.sessions = sessionmaker(bind=engine) if engine else None
         if engine:
             Base.metadata.create_all(engine)
+            self._add_missing_columns(engine)
 
-    def submit(self, day, content, sources, now, limit=10):
+    @staticmethod
+    def _add_missing_columns(engine):
+        # create_all never alters an existing table, so add the title column in place.
+        columns = {column['name'] for column in inspect(engine).get_columns(DailyMayaProposal.__tablename__)}
+        if 'title' not in columns:
+            with engine.begin() as connection:
+                connection.execute(text('ALTER TABLE ' + DailyMayaProposal.__tablename__ + ' ADD COLUMN title TEXT'))
+
+    def submit(self, day, content, sources, now, limit=10, title=None):
         datetime.strptime(day, '%Y-%m-%d')
         if not content.strip() or len(content) > 20000 or not sources or len(sources) > 50:
             raise ValueError('Content and bounded sources required')
@@ -55,7 +66,7 @@ class DailyMayaDatabase:
             if session.query(DailyMayaProposal).filter_by(day=day).count() >= limit:
                 raise OverflowError('Daily proposal inbox is full')
             row = DailyMayaProposal(id=str(uuid.uuid4()), day=day, digest=digest, content=content,
-                                    sources=source_json, status='pending', submitted_at=now)
+                                    sources=source_json, status='pending', submitted_at=now, title=title)
             session.add(row)
             session.flush()
             return _row(row), True

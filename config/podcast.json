@@ -1,0 +1,14 @@
+{
+  "title": "Birch Investments 每日市場精讀",
+  "description": "Birch Investments 每日市場精讀：整理總經與個股的最新分析，用主播逐字稿說明觀點、傳導與風險。語音為 AI 合成，內容僅供參考，不構成投資建議。文字稿與來源請見 tymultiverse.cc。",
+  "link": "https://tymultiverse.cc/learn/",
+  "language": "zh-tw",
+  "author": "Birch Investments",
+  "ownerName": "Birch Investments",
+  "ownerEmail": "tianyikao@tymultiverse.cc",
+  "imageUrl": "https://tymultiverse.cc/podcast-cover.jpg",
+  "category": "Business",
+  "subcategory": "Investing",
+  "audioBaseUrl": "https://tymultiverse.cc/api/market/audio",
+  "disclaimer": "本節目語音為 AI 合成，內容僅供參考，不構成投資建議。"
+}

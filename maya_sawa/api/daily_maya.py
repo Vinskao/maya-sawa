@@ -1,18 +1,38 @@
 """Isolated, bounded GPT drafts and keyed reviewer actions."""
 import asyncio
+import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..services.daily_maya_sources import validate_sources
+
+# Plain one-line text only: no line breaks, Markdown markers or HTML brackets.
+_TITLE_FORBIDDEN = re.compile(r'[\r\n#*`\[\]<>]')
+
+
+def default_title(day):
+    """Dated fallback so an episode is never untitled while older prompts still omit the title."""
+    return '每日市場精讀｜' + day.replace('-', '/')
 
 
 class Submission(BaseModel):
     day: str = Field(pattern=r'^\d{4}-\d{2}-\d{2}$')
+    title: str | None = Field(default=None, max_length=200)
     content: str = Field(min_length=1, max_length=20000)
     sources: list[str] = Field(min_length=1, max_length=50)
+
+    @field_validator('title')
+    @classmethod
+    def plain_short_title(cls, value):
+        if value is None:
+            return None
+        value = value.strip()
+        if not value or len(value) > 120 or _TITLE_FORBIDDEN.search(value):
+            raise ValueError('Title must be 1-120 plain-text characters on one line')
+        return value
 
 
 class Review(BaseModel):
@@ -34,7 +54,8 @@ def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.ut
             raise HTTPException(422, 'Day must be today in Asia/Taipei')
         try:
             await asyncio.to_thread(validate_sources, body.sources, analyses)
-            row, created = await asyncio.to_thread(db.submit, body.day, body.content, body.sources, now)
+            row, created = await asyncio.to_thread(db.submit, body.day, body.content, body.sources, now,
+                                                   title=body.title or default_title(body.day))
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         except OverflowError as exc:

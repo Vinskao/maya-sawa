@@ -15,10 +15,13 @@ def make_router(db, daily_db=None):
         try:
             items = await asyncio.to_thread(db.list_ready)
             if daily_db:
-                days = {row['id']: row['day'] for row in await asyncio.to_thread(daily_db.published)}
+                published = {row['id']: row for row in await asyncio.to_thread(daily_db.published)}
                 for item in items:
-                    if item['productType'] == 'daily' and item['code'] in days:
-                        item['day'] = days[item['code']]
+                    if item['productType'] == 'daily' and item['code'] in published:
+                        row = published[item['code']]
+                        item['day'] = row['day']
+                        item['title'] = row.get('title')
+                        item['sources'] = row.get('sources', [])
             return {'items': items, 'presenterSettings': public_presenter_settings()}
         except Exception as exc:
             raise HTTPException(503, 'Audio database unavailable') from exc
