@@ -51,7 +51,7 @@ stateDiagram-v2
 
 ## API 契約
 
-- `POST /market/daily-maya/proposals`：匿名提交 `{day, content, sources}`，day 必須是當天台北日期，最多 20,000 字及 50 個來源。相同內容與來源同日重送去重，每日最多十份；PostgreSQL 以交易鎖保護限額。
+- `POST /market/daily-maya/proposals`：匿名提交 `{day, title, content, sources}`（`title` 選填，2026-11-09 新增：每集公開標題，純文字單行 1–120 字；缺少時補「每日市場精讀｜YYYY/MM/DD」，審核提示會退回預設標題；Podcast RSS 見 [PODCAST_FEED.md](PODCAST_FEED.md)），day 必須是當天台北日期，最多 20,000 字及 50 個來源。相同內容與來源同日重送去重，每日最多十份；PostgreSQL 以交易鎖保護限額。
 - `GET /market/daily-maya/proposals`：以現有 `X-Market-Agent-Key` 讀待審提案。
 - `POST /market/daily-maya/proposals/{id}/review`：同一金鑰，`{decision: "approved"|"rejected", note}`；僅 pending 可轉換。核准前再次確認引用的分析版本存在。
 - `GET /market/daily-maya`：公開列出已核准內容。
