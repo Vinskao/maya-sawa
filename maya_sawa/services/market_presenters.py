@@ -21,6 +21,12 @@ def presenter_for_day(day: date):
     return {**presenter, 'voice': PRESENTERS[presenter['speaker']]['voice']} if presenter.get('speaker') else presenter
 
 
+def presenter_greeting(presenter):
+    """Opening line read before the script. Duo days are read by the speaker until Maya's part exists."""
+    speaker = PRESENTERS[presenter['speaker']] if presenter.get('speaker') else presenter
+    return f"早安，我是主播{speaker['name']}。"
+
+
 def presenter_for_voice(voice: str | None):
     return next((presenter for presenter in PRESENTERS.values() if voice and presenter.get('voice') == voice), PRESENTERS['maya'])
 

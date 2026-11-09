@@ -63,6 +63,22 @@ flowchart LR
 
 以 `config/market-presenters.json` 為設定來源：Maya `zh-CN-Xiaoqi:DragonHDFlashLatestNeural`，Uiobbeci `zh-CN-XiaoyiNeural`；週二、週日為 Duo，市場稿先以 Uiobbeci 發聲並記為 `duo:uiobbeci:maya-pending`，未生成 Maya 稿。已核准稿的原始日期由公開音訊 API 附上，重製時間不影響排班。先測七日排班、Duo 聲音與 pending metadata，再以 Azure 真實短句驗證 Xiaoqi；金鑰來自既有 Kubernetes Secret，不寫日誌或 Git。重製歷史稿時先備份現有完整音檔，再驗證稿件與合成，所有新音檔完成後才可在單一資料庫交易中替換；保留舊來源與新的計費字元預留，避免中途失敗讓清單空白。兩篇不符口播檢查的舊稿必須人工整理成保留不確定性與限制的摘要，保留稿件 ID 和來源，不將文件語句直接送 TTS。測試 `poetry run python -m pytest tests/market/test_market_presenters.py tests/market/test_market_audio_worker.py tests/market/test_market_audio_api.py tests/market/test_market_audio_azure.py -q`。Duo 的 Maya 片段、稿件以及雙人逐段切換仍待後續定義。
 
+### 開場問候依星期幾加上主播名（2026-11-09）
+
+```mermaid
+flowchart LR
+  A[已核准日報與台北日期] --> B[presenter_for_day 依星期挑主播]
+  B --> C[presenter_greeting 產生 早安，我是主播name。]
+  C --> D[問候 + 口播稿 檢查後的內容]
+  D --> E[字元預留 計費含問候]
+  E --> F[Azure Speech 合成]
+```
+
+- 問候語**由程式加**，AI 稿不要自己寫「早安，我是主播…」（會重複）。加在口播稿檢查**之後**、字元預留**之前**，所以問候的字數也計費，也不會被口播檢查誤擋。
+- 名字取自 `config/market-presenters.json`：週一三五 Maya、週四六 Uiobbeci；週二、週日是 Duo，Maya 段尚未實作，目前由 Uiobbeci 讀，所以問候用 `Uiobbeci`，等 Maya 雙人稿做好再改成兩人。
+- 只對有日期可查主播的 daily 加；總經、個股音訊和無法判斷日期的 daily 不變。資料庫存的來源稿不含問候，Learn／首頁顯示的文字也不變，只有語音有。
+- 測試：`tests/market/test_market_presenters.py::test_greeting_names_the_presenter_of_that_weekday`、`tests/market/test_market_audio_worker.py::test_daily_audio_opens_with_the_weekday_presenter_greeting_and_bills_it`。
+
 ### Presenter schedule and voice selection
 
 2026-11-05 修正：使用者提供的 Speech Studio 截圖為「曉伊」，風格為預設及 `affectionate`、`angry`、`cheerful`、`disgruntled`、`embarrassed`、`fearful`、`gentle`、`sad`、`serious`，對應標準音色 `zh-CN-XiaoyiNeural`。Uiobbeci 的唯一設定改為該音色；先前 `Xiaoxiao2` 試音並非截圖音色。先以設定測試重現錯誤，再更新 JSON、worker 和 API 測試。使用既有 Azure Secret 合成兩筆測試的 revision 2：單人使用曉伊，雙人前半使用 Maya 的 Xiaoyu、後半使用曉伊，兩段各約 10.73 秒；先鎖住音訊工作表並確認無 processing 工作，每次合成前依原有帳本預留字元。原 revision 1 保留以便追溯。兩個公開音檔 HTTP 可讀且 FFmpeg 全檔解碼成功；前端僅對 `test:` 錄音顯示最新 revision。語音依照截圖使用預設風格，截圖的「傷心」按鈕不作持續套用。測試：`poetry run python -m pytest tests/market/test_market_presenters.py tests/market/test_market_audio_worker.py tests/market/test_market_audio_api.py tests/market/test_market_audio_azure.py -q`；真實排程仍須在部署後確認新設定已生效。

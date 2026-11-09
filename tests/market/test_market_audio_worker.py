@@ -87,6 +87,26 @@ def test_daily_worker_uses_scheduled_presenter_voice_but_analysis_keeps_default(
     assert calls == ['zh-CN-XiaoyiNeural', None]
 
 
+def test_daily_audio_opens_with_the_weekday_presenter_greeting_and_bills_it():
+    db = database()
+    brief_id = 'a1e3f5d0-7401-46e9-a110-a20261109001'
+    db.enqueue('daily', brief_id, 1, '今天市場的第一段內容。')
+    seen = []
+
+    class Provider:
+        @staticmethod
+        def billable_characters(text): return len(text)
+        def synthesize(self, text, voice=None):
+            seen.append(text)
+            return b'audio', 'audio/mpeg', voice
+
+    worker = MarketAudioWorker(db, Provider(), enabled=True, monthly_char_limit=10000,
+                               daily_brief_day=lambda code: date(2026, 11, 9))  # Monday = Maya
+    assert worker.process_one() == 'ready'
+    assert seen == ['早安，我是主播Maya。今天市場的第一段內容。']
+    assert db.monthly_reserved_characters() == len(seen[0])
+
+
 def test_autogen_requires_two_explicit_flags_credential_region_and_monthly_cap():
     base = {'MARKET_AUDIO_AUTOGEN_ENABLED': 'true', 'MARKET_AUDIO_AZURE_ENABLED': 'true',
             'AZURE_SPEECH_KEY': 'secret', 'MARKET_AUDIO_SPEECH_REGION': 'eastus',

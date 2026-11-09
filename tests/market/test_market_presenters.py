@@ -1,6 +1,14 @@
 from datetime import date
 
 from maya_sawa.services.market_presenters import PRESENTERS, presenter_for_day, presenter_for_voice, public_presenter_settings
+from maya_sawa.services.market_presenters import presenter_greeting
+
+
+def test_greeting_names_the_presenter_of_that_weekday():
+    # Mon Maya, Tue duo (read by Uiobbeci until Maya's part exists), Thu Uiobbeci
+    assert presenter_greeting(presenter_for_day(date(2026, 11, 9))) == '早安，我是主播Maya。'
+    assert presenter_greeting(presenter_for_day(date(2026, 11, 10))) == '早安，我是主播Uiobbeci。'
+    assert presenter_greeting(presenter_for_day(date(2026, 11, 12))) == '早安，我是主播Uiobbeci。'
 
 
 def test_daily_presenter_schedule_and_media_are_centralized():

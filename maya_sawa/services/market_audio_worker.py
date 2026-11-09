@@ -6,7 +6,7 @@ from datetime import date
 
 from ..databases.market_audio_db import AudioBudgetExceeded
 from .daily_maya_speech import InvalidSpokenTranscript, prepare_spoken_transcript
-from .market_presenters import presenter_for_day
+from .market_presenters import presenter_for_day, presenter_greeting
 
 logger = logging.getLogger(__name__)
 ESTIMATED_USD_PER_MILLION_CHARACTERS = 15.0
@@ -58,6 +58,18 @@ class MarketAudioWorker:
                 raise ValueError('Source integrity check failed')
             spoken_text = (prepare_spoken_transcript(source_text)
                            if job['productType'] == 'daily' else source_text)
+            brief_day = None
+            if job['productType'] == 'daily' and self.daily_brief_day:
+                brief_day = self.daily_brief_day(job['code'])
+            elif job['productType'] == 'daily':
+                try:
+                    brief_day = date.fromisoformat(job['code'])
+                except ValueError:
+                    brief_day = None
+            presenter = presenter_for_day(brief_day) if brief_day else None
+            if presenter:
+                # Added after the transcript check so the AI script never has to introduce the presenter.
+                spoken_text = presenter_greeting(presenter) + spoken_text
             character_counter = getattr(self.provider, 'billable_characters', None)
             if not callable(character_counter):
                 raise ValueError('Speech provider must supply a billable character counter')
@@ -78,15 +90,6 @@ class MarketAudioWorker:
                 monthly_reserved,
                 monthly_reserved * ESTIMATED_USD_PER_MILLION_CHARACTERS / 1_000_000,
                 self.monthly_char_limit, ESTIMATED_USD_PER_MILLION_CHARACTERS)
-            brief_day = None
-            if job['productType'] == 'daily' and self.daily_brief_day:
-                brief_day = self.daily_brief_day(job['code'])
-            elif job['productType'] == 'daily':
-                try:
-                    brief_day = date.fromisoformat(job['code'])
-                except ValueError:
-                    brief_day = None
-            presenter = presenter_for_day(brief_day) if brief_day else None
             try:
                 audio, content_type, voice = self.provider.synthesize(spoken_text, voice=presenter['voice']) if presenter else self.provider.synthesize(spoken_text)
             except TypeError as exc:
