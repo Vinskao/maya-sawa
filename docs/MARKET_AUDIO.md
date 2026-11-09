@@ -1,5 +1,7 @@
 # 市場快報語音（準備中）
 
+> **現況更正（2026-11-09）：** 正式環境 `k8s/deployment.yaml` 目前是 `MARKET_AUDIO_AZURE_ENABLED=true`、`MARKET_AUDIO_AUTOGEN_ENABLED=true`、`MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT=50000`，只對「今天已核准的每日精讀」自動合成。下文第 3 行與「接線與成本控制實作補充」第 5 點所說的「預設關閉、月上限 0」是 2026-11-04 啟用前的狀態，保留作歷史紀錄；以部署檔為準。操作流程與診斷順序整理在 skill `daily-market-reading`。
+
 市場語音唯讀 API 現已接入服務，Learn 頁會列出已完成的語音並播放資料庫中的完整音檔。版本佇列、Azure Speech REST provider、全文分段/MP3 合併及月字數預留閘門已實作並測試；正式環境透過 Jenkins folder credential `AZURE_SPEECH_KEY` 安全建立 Kubernetes Secret，再由 deployment 的 SecretKeyRef 注入。`MARKET_AUDIO_AZURE_ENABLED`、`MARKET_AUDIO_AUTOGEN_ENABLED` 預設仍關閉，月字數上限為 0；不會因部署 credential 而啟動自動合成。
 
 ## 預定資料流程
