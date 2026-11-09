@@ -186,6 +186,10 @@ Follow the workspace TDD rules (`../AGENTS.md`, "Test-driven development"): fail
 - API routes: build a `FastAPI()` with the router, override `require_authenticated`, and inject a SQLite-backed database (see `tests/market/test_market_ai_analysis.py`).
 - Macro source coverage: DGBAS employment and COMEX gold are tested. BLS, FRED (dates/observations), CBC, Taiwan customs, TPEx gold, Taiwan PPI, PMI, UMich, World Bank gold, Fed calendar and the consensus calendar have no tests. Add one with a fixture when you touch any of them.
 
+## 社群自動發文 / Social publishing
+
+分析一存檔就自動發到 Facebook 粉專、Instagram、Threads、LinkedIn（`services/social`）。架構圖、狀態機、憑證與開發方法見 [docs/SOCIAL_PUBLISHING.md](docs/SOCIAL_PUBLISHING.md)；`docs/BIRCH_THREADS_PUBLISHING.md` 是已被取代的舊流程。發文公開且無法收回，`pending_review` 的貼文絕不重送。操作流程也整理成 skill `social-publishing`。
+
 ## Agent 開發注意事項
 
 ### 1. API 路徑兼容性
