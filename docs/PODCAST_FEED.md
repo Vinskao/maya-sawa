@@ -4,6 +4,8 @@ Spotify **沒有**可以上傳或發佈單集的公開 API：Web API 的 Podcast
 
 Feed：`https://tymultiverse.cc/podcast.xml`（前端路由代理後端 `GET /market/podcast.xml`）。
 
+**Spotify 節目（2026-11-09 提交）：** https://open.spotify.com/show/6c674Xq9as5ugqva8aqimV 。在 Spotify for Creators 以「尋找現有節目 → Somewhere else → 貼上 RSS」提交，驗證碼寄到 feed 的擁有者信箱 `tianyikao@tymultiverse.cc`（經自有郵件閘道轉寄到 Gmail）。製作地點 Taiwan、語言 Chinese、代管「其他」、類別 Business & Technology。子類別選的是 Investing／Economics／Finance，但送出瞬間頁面顯示成 Investing／Economics／**Technology**，最後存了哪一組要在 Spotify for Creators 的節目設定確認。上架需要數小時。
+
 ```mermaid
 flowchart LR
     A[ChatGPT 08:30 草稿<br/>含 title + sources] --> P[(提案 pending)]
