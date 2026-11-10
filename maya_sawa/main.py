@@ -273,6 +273,27 @@ app.include_router(make_daily_maya_router(daily_maya_db,
                                          market_ai_analysis_db, _daily_maya_authorized,
                                          on_approved=lambda row: market_audio_db.enqueue('daily', row['id'], 1, row['content'])))
 app.include_router(make_market_audio_router(market_audio_db, daily_maya_db))
+
+# Daily reading by email: sign-ups are stored at once; mail goes out only once SMTP is configured.
+from .api.brief_subscriptions import make_router as make_brief_subscriptions_router
+from .databases.brief_subscribers_db import BriefSubscribersDatabase
+from .services.brief_mailer import BriefMailer
+
+brief_subscribers_db = BriefSubscribersDatabase(market_dashboard_db.engine)
+app.include_router(make_brief_subscriptions_router(brief_subscribers_db, lambda: datetime.now(ZoneInfo('UTC'))))
+_brief_mail_task = None
+
+def _today_approved_brief():
+    today = datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
+    return next((row for row in daily_maya_db.published() if row['day'] == today), None)
+
+async def _brief_mail_loop(mailer):
+    while True:
+        try:
+            await asyncio.to_thread(lambda: mailer.run_once(_today_approved_brief()))
+        except Exception:
+            logger.exception('Brief mail loop failed')
+        await asyncio.sleep(300)
 app.include_router(make_podcast_router(market_audio_db, daily_maya_db))
 app.include_router(admin_users_router)
 app.include_router(reader_events_router)
@@ -305,6 +326,9 @@ async def _startup_event():
     """
     try:
         await _start_market_audio_worker_if_configured()
+        global _brief_mail_task
+        if _brief_mail_task is None and market_dashboard_db.engine:
+            _brief_mail_task = asyncio.create_task(_brief_mail_loop(BriefMailer(brief_subscribers_db)))
         # 檢查配置
         missing_config = Config.validate_required_config()
         if missing_config:
@@ -466,6 +490,10 @@ async def _shutdown_event():
     4. 記錄關閉日誌
     """
     try:
+        global _brief_mail_task
+        if _brief_mail_task:
+            _brief_mail_task.cancel()
+            _brief_mail_task = None
         global _market_audio_worker_task, _market_audio_worker_lock
         if _market_audio_worker_task:
             _market_audio_worker_task.cancel()

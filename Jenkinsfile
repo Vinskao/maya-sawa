@@ -458,6 +458,28 @@ TELEGRAM_CHAT_ID=%s
             }
         }
 
+        stage('Configure Brief Mail') {
+            // SMTP for the daily reading by email; until these credentials exist, sign-ups are stored and nothing is sent.
+            steps {
+                container('kubectl') {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Brief mail credentials unavailable; subscription mail stays off') {
+                        withCredentials([
+                            string(credentialsId: 'BRIEF_MAIL_SMTP_HOST', variable: 'BRIEF_MAIL_SMTP_HOST'),
+                            string(credentialsId: 'BRIEF_MAIL_SMTP_USERNAME', variable: 'BRIEF_MAIL_SMTP_USERNAME'),
+                            string(credentialsId: 'BRIEF_MAIL_SMTP_PASSWORD', variable: 'BRIEF_MAIL_SMTP_PASSWORD'),
+                            string(credentialsId: 'BRIEF_MAIL_FROM', variable: 'BRIEF_MAIL_FROM')
+                        ]) {
+                            sh '''
+                                set +x
+                                set -e
+                                printf 'BRIEF_MAIL_SMTP_HOST=%s\nBRIEF_MAIL_SMTP_USERNAME=%s\nBRIEF_MAIL_SMTP_PASSWORD=%s\nBRIEF_MAIL_FROM=%s\n' "$BRIEF_MAIL_SMTP_HOST" "$BRIEF_MAIL_SMTP_USERNAME" "$BRIEF_MAIL_SMTP_PASSWORD" "$BRIEF_MAIL_FROM" | kubectl create secret generic brief-mail-credentials --from-env-file=/dev/stdin -n default --dry-run=client -o yaml | kubectl apply -f -
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {

@@ -577,7 +577,8 @@ class MarketReportsDatabase:
         if not self.sessions:
             raise RuntimeError("Market reports database unavailable")
         with self.sessions() as session:
-            query = session.query(MarketReport.id, MarketReport.text).filter(
+            query = session.query(MarketReport.id, MarketReport.text, MarketReport.title, MarketReport.publisher,
+                                  MarketReport.published_at, MarketReport.source_url).filter(
                 MarketReport.visibility == "public",
                 MarketReport.status.notin_(["failed", "digest", "archived"]),
             )
@@ -586,11 +587,13 @@ class MarketReportsDatabase:
                 query = query.filter(func.lower(MarketReport.text).like(f"%{escaped}%", escape="\\"))
             rows = query.order_by(MarketReport.received_at.desc()).limit(limit).all()
         results = []
-        for report_id, body in rows:
+        for report_id, body, title, publisher, published_at, source_url in rows:
             at = body.lower().find(terms[0])
             markers = _PAGE_MARKER.findall(body[:at])
             snippet = _PAGE_MARKER.sub(" ", body[max(0, at - 60):at + len(terms[0]) + 100])
-            results.append({"report_id": report_id, "page": int(markers[-1]) if markers else 1,
+            results.append({"report_id": report_id, "title": title, "publisher": publisher,
+                            "published_at": published_at.isoformat() if published_at else None,
+                            "source_url": source_url, "page": int(markers[-1]) if markers else 1,
                             "snippet": " ".join(snippet.split())})
         return results
 

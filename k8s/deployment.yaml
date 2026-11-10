@@ -56,6 +56,31 @@ spec:
             secretKeyRef:
               name: azure-speech-credentials
               key: AZURE_SPEECH_KEY
+        # Daily reading by email. Optional: without this secret sign-ups are stored and no mail is sent.
+        - name: BRIEF_MAIL_SMTP_HOST
+          valueFrom:
+            secretKeyRef:
+              name: brief-mail-credentials
+              key: BRIEF_MAIL_SMTP_HOST
+              optional: true
+        - name: BRIEF_MAIL_SMTP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: brief-mail-credentials
+              key: BRIEF_MAIL_SMTP_USERNAME
+              optional: true
+        - name: BRIEF_MAIL_SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: brief-mail-credentials
+              key: BRIEF_MAIL_SMTP_PASSWORD
+              optional: true
+        - name: BRIEF_MAIL_FROM
+          valueFrom:
+            secretKeyRef:
+              name: brief-mail-credentials
+              key: BRIEF_MAIL_FROM
+              optional: true
         - name: MARKET_AUDIO_SPEECH_REGION
           value: "eastus"
         # Automatic synthesis is limited to approved daily briefs; monthly local ceiling is 50k chars.
