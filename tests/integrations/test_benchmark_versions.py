@@ -9,7 +9,7 @@ from maya_sawa.api import tw_benchmark
 
 
 def test_every_version_is_a_complete_lineup():
-    assert [v["version"] for v in versions.VERSIONS] == [1, 2]
+    assert [v["version"] for v in versions.VERSIONS] == [1, 2, 3]
     for version in versions.VERSIONS:
         rows = versions.members(version)
         codes = [row["code"] for row in rows]
@@ -27,6 +27,13 @@ def test_version_two_pairs_a_leader_with_a_peer_in_every_stage():
         assert [company["role"] for company in stage["companies"]] == [versions.LEADER, versions.PEER]
     titles = {stage["title"] for stage in stages}
     assert {"記憶體", "矽智財與 ASIC 設計服務", "測試介面", "IC 載板"} <= titles
+
+
+def test_version_three_keeps_only_the_leader_of_each_stage():
+    # 2026-11-10: benchmarks set the guidance and cycle tone; they are not purchase candidates, so no peers.
+    stages = [stage for layer in versions.definition(versions.VERSIONS[2])["layers"] for stage in layer["stages"]]
+    assert len(stages) == 12
+    assert all([company["role"] for company in stage["companies"]] == [versions.LEADER] for stage in stages)
 
 
 def _sync(monkeypatch, applied):
@@ -48,15 +55,15 @@ def _sync(monkeypatch, applied):
 def test_a_new_version_is_applied_once_and_retires_companies_it_drops(monkeypatch):
     calls = _sync(monkeypatch, 1)
     recorded = [params["version"] for sql, params in calls if "INSERT INTO benchmark_version" in sql]
-    assert recorded == [1, 2]
+    assert recorded == [1, 2, 3]
     upserted = {params["code"] for sql, params in calls if "INSERT INTO benchmark\n" in sql}
-    assert upserted == {row["code"] for row in versions.members(versions.VERSIONS[1])}
+    assert upserted == {row["code"] for row in versions.members(versions.VERSIONS[-1])}
     retire = [params for sql, params in calls if "SET is_active=FALSE" in sql]
-    assert len(retire) == 1 and "6937" not in retire[0]["codes"] and "2330" in retire[0]["codes"]
+    assert len(retire) == 1 and "2379" not in retire[0]["codes"] and "2330" in retire[0]["codes"]
 
 
 def test_an_applied_version_is_left_alone_so_manual_selection_survives(monkeypatch):
-    calls = _sync(monkeypatch, 2)
+    calls = _sync(monkeypatch, 3)
     assert not any("INSERT INTO benchmark" in sql or "SET is_active=FALSE" in sql for sql, _ in calls)
 
 
