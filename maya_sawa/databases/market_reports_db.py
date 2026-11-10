@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
@@ -17,6 +18,7 @@ from sqlalchemy import (
     LargeBinary,
     Text,
     UniqueConstraint,
+    func,
     text as sql_text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -27,6 +29,7 @@ from .market_dashboard_db import market_dashboard_db
 
 Base = declarative_base()
 
+_PAGE_MARKER = re.compile(r"=====PAGE (\d+)=====")
 COLLECTOR_UPLOADER = "telegram-collector"  # reports made from public Telegram posts
 COLLECTOR_LISTED_PER_CHANNEL = 10  # the report list shows only the latest posts of each channel; the rest stay data
 
@@ -565,6 +568,31 @@ class MarketReportsDatabase:
                 }
                 for chunk, report, dist in query.order_by(distance).limit(limit).all()
             ]
+
+    def search_text(self, q: str, limit: int = 200) -> list[dict]:
+        """Keyword search over the whole text of public reports: every word must appear (case-insensitive)."""
+        terms = [term for term in q.lower().split() if term][:8]
+        if not terms:
+            return []
+        if not self.sessions:
+            raise RuntimeError("Market reports database unavailable")
+        with self.sessions() as session:
+            query = session.query(MarketReport.id, MarketReport.text).filter(
+                MarketReport.visibility == "public",
+                MarketReport.status.notin_(["failed", "digest", "archived"]),
+            )
+            for term in terms:
+                escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                query = query.filter(func.lower(MarketReport.text).like(f"%{escaped}%", escape="\\"))
+            rows = query.order_by(MarketReport.received_at.desc()).limit(limit).all()
+        results = []
+        for report_id, body in rows:
+            at = body.lower().find(terms[0])
+            markers = _PAGE_MARKER.findall(body[:at])
+            snippet = _PAGE_MARKER.sub(" ", body[max(0, at - 60):at + len(terms[0]) + 100])
+            results.append({"report_id": report_id, "page": int(markers[-1]) if markers else 1,
+                            "snippet": " ".join(snippet.split())})
+        return results
 
     def page_count(self, report_id):
         if not self.sessions:

@@ -357,6 +357,19 @@ async def search_reports(
         ) from exc
 
 
+@router.get("/fulltext", **public_data("公開研究報告全文關鍵字搜尋（每個詞都要出現；回傳報告、頁碼與摘錄）", "研究報告與主張"))
+async def fulltext_reports(q: str, limit: int = 200):
+    if len(q) > 200:
+        raise HTTPException(status_code=422, detail="Search text must be at most 200 characters")
+    if not q.strip():
+        return {"results": []}
+    try:
+        return {"results": await asyncio.to_thread(market_reports_db.search_text, q.strip(), min(max(limit, 1), 200))}
+    except Exception as exc:
+        logger.exception("Market report full-text search failed")
+        raise HTTPException(status_code=503, detail="Report search unavailable") from exc
+
+
 @router.get("/pending")
 async def pending_reports(x_market_agent_key: str | None = Header(None)):
     _verify_agent(x_market_agent_key)
