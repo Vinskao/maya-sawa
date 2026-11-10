@@ -106,7 +106,7 @@ def test_api_accepts_an_address_without_revealing_whether_it_exists():
     client = _client(db)
     first = client.post('/market/subscriptions', json={'email': 'reader@example.com'})
     second = client.post('/market/subscriptions', json={'email': 'reader@example.com'})
-    assert first.status_code == 200 and first.json() == second.json() == {'status': 'pending'}
+    assert first.status_code == 200 and first.json() == second.json() == {'status': 'pending', 'mail_enabled': True}
     assert client.post('/market/subscriptions', json={'email': 'not-an-email'}).status_code == 422
     assert client.post('/market/subscriptions', json={'email': 'a@b.cc\nBcc: x@y.zz'}).status_code == 422
 
