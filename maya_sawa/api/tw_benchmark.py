@@ -7,12 +7,14 @@ from datetime import datetime
 from hashlib import sha256
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from maya_sawa.databases.market_dashboard_db import market_dashboard_db
 from maya_sawa.services.benchmark_analysis import process_annual_filings
 from maya_sawa.tw_benchmark_filings import catalog_url, download, listing
+from maya_sawa.api.market_reports import _verify_agent
 
 router = APIRouter(prefix="/market/benchmark")
 logger = logging.getLogger(__name__)
@@ -39,8 +41,10 @@ BENCHMARKS = (
 SCHEMA = (
     """CREATE TABLE IF NOT EXISTS benchmark (
         code TEXT PRIMARY KEY, company_name TEXT NOT NULL,
-        segment TEXT NOT NULL, significance TEXT NOT NULL, annual_report_location TEXT NOT NULL
+        segment TEXT NOT NULL, significance TEXT NOT NULL, annual_report_location TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE
     )""",
+    "ALTER TABLE benchmark ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
     """CREATE TABLE IF NOT EXISTS benchmark_filing (
         code TEXT NOT NULL REFERENCES benchmark(code), fiscal_year INTEGER NOT NULL,
         kind TEXT NOT NULL CHECK (kind IN ('A', 'F')), filename TEXT NOT NULL,
@@ -63,16 +67,23 @@ def sync():
             with conn.begin_nested():
                 for ddl in SCHEMA:
                     conn.execute(text(ddl))
-                for code, company, segment, significance in BENCHMARKS:
-                    conn.execute(text("""
-                        INSERT INTO benchmark VALUES (:code, :company, :segment, :meaning, :location)
-                        ON CONFLICT (code) DO UPDATE SET company_name=excluded.company_name,
-                        segment=excluded.segment, significance=excluded.significance,
-                        annual_report_location=excluded.annual_report_location
-                    """), dict(code=code, company=company, segment=segment, meaning=significance,
-                               location=catalog_url(code, year - 1, "F")))
+                # The legacy catalog is an initial seed only. Once rows exist, DB selection
+                # is authoritative and daily sync must never restore a retired company.
+                if not conn.scalar(text("SELECT EXISTS (SELECT 1 FROM benchmark)")):
+                    for code, company, segment, significance in BENCHMARKS:
+                        conn.execute(text("""
+                            INSERT INTO benchmark
+                              (code, company_name, segment, significance, annual_report_location, is_active)
+                            VALUES (:code, :company, :segment, :meaning, :location, TRUE)
+                            ON CONFLICT (code) DO NOTHING
+                        """), dict(code=code, company=company, segment=segment, meaning=significance,
+                                   location=catalog_url(code, year - 1, "F")))
             conn.commit()
-            for code, *_ in BENCHMARKS:
+            active_companies = conn.execute(text(
+                "SELECT code FROM benchmark WHERE is_active=TRUE ORDER BY code"
+            )).mappings().all()
+            for company_row in active_companies:
+                code = company_row["code"]
                 for fiscal_year in (year - 2, year - 1, year):
                     for kind in ("F", "A"):
                         try:
@@ -146,3 +157,62 @@ def benchmark_list():
             ) a ON true
             ORDER BY b.code
         """)).mappings()]
+
+
+class BenchmarkCompany(BaseModel):
+    code: str = Field(pattern=r"^\d{4}$")
+    company_name: str = Field(min_length=1, max_length=100)
+    segment: str = Field(min_length=1, max_length=200)
+    significance: str = Field(min_length=10, max_length=3000)
+    active: bool = True
+
+
+class BenchmarkSelection(BaseModel):
+    active: bool
+
+
+@router.put("/{code}")
+def upsert_benchmark_company(
+    code: str,
+    company: BenchmarkCompany,
+    x_market_agent_key: str | None = Header(None),
+):
+    """Add or update a Taiwan benchmark company and its current selection state."""
+    _verify_agent(x_market_agent_key)
+    if code != company.code:
+        raise HTTPException(422, "Path code and company code must match")
+    engine = market_dashboard_db.engine
+    if engine is None:
+        raise HTTPException(503, "Benchmark database unavailable")
+    year = datetime.now(ZoneInfo("Asia/Taipei")).year
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO benchmark
+              (code, company_name, segment, significance, annual_report_location, is_active)
+            VALUES (:code, :company_name, :segment, :significance, :location, :active)
+            ON CONFLICT (code) DO UPDATE SET company_name=excluded.company_name,
+              segment=excluded.segment, significance=excluded.significance,
+              annual_report_location=excluded.annual_report_location, is_active=excluded.is_active
+        """), {**company.model_dump(exclude={"active"}),
+               "location": catalog_url(code, year - 1, "F"), "active": company.active})
+    return {"code": code, "is_active": company.active}
+
+
+@router.put("/{code}/selection")
+def set_benchmark_selection(
+    code: str,
+    selection: BenchmarkSelection,
+    x_market_agent_key: str | None = Header(None),
+):
+    """Select or retire a Taiwan benchmark company without deleting its filing history."""
+    _verify_agent(x_market_agent_key)
+    engine = market_dashboard_db.engine
+    if engine is None:
+        raise HTTPException(503, "Benchmark database unavailable")
+    with engine.begin() as conn:
+        result = conn.execute(text(
+            "UPDATE benchmark SET is_active=:active WHERE code=:code"
+        ), {"code": code, "active": selection.active})
+        if not result.rowcount:
+            raise HTTPException(404, "Benchmark company not found")
+    return {"code": code, "is_active": selection.active}

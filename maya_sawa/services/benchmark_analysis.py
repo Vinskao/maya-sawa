@@ -59,7 +59,7 @@ def process_annual_filings(conn):
     keys = conn.execute(text("""
         SELECT f.code, f.filename, f.sha256, f.fiscal_year, f.source_url, b.company_name
         FROM benchmark_filing f JOIN benchmark b ON f.code=b.code
-        WHERE f.kind='F' AND f.analysis_status IS NULL
+        WHERE f.kind='F' AND f.analysis_status IS NULL AND b.is_active=TRUE
         ORDER BY f.analysis_attempted_at NULLS FIRST, f.fiscal_year DESC, f.code, f.filename
         LIMIT 4
     """)).mappings().all()
