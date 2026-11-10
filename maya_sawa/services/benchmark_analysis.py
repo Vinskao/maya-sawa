@@ -50,6 +50,10 @@ def propose(client, pages, code, company):
     return [{**claim, "codes": [code]} for claim in normalized]
 
 
+# One line-up (22 companies, one annual report each) clears in a single daily run.
+DAILY_LIMIT = 24
+
+
 def process_annual_filings(conn):
     if not Config.OPENAI_API_KEY:
         return
@@ -60,9 +64,11 @@ def process_annual_filings(conn):
         SELECT f.code, f.filename, f.sha256, f.fiscal_year, f.source_url, b.company_name
         FROM benchmark_filing f JOIN benchmark b ON f.code=b.code
         WHERE f.kind='F' AND f.analysis_status IS NULL AND b.is_active=TRUE
-        ORDER BY f.analysis_attempted_at NULLS FIRST, f.fiscal_year DESC, f.code, f.filename
-        LIMIT 4
-    """)).mappings().all()
+          AND f.fiscal_year = (SELECT max(fiscal_year) FROM benchmark_filing
+                               WHERE code=f.code AND kind='F')
+        ORDER BY f.analysis_attempted_at NULLS FIRST, f.code, f.filename
+        LIMIT :limit
+    """), {"limit": DAILY_LIMIT}).mappings().all()
     conn.commit()
     for key in keys:
         conn.execute(text("""

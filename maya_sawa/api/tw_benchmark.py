@@ -84,30 +84,33 @@ def sync():
             )).mappings().all()
             for company_row in active_companies:
                 code = company_row["code"]
-                for fiscal_year in (year - 2, year - 1, year):
-                    for kind in ("F", "A"):
-                        try:
-                            source, files = listing(code, fiscal_year, kind)
-                            for filename in files:
-                                known = conn.scalar(text("""
-                                    SELECT 1 FROM benchmark_filing WHERE code=:code AND filename=:filename
-                                    LIMIT 1
-                                """), dict(code=code, filename=filename))
-                                conn.commit()
-                                if known:
-                                    continue
-                                pdf = download(code, kind, filename)
-                                conn.execute(text("""
-                                    INSERT INTO benchmark_filing
-                                      (code,fiscal_year,kind,filename,source_url,sha256,pdf)
-                                    VALUES (:code,:year,:kind,:filename,:source,:sha,:pdf)
-                                    ON CONFLICT DO NOTHING
-                                """), dict(code=code, year=fiscal_year, kind=kind, filename=filename,
-                                           source=source, sha=sha256(pdf).hexdigest(), pdf=pdf))
-                                conn.commit()
-                        except Exception:
-                            conn.rollback()
-                            logger.exception("Benchmark filing sync failed: %s %s %s", code, fiscal_year, kind)
+                # Benchmarks set the guidance and cycle view, they are not holdings: only the newest
+                # shareholder annual report is kept. This year's is tried first, then last year's.
+                for fiscal_year in (year, year - 1):
+                    try:
+                        source, files = listing(code, fiscal_year, "F")
+                        for filename in files:
+                            known = conn.scalar(text("""
+                                SELECT 1 FROM benchmark_filing WHERE code=:code AND filename=:filename
+                                LIMIT 1
+                            """), dict(code=code, filename=filename))
+                            conn.commit()
+                            if known:
+                                continue
+                            pdf = download(code, "F", filename)
+                            conn.execute(text("""
+                                INSERT INTO benchmark_filing
+                                  (code,fiscal_year,kind,filename,source_url,sha256,pdf)
+                                VALUES (:code,:year,'F',:filename,:source,:sha,:pdf)
+                                ON CONFLICT DO NOTHING
+                            """), dict(code=code, year=fiscal_year, filename=filename,
+                                       source=source, sha=sha256(pdf).hexdigest(), pdf=pdf))
+                            conn.commit()
+                        if files:
+                            break
+                    except Exception:
+                        conn.rollback()
+                        logger.exception("Benchmark filing sync failed: %s %s", code, fiscal_year)
             process_annual_filings(conn)
         finally:
             conn.rollback()

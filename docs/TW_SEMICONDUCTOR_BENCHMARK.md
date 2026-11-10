@@ -78,3 +78,10 @@ flowchart LR
 3. 版本套用只發生一次。之後用 `PUT /market/benchmark/{code}` 或 `/selection` 做的人工調整不會被每日同步改回；但人工調整不會產生新版號，要留紀錄就加版本。
 4. `GET /market/benchmark` 只回目前啟用的公司；`GET /market/benchmark/versions` 由新到舊回傳所有版本，第一筆 `is_current=true`。
 5. 測試 `poetry run python -m pytest tests/integrations/test_benchmark_versions.py tests/integrations/test_benchmark_selection.py -q`。
+
+## 只留最新一份股東會年報（2026-11-10）
+
+Benchmark 公司用來定調產業 guidance 與景氣位置，不是買入標的，所以和持股研究分開存放（`benchmark`、`benchmark_filing` 兩張表），也不需要多年財報。
+
+- 每日同步只抓股東會年報（F）：先查今年度，查不到才查去年度，每家只取最新一份。不再抓年度財務報告（A），也不再回溯三年。先前已存的舊年度檔案保留，但不進分析佇列。
+- 分析佇列只挑每家公司最新年度的年報，每輪上限由 4 份提高到 `DAILY_LIMIT = 24`，一整版名單（22 家）一天可跑完。仍使用部署既有的 OpenAI 設定。
