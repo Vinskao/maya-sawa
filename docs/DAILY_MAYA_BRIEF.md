@@ -142,3 +142,30 @@ GPT 08:30 與 Claude Sonnet 09:00（台北）既有排程已修改，重新載�
 處理：每個報告日只保留一筆。11/3 留 `16d80368`（916 字，最完整），11/4 留 `6667f960`（當日最後核准）。刪除 `f4b01241`、`64bf7afc`、`de296397` 在 `maya_sawa_market_audio`、`maya_sawa_market_audio_job`、`maya_sawa_daily_maya_proposal` 的列（單一交易），刪前以 `pg_dump` 備份三張表。前端新增 `newestMarketAudioFirst`（先依報告日、再依建立時間遞減），測試在 `tests/learn/marketAudioPresentation.test.ts`。
 
 11/5–11/7 仍無核准稿：`efc22e62`、`e4dc850a`、`f8b58b2d`、`57e98025`、`c65ea8e8`、`1b97aadc` 全被審核退回（退回理由見各稿 `review_note`：漏當日重大事件、數字用舊一期、行情數字堆砌、製程用語、sources 缺標的版本）。
+
+
+## 2026-11-10 11/10 精讀有稿卻沒語音：三個互相疊加的問題
+
+```mermaid
+flowchart LR
+  A[07:00 Claude 審核<br/>proposals 為空] -->|什麼都沒審| B
+  G[08:30 ChatGPT 草稿 e8b0327e<br/>提交成功 pending] --> B[待審稿無人審]
+  G -->|回報後自行暫停排程| P[ChatGPT 任務被暫停]
+  B --> F[10:10 Claude 備援<br/>自寫自審核准 df534aee]
+  F --> W[語音工作]
+  W -->|稿中一個頓號| X[InvalidSpokenTranscript<br/>job failed，無通知]
+```
+
+**症狀**：ChatGPT 排程顯示被暫停；`/market/daily-maya` 有 11/10 核准稿（備援寫的），但 `/market/audio` 最新仍是 11/9，Learn 與首頁沒有今天的語音。
+
+**三個原因（用 `RemoteTrigger get / list_runs / get_run_log`、Pod 前一個容器的日誌、`prepare_spoken_transcript` 本機重跑查到）**：
+
+1. **審核排程時間錯了**：`trig_01ThBAep1tNAisdAKS43XiKg` 的 cron 是 `CRON_TZ=Asia/Taipei 0 7 * * *`（07:00），而草稿 08:30 才送，所以 07:06 的審核只看到空清單就結束；草稿一直 pending 到 10:10 被備援略過。routine 檔與文件都寫 09:00；該 routine 的 `updated_at` 是 11/9 17:33，也就是改提示那次一併被改錯的。已改回 `CRON_TZ=Asia/Taipei 0 9 * * *`。
+2. **ChatGPT 自己把任務暫停**：它的回報寫「我已暫停此任務，避免繼續自動提交重複的待審稿」。提示裡沒有任何允許暫停的字句，是模型自己的判斷（11/7 那次也是同一句）。處理：提示末尾加「絕不暫停、停用或修改這個排程本身；同一天已有待審稿仍照常提交，重複由伺服器合併，審核由另一個排程負責」。這是 ChatGPT 端設定，不在 repo。
+3. **備援稿一個頓號讓整天語音失敗**：`df534aee` 第 891 字「出貨節奏、毛利率」用了「、」，口播檢查只允許「，。」，worker 標 `failed`（`error_type=InvalidSpokenTranscript`），而且沒有任何通知，使用者是看 Learn 才發現。修正兩處：
+   - `daily_maya_speech._clean_formatting` 把「、」讀成「，」（它本來就是列舉停頓，唸法相同；不算改原文）。
+   - `POST /market/daily-maya/proposals` 在存入前先跑同一個 `validate_spoken_transcript`，不過就回 422 並把原因寫在 detail（「content 無法朗讀（…）」），讓撰稿排程當場改寫，而不是核准後才在語音階段靜默失敗。既有測試的英文 content 因此改成中文句。
+
+**開發方法**：先寫失敗測試（`tests/market/test_daily_maya_speech.py::test_enumeration_comma_is_spoken_as_a_pause_not_a_failure`、`tests/market/test_daily_maya_api.py::test_unspeakable_content_is_refused_at_submission_with_the_reason`）再改；排程問題用 API 讀 cron 與 run log 確認，不憑介面顯示猜。當天補救：部署後把 `maya_sawa_market_audio_job` 中 `daily/df534aee` 的 `status` 從 `failed` 改回 `pending`、`attempts` 歸零，worker 會在 30 秒內重跑（只動這一列）。
+
+**仍未做**：語音工作 `failed`／`blocked` 時沒有通知（Telegram 或 PushNotification），下次失敗仍要靠人看；Pod 11/10 11:01 因 liveness probe 逾時被重啟（exit 137），與本事故無關但值得追。

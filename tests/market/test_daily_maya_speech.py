@@ -30,6 +30,11 @@ def test_document_language_or_non_speech_markup_fails_closed(transcript):
         validate_spoken_transcript(transcript)
 
 
+def test_enumeration_comma_is_spoken_as_a_pause_not_a_failure():
+    # 2026-11-10: the approved brief used 頓號 once and the whole day's audio failed closed.
+    assert prepare_spoken_transcript('要看出貨節奏、毛利率與客戶驗證進度，再下判斷。') == '要看出貨節奏，毛利率與客戶驗證進度，再下判斷。'
+
+
 def test_decimal_points_are_allowed_only_inside_numbers():
     assert prepare_spoken_transcript('EPS為5.19，年增2.4%。') == 'EPS為5.19，年增百分之2.4。'
     with pytest.raises(ValueError):

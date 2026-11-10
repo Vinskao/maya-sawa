@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from ..services.daily_maya_sources import validate_sources
+from ..services.daily_maya_speech import InvalidSpokenTranscript, validate_spoken_transcript
 
 # Plain one-line text only: no line breaks, Markdown markers or HTML brackets.
 _TITLE_FORBIDDEN = re.compile(r'[\r\n#*`\[\]<>]')
@@ -52,6 +53,12 @@ def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.ut
         now = clock()
         if body.day != now.astimezone(ZoneInfo('Asia/Taipei')).date().isoformat():
             raise HTTPException(422, 'Day must be today in Asia/Taipei')
+        # Same check the audio worker applies: refuse now with the reason, instead of failing silently after approval.
+        try:
+            validate_spoken_transcript(body.content)
+        except InvalidSpokenTranscript as exc:
+            raise HTTPException(422, f'content 無法朗讀（{exc}）：只能用中文逗號與句號，不得有 Markdown、條列、'
+                                     '其他標點或來源、版本、資料截點等製程用語，請改寫後重新提交') from exc
         try:
             await asyncio.to_thread(validate_sources, body.sources, analyses)
             row, created = await asyncio.to_thread(db.submit, body.day, body.content, body.sources, now,

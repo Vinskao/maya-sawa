@@ -32,6 +32,8 @@ def _clean_formatting(text: str) -> str:
     text = re.sub(r'(?<![A-Za-z0-9])\+(?=\d)', '正', text)
     text = _PERCENT.sub(lambda m: f'百分之{m[1]}', text)
     text = _THOUSANDS.sub('', text)
+    # 頓號 is a spoken pause between list items; read it as a comma instead of failing the whole day's audio.
+    text = text.replace('、', '，')
     # Paragraph boundaries carry no audible content; keep sentence punctuation intact.
     return re.sub(r'\s+', ' ', text).strip()
 
