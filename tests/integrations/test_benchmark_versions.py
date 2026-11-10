@@ -64,7 +64,22 @@ def test_a_new_version_is_applied_once_and_retires_companies_it_drops(monkeypatc
 
 def test_an_applied_version_is_left_alone_so_manual_selection_survives(monkeypatch):
     calls = _sync(monkeypatch, 3)
-    assert not any("INSERT INTO benchmark" in sql or "SET is_active=FALSE" in sql for sql, _ in calls)
+    assert not any("INSERT INTO benchmark\n" in sql or "SET is_active=FALSE" in sql for sql, _ in calls)
+    # the drawing of a version still follows the code, so a corrected diagram reaches the page
+    refreshed = [sql for sql, _ in calls if "INSERT INTO benchmark_version" in sql]
+    assert len(refreshed) == 3 and all("DO UPDATE SET" in sql for sql in refreshed)
+
+
+def test_version_three_says_how_every_company_connects_to_another():
+    # 2026-11-10: leaders sat side by side with no line between them; the picture has to show why each matters.
+    drawing = versions.definition(versions.VERSIONS[2])
+    codes = {row["code"] for row in versions.members(versions.VERSIONS[2])}
+    ends = codes | {terminal["key"] for terminal in drawing["terminals"]}
+    assert all(link["from"] in ends and link["to"] in ends and link["label"] for link in drawing["links"])
+    assert codes <= {link["from"] for link in drawing["links"]} | {link["to"] for link in drawing["links"]}
+    pairs = {(link["from"], link["to"]) for link in drawing["links"]}
+    assert ("2454", "3443") not in pairs and ("3443", "2454") not in pairs
+    assert versions.definition(versions.VERSIONS[0])["links"] == []
 
 
 def test_versions_endpoint_lists_newest_first_and_marks_the_current_one(monkeypatch):

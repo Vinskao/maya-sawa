@@ -58,15 +58,18 @@ def sync():
                 # authoritative, so the daily sync never undoes a manual selection.
                 applied = conn.scalar(text("SELECT max(version) FROM benchmark_version"))
                 latest = VERSIONS[-1]
+                # How a version is described and drawn follows the code on every sync; only the
+                # membership below is applied once.
+                for version in VERSIONS:
+                    conn.execute(text("""
+                        INSERT INTO benchmark_version (version, name, rationale, definition)
+                        VALUES (:version, :name, :rationale, CAST(:definition AS JSONB))
+                        ON CONFLICT (version) DO UPDATE SET name=excluded.name,
+                          rationale=excluded.rationale, definition=excluded.definition
+                    """), dict(version=version["version"], name=version["name"],
+                               rationale=version["rationale"],
+                               definition=json.dumps(definition(version), ensure_ascii=False)))
                 if applied is None or applied < latest["version"]:
-                    for version in VERSIONS:
-                        conn.execute(text("""
-                            INSERT INTO benchmark_version (version, name, rationale, definition)
-                            VALUES (:version, :name, :rationale, CAST(:definition AS JSONB))
-                            ON CONFLICT (version) DO NOTHING
-                        """), dict(version=version["version"], name=version["name"],
-                                   rationale=version["rationale"],
-                                   definition=json.dumps(definition(version), ensure_ascii=False)))
                     lineup = members(latest)
                     for company in lineup:
                         conn.execute(text("""

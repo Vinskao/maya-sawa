@@ -127,8 +127,8 @@ VERSIONS = (
                      "不是買進標的，不需要同環節再放一家對照。晶圓代工分成先進與成熟製程兩個環節，因為兩者的景氣循環不同步。",
         "layers": [
             {"key": "design", "title": "設計：決定要做什麼晶片", "stages": [
-                {"title": "IC 設計", "companies": [("2454", "聯發科", "IC 設計與終端應用", LEADER, "看手機與消費性電子的終端需求、庫存水位，以及經營階層對下一年出貨與產品組合的展望。")]},
-                {"title": "矽智財與 ASIC 設計服務", "companies": [("3443", "創意", "ASIC 設計服務與矽智財", LEADER, "看雲端業者自研晶片的委託設計案量與量產時程，這是 AI 客製晶片需求最早出現的地方。")]},
+                {"title": "自有產品 IC 設計", "companies": [("2454", "聯發科", "IC 設計與終端應用", LEADER, "看手機與消費性電子的終端需求、庫存水位，以及經營階層對下一年出貨與產品組合的展望。")]},
+                {"title": "代客設計（ASIC）", "companies": [("3443", "創意", "ASIC 設計服務與矽智財", LEADER, "看雲端業者自研晶片的委託設計案量與量產時程，這是 AI 客製晶片需求最早出現的地方。")]},
             ]},
             {"key": "inputs", "title": "材料與設備：晶圓廠買什麼", "stages": [
                 {"title": "矽晶圓", "companies": [("6488", "環球晶", "8 吋與 12 吋矽晶圓", LEADER, "看長約價格、客戶庫存去化與擴產進度，矽晶圓出貨反映整體晶圓投片量的方向。")]},
@@ -155,6 +155,28 @@ VERSIONS = (
             {"from": "support", "to": "fab", "label": "建廠與驗證"},
             {"from": "fab", "to": "backend", "label": "晶圓出貨"},
         ],
+        # Company-to-company relations, so the picture says why each one matters. Two companies with no
+        # arrow between them (聯發科 sells its own chips, 創意 designs chips for others) are separate stages.
+        "terminals": [{"key": "market", "title": "終端產品：手機、伺服器、車用"}],
+        "links": [
+            {"from": "2454", "to": "2330", "label": "先進製程投片"},
+            {"from": "2454", "to": "2303", "label": "成熟製程投片"},
+            {"from": "3443", "to": "2330", "label": "替雲端客戶設計後投片"},
+            {"from": "6488", "to": "2330", "label": "矽晶圓"},
+            {"from": "6488", "to": "2303", "label": "矽晶圓"},
+            {"from": "6488", "to": "2408", "label": "矽晶圓"},
+            {"from": "3131", "to": "2330", "label": "先進封裝濕製程機台"},
+            {"from": "3131", "to": "3711", "label": "濕製程機台"},
+            {"from": "2404", "to": "2330", "label": "無塵室與機電工程"},
+            {"from": "3587", "to": "2330", "label": "材料與故障分析"},
+            {"from": "3587", "to": "2454", "label": "晶片除錯與驗證"},
+            {"from": "2330", "to": "3711", "label": "晶圓送封裝測試"},
+            {"from": "2303", "to": "3711", "label": "晶圓送封裝測試"},
+            {"from": "6515", "to": "3711", "label": "測試座"},
+            {"from": "3037", "to": "3711", "label": "IC 載板"},
+            {"from": "3711", "to": "market", "label": "成品晶片"},
+            {"from": "2408", "to": "market", "label": "記憶體"},
+        ],
     },
 )
 
@@ -176,4 +198,6 @@ def definition(version: dict) -> dict:
             ]} for stage in layer["stages"]],
         } for index, layer in enumerate(version["layers"])],
         "flows": version["flows"],
+        "links": version.get("links", []),
+        "terminals": version.get("terminals", []),
     }
