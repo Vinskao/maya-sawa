@@ -1,6 +1,6 @@
 # 台灣半導體 Benchmark 與申報文件
 
-只處理資料庫 `benchmark` 表中當下 `is_active=TRUE` 的台灣公司。初始表格為空時，舊版 16 家名單只播種一次；其後名單以資料庫為準，日常同步不會覆寫人工選取。每日輪詢證交所 MOPS 電子文件服務，保存中文股東會年報及年度財務報告 PDF。股東會年報依檔名的會計年度歸檔，查詢年度為隔年的股東會年度。財務報告取第四季完整合併與個體財報，排除同期間英文版與其他資料。
+只處理資料庫 `benchmark` 表中當下 `is_active=TRUE` 的台灣公司。名單有版本（見文末「名單版本」）：程式裡最新的版本第一次出現時套用一次，其後名單以資料庫為準，日常同步不會覆寫人工選取。每日輪詢證交所 MOPS 電子文件服務，保存中文股東會年報及年度財務報告 PDF。股東會年報依檔名的會計年度歸檔，查詢年度為隔年的股東會年度。財務報告取第四季完整合併與個體財報，排除同期間英文版與其他資料。
 
 ```mermaid
 flowchart LR
@@ -48,3 +48,33 @@ flowchart LR
 5. 新增／更新台灣公司使用 `PUT /market/benchmark/{code}`，停用或重新選取使用 `PUT /market/benchmark/{code}/selection`，兩者均需 `X-Market-Agent-Key`。新公司需送入代碼、名稱、環節、benchmark 意義及 active 狀態。停用只停止後續抓取與 AI 分析，不刪除既有年報、報告或審核紀錄。重新啟用時，尚未分析的歷年年報會進入佇列；已處理的文件不會重複建立提案。
 6. 每日同步先讀目前啟用名單，再為每家公司檢查最近三個年度。每輪最多處理四份尚未分析的股東年報；後續每日持續清空佇列。只有研究報告提案經既有審核通過後才成為正式主張。
 7. 部署後先核對 benchmark.is_active、benchmark_filing 的分析狀態、待審提案與來源頁碼，再核對審核後的研究報告。測試指令為 `poetry run python -m pytest tests/integrations/test_benchmark_selection.py tests/integrations/test_benchmark_evidence.py tests/integrations/test_benchmark_analysis.py tests/integrations/test_tw_benchmark_filings.py tests/market/reports/test_claim_inbox.py tests/market/reports/test_market_reports.py -q`。
+
+## 名單版本
+
+名單整份換版，每版記錄選股理由。版本定義在 `maya_sawa/benchmark_versions.py` 的 `VERSIONS`，存入 `benchmark_version` 表（版號、名稱、理由、分層與流向的 JSON、採用時間）。
+
+| 版 | 名稱 | 選法 |
+|---|---|---|
+| 1 | 台積電本土設備鏈觀察名單 | 依製程步驟選 16 家，設備、耗材與廠務占 9 家 |
+| 2 | 台灣半導體全產業骨幹 | 11 個環節各一家龍頭加一家對照公司，共 22 家；補上記憶體、矽智財與 ASIC、測試介面、載板、專業測試 |
+
+```mermaid
+flowchart LR
+  Code[VERSIONS 新增一版] --> Sync[每日同步]
+  Sync --> Check{資料庫已有此版號?}
+  Check -->|有| Keep[不動名單]
+  Check -->|沒有| Record[寫入 benchmark_version]
+  Record --> Apply[新版公司寫入 benchmark 並啟用<br/>不在新版的公司停用]
+  Apply --> Filings[抓新名單的年報與財報]
+  Filings --> Analysis[年報 AI 分析]
+  Record --> API[GET /market/benchmark/versions]
+  API --> Page[研究報告區：目前版本、理由、先前版本、供應鏈圖]
+```
+
+### 開發方法
+
+1. 換名單就在 `VERSIONS` 末端加一版（版號加一），寫明理由、分層（圖上的每一列）、每列的環節、每個環節的公司（代碼、名稱、環節說明、角色、Benchmark 意義）與列之間的流向。不要改舊版內容，舊版是紀錄。
+2. 同步時若資料庫最大版號小於程式最新版號，補寫缺少的版本列，並只套用最新一版：新版公司 upsert 並啟用，其餘公司 `is_active=FALSE`。被停用公司的年報、報告與審核紀錄都保留。
+3. 版本套用只發生一次。之後用 `PUT /market/benchmark/{code}` 或 `/selection` 做的人工調整不會被每日同步改回；但人工調整不會產生新版號，要留紀錄就加版本。
+4. `GET /market/benchmark` 只回目前啟用的公司；`GET /market/benchmark/versions` 由新到舊回傳所有版本，第一筆 `is_current=true`。
+5. 測試 `poetry run python -m pytest tests/integrations/test_benchmark_versions.py tests/integrations/test_benchmark_selection.py -q`。

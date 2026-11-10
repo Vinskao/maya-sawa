@@ -8,9 +8,9 @@ from maya_sawa.api import tw_benchmark
 from maya_sawa.services import benchmark_analysis
 
 
-def test_sync_seeds_once_and_uses_active_database_selection(monkeypatch):
+def test_sync_uses_active_database_selection_once_the_lineup_is_applied(monkeypatch):
     conn = Mock()
-    conn.scalar.side_effect = [True, False]
+    conn.scalar.side_effect = [True, 2]
     conn.begin_nested.return_value = _connection(Mock())
     active_rows = Mock()
     active_rows.mappings.return_value.all.return_value = [{"code": "2330"}]
