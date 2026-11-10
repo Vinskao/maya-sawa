@@ -76,6 +76,7 @@ from .services.market_history_collector import market_history_collector
 from .services.market_fundamentals import market_fundamentals_service
 from .services.metrics_consumer import MetricsConsumer
 from .core.services.scheduler import ArticleSyncScheduler
+from .api.tw_benchmark import benchmark_worker, router as benchmark_router
 from .people import sync_data
 from .core.config import Config
 from .core.errors.errors import register_exception_handlers
@@ -111,7 +112,7 @@ async def lifespan(app: FastAPI):
         await _startup_event()
         start_publishing_monitor()
         social_runner.start()
-        async with blog_worker():
+        async with blog_worker(), benchmark_worker():
             yield
     finally:
         await stop_publishing_monitor()
@@ -203,6 +204,7 @@ app.include_router(otel_usage_router)
 # Read-only market quote endpoints backed by Shioaji.
 app.include_router(market_router)
 app.include_router(market_reports_router)
+app.include_router(benchmark_router)
 from .api.daily_maya import make_router as make_daily_maya_router
 from .api.market import _verify_agent_key
 from .databases.daily_maya_db import DailyMayaDatabase
@@ -600,4 +602,4 @@ async def root():
             "paprika": "/paprika/* - Article management",
             "maya_v2": "/maya-v2/* - Conversation & AI model management"
         }
-    } 
+    }

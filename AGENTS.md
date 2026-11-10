@@ -1280,3 +1280,5 @@ Notification receipt identity and rollout: [docs/NOTIFICATION_RECEIPTS.md](docs/
 PDF 上傳安全審查及其限制：[docs/REPORT_SECURITY.md](docs/REPORT_SECURITY.md)。
 
 GPT 市場報告主張萃取交接（API 上線後啟用）：[docs/GPT_REPORT_CLAIM_EXTRACTION.md](docs/GPT_REPORT_CLAIM_EXTRACTION.md)。
+
+台灣半導體 Benchmark 及年報收集：[流程與開發方法](docs/TW_SEMICONDUCTOR_BENCHMARK.md)。
