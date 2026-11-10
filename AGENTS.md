@@ -1,6 +1,7 @@
 # Maya Sawa - Agent 開發指南
 
 市場快報語音的設計、測試與未完成事項：[docs/MARKET_AUDIO.md](docs/MARKET_AUDIO.md)。
+北極星指標（每週回訪的研究讀者數）的事件收集、計算與隱私界線：[docs/NORTH_STAR_METRIC.md](docs/NORTH_STAR_METRIC.md)。
 Maya 每日精讀的編輯規則、流程與未完成事項：[docs/DAILY_MAYA_BRIEF.md](docs/DAILY_MAYA_BRIEF.md)。
 每日精讀的公開 Podcast RSS（Spotify 沒有上傳 API，改公開 feed 讓它輪詢；每集標題與來源）：[docs/PODCAST_FEED.md](docs/PODCAST_FEED.md)。
 排程撰稿 → 審核 → Azure TTS → 資料庫 → 播放的整條流程、診斷順序與成本規則整理成 skill `daily-market-reading`；這兩份文件按日期累積，舊段落可能過時，現況以 `k8s/deployment.yaml` 與程式為準。
