@@ -102,7 +102,7 @@ pipeline {
         disableConcurrentBuilds()
     }
     parameters {
-        booleanParam(name: 'ENABLE_MACRO_COLLECTION', defaultValue: false,
+        booleanParam(name: 'ENABLE_MACRO_COLLECTION', defaultValue: true,
             description: 'Enable scheduled macro data collection during deployment (requires BLS_API_KEY and FRED_API_KEY Jenkins credentials).')
         booleanParam(name: 'DEPLOY_IBKR_GATEWAY', defaultValue: false,
             description: 'Deploy and restart the separate IBKR Gateway only when its code or configuration changed.')
@@ -301,6 +301,8 @@ pipeline {
             }
             steps {
                 container('kubectl') {
+                    // The secret already exists in the cluster; a missing credential must not block a deploy.
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'BLS/FRED credential unavailable; kept the existing macro-data-credentials secret') {
                     withCredentials([
                         string(credentialsId: 'BLS_API_KEY', variable: 'BLS_API_KEY'),
                         string(credentialsId: 'FRED_API_KEY', variable: 'FRED_API_KEY')
@@ -312,6 +314,7 @@ pipeline {
                               -n default \
                               --dry-run=client -o yaml | kubectl apply -f -
                         '''
+                    }
                     }
                 }
             }

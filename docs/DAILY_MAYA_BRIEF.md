@@ -169,3 +169,10 @@ flowchart LR
 **開發方法**：先寫失敗測試（`tests/market/test_daily_maya_speech.py::test_enumeration_comma_is_spoken_as_a_pause_not_a_failure`、`tests/market/test_daily_maya_api.py::test_unspeakable_content_is_refused_at_submission_with_the_reason`）再改；排程問題用 API 讀 cron 與 run log 確認，不憑介面顯示猜。當天補救：部署後把 `maya_sawa_market_audio_job` 中 `daily/df534aee` 的 `status` 從 `failed` 改回 `pending`、`attempts` 歸零，worker 會在 30 秒內重跑（只動這一列）。
 
 **仍未做**：語音工作 `failed`／`blocked` 時沒有通知（Telegram 或 PushNotification），下次失敗仍要靠人看；Pod 11/10 11:01 因 liveness probe 逾時被重啟（exit 137），與本事故無關但值得追。
+
+## 2026-11-10 總經圖消失：Jenkins 參數預設值把總經收集關掉
+
+- **現象**：首頁「邏輯鏈」一直載入、「指標總表」顯示「總體經濟資料收集尚未啟用」；`/api/market/dashboard/macro` 回 `status: disabled`。
+- **原因**：`Jenkinsfile` 的 `ENABLE_MACRO_COLLECTION` 預設 `false`，部署檔的 `MACRO_ENABLED` 取自它。push 觸發的建置（例如 build 293）不帶參數，就把線上的總經收集關掉了。
+- **處理**：預設改 `true`；`Configure Macro Collection` 階段用 `catchError`，憑證缺失時不擋部署（叢集內的 `macro-data-credentials` Secret 仍在）。
+- **開發方法**：任何「功能旗標由 Jenkins 參數決定」的設定，預設值必須等於線上現況，否則一般 push 就會悄悄改掉線上行為；部署後用 `curl /api/market/dashboard/macro` 確認 `enabled`。
