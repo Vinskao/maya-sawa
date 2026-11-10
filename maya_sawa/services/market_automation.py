@@ -44,8 +44,8 @@ class RoutineRun:
 
 
 RUNS = (
-    # Friday reconciliation is Taiwan-only; it does not wait on an IB login or overseas market bars.
-    RoutineRun("taiwan", "trig_01ECP68tWfgM749sJa3gBiN9", "MARKET_ROUTINE_TAIWAN_TOKEN", (), (4,),
+    # Taiwan runs after every trading day; it does not wait on an IB login or overseas market bars.
+    RoutineRun("taiwan", "trig_01ECP68tWfgM749sJa3gBiN9", "MARKET_ROUTINE_TAIWAN_TOKEN", (), (0, 1, 2, 3, 4),
                time(14, 30), time(21, 10), time(21, 15)),
     # New York closes 04:00 (EDT) / 05:00 (EST) Taipei, Tuesday to Saturday. Cron: 23:30 UTC.
     RoutineRun("us", "trig_01NETQT5DCSHj4TKwv45nbJR", "MARKET_ROUTINE_US_TOKEN", ("US",), (1, 2, 3, 4, 5),

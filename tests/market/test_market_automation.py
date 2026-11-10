@@ -15,17 +15,18 @@ def tpe(day, hour, minute=0):
 TAIWAN, US = automation.RUNS
 
 
-def test_taiwan_automation_is_weekly_and_does_not_depend_on_ib_market_bars():
-    assert TAIWAN.weekdays == (4,)
+def test_taiwan_automation_runs_every_trading_day_and_does_not_depend_on_ib_market_bars():
+    assert TAIWAN.weekdays == (0, 1, 2, 3, 4)
     assert TAIWAN.markets == ()
-    assert session_date(TAIWAN, tpe(29, 21, 10)) is None
+    assert session_date(TAIWAN, tpe(29, 21, 10)) == date(2026, 10, 29)
     assert session_date(TAIWAN, tpe(30, 21, 10)) == date(2026, 10, 30)
     assert automation.missed_runs(tpe(30, 21, 15), {"JP": tpe(28, 15), "KR": tpe(28, 15)}) == []
 
 
 def test_sessions_follow_each_market_close():
-    # Taiwan analysis reconciles only on Friday; overseas market routines retain their daily schedule.
-    assert session_date(TAIWAN, tpe(29, 21, 10)) is None  # Thursday
+    # Taiwan analysis runs after every trading day (2026-11-10: back from Fridays only).
+    assert session_date(TAIWAN, tpe(29, 21, 10)) == date(2026, 10, 29)  # Thursday
+    assert session_date(TAIWAN, tpe(29, 21, 9)) is None
     assert session_date(TAIWAN, tpe(30, 21, 10)) == date(2026, 10, 30)
     assert session_date(TAIWAN, tpe(25, 21, 10)) is None  # Sunday
     assert session_date(US, tpe(19, 9)) is None  # Monday morning follows no US session
@@ -146,12 +147,12 @@ class FakeSource:
 def test_check_does_not_fire_or_wait_for_ib_on_weekdays(tmp_path, monkeypatch):
     store = AutomationStore(create_engine(f"sqlite:///{tmp_path / 'fires.db'}"))
     positions = [("6857", "JP"), ("000660", "KR"), ("META", "US")]
-    # 2026-10-29 is Thursday. Taiwan's weekly reconciliation is Friday and ignores overseas login state.
+    # 2026-10-29 is Thursday. Taiwan's run is left to the routine cron and ignores overseas login state.
     logged_out = FakeSource(tpe(16, 19).astimezone(timezone.utc), positions,
                             {("6857", "JP"): tpe(16, 17), ("000660", "KR"): tpe(16, 17), ("META", "US"): tpe(17, 8)})
     status = asyncio.run(automation.check(store, logged_out, tpe(29, 21, 20).astimezone(timezone.utc)))
     assert status["ib"]["authenticated"] is False
-    assert {r["key"]: r["state"] for r in status["runs"]}["taiwan"] == "no-session"
+    assert {r["key"]: r["state"] for r in status["runs"]}["taiwan"] == "scheduled"
 
 
 def test_a_day_with_ib_up_fires_nothing_extra(tmp_path, monkeypatch):
