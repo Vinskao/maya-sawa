@@ -122,3 +122,14 @@ def test_api_confirm_and_unsubscribe_by_token_and_caps_new_signups_per_day():
     assert client.get('/market/subscriptions/unsubscribe', params={'token': token}).json()['status'] == 'unsubscribed'
     client.post('/market/subscriptions', json={'email': 'b@example.com'})
     assert client.post('/market/subscriptions', json={'email': 'c@example.com'}).status_code == 429
+
+
+def test_api_says_when_no_confirmation_mail_will_be_sent():
+    # 2026-11-10: the form promised a confirmation mail while SMTP was not configured.
+    def answer(**kwargs):
+        engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
+        app = FastAPI()
+        app.include_router(make_router(BriefSubscribersDatabase(engine), lambda: NOW, **kwargs))
+        return TestClient(app).post('/market/subscriptions', json={'email': 'a@example.com'}).json()
+    assert answer(mail_enabled=lambda: False) == {'status': 'pending', 'mail_enabled': False}
+    assert answer()['mail_enabled'] is True

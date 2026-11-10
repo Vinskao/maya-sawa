@@ -278,11 +278,12 @@ app.include_router(make_market_audio_router(market_audio_db, daily_maya_db))
 
 # Daily reading by email: sign-ups are stored at once; mail goes out only once SMTP is configured.
 from .api.brief_subscriptions import make_router as make_brief_subscriptions_router
+from .services.brief_mailer import smtp_configured as _brief_smtp_configured
 from .databases.brief_subscribers_db import BriefSubscribersDatabase
 from .services.brief_mailer import BriefMailer
 
 brief_subscribers_db = BriefSubscribersDatabase(market_dashboard_db.engine)
-app.include_router(make_brief_subscriptions_router(brief_subscribers_db, lambda: datetime.now(ZoneInfo('UTC'))))
+app.include_router(make_brief_subscriptions_router(brief_subscribers_db, lambda: datetime.now(ZoneInfo('UTC')), mail_enabled=_brief_smtp_configured))
 _brief_mail_task = None
 
 def _today_approved_brief():
