@@ -2,11 +2,14 @@
 
 import hashlib
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, Text, UniqueConstraint, update
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+from maya_sawa.benchmark_evidence import UPLOADER, validate_evidence
 
 Base = declarative_base()
 
@@ -33,9 +36,12 @@ def _public_pending_source(report):
         raise LookupError("Public pending report not found")
     if report.status == "failed" and (report.page_count <= 0 or not report.text):
         raise LookupError("Public pending report not found")
-    return {"id": report.id, "title": report.title, "publisher": report.publisher,
+    source = {"id": report.id, "title": report.title, "publisher": report.publisher,
             "published_at": report.published_at.isoformat() if report.published_at else None,
             "page_count": report.page_count, "text": report.text}
+    if report.uploaded_by == UPLOADER:
+        source["analysis_profile"] = "tw-semiconductor-annual"
+    return source
 
 
 def _validate_proposal(claims, page_count):
@@ -86,6 +92,11 @@ class ClaimInboxDatabase:
         with reports_db.sessions() as session:
             return _public_pending_source(session.get(MarketReport, report_id))
 
+    def has_proposal(self, report_id):
+        self._require()
+        with self.sessions() as session:
+            return session.query(ReportClaimProposal.id).filter_by(report_id=report_id).first() is not None
+
     def submit(self, report_id, claims, reports_db, now=None):
         self._require()
         from .market_reports_db import MarketReport
@@ -93,6 +104,12 @@ class ClaimInboxDatabase:
         with reports_db.sessions() as session:
             source = _public_pending_source(session.get(MarketReport, report_id))
         normalized = _validate_proposal(claims, source["page_count"])
+        if source.get("analysis_profile") == "tw-semiconductor-annual":
+            pages = re.split(r"(?m)^=====PAGE \d+=====\n", source["text"])[1:]
+            try:
+                validate_evidence(normalized, pages)
+            except ValueError as exc:
+                raise InvalidClaimProposal(str(exc)) from exc
         serialized = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
         digest = hashlib.sha256(serialized.encode()).hexdigest()
         now = now or datetime.now(timezone.utc)

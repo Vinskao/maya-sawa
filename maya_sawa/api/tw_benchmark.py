@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 
 from maya_sawa.databases.market_dashboard_db import market_dashboard_db
+from maya_sawa.services.benchmark_analysis import process_annual_filings
 from maya_sawa.tw_benchmark_filings import catalog_url, download, listing
 
 router = APIRouter(prefix="/market/benchmark")
@@ -47,6 +48,8 @@ SCHEMA = (
         collected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         PRIMARY KEY (code, filename, sha256)
     )""",
+    "ALTER TABLE benchmark_filing ADD COLUMN IF NOT EXISTS analysis_status TEXT",
+    "ALTER TABLE benchmark_filing ADD COLUMN IF NOT EXISTS analysis_attempted_at TIMESTAMPTZ",
 )
 
 
@@ -94,6 +97,7 @@ def sync():
                         except Exception:
                             conn.rollback()
                             logger.exception("Benchmark filing sync failed: %s %s %s", code, fiscal_year, kind)
+            process_annual_filings(conn)
         finally:
             conn.rollback()
             conn.execute(text("SELECT pg_advisory_unlock(72405839)"))
