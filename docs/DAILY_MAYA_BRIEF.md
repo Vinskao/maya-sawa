@@ -211,3 +211,12 @@ flowchart LR
 4. 排程提示測試 `tests/automation/test_routine_prompts.py`：審核、備援與 ChatGPT 提示文件都要提到 `reading` 與格式。
 5. 測試：`poetry run python -m pytest tests/market tests/automation -q`。
 6. 限制：兩版是否一致由審核模型逐段對照，程式只檢查格式；部署後要看當天核准稿在首頁與 Spotify 單集說明的實際排版。
+# 2026-11-11：修正 Podcast 結尾突兀
+
+十一月十一日原音檔長 194.4 秒，完整解碼與後半段 Range 下載均正常，尾段辨識也對上稿件末句。問題是編輯未要求整集結語，稿件停在欣興的下次驗證點，聽起來像音訊遭截斷。
+
+撰稿、備援與審核提示同步要求：兩到三句總結總經與個股已有判斷，不新增事實，最後明確道別；content 與 reading 一致。沒有整集總結或只有道別的稿件退回。這是人工／模型審稿的語意要求，不能靠音檔可解碼或固定字尾證明內容完整。
+
+本次保留原稿，經提案、審核及正常語音佇列建立含結語的修正版，使用新 proposal ID 與音檔 URL 避免舊快取。新音訊完成後才將舊稿改為 superseded，保留稽核資料。公開 RSS 更新不代表 Spotify 已重新輪詢，已下載的舊集須重新下載。
+
+驗證：`poetry run python -m pytest tests/market/test_daily_maya_api.py tests/market/test_daily_maya_speech.py tests/market/test_podcast_feed.py -q`，20 passed。提示文字修改未新增程式邏輯，因此沒有新增單元測試；另核對正式修正版稿件與音檔結尾。
