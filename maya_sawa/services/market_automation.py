@@ -331,7 +331,8 @@ async def analyze_added(store: AutomationStore, items: list[dict], collect, now:
     try:
         url = await fire_routine(run, (
             f"新增標的：使用者剛把 {listed} 加入看盤清單（{now.astimezone(TAIPEI):%Y-%m-%d %H:%M} 台北），"
-            "這些標的的歷史價量、籌碼與財報資料剛補抓。這次只為這些標的寫第一份 AI 分析，照原本規則與格式；"
+            "這些標的的歷史價量、籌碼與財報資料剛補抓。這次只為這些標的建立研究圖（productType=research，"
+            "沒有研究圖就依 research-guide.md 建立第一版）並寫第一份 AI 分析，照原本規則與格式；"
             "不要重跑其他標的，也不要寫總經。若某項資料仍缺，照實寫明缺什麼。"))
     except Exception as exc:  # token revoked, routine API down: the next save retries
         for item in claimed:

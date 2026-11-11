@@ -6,6 +6,8 @@ from datetime import datetime
 from email.utils import format_datetime
 from xml.sax.saxutils import escape
 
+from .daily_maya_reading import reading_blocks
+
 ITUNES_NS = 'http://www.itunes.com/dtds/podcast-1.0.dtd'
 
 
@@ -28,7 +30,12 @@ def _title(episode):
 
 
 def _show_notes(episode, disclaimer):
-    paragraphs = ''.join('<p>' + escape(part.strip()) + '</p>' for part in episode['content'].split('\n') if part.strip())
+    # Listeners read the show notes, so prefer the reader-facing version over the glued speech script.
+    if episode.get('reading'):
+        paragraphs = ''.join(('<p><b>' + escape(body) + '</b></p>') if kind == 'heading' else ('<p>' + escape(body) + '</p>')
+                             for kind, body in reading_blocks(episode['reading']))
+    else:
+        paragraphs = ''.join('<p>' + escape(part.strip()) + '</p>' for part in episode['content'].split('\n') if part.strip())
     sources = ''.join('<li>' + escape(line) + '</li>' for line in describe_sources(episode['sources']))
     return paragraphs + '<p>來源：</p><ul>' + sources + '</ul><p>' + escape(disclaimer) + '</p>'
 

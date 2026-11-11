@@ -21,7 +21,7 @@
 
 ## 3. 美國持股
 - GET https://tymultiverse.cc/maya-sawa/market/dashboard 重新列出所有美國持股，不要沿用舊清單。
-- 每檔：讀目前分析 GET https://tymultiverse.cc/maya-sawa/market/dashboard/analysis/{CODE}-US?productType=stock、研究圖（同網址 productType=research，三項判斷的基準，排程不能寫）、市場資料 GET /maya-sawa/market/dashboard/overseas/{CODE}?market=US。財報用公司 SEC 申報等可驗證來源。
+- 每檔：讀目前分析 GET https://tymultiverse.cc/maya-sawa/market/dashboard/analysis/{CODE}-US?productType=stock、研究圖（同網址 productType=research，三項判斷的基準；已有研究圖時本例程不改寫，沒有研究圖時依第 3.3 節建立第一版）、市場資料 GET /maya-sawa/market/dashboard/overseas/{CODE}?market=US。財報用公司 SEC 申報等可驗證來源。
 - 只有新的交易日、財報、重大訊息或相關研究報告主張比現有分析新時才更新；沿用現有段落結構，數字一律附日期，不編造；引用本輪存完的總經評論版本號。美國休市或沒有新資料就跳過並記錄原因。
 
 ## 4. 儲存
@@ -43,6 +43,10 @@ body.json = {"model": "Claude Opus 5.5（排程：美股與總經）", "content"
 
 ## 3.2 公司財報新聞稿（不等 10-Q）
 美國公司公布季報後，SEC 10-Q 常晚幾天到幾週才進本站財報庫（overseas 的 financials 最新季可能還是上一季）。所以每輪對每檔美國持股，用 WebSearch／WebFetch 查是否已發布新一季財報新聞稿：公司投資人關係網站，或 SEC EDGAR 的 8-K Exhibit 99.1。若發布日晚於現有分析的資料截點，就算新財報資料，必須更新該檔分析：營收、營業利益率、EPS、資本支出、下季／全年指引，每個數字附公布日期與原文連結，並標明「公司新聞稿，10-Q 尚未入庫」。數字只能取自公司新聞稿、8-K 或 SEC 申報原文；媒體報導只能用來找到原文，不能當數字來源。下一個財報日也只寫公司公告過的日期。
+
+
+## 3.3 沒有研究圖就建立（強制，2026-11-11）
+每檔標的讀 productType=research 時，若回應的 analysis 是 null，代表這檔沒有研究圖（研究分頁會是空的）。這不需要等新證據：本輪就照前端倉庫 public/research-guide.md 的完整流程建立第一版，用 market-ai.md「Research maps」列出的 JSON 欄位（name、market、asOf、summary、supplyChain、technology、assessment.cycle/technology/delivery 的 view 與 note、lean、leanReason、watch、sources 附 https 網址；Mermaid 只用 flowchart），以 PUT 同一個 analysis 網址、productType=research、expectedRevision 0 儲存，存完再 GET 確認。先建研究圖，再寫或更新同一檔的 AI 分析，讓三項判斷有基準。證據只能來自公司申報、法說、財報與本站報告主張；查不到的環節標記未知，不得為了把圖畫滿而推估。美國標的的紀錄代碼是 META-US 這種格式。單輪最多新建三檔，其餘列在最後回報的「尚缺研究圖」，下一輪繼續。指數期貨與 ETF 依 research-guide.md 的分支處理。
 
 ## 6. IB 資料斷線提醒
 讀 overseas 資料時，若美國持股的最新日線比最近一個已收盤的美股交易日還舊（例如 gaps 寫 broker 抓取失敗，或 datasets 的 quote／history_raw fetchedAt 超過 24 小時），就用 PushNotification 送一則通知：「IB gateway 需要重新登入：在電腦執行 powershell -ExecutionPolicy Bypass -File F:\002-workspace\ty-multiverse\maya-sawa\ibkr-gateway\login.ps1，完成帳密與 2FA。美股日線停在 {最新日線日期}。」美國休市造成的沒有新日線不算。每輪最多一則，最後回報寫明是否已通知。

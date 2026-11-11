@@ -176,3 +176,38 @@ flowchart LR
 - **原因**：`Jenkinsfile` 的 `ENABLE_MACRO_COLLECTION` 預設 `false`，部署檔的 `MACRO_ENABLED` 取自它。push 觸發的建置（例如 build 293）不帶參數，就把線上的總經收集關掉了。
 - **處理**：預設改 `true`；`Configure Macro Collection` 階段用 `catchError`，憑證缺失時不擋部署（叢集內的 `macro-data-credentials` Secret 仍在）。
 - **開發方法**：任何「功能旗標由 Jenkins 參數決定」的設定，預設值必須等於線上現況，否則一般 push 就會悄悄改掉線上行為；部署後用 `curl /api/market/dashboard/macro` 確認 `enabled`。
+
+## 2026-11-11 朗讀稿與閱讀版分開（content／reading）
+
+朗讀稿只能用中文逗號與句號、沒有分段，語音合成才讀得乾淨；但同一份字貼在首頁與 Podcast 單集說明，是一整塊黏在一起的字，讀者很難讀。所以每篇精讀改成同一篇內容的兩個版本：
+
+| 欄位 | 給誰 | 格式 | 檢查 |
+|---|---|---|---|
+| `content` 朗讀稿 | Azure 語音合成 | 只有中文逗號與句號，數字寫成可唸的中文 | `daily_maya_speech.validate_spoken_transcript`（不變） |
+| `reading` 閱讀版 | 首頁、Podcast 單集說明的讀者 | 空行分段（至少 3 段、每段 600 字內）、單獨一行的 `## 小標`、阿拉伯數字與一般標點；不得有 HTML、粗體、網址、製程用語 | `daily_maya_reading.validate_reading` |
+
+```mermaid
+flowchart LR
+  W[撰稿：ChatGPT 08:30／Claude 備援] -->|POST proposals<br/>content + reading| V{API 檢查}
+  V -->|content 不能朗讀或 reading 不好讀| X[422，附原因]
+  V --> P[(提案 pending)]
+  P --> R[09:00 審核：兩版論點與數字一致<br/>缺 reading 退回]
+  R -->|approved| A[(已核准)]
+  A -->|content| T[語音工作 → Azure TTS → MP3]
+  A -->|reading，沒有才退回用 content| H[首頁每日精讀]
+  A -->|reading，沒有才退回用 content| S[Podcast 單集說明]
+```
+
+- `reading` 在 API 是選填（舊資料與尚未更新提示的草稿沒有），顯示端沒有就退回顯示 `content`；**審核規則把缺 `reading` 視為退回理由**，所以每天核准的稿都會有。
+- 語音只用 `content`，`reading` 永遠不送語音合成，也不計入 Azure 字元帳本。
+- 去重 digest 在有 `reading` 時才把它算進去：舊資料的 digest 不變；只因閱讀版被退回的稿，可以用同一份朗讀稿加上修正後的閱讀版重新提交。
+- 三處撰稿／審核提示都已加入閱讀版規則：`routines/maya-daily-review.md`、`routines/maya-daily-fallback.md`、`docs/GPT_DAILY_DRAFT_PROMPT.md`。**ChatGPT 排程的提示要手動貼回 ChatGPT 介面**；貼之前 ChatGPT 草稿會因缺 `reading` 被退回，當天由 10:10 Claude 備援補上。
+
+### 開發方法
+
+1. 先確認問題：首頁 `index.astro` 直接把 `content` 放進一個 `<p>`，Podcast 單集說明用換行切段，而朗讀稿沒有換行，所以兩處都是一整塊。
+2. 先寫測試 `tests/market/test_daily_maya_reading.py`：閱讀版保留分段、小標與一般標點；整塊、段數不足、HTML、製程用語、單段過長都被拒絕；提案同時保存並發布兩版；壞的閱讀版在 POST 回 422 並說明原因；缺閱讀版仍可提交；同一份朗讀稿配修正後的閱讀版是新提案；既有資料表自動補 `reading` 欄；Podcast 單集說明優先用閱讀版。
+3. 實作：`services/daily_maya_reading.py`（檢查與切塊）、`databases/daily_maya_db.py`（欄位與就地補欄）、`api/daily_maya.py`（收欄位、422）、`services/podcast_feed.py`（單集說明）。語音 worker 沒有改。
+4. 排程提示測試 `tests/automation/test_routine_prompts.py`：審核、備援與 ChatGPT 提示文件都要提到 `reading` 與格式。
+5. 測試：`poetry run python -m pytest tests/market tests/automation -q`。
+6. 限制：兩版是否一致由審核模型逐段對照，程式只檢查格式；部署後要看當天核准稿在首頁與 Spotify 單集說明的實際排版。

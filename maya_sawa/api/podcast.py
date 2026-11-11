@@ -28,7 +28,7 @@ def make_router(audio_db, daily_db, config=None):
             if row is None:
                 continue
             items.append({'id': row['id'], 'revision': audio['revision'], 'day': row['day'], 'title': row.get('title'),
-                          'content': row['content'], 'sources': row['sources'],
+                          'content': row['content'], 'reading': row.get('reading'), 'sources': row['sources'],
                           'createdAt': audio['createdAt'], 'size': audio.get('size') or 0})
         return items
 

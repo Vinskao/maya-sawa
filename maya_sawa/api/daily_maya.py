@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+from ..services.daily_maya_reading import InvalidReading, validate_reading
 from ..services.daily_maya_sources import validate_sources
 from ..services.daily_maya_speech import InvalidSpokenTranscript, validate_spoken_transcript
 
@@ -23,6 +24,8 @@ class Submission(BaseModel):
     day: str = Field(pattern=r'^\d{4}-\d{2}-\d{2}$')
     title: str | None = Field(default=None, max_length=200)
     content: str = Field(min_length=1, max_length=20000)
+    # Same piece laid out for readers (paragraphs, `## ` headings, ordinary punctuation); never sent to speech.
+    reading: str | None = Field(default=None, max_length=20000)
     sources: list[str] = Field(min_length=1, max_length=50)
 
     @field_validator('title')
@@ -59,10 +62,16 @@ def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.ut
         except InvalidSpokenTranscript as exc:
             raise HTTPException(422, f'content 無法朗讀（{exc}）：只能用中文逗號與句號，不得有 Markdown、條列、'
                                      '其他標點或來源、版本、資料截點等製程用語，請改寫後重新提交') from exc
+        reading = None
+        if body.reading is not None:
+            try:
+                reading = validate_reading(body.reading)
+            except InvalidReading as exc:
+                raise HTTPException(422, f'reading 不適合閱讀（{exc}），請改寫後重新提交；content 維持朗讀稿格式') from exc
         try:
             await asyncio.to_thread(validate_sources, body.sources, analyses)
             row, created = await asyncio.to_thread(db.submit, body.day, body.content, body.sources, now,
-                                                   title=body.title or default_title(body.day))
+                                                   title=body.title or default_title(body.day), reading=reading)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         except OverflowError as exc:

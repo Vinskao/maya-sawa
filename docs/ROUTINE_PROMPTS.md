@@ -47,3 +47,38 @@ flowchart TD
 
 **限制與風險：** 排程若讀不到檔案就不會做事（指標要求它停止並用 attention 通知）。指示檔在 `main`，所以改它等於改排程行為，推送前要有測試與審查。
 測試：`poetry run python -m pytest tests/automation/test_routine_prompts.py -q`。
+
+## 2026-11-11 海外標的缺研究圖：流程缺口與修正
+
+6834-JP（精工技研）有 AI 分析卻沒有研究圖，研究分頁是空的。逐檔比對 dashboard 與 `analysis/{code}?productType=research` 後，缺口有四個：
+
+| 缺口 | 原本 | 現在 |
+|---|---|---|
+| 沒有任何規則要求「沒有研究圖就建立」 | 排程只在「新證據改變技術節點」時**更新**既有研究圖；第一版都是人工請模型做的（6857-JP 是 2026-10-25 人工覆核寫的） | 台股例程第 7.1 節、美股例程第 3.3 節：讀到 `analysis: null` 就依 `research-guide.md` 建立第一版，再寫 AI 分析；單輪最多新建三檔 |
+| 台股例程開頭寫「日本、韓國標的不在本例程範圍」 | 後面的段落卻要它讀日韓資料，實際上有寫日韓 AI 分析，但研究圖沒人負責 | 明確把 dashboard 列出的日韓標的納入，紀錄代碼用 `6857-JP`、`000660-KR` |
+| 美股例程寫研究圖「排程不能寫」 | 新的美國標的永遠不會有研究圖 | 已有的不改寫，沒有的建立第一版 |
+| 「新增標的」觸發訊息只要求第一份 AI 分析 | 新加入的標的沒有研究圖 | 訊息同時要求建立研究圖（`market_automation.analyze_added`） |
+
+```mermaid
+flowchart TD
+  D[GET dashboard：列出全部標的] --> C{紀錄代碼}
+  C -->|台股 2454| T[台股收盤後例程 21:15]
+  C -->|日韓 6834-JP、000660-KR| T
+  C -->|美國 META-US| U[美股與總經例程 07:30]
+  T --> R{GET productType=research<br/>analysis 是 null？}
+  U --> R
+  R -->|是| N[依 research-guide.md 建立第一版<br/>PUT expectedRevision 0，單輪最多三檔]
+  R -->|否| K[有新證據才更新]
+  N --> A[寫或更新 AI 分析]
+  K --> A
+```
+
+仍未處理：報告主張的事件觸發（`fire_analysis_event`）只接受四位數台股代碼，海外代碼的新主張要等每日例程才會反映。
+
+### 開發方法
+
+1. 先量：用 dashboard 清單逐檔打 `analysis/{code}` 的 stock 與 research，列出哪一檔缺哪一種（6834-JP：stock 有、research 無）。
+2. 讀四份例程指示與 `market_automation.py`，找出誰負責建立研究圖：沒有人。
+3. 先寫測試：`tests/automation/test_routine_prompts.py`（四份市場例程都要有「沒有研究圖」的建立規則並指向 `research-guide.md`；台股例程不得再排除日韓、要寫出 `6857-JP` 代碼格式；美股例程不得再寫「排程不能寫」）與 `tests/automation/test_added_instrument_prompt.py`（新增標的訊息要求研究圖）。確認紅再改。
+4. 改 `routines/market-*.md` 與 `market_automation.py`，推 `main`；排程下一次執行就會讀到。
+5. 驗證：下一輪執行後 `GET /maya-sawa/market/dashboard/analysis/6834-JP?productType=research` 應有 revision 1，研究分頁出現供應鏈與技術圖。

@@ -12,7 +12,7 @@ FILES = sorted((ROOT / "routines").glob("*.md")) if (ROOT / "routines").is_dir()
 EXPECTED = {
     "market-us-macro-sonnet.md", "market-us-macro-opus.md", "market-taiwan-sonnet.md", "market-taiwan-opus.md",
     "weekly-maintenance-frontend.md", "weekly-maintenance-maya-sawa.md", "weekly-maintenance-backend.md",
-    "report-claim-extraction.md", "maya-daily-fallback.md",
+    "report-claim-extraction.md", "maya-daily-fallback.md", "maya-daily-review.md",
 }
 
 
@@ -71,3 +71,28 @@ def test_daily_fallback_routine_skips_when_today_is_already_approved_and_self_re
     assert text.index("已有 day == D 的已核准稿") < text.index("POST /market/daily-maya/proposals")
     assert "備援自審" in text and "嚴格審稿" in text and "不得核准" in text
     assert "PushNotification" in text and "/market/audio" in text
+
+
+def test_daily_reading_routines_ask_for_a_reader_version_beside_the_speech_script():
+    """2026-11-11: the speech script is one glued block on a page, so every draft also carries a laid-out reading version."""
+    for name in ("maya-daily-review.md", "maya-daily-fallback.md"):
+        text = (ROOT / "routines" / name).read_text(encoding="utf-8")
+        assert "reading" in text and "閱讀版" in text and "## 小標" in text, name
+    fallback = (ROOT / "routines" / "maya-daily-fallback.md").read_text(encoding="utf-8")
+    assert '"reading":' in fallback
+    draft = (ROOT / "docs" / "GPT_DAILY_DRAFT_PROMPT.md").read_text(encoding="utf-8")
+    assert '"reading"' in draft and "閱讀版" in draft and '"title"' in draft
+
+
+def test_market_routines_create_a_missing_research_map_and_cover_overseas_holdings():
+    """2026-11-11: 6834-JP had an AI analysis but no research map: no routine was told to create a missing one,
+    the Taiwan routine declared Japan and Korea out of scope, and the US routine was forbidden to write maps."""
+    for name in ("market-taiwan-sonnet.md", "market-taiwan-opus.md"):
+        text = (ROOT / "routines" / name).read_text(encoding="utf-8")
+        assert "日本、韓國、美國標的與總經評論不在本例程範圍" not in text, name
+        assert "6857-JP" in text and "000660-KR" in text, name
+        assert "沒有研究圖" in text and "research-guide.md" in text, name
+    for name in ("market-us-macro-sonnet.md", "market-us-macro-opus.md"):
+        text = (ROOT / "routines" / name).read_text(encoding="utf-8")
+        assert "排程不能寫" not in text, name
+        assert "沒有研究圖" in text and "research-guide.md" in text, name
