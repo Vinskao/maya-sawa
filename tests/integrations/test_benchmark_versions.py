@@ -9,7 +9,7 @@ from maya_sawa.api import tw_benchmark
 
 
 def test_every_version_is_a_complete_lineup():
-    assert [v["version"] for v in versions.VERSIONS] == [1, 2, 3, 4]
+    assert [v["version"] for v in versions.VERSIONS] == [1, 2, 3, 4, 5]
     for version in versions.VERSIONS:
         rows = versions.members(version)
         codes = [row["code"] for row in rows]
@@ -55,7 +55,7 @@ def _sync(monkeypatch, applied):
 def test_a_new_version_is_applied_once_and_retires_companies_it_drops(monkeypatch):
     calls = _sync(monkeypatch, 1)
     recorded = [params["version"] for sql, params in calls if "INSERT INTO benchmark_version" in sql]
-    assert recorded == [1, 2, 3, 4]
+    assert recorded == [1, 2, 3, 4, 5]
     upserted = {params["code"] for sql, params in calls if "INSERT INTO benchmark\n" in sql}
     assert upserted == {row["code"] for row in versions.members(versions.VERSIONS[-1])}
     retire = [params for sql, params in calls if "SET is_active=FALSE" in sql]
@@ -63,11 +63,11 @@ def test_a_new_version_is_applied_once_and_retires_companies_it_drops(monkeypatc
 
 
 def test_an_applied_version_is_left_alone_so_manual_selection_survives(monkeypatch):
-    calls = _sync(monkeypatch, 4)
+    calls = _sync(monkeypatch, 5)
     assert not any("INSERT INTO benchmark\n" in sql or "SET is_active=FALSE" in sql for sql, _ in calls)
     # the drawing of a version still follows the code, so a corrected diagram reaches the page
     refreshed = [sql for sql, _ in calls if "INSERT INTO benchmark_version" in sql]
-    assert len(refreshed) == 4 and all("DO UPDATE SET" in sql for sql in refreshed)
+    assert len(refreshed) == 5 and all("DO UPDATE SET" in sql for sql in refreshed)
 
 
 def test_version_three_says_how_every_company_connects_to_another():
@@ -134,3 +134,20 @@ def test_version_four_connects_every_company():
     ends = codes | {terminal["key"] for terminal in drawing["terminals"]}
     assert all(link["from"] in ends and link["to"] in ends and link["label"] for link in drawing["links"])
     assert codes <= {link["from"] for link in drawing["links"]} | {link["to"] for link in drawing["links"]}
+
+
+def test_version_five_adds_rack_components_each_with_an_annual_report_source():
+    """2026-11-11: CCL, data-centre power, optical interconnect and passives; copper interconnect stays out."""
+    from maya_sawa import overseas_benchmark_filings as overseas
+    v5 = versions.VERSIONS[4]
+    codes = [row["code"] for row in versions.members(v5)]
+    assert len(codes) == 23 and len(set(codes)) == 23
+    assert {"2383", "2308", "LITE-US", "6981-JP"} <= set(codes)
+    assert set(row["code"] for row in versions.members(versions.VERSIONS[3])) <= set(codes)
+    assert all(code.isdigit() or overseas.is_overseas(code) for code in codes)
+    drawing = versions.definition(v5)
+    ends = set(codes) | {terminal["key"] for terminal in drawing["terminals"]}
+    assert all(link["from"] in ends and link["to"] in ends for link in drawing["links"])
+    assert set(codes) <= {link["from"] for link in drawing["links"]} | {link["to"] for link in drawing["links"]}
+    assert [layer["key"] for layer in drawing["layers"]][-2:] == ["rack", "demand"]
+    assert "3665" not in codes  # copper cable: direction contested by copper-to-optics

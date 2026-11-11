@@ -21,17 +21,20 @@ from maya_sawa.services.sec_filings import USER_AGENT, _pages, filing_text
 LIMIT = 64 * 1024 * 1024
 SEC = {  # record code -> SEC CIK
     "GOOGL-US": "1652044", "META-US": "1326801", "MSFT-US": "789019",
-    "AMZN-US": "1018724", "NVDA-US": "1045810",
+    "AMZN-US": "1018724", "NVDA-US": "1045810", "LITE-US": "1633978",
 }
 ADVANTEST = "6857-JP"
 ADVANTEST_REPORT = "https://www.advantest.com/document/en/investors/ir-library/annual/E_all_IAR{edition}.pdf"
 ADVANTEST_LIBRARY = "https://www.advantest.com/en/investors/ir-library/annual/"
+MURATA = "6981-JP"
+MURATA_LIBRARY = "https://corporate.murata.com/en-global/ir/library/report"
+MURATA_REPORT = re.compile(r"/-/media/corporate/ir/library/murata-value-report/(\d{4})_e/[^\"'\s]*?all-for-viewing-e\.ashx")
 DART = {"000660-KR": "00164779"}  # record code -> OpenDART corp_code (SK hynix)
 DART_API = "https://opendart.fss.or.kr/api/"
 
 
 def is_overseas(code: str) -> bool:
-    return code in SEC or code == ADVANTEST or code in DART
+    return code in SEC or code in (ADVANTEST, MURATA) or code in DART
 
 
 def catalog_url(code: str) -> str:
@@ -40,6 +43,8 @@ def catalog_url(code: str) -> str:
         return f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={SEC[code]}&type=ARS"
     if code == ADVANTEST:
         return ADVANTEST_LIBRARY
+    if code == MURATA:
+        return MURATA_LIBRARY
     if code in DART:
         return "https://dart.fss.or.kr/dsab007/main.do"
     raise ValueError(f"No overseas annual report source for {code}")
@@ -60,6 +65,17 @@ def latest_sec_report(submissions: dict, cik: str) -> dict | None:
         return {"fiscal_year": year, "filename": document,
                 "url": f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"}
     return None
+
+
+def latest_murata_report(page: str) -> dict | None:
+    """The newest English Murata value report (integrated report) linked from the IR library page."""
+    found = {int(match[1]): match[0] for match in MURATA_REPORT.finditer(page.replace("&amp;", "&"))}
+    if not found:
+        return None
+    edition = max(found)
+    # The edition published in a year covers the fiscal year that ended that March (2025 = FY2024).
+    return {"fiscal_year": edition - 1, "filename": f"murata-value-report-{edition}-e.pdf",
+            "url": "https://corporate.murata.com" + found[edition] + "?la=en"}
 
 
 def latest_dart_report(listing: dict) -> dict | None:
@@ -114,6 +130,8 @@ def latest_report(code: str, today: date | None = None, client: httpx.Client | N
                     return {"fiscal_year": edition - 1, "filename": f"E_all_IAR{edition}.pdf",
                             "url": ADVANTEST_REPORT.format(edition=edition)}
             return None
+        if code == MURATA:
+            return latest_murata_report(_get(client, MURATA_LIBRARY).decode("utf-8", errors="replace"))
         if code in DART:
             key = os.getenv("OPENDART_API_KEY", "")
             if not key:

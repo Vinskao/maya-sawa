@@ -262,6 +262,32 @@ VERSIONS = (
 )
 
 
+# Version 5 keeps version 4 and adds the rack components around the chips. Built from version 4 so the shared
+# stages cannot drift apart between the two records.
+_V4 = VERSIONS[3]
+VERSIONS = VERSIONS + ({
+    "version": 5,
+    "name": "加入機櫃元件",
+    "rationale": "第五版在第四版之外加上晶片以外、AI 機櫃一定要用的四個環節，共 23 家。台光電看高速銅箔基板，"
+                 "伺服器與交換器的板材升級不受銅轉光影響（被光取代的是銅線互連，不是電路板）；台達電看資料中心電源與散熱，"
+                 "機櫃功率密度上升讓需求方向明確；Lumentum 看光通訊雷射，是銅轉光中受惠的一端；村田看 MLCC，"
+                 "需求大部分來自消費電子與車用，放進來是當整體電子業庫存循環的溫度計，不是 AI 需求的訊號。"
+                 "銅線互連、玻璃基板與 ABF 膜材不列入：前者方向有爭議，玻璃基板量產時程未定，ABF 膜材龍頭的年報以食品為主。",
+    "layers": [*_V4["layers"][:-1], {"key": "rack", "title": "機櫃元件：晶片以外的板材、電源與互連", "stages": [
+        {"title": "銅箔基板（CCL）", "companies": [("2383", "台光電", "高速與低損耗銅箔基板", LEADER, "看 AI 伺服器與交換器的高階板材出貨與擴產，板層數與材料等級升級是中長期確定的方向，不受銅轉光影響。")]},
+        {"title": "資料中心電源與散熱", "companies": [("2308", "台達電", "伺服器電源、散熱與資料中心基礎設施", LEADER, "看資料中心電源與液冷的營收比重與擴產，機櫃功率密度上升讓每座資料中心的電源與散熱用量持續增加。")]},
+        {"title": "光互聯", "companies": [("LITE-US", "Lumentum", "光通訊雷射（EML、CPO 光源）", LEADER, "看資料中心雷射的產能與交期，傳輸速率升級與銅轉光都會增加雷射用量，是光互聯需求最上游的訊號。")]},
+        {"title": "被動元件", "companies": [("6981-JP", "村田製作所", "MLCC 與電子元件", LEADER, "看 MLCC 稼動率、庫存與各應用需求，被動元件反映整體電子業的庫存循環；AI 伺服器用量增加，但需求主體仍是消費電子與車用。")]},
+    ]}, _V4["layers"][-1]],
+    "flows": [*_V4["flows"], {"from": "rack", "to": "demand", "label": "AI 機櫃元件"}],
+    "terminals": [*_V4["terminals"], {"key": "rack", "title": "AI 資料中心機櫃"}],
+    "links": [*_V4["links"],
+              {"from": "2383", "to": "rack", "label": "高速 CCL 板材"},
+              {"from": "2308", "to": "rack", "label": "電源與散熱"},
+              {"from": "LITE-US", "to": "rack", "label": "光收發模組雷射"},
+              {"from": "6981-JP", "to": "rack", "label": "MLCC"}],
+},)
+
 def members(version: dict) -> list[dict]:
     return [dict(code=code, company_name=name, segment=segment, significance=significance)
             for layer in version["layers"] for stage in layer["stages"]

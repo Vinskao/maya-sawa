@@ -59,6 +59,7 @@ flowchart LR
 | 2 | 台灣半導體全產業骨幹 | 11 個環節各一家龍頭加一家對照公司，共 22 家；補上記憶體、矽智財與 ASIC、測試介面、載板、專業測試 |
 | 3 | 各環節只留龍頭 | 每個環節只留龍頭一家，共 12 家。Benchmark 只用股東會年報定調產業指引與景氣位置，不是買進標的，所以不放對照公司；晶圓代工拆成先進與成熟製程，因為兩者循環不同步 |
 | 4 | 加入需求端與海外龍頭 | 第三版 12 家加 7 家海外龍頭，共 19 家：四家雲端服務商（各讀各的股東年報，不合併）、NVIDIA、SK 海力士（HBM，與南亞科分成兩個環節）、愛德萬（測試機台）。每家都要能從官方來源取得最新股東年報才列入 |
+| 5 | 加入機櫃元件 | 第四版加台光電（CCL）、台達電（資料中心電源與散熱）、Lumentum（光互聯）、村田（被動元件，當電子業庫存循環溫度計），共 23 家。銅線互連、玻璃基板、ABF 膜材不列入 |
 
 ```mermaid
 flowchart LR
@@ -110,7 +111,7 @@ flowchart LR
 |---|---|---|---|---|
 | GOOGL-US、META-US、MSFT-US、AMZN-US、NVDA-US | 美國五家 | 股東年報（SEC form ARS） | `data.sec.gov` submissions API 找最新 ARS | 五家都取得；Meta 的 ARS 是 HTML，其餘是 PDF |
 | 6857-JP | 愛德萬 | 統合報告書（Integrated Annual Report） | 官網 `E_all_IAR{版次}.pdf`，版次年份 = 會計年度結束的那年 3 月 | 取得 IAR2026（FY2025，19.9 MB） |
-| 000660-KR | SK 海力士 | 사업보고서（事業報告書） | OpenDART `list.json` + `document.xml`，用部署既有的 `OPENDART_API_KEY`（Jenkins credential） | 本機沒有金鑰，未實測；正式環境同一把金鑰已在抓 SK 海力士財報 |
+| 000660-KR | SK 海力士 | 사업보고서（事業報告書） | OpenDART `list.json` + `document.xml`，用部署既有的 `OPENDART_API_KEY`（Jenkins credential） | 正式環境 2026-11-11 抓到 FY2025 事業報告書（rcpNo 20260317000635） |
 
 美光沒有選入：SK 海力士才是 HBM 龍頭，而 OpenDART 金鑰早已設定，事業報告書抓得到。
 
@@ -142,3 +143,20 @@ flowchart LR
 3. 實作後對真實來源跑一次：美國五家與愛德萬都下載成功，Meta、NVIDIA、愛德萬各選出約 13,000–16,000 字的前瞻句。
 4. 部署後確認：`benchmark` 表 19 家啟用、`benchmark_filing` 出現 7 筆海外年報（SK 海力士要看 OpenDART 是否回傳）、待審提案出現海外公司的主張。
 5. 測試：`poetry run python -m pytest tests/integrations -q`；前端 `node node_modules/vitest/vitest.mjs run tests/market/benchmarkChain.test.ts`。
+
+## 第五版：機櫃元件（2026-11-11）
+
+第五版保留第四版全部 19 家，另加一層「機櫃元件」，終點是「AI 資料中心機櫃」，共 23 家。程式從第四版延伸（`_V4`），共用的環節不會在兩版之間不一致。
+
+| 環節 | 公司 | 年報來源 | 為什麼可以當 benchmark |
+|---|---|---|---|
+| 銅箔基板（CCL） | 台光電 2383 | MOPS 股東會年報 | 板層數與材料升級是確定方向；銅轉光取代的是銅線互連，不是電路板 |
+| 資料中心電源與散熱 | 台達電 2308 | MOPS 股東會年報 | 機櫃功率密度上升，電源與液冷用量增加 |
+| 光互聯 | Lumentum（LITE-US） | SEC 股東年報 `lite-ars.pdf` | 銅轉光的受惠端，雷射是光互聯最上游 |
+| 被動元件 | 村田（6981-JP） | 官網 Murata value report（英文 PDF，從 IR 頁找最新版次） | 當電子業庫存循環的溫度計；需求主體是消費電子與車用，不是 AI 訊號 |
+
+不列入：銅線互連（貿聯等，方向有爭議，放觀察名單）、玻璃基板（量產時程與龍頭未定）、ABF 膜材（味之素年報以食品為主）。
+
+開發方法：先逐家確認年報能自動取得（Lumentum 的 SEC ARS、村田 IR 頁的英文 PDF 連結都實際下載過），再加測試（23 家、包含第四版全部、每家有年報來源、每家都有連線、不含銅纜廠；村田從 IR 頁挑最新英文版、略過中文版），最後實作。
+
+**部署後發現：年報 AI 分析目前全部卡在 OpenAI `RateLimitError`。** 台灣與海外的年報都已入庫，但每一份分析都失敗，`analysis_status` 維持空值，每日同步會重試。原因可能是 OpenAI 額度用完，也可能是一次連發 24 份觸發速率限制，還沒查清楚。

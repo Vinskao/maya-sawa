@@ -56,9 +56,9 @@ def test_korea_report_is_skipped_without_the_opendart_key(monkeypatch):
 
 def test_only_companies_with_a_known_source_are_overseas_benchmarks():
     assert all(overseas.is_overseas(code) for code in ("NVDA-US", "MSFT-US", "6857-JP", "000660-KR"))
-    assert not overseas.is_overseas("2330") and not overseas.is_overseas("LITE-US")
+    assert not overseas.is_overseas("2330") and not overseas.is_overseas("AAPL-US")
     with pytest.raises(ValueError):
-        overseas.catalog_url("LITE-US")
+        overseas.catalog_url("AAPL-US")
 
 
 def test_html_and_dart_archives_become_text_pages():
@@ -80,3 +80,15 @@ def test_english_and_korean_annual_report_sentences_are_selected_and_financial_o
     selected = select_pages([page])[0]
     assert "capital expenditures to increase" in selected and "accelerated computing" in selected
     assert "HBM 수요가" in selected and "Net income" not in selected
+
+
+def test_the_newest_english_murata_value_report_is_picked_from_the_ir_page():
+    page = ('<a href="/-/media/corporate/ir/library/murata-value-report/2024_e/murata-value-report-2024-all-for-viewing-e.ashx?la=en&amp;cvid=1">'
+            '<a href="/-/media/corporate/ir/library/murata-value-report/2025_c/murata-value-report-2025-all-for-viewing-c.ashx?la=en">'
+            '<a href="/-/media/corporate/ir/library/murata-value-report/2025_e/murata-value-report-2025-all-for-viewing-e.ashx?la=en&amp;cvid=2">')
+    report = overseas.latest_murata_report(page)
+    assert report["fiscal_year"] == 2024 and report["filename"] == "murata-value-report-2025-e.pdf"
+    assert report["url"] == ("https://corporate.murata.com/-/media/corporate/ir/library/murata-value-report/2025_e/"
+                             "murata-value-report-2025-all-for-viewing-e.ashx?la=en")
+    assert overseas.latest_murata_report("<html></html>") is None
+    assert overseas.is_overseas("6981-JP") and overseas.is_overseas("LITE-US")
