@@ -82,3 +82,20 @@ flowchart TD
 3. 先寫測試：`tests/automation/test_routine_prompts.py`（四份市場例程都要有「沒有研究圖」的建立規則並指向 `research-guide.md`；台股例程不得再排除日韓、要寫出 `6857-JP` 代碼格式；美股例程不得再寫「排程不能寫」）與 `tests/automation/test_added_instrument_prompt.py`（新增標的訊息要求研究圖）。確認紅再改。
 4. 改 `routines/market-*.md` 與 `market_automation.py`，推 `main`；排程下一次執行就會讀到。
 5. 驗證：下一輪執行後 `GET /maya-sawa/market/dashboard/analysis/6834-JP?productType=research` 應有 revision 1，研究分頁出現供應鏈與技術圖。
+
+## 持股歸組與資料缺口（2026-11-11）
+
+```mermaid
+flowchart LR
+  U["GET /dashboard/industries/unclassified"] --> J{"benchmark 有這家？"}
+  J -->|有| B["用 benchmark 環節對應的分組"]
+  J -->|沒有| E["依申報與年報主業找最貼切分組"]
+  B --> P["PUT /dashboard/industries/{id}（agent key 只能加成員）"]
+  E --> P
+  E -->|沒有合適分組| N["新建分組"] --> P
+```
+
+開發方法：
+- 持股不屬於任何分組時，首頁顯示「待分類（下次 AI 排程自動歸組）」。台股例程第 7.2 節、美股例程第 3.4 節，每輪都會把這些持股歸進分組。
+- `PUT /market/dashboard/industries/{id}` 同時接受 owner 與 `X-Market-Agent-Key`。agent 只能新建分組或加成員，送出缺少既有成員的分組會回 403。
+- 研究圖節點的標籤若含「未取得原文、待核實、未核實、待驗證、未知、未擷取」，代表資料缺口，不是判斷。前端把這種節點畫成灰色虛線框，並在圖下加註（`markEvidenceGaps`）。

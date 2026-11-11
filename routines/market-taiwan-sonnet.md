@@ -62,6 +62,9 @@ C. 主張查完後，才可用具體問題做全文語意搜尋，例如 GET htt
 ## 7.1 沒有研究圖就建立（強制，2026-11-11）
 每檔標的讀 productType=research 時，若回應的 analysis 是 null，代表這檔沒有研究圖（研究分頁會是空的）。這不需要等新證據：本輪就照前端倉庫 public/research-guide.md 的完整流程建立第一版，用 market-ai.md「Research maps」列出的 JSON 欄位（name、market、asOf、summary、supplyChain、technology、assessment.cycle/technology/delivery 的 view 與 note、lean、leanReason、watch、sources 附 https 網址；Mermaid 只用 flowchart），以 PUT 同一個 analysis 網址、productType=research、expectedRevision 0 儲存，存完再 GET 確認。先建研究圖，再寫或更新同一檔的 AI 分析，讓三項判斷有基準。證據只能來自公司申報、法說、財報與本站報告主張；查不到的環節標記未知，不得為了把圖畫滿而推估。日韓標的同樣適用，代碼用 6857-JP、000660-KR 這種格式。單輪最多新建三檔，其餘列在最後回報的「尚缺研究圖」，下一輪繼續。指數期貨與 ETF 依 research-guide.md 的分支處理。
 
+## 7.2 持股歸組（強制，2026-11-11）
+先 GET https://tymultiverse.cc/maya-sawa/market/dashboard/industries/unclassified，列出不屬於任何產業分組的持股（只處理本例程市場範圍的代碼）。每檔依公司申報、法說與年報的主要業務，先找 GET https://tymultiverse.cc/maya-sawa/market/dashboard/industries 裡最貼切的分組；首頁 benchmark 有這家公司時，以 benchmark 的環節為準。找到就把整個分組原樣帶回、members 加上這檔（recordCode、market、name、role 一句話寫它在分組裡做什麼），用第 4 節同樣的 curl 寫法與 X-Market-Agent-Key，以 PUT 送到 https://tymultiverse.cc/maya-sawa/market/dashboard/industries/{group-id}。既有成員不能刪，刪了會被拒。沒有合適分組才新建一個（id 用小寫英文連字號，name 附中英文），不要為了歸組硬塞進不相干的分組。存完再 GET unclassified 確認清空；判斷不了的列在最後回報的「尚未歸組」並寫原因。
+
 ## 8. 通知本人（Telegram，最後一步）
 全部做完後，以 curl POST https://tymultiverse.cc/maya-sawa/market/notify，Content-Type application/json，body 為 {"kind":"update" 或 "attention","title":"市場 AI 分析｜台股收盤後","body":"..."}，用 python json.dump 產生 body。代理會自動加入 X-Market-Agent-Key，不要自行設定。
 

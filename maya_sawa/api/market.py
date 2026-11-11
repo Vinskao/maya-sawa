@@ -655,14 +655,42 @@ async def list_market_industries(code: str | None = None):
     return {"groups": groups}
 
 
+@router.get("/dashboard/industries/unclassified", **public_data("尚未歸入任何產業分組的持股", "AI 分析與研究"))
+async def list_unclassified_holdings():
+    """Stock holdings that belong to no industry group. The scheduled routine files each one into a group (or a new
+    one) on its next run, so the holdings list never keeps an 未分類 section for long."""
+    try:
+        positions = (await asyncio.to_thread(market_dashboard_db.latest_auto))["positions"]
+        grouped = {member["recordCode"] for group in await asyncio.to_thread(market_industry_db.list_groups)
+                   for member in group["members"]}
+    except Exception as exc:
+        logger.exception("Unclassified holdings unavailable")
+        raise HTTPException(status_code=503, detail="Industry database unavailable") from exc
+    holdings = []
+    for item in positions:
+        if item.get("productType", "stock") != "stock":
+            continue
+        market = (item.get("market") or "TW").upper()
+        code = item["code"].upper() if market == "TW" else f"{item['code'].upper()}-{market}"
+        if code not in grouped and code not in {row["recordCode"] for row in holdings}:
+            holdings.append({"recordCode": code, "market": market, "name": item.get("name") or code})
+    return {"holdings": holdings}
+
+
 @router.put("/dashboard/industries/{group_id}")
-async def put_market_industry(group_id: str, body: dict, claims: dict = Depends(require_manage_users_request)):
+async def put_market_industry(group_id: str, body: dict, editor: str = Depends(analysis_editor)):
     if body.get("id") != group_id:
         raise HTTPException(status_code=422, detail="Group id in the body must match the URL")
     try:
         validate_group(body)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if editor == AGENT_EDITOR:
+        # The routine files unclassified holdings: it may create a group or add members, never drop one.
+        current = await asyncio.to_thread(market_industry_db.group, group_id)
+        kept = {member["recordCode"] for member in body["members"]}
+        if current and any(member["recordCode"] not in kept for member in current["members"]):
+            raise HTTPException(status_code=403, detail="The agent key can only add members to a group")
     try:
         return {"group": await asyncio.to_thread(market_industry_db.save_group, body), "saved": True}
     except Exception as exc:

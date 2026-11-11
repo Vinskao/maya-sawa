@@ -75,7 +75,7 @@ def test_api_lists_groups_for_a_stock_and_only_the_owner_writes(database, monkey
     app.include_router(market.router)
     client = TestClient(app)
     assert client.put("/market/dashboard/industries/ai-optics", json=OPTICS).status_code == 401
-    app.dependency_overrides[market.require_manage_users_request] = lambda: {"sub": "owner"}   # members are refused: tests/security/test_owner_only_writes.py
+    app.dependency_overrides[market.analysis_editor] = lambda: "owner"   # members are refused: tests/security/test_owner_only_writes.py
     assert client.put("/market/dashboard/industries/ai-optics", json={**OPTICS, "id": "other"}).status_code == 422
     assert client.put("/market/dashboard/industries/ai-optics", json=OPTICS).status_code == 200
     body = client.get("/market/dashboard/industries?code=LITE-US").json()
@@ -88,3 +88,31 @@ def test_seeding_creates_missing_groups_and_never_overwrites_edited_ones(databas
     database.save_group({**OPTICS, "members": OPTICS["members"][:1]})  # edited through the API
     assert market_research.seed_industry_groups(database, [OPTICS, POWER]) == {"inserted": 0, "kept": 2}
     assert len(database.group("ai-optics")["members"]) == 1
+
+
+def test_agent_key_may_only_add_members_and_unclassified_holdings_are_listed(database, monkeypatch):
+    import hashlib
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market
+    monkeypatch.setattr(market, "market_industry_db", database)
+    monkeypatch.setenv("MARKET_AGENT_KEY_SHA256", hashlib.sha256(b"k").hexdigest())
+    monkeypatch.setattr(market.market_dashboard_db, "latest_auto", lambda: {"positions": [
+        {"code": "2454", "productType": "stock", "market": "TW", "name": "聯發科"},
+        {"code": "3081", "productType": "stock", "market": "TW", "name": "聯亞"},
+        {"code": "6834", "productType": "stock", "market": "JP", "name": "SEIKOH GIKEN"},
+        {"code": "TXF", "productType": "futures", "market": "TW", "name": "台指期"}]})
+    database.save_group(OPTICS)
+    app = FastAPI()
+    app.include_router(market.router)
+    client = TestClient(app)
+    unclassified = client.get("/market/dashboard/industries/unclassified").json()["holdings"]
+    assert [row["recordCode"] for row in unclassified] == ["2454", "6834-JP"]
+    agent = {"x-market-agent-key": "k"}
+    removed = {**OPTICS, "members": OPTICS["members"][:1]}
+    assert client.put("/market/dashboard/industries/ai-optics", json=removed, headers=agent).status_code == 403
+    added = {**OPTICS, "members": OPTICS["members"] + [
+        {"recordCode": "6834-JP", "name": "精工技研", "market": "JP", "role": "光連接器與研磨設備"}]}
+    assert client.put("/market/dashboard/industries/ai-optics", json=added, headers=agent).status_code == 200
+    assert client.put("/market/dashboard/industries/ai-optics", json=added, headers={"x-market-agent-key": "bad"}).status_code == 401
+    assert [row["recordCode"] for row in client.get("/market/dashboard/industries/unclassified").json()["holdings"]] == ["2454"]

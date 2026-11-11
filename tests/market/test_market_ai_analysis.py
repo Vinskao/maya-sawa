@@ -120,7 +120,7 @@ def test_scheduled_agent_key_writes_stock_research_and_macro_analyses(database, 
                       headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 200
     assert database.last_editor("stock", "2330") == "agent:scheduled-analysis"
     assert client.put("/market/dashboard/industries/ai-optics", json={},
-                      headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 401  # the key is not a login
+                      headers={"X-Market-Agent-Key": AGENT_KEY}).status_code == 422  # the key may add industry members; an empty group is still rejected
 
 
 def test_macro_chain_nodes_each_keep_their_own_analysis(database, monkeypatch):
