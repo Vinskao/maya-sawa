@@ -146,8 +146,22 @@ def test_version_five_adds_rack_components_each_with_an_annual_report_source():
     assert set(row["code"] for row in versions.members(versions.VERSIONS[3])) <= set(codes)
     assert all(code.isdigit() or overseas.is_overseas(code) for code in codes)
     drawing = versions.definition(v5)
-    ends = set(codes) | {terminal["key"] for terminal in drawing["terminals"]}
+    layers = {layer["key"]: layer for layer in drawing["layers"]}
+    ends = set(codes) | {terminal["key"] for terminal in drawing["terminals"]} | set(layers)
     assert all(link["from"] in ends and link["to"] in ends for link in drawing["links"])
-    assert set(codes) <= {link["from"] for link in drawing["links"]} | {link["to"] for link in drawing["links"]}
+    linked = {link["from"] for link in drawing["links"]} | {link["to"] for link in drawing["links"]}
+    reached = linked | {company["code"] for key in linked & set(layers)
+                        for stage in layers[key]["stages"] for company in stage["companies"]}
+    assert set(codes) <= reached
     assert [layer["key"] for layer in drawing["layers"]][-2:] == ["rack", "demand"]
     assert "3665" not in codes  # copper cable: direction contested by copper-to-optics
+
+
+def test_version_five_arrows_run_supplier_to_customer_and_say_what_is_handed_over():
+    """2026-11-11: 創意's customers are the CSPs but had no line, and arrows mixed 'orders from' with 'ships to'."""
+    links = versions.definition(versions.VERSIONS[4])["links"]
+    assert all(link["kind"] in {"supply", "manufacture", "service", "product"} and link["label"] for link in links)
+    pairs = {(link["from"], link["to"]) for link in links}
+    assert ("3443", "demand") in pairs and ("NVDA-US", "demand") in pairs   # who sells to the cloud providers
+    assert ("2330", "NVDA-US") in pairs and ("NVDA-US", "2330") not in pairs  # foundry supplies its customer
+    assert ("000660-KR", "NVDA-US") in pairs                                  # HBM is sold to NVIDIA

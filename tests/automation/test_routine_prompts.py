@@ -96,3 +96,21 @@ def test_market_routines_create_a_missing_research_map_and_cover_overseas_holdin
         text = (ROOT / "routines" / name).read_text(encoding="utf-8")
         assert "排程不能寫" not in text, name
         assert "沒有研究圖" in text and "research-guide.md" in text, name
+
+
+def test_benchmark_outlook_is_written_by_opus_and_read_by_every_analysis_and_daily_reading():
+    """2026-11-11: the benchmark sets the year's AI long-term outlook; short-term analyses read their data against it."""
+    writer = (ROOT / "routines" / "market-us-macro-opus.md").read_text(encoding="utf-8")
+    assert "年度 AI 長線格局" in writer and "productType=outlook" in writer and "benchmark/versions" in writer
+    assert "check_outlook" in writer or "【年度格局】" in writer
+    for name in ("market-us-macro-sonnet.md", "market-taiwan-sonnet.md", "market-taiwan-opus.md"):
+        assert "不得寫入年度格局" in (ROOT / "routines" / name).read_text(encoding="utf-8"), name
+    readers = ["market-us-macro-sonnet.md", "market-us-macro-opus.md", "market-taiwan-sonnet.md", "market-taiwan-opus.md",
+               "maya-daily-review.md", "maya-daily-fallback.md"]
+    for name in readers:
+        text = (ROOT / "routines" / name).read_text(encoding="utf-8")
+        assert "analysis/AI?productType=outlook" in text and "長線格局對照" in text, name
+    for name in ("maya-daily-review.md", "maya-daily-fallback.md"):
+        assert "outlook:AI:" in (ROOT / "routines" / name).read_text(encoding="utf-8"), name
+    draft = (ROOT / "docs" / "GPT_DAILY_DRAFT_PROMPT.md").read_text(encoding="utf-8")
+    assert "productType=outlook" in draft and "outlook:AI:" in draft

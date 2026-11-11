@@ -9,6 +9,7 @@
 - /market/dashboard、/market/dashboard/brief：完整關注股票清單與最新月營收、季報數字（以這裡為最新一期，個股分析文字可能是舊一期，數字衝突時以 dashboard 為準並以當期為主）。
 - /market/dashboard/events：過去 24 小時重大事件（財報、月營收、大幅跳空、臺股期貨）。
 - 總經：/market/macro/nodes（含 NET-LIQUIDITY 等節點）；個股：/market/dashboard/analysis/{code}?productType=stock 與 productType=research。
+- 長線格局對照：讀年度 AI 長線格局 GET https://tymultiverse.cc/maya-sawa/market/dashboard/analysis/AI?productType=outlook。精讀的價值在「長線格局對照」：先用一兩句交代今天的事件落在年度格局哪一條主軸，再講總經與個股，每個重點都說明它是印證、挑戰還是觸及某條主軸的反證；不要只複述新聞。播音稿與閱讀版都用口語講主軸內容，不唸 T 編號。引用了格局就在 sources 加 outlook:AI:{版次}。格局不存在時照原規則寫，並在審核 note 註明。
 - 逐檔掃描關注清單，不可無聲漏股。當日重大市場事件（例如臺股期貨或多檔個股大跌、權值股外資連賣）一定要提到。
 
 ## 三、撰寫播音稿（content）

@@ -268,7 +268,8 @@ _V4 = VERSIONS[3]
 VERSIONS = VERSIONS + ({
     "version": 5,
     "name": "加入機櫃元件",
-    "rationale": "第五版在第四版之外加上晶片以外、AI 機櫃一定要用的四個環節，共 23 家。台光電看高速銅箔基板，"
+    "rationale": "第五版在第四版之外加上晶片以外、AI 機櫃一定要用的四個環節，共 23 家，並統一圖的讀法：每條箭頭都從供應者指向客戶，線型代表交付的是材料設備、代工製造、服務還是產品。"
+                 "台光電看高速銅箔基板，"
                  "伺服器與交換器的板材升級不受銅轉光影響（被光取代的是銅線互連，不是電路板）；台達電看資料中心電源與散熱，"
                  "機櫃功率密度上升讓需求方向明確；Lumentum 看光通訊雷射，是銅轉光中受惠的一端；村田看 MLCC，"
                  "需求大部分來自消費電子與車用，放進來是當整體電子業庫存循環的溫度計，不是 AI 需求的訊號。"
@@ -281,11 +282,38 @@ VERSIONS = VERSIONS + ({
     ]}, _V4["layers"][-1]],
     "flows": [*_V4["flows"], {"from": "rack", "to": "demand", "label": "AI 機櫃元件"}],
     "terminals": [*_V4["terminals"], {"key": "rack", "title": "AI 資料中心機櫃"}],
-    "links": [*_V4["links"],
-              {"from": "2383", "to": "rack", "label": "高速 CCL 板材"},
-              {"from": "2308", "to": "rack", "label": "電源與散熱"},
-              {"from": "LITE-US", "to": "rack", "label": "光收發模組雷射"},
-              {"from": "6981-JP", "to": "rack", "label": "MLCC"}],
+    # Every arrow runs supplier -> customer; `kind` says what is handed over (legend on the page). A link may end
+    # at a layer key ("demand") when the relation is with the whole group rather than one named company.
+    "links": [
+        {"from": "6488", "to": "2330", "kind": "supply", "label": "矽晶圓"},
+        {"from": "6488", "to": "2303", "kind": "supply", "label": "矽晶圓"},
+        {"from": "6488", "to": "2408", "kind": "supply", "label": "矽晶圓"},
+        {"from": "3131", "to": "2330", "kind": "supply", "label": "先進封裝濕製程機台"},
+        {"from": "3131", "to": "3711", "kind": "supply", "label": "濕製程機台"},
+        {"from": "6857-JP", "to": "3711", "kind": "supply", "label": "SoC 測試機台"},
+        {"from": "6857-JP", "to": "000660-KR", "kind": "supply", "label": "HBM 測試機台"},
+        {"from": "6515", "to": "3711", "kind": "supply", "label": "測試座"},
+        {"from": "3037", "to": "3711", "kind": "supply", "label": "IC 載板"},
+        {"from": "000660-KR", "to": "NVDA-US", "kind": "supply", "label": "HBM"},
+        {"from": "2383", "to": "rack", "kind": "supply", "label": "高速 CCL 板材"},
+        {"from": "2308", "to": "rack", "kind": "supply", "label": "電源與散熱"},
+        {"from": "LITE-US", "to": "rack", "kind": "supply", "label": "光收發模組雷射"},
+        {"from": "6981-JP", "to": "rack", "kind": "supply", "label": "MLCC"},
+        {"from": "2330", "to": "NVDA-US", "kind": "manufacture", "label": "先進製程與 CoWoS"},
+        {"from": "2330", "to": "2454", "kind": "manufacture", "label": "先進製程"},
+        {"from": "2303", "to": "2454", "kind": "manufacture", "label": "成熟製程"},
+        {"from": "2330", "to": "3443", "kind": "manufacture", "label": "ASIC 晶圓"},
+        {"from": "3711", "to": "2454", "kind": "manufacture", "label": "封裝測試"},
+        {"from": "3711", "to": "NVDA-US", "kind": "manufacture", "label": "封裝測試"},
+        {"from": "2404", "to": "2330", "kind": "service", "label": "無塵室與機電工程"},
+        {"from": "3587", "to": "2330", "kind": "service", "label": "材料與故障分析"},
+        {"from": "3587", "to": "2454", "kind": "service", "label": "晶片除錯與驗證"},
+        {"from": "3443", "to": "demand", "kind": "service", "label": "自研 AI ASIC 設計與量產"},
+        {"from": "NVDA-US", "to": "demand", "kind": "product", "label": "GPU 與 AI 系統"},
+        {"from": "rack", "to": "demand", "kind": "product", "label": "機櫃建置"},
+        {"from": "2454", "to": "market", "kind": "product", "label": "手機與消費性晶片"},
+        {"from": "2408", "to": "market", "kind": "product", "label": "標準型 DRAM"},
+    ],
 },)
 
 def members(version: dict) -> list[dict]:

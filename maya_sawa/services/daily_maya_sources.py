@@ -7,7 +7,7 @@ import ipaddress
 import re
 from urllib.parse import urlsplit
 
-_REFERENCE = re.compile(r'^(stock|macro|macro-node):([A-Z0-9-]{1,24}):([1-9][0-9]*)$')
+_REFERENCE = re.compile(r'^(stock|macro|macro-node|outlook):([A-Z0-9-]{1,24}):([1-9][0-9]*)$')
 
 
 def validate_sources(sources, analyses):

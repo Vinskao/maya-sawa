@@ -20,6 +20,8 @@ def describe_sources(sources):
             described.append(f'TY Multiverse 個股分析 {parts[1]}（第 {parts[2]} 版）')
         elif len(parts) == 3 and parts[0] == 'macro-node' and parts[2].isdigit():
             described.append(f'TY Multiverse 總經分析 {parts[1]}（第 {parts[2]} 版）')
+        elif len(parts) == 3 and parts[0] == 'outlook' and parts[2].isdigit():
+            described.append(f'TY Multiverse 年度 AI 長線格局（第 {parts[2]} 版）')
         else:
             described.append(source)
     return described

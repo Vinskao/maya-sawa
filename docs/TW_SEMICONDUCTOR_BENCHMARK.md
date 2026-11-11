@@ -160,3 +160,67 @@ flowchart LR
 開發方法：先逐家確認年報能自動取得（Lumentum 的 SEC ARS、村田 IR 頁的英文 PDF 連結都實際下載過），再加測試（23 家、包含第四版全部、每家有年報來源、每家都有連線、不含銅纜廠；村田從 IR 頁挑最新英文版、略過中文版），最後實作。
 
 **部署後發現：年報 AI 分析目前全部卡在 OpenAI `RateLimitError`。** 台灣與海外的年報都已入庫，但每一份分析都失敗，`analysis_status` 維持空值，每日同步會重試。原因可能是 OpenAI 額度用完，也可能是一次連發 24 份觸發速率限制，還沒查清楚。
+
+## 圖的讀法統一，以及年度 AI 長線格局（2026-11-11）
+
+### 箭頭一律由供應者指向客戶
+
+第四版的箭頭混用兩種意思：「聯發科 → 台積電：投片」是客戶指向供應者，「台積電 → 日月光：晶圓送封裝測試」是貨物流向。創意的主要客戶是雲端服務商，圖上卻沒有這條線。第五版改成：
+
+- 每條箭頭都是**供應者 → 客戶**，`kind` 說明交付的是什麼，頁面圖下方有圖例：
+  - `supply`（實線）：材料、設備與元件；
+  - `manufacture`（粗線）：代工製造與封裝測試；
+  - `service`（虛線）：設計、工程與驗證服務；
+  - `product`（綠線）：產品賣給客戶。
+- 和整群公司的關係（創意、NVIDIA 賣給雲端服務商）可以指向一個層的 key（`demand`），圖上把這一層畫成框，箭頭指向框。這樣不需要逐家宣稱「哪家 CSP 委託創意」這種未逐一證實的配對。
+- 因此改向或新增的線：
+  - 台積電 → NVIDIA（先進製程與 CoWoS）；
+  - SK 海力士 → NVIDIA（HBM，原本畫成 SK 海力士 → 台積電）；
+  - 創意 → 雲端服務商（自研 AI ASIC 設計與量產）；
+  - 日月光 → 聯發科、NVIDIA（封裝測試）。
+- 第四版保留原樣當紀錄。
+
+### 年度 AI 長線格局：benchmark 在分析流程裡的位置
+
+Benchmark 用龍頭的股東年報定調**當年度**的 AI 長線格局；總經判斷循環位置；個股與每日精讀用短線資料印證或挑戰長線格局。順序和首頁 Benchmark 說明的「Benchmark → 總體 → 個體」一致。
+
+```mermaid
+flowchart TD
+  AR[(benchmark 龍頭股東年報<br/>MOPS／SEC／IR／OpenDART)] --> Claims[年報主張<br/>AI 萃取 + 審核]
+  Lineup[benchmark/versions<br/>名單、環節、供應關係] --> Opus
+  Claims --> Opus[美股與總經 Opus 班<br/>寫年度格局]
+  Opus -->|PUT productType=outlook code=AI<br/>伺服器檢查格式| Outlook[(年度 AI 長線格局<br/>T1…T6：依據、環節、短線印證指標、反證)]
+  Outlook --> Macro[總經評論]
+  Outlook --> Stock[每檔 AI 分析<br/>「長線格局對照」段落]
+  Outlook --> Daily[每日精讀<br/>先講今天落在哪條主軸]
+  Short[月營收、財報、報告主張、價格籌碼] --> Stock
+  Short --> Daily
+  Stock --> Daily
+  Outlook --> Page[首頁 Benchmark 區<br/>年度 AI 長線格局]
+```
+
+- 紀錄：`productType=outlook`、代碼固定 `AI`，和總經評論一樣是一份共用、有版本的紀錄。日常分析與精讀的 sources 用 `outlook:AI:{版次}` 引用，Podcast 單集說明顯示為「TY Multiverse 年度 AI 長線格局（第 N 版）」。
+- 格式由 `services/benchmark_outlook.py` 檢查：
+  - 第一行是 `【年度格局】YYYY`；
+  - 每條主軸 `T1 標題` 下都要有「依據：」「環節：」「短線印證指標：」「反證：」，缺一回 422。
+  - 這樣短線分析可以引用 T 編號，主軸也一定能被資料證偽。
+- 誰寫：
+  - 只有「美股與總經」Opus 班可以寫（第 1.5 節）。
+  - 觸發條件：沒有紀錄、benchmark 換版、年報主張新通過審核，或超過 7 天。
+  - Sonnet 班與台股例程只讀。
+- 誰讀：
+  - 台股、美股例程的每檔分析加「長線格局對照」；
+  - 每日精讀的審核、備援與 ChatGPT 草稿提示都要求先把當天重點放回主軸；
+  - 審核會退回只複述新聞的稿。
+  - 長線格局是背景，不推翻三項判斷規則。
+- 已知限制：年報 AI 萃取目前卡在 OpenAI `RateLimitError`。主張沒進來前，Opus 寫格局時只能用已有的主張，並寫明缺口。
+
+### 開發方法
+
+1. 先寫測試：
+   - 後端：`tests/market/test_benchmark_outlook.py`（outlook 只接受代碼 AI、agent 可寫、格式檢查、sources 可引用、單集說明文字）；`tests/integrations/test_benchmark_versions.py`（第五版每條線有 kind、創意與 NVIDIA 連到雲端服務商、台積電指向 NVIDIA 而非反向、SK 海力士賣給 NVIDIA）；`tests/automation/test_routine_prompts.py`（只有 Opus 寫、其餘只讀、每份讀者提示都有「長線格局對照」與 sources 規則）。
+   - 前端：`tests/market/benchmarkChain.test.ts`（線型、框住整層、圖例、首頁顯示格局、公開規則）。
+2. 確認紅，再實作 `benchmark_outlook.py`、`api/market.py` 的 outlook 類型、`daily_maya_sources.py`、`podcast_feed.py`、第五版 links 與前端 `benchmarkChain.ts`。
+3. 排程提示改原句或在既有清單裡加一項，不在檔尾追加「優先於上文」（見每日精讀的教訓）。
+4. 部署後確認：首頁圖例出現、創意有線連到雲端服務商框；下一次美股與總經 Opus 班寫出第 1 版格局（`GET /maya-sawa/market/dashboard/analysis/AI?productType=outlook`）；之後的個股分析與精讀出現「長線格局對照」。
+5. 測試：`poetry run python -m pytest tests/market tests/integrations tests/automation -q`；前端 `node node_modules/vitest/vitest.mjs run tests/market/benchmarkChain.test.ts`。

@@ -102,11 +102,14 @@ class MarketAiAnalysisUpdate(BaseModel):
 
 def analysis_target(code: str, product_type: str):
     normalized = code.strip().upper()
-    if product_type not in {"stock", "futures", "crypto", "macro", "macro-node", "research"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
+    if product_type not in {"stock", "futures", "crypto", "macro", "macro-node", "research", "outlook"} or not re.fullmatch(r"[A-Z0-9-]{1,24}", normalized):
         raise HTTPException(status_code=422, detail="Invalid instrument code or productType")
     # One shared macro commentary that every instrument analysis reads instead of restating.
     if product_type == "macro" and normalized != "US":
         raise HTTPException(status_code=422, detail="Macro commentary code must be US")
+    # "outlook": one annual AI long-term outlook set from the benchmark line-up; daily readings and holdings cite it.
+    if product_type == "outlook" and normalized != "AI":
+        raise HTTPException(status_code=422, detail="Outlook code must be AI")
     # "macro-node": one analysis per node of the macro logic chains; the code is the node id from the frontend graph.
     return product_type, normalized
 
@@ -171,7 +174,7 @@ async def get_analysis_timestamp_proof(day: str):
 
 
 AGENT_EDITOR = "agent:scheduled-analysis"
-AGENT_PRODUCT_TYPES = {"stock", "futures", "macro", "macro-node", "research"}
+AGENT_PRODUCT_TYPES = {"stock", "futures", "macro", "macro-node", "research", "outlook"}
 
 
 async def analysis_editor(request: Request) -> str:
@@ -202,6 +205,12 @@ async def put_market_ai_analysis(code: str, body: MarketAiAnalysisUpdate, produc
     if target[0] == "research":
         try:
             validate_research_content(body.content)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if target[0] == "outlook":
+        from ..services.benchmark_outlook import validate_outlook_content
+        try:
+            validate_outlook_content(body.content)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
