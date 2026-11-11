@@ -59,7 +59,9 @@ def test_bundled_groups_cover_every_current_research_record():
     for group in groups:
         validate_group(group)
     grouped = {member["recordCode"] for group in groups for member in group["members"]}
-    held = set(market_research.load_seed_records()) - {"TXF"}  # the index future is not a company
+    # Industry groups hold companies: the index future and funds (kind "etf", researched by allocation) have none.
+    held = {code for code, record in market_research.load_seed_records().items()
+            if code != "TXF" and record.get("kind") != "etf"}
     assert held <= grouped, sorted(held - grouped)
     assert next(group for group in groups if group["id"] == "dc-power-rack")["diagram"] == "power-rack"
 

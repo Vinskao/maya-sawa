@@ -183,8 +183,12 @@ class MarketReportsDatabase:
         uploaded_by,
         digest,
         pdf,
+        received_at=None,
     ):
-        """Persist an uploaded PDF before extraction so the API can return immediately."""
+        """Persist an uploaded PDF before extraction so the API can return immediately.
+
+        received_at is the caller's clock (the daily upload limit counts by it); defaults to now.
+        """
         if not self.sessions:
             raise RuntimeError("Market reports database unavailable")
         try:
@@ -199,7 +203,7 @@ class MarketReportsDatabase:
                     title=title,
                     publisher=publisher,
                     published_at=published_at,
-                    received_at=datetime.now(timezone.utc),
+                    received_at=received_at or datetime.now(timezone.utc),
                     uploaded_by=uploaded_by,
                     sha256=digest,
                     page_count=0,

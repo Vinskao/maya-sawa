@@ -166,6 +166,7 @@ async def upload_report(
             uploaded_by=uploaded_by,
             digest=digest,
             pdf=data,
+            received_at=_now(),
         )
     except Exception as exc:
         logger.exception("Could not queue uploaded market report")
