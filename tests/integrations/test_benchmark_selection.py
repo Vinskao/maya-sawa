@@ -10,7 +10,7 @@ from maya_sawa.services import benchmark_analysis
 
 def test_sync_uses_active_database_selection_once_the_lineup_is_applied(monkeypatch):
     conn = Mock()
-    conn.scalar.side_effect = [True, 3]
+    conn.scalar.side_effect = [True, 4]
     conn.begin_nested.return_value = _connection(Mock())
     active_rows = Mock()
     active_rows.mappings.return_value.all.return_value = [{"code": "2330"}]
@@ -47,7 +47,7 @@ def test_analysis_queue_only_selects_current_benchmarks(monkeypatch):
 
 def test_sync_fetches_only_the_newest_shareholder_annual_report(monkeypatch):
     conn = Mock()
-    conn.scalar.side_effect = lambda query, *args: 3 if "max(version)" in str(query) else True
+    conn.scalar.side_effect = lambda query, *args: 4 if "max(version)" in str(query) else True
     conn.begin_nested.return_value = _connection(Mock())
     active_rows = Mock()
     active_rows.mappings.return_value.all.return_value = [{"code": "2330"}, {"code": "2408"}]

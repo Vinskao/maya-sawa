@@ -58,6 +58,7 @@ flowchart LR
 | 1 | 台積電本土設備鏈觀察名單 | 依製程步驟選 16 家，設備、耗材與廠務占 9 家 |
 | 2 | 台灣半導體全產業骨幹 | 11 個環節各一家龍頭加一家對照公司，共 22 家；補上記憶體、矽智財與 ASIC、測試介面、載板、專業測試 |
 | 3 | 各環節只留龍頭 | 每個環節只留龍頭一家，共 12 家。Benchmark 只用股東會年報定調產業指引與景氣位置，不是買進標的，所以不放對照公司；晶圓代工拆成先進與成熟製程，因為兩者循環不同步 |
+| 4 | 加入需求端與海外龍頭 | 第三版 12 家加 7 家海外龍頭，共 19 家：四家雲端服務商（各讀各的股東年報，不合併）、NVIDIA、SK 海力士（HBM，與南亞科分成兩個環節）、愛德萬（測試機台）。每家都要能從官方來源取得最新股東年報才列入 |
 
 ```mermaid
 flowchart LR
@@ -100,3 +101,44 @@ flowchart LR
 ```
 
 開發方法：名單成員仍然只在版本第一次出現時套用；版本的名稱、理由與畫法每次 sync 都以程式為準覆寫，所以修正圖不必升版。先寫測試（每家公司至少出現在一條 link、端點必須是名單內代號或 terminal），再補資料。`links` 的內容是產業常識層級的關係，尚未逐條以年報的主要客戶與供應商揭露核對。
+
+## 第四版：海外龍頭與各自的股東年報來源（2026-11-11）
+
+第四版在台灣供應鏈兩端加上海外龍頭：需求端的 Alphabet、Microsoft、Amazon、Meta，設計端的 NVIDIA，記憶體的 SK 海力士，後段的愛德萬。選入的條件是**每家都能從官方來源自動取得最新一份股東年報**，所以先逐家確認來源才放進名單：
+
+| 代碼 | 公司 | 年報 | 來源 | 2026-11-11 實測 |
+|---|---|---|---|---|
+| GOOGL-US、META-US、MSFT-US、AMZN-US、NVDA-US | 美國五家 | 股東年報（SEC form ARS） | `data.sec.gov` submissions API 找最新 ARS | 五家都取得；Meta 的 ARS 是 HTML，其餘是 PDF |
+| 6857-JP | 愛德萬 | 統合報告書（Integrated Annual Report） | 官網 `E_all_IAR{版次}.pdf`，版次年份 = 會計年度結束的那年 3 月 | 取得 IAR2026（FY2025，19.9 MB） |
+| 000660-KR | SK 海力士 | 사업보고서（事業報告書） | OpenDART `list.json` + `document.xml`，用部署既有的 `OPENDART_API_KEY`（Jenkins credential） | 本機沒有金鑰，未實測；正式環境同一把金鑰已在抓 SK 海力士財報 |
+
+美光沒有選入：SK 海力士才是 HBM 龍頭，而 OpenDART 金鑰早已設定，事業報告書抓得到。
+
+```mermaid
+flowchart LR
+  Sync[每日 benchmark sync] --> Kind{代碼}
+  Kind -->|四位數台股| MOPS[MOPS 股東會年報 PDF]
+  Kind -->|-US| SEC[SEC submissions API<br/>最新 ARS：PDF 或 HTML]
+  Kind -->|6857-JP| IR[愛德萬官網統合報告書 PDF]
+  Kind -->|000660-KR| DART[OpenDART 事業報告書<br/>ZIP 內的 XML]
+  MOPS --> Store[(benchmark_filing<br/>kind=F，每家只留最新一份)]
+  SEC --> Store
+  IR --> Store
+  DART --> Store
+  Store --> Pages[document_pages：PDF 用原頁序<br/>HTML 與 DART 依字數切頁]
+  Pages --> Select[select_pages：中文、英文、韓文關鍵詞<br/>排除淨利、股利等財務句]
+  Select --> AI[AI 提出主張，引文保留原文語言]
+  AI --> Inbox[(既有待審提案)]
+```
+
+- 程式：`maya_sawa/overseas_benchmark_filings.py`（找年報、下載、轉成頁面文字），`api/tw_benchmark.py` 的 `sync_overseas`（海外代碼不走 MOPS）。管理 API `PUT /market/benchmark/{code}` 現在也接受有年報來源的海外代碼，沒有來源的海外代碼回 422。
+- HTML 年報（Meta）與 DART 沒有頁碼，依字數切頁，主張的 page 指的是切出來的頁序，不是印刷頁碼。
+- 首頁圖的節點 id 原本只留數字，美股代碼會全部變成同一個節點；台股維持 `c2330`，海外改成 `cNVDA_US`。
+
+### 開發方法
+
+1. 先確認來源再選公司：SEC submissions API 列出六家美股的 ARS（含美光，後來改選 SK 海力士），愛德萬用 HEAD 確認 PDF，SK 海力士確認 Jenkins 已有 `OPENDART_API_KEY` 且正式環境正在使用。
+2. 先寫測試：`tests/integrations/test_overseas_benchmark_filings.py`（挑最新 ARS、挑最新事業報告書並略過季報、愛德萬找最新存在的版次、沒有 DART 金鑰時略過、只有已知來源的代碼算海外 benchmark、HTML 與 DART ZIP 轉文字、英文與韓文句子的選取與財務句排除）；`test_benchmark_versions.py` 加第四版（19 家、四家 CSP 分開、每個供應鏈環節一家、每家都有連線且都有年報來源）。前端 `tests/market/benchmarkChain.test.ts` 加海外節點 id 與標題。
+3. 實作後對真實來源跑一次：美國五家與愛德萬都下載成功，Meta、NVIDIA、愛德萬各選出約 13,000–16,000 字的前瞻句。
+4. 部署後確認：`benchmark` 表 19 家啟用、`benchmark_filing` 出現 7 筆海外年報（SK 海力士要看 OpenDART 是否回傳）、待審提案出現海外公司的主張。
+5. 測試：`poetry run python -m pytest tests/integrations -q`；前端 `node node_modules/vitest/vitest.mjs run tests/market/benchmarkChain.test.ts`。

@@ -178,6 +178,87 @@ VERSIONS = (
             {"from": "2408", "to": "market", "label": "記憶體"},
         ],
     },
+    {
+        "version": 4,
+        "name": "加入需求端與海外龍頭",
+        "rationale": "第四版在台灣供應鏈兩端補上海外龍頭，共 19 家。最右邊加上需求端：Alphabet、Meta、Microsoft、Amazon "
+                     "四家雲端服務商各自讀股東年報的資本支出與 AI 基礎建設說法，因為四家的展望不同，不合併成一個節點。"
+                     "設計端加 NVIDIA，它是台積電先進製程與 CoWoS 的最大客戶。記憶體加 SK 海力士（HBM 龍頭，"
+                     "NVIDIA 的主要 HBM 供應商），與看標準型 DRAM 的南亞科分成兩個環節，因為兩者的循環不同步。"
+                     "後段加愛德萬測試機台，AI 晶片與 HBM 的測試時間拉長是後段景氣的主要訊號。"
+                     "每家都必須能從官方來源取得最新一份股東年報才列入：美國走 SEC 的股東年報（ARS），"
+                     "愛德萬走公司官網的統合報告書，SK 海力士走 OpenDART 的事業報告書。",
+        "layers": [
+            {"key": "design", "title": "設計：決定要做什麼晶片", "stages": [
+                {"title": "AI 加速器", "companies": [("NVDA-US", "NVIDIA", "GPU 與 AI 加速器", LEADER, "看資料中心營收展望、供給限制與新架構時程，這是 AI 晶片需求最直接的訊號，也是台積電先進製程與 CoWoS 產能的最大買家。")]},
+                {"title": "自有產品 IC 設計", "companies": [("2454", "聯發科", "IC 設計與終端應用", LEADER, "看手機與消費性電子的終端需求、庫存水位，以及經營階層對下一年出貨與產品組合的展望。")]},
+                {"title": "代客設計（ASIC）", "companies": [("3443", "創意", "ASIC 設計服務與矽智財", LEADER, "看雲端業者自研晶片的委託設計案量與量產時程，這是 AI 客製晶片需求最早出現的地方。")]},
+            ]},
+            {"key": "inputs", "title": "材料與設備：晶圓廠買什麼", "stages": [
+                {"title": "矽晶圓", "companies": [("6488", "環球晶", "8 吋與 12 吋矽晶圓", LEADER, "看長約價格、客戶庫存去化與擴產進度，矽晶圓出貨反映整體晶圓投片量的方向。")]},
+                {"title": "製程設備", "companies": [("3131", "弘塑", "先進封裝濕製程設備", LEADER, "看在手訂單與交機時程，設備訂單反映晶圓廠與封裝廠對未來一到兩年產能的判斷。")]},
+            ]},
+            {"key": "support", "title": "廠務與驗證：晶圓廠靠什麼量產", "stages": [
+                {"title": "無塵室與廠務工程", "companies": [("2404", "漢唐", "無塵室與機電系統整合", LEADER, "看在手工程金額與認列進度，建廠工程是晶圓廠資本支出落地的第一站。")]},
+                {"title": "材料分析與可靠度驗證", "companies": [("3587", "閎康", "材料分析與可靠度驗證", LEADER, "看分析與驗證委案量，新製程與新材料的研發活動會先反映在這裡，早於量產。")]},
+            ]},
+            {"key": "fab", "title": "晶圓製造：把設計做成晶片", "stages": [
+                {"title": "先進製程晶圓代工", "companies": [("2330", "台積電", "專業晶圓代工與 CoWoS", LEADER, "看資本支出規劃、各應用平台的成長展望與先進封裝產能，這是全產業指引的定錨。")]},
+                {"title": "成熟製程晶圓代工", "companies": [("2303", "聯電", "成熟與特殊製程晶圓代工", LEADER, "看稼動率、平均售價與車用工控需求，成熟製程的景氣循環和先進製程不同步。")]},
+                {"title": "AI 記憶體（HBM）", "companies": [("000660-KR", "SK 海力士", "HBM 與 DRAM", LEADER, "看 HBM 產能、世代轉換與客戶長約，AI 記憶體的供給決定加速器能出多少貨，循環也和標準型 DRAM 不同步。")]},
+                {"title": "標準型與利基型 DRAM", "companies": [("2408", "南亞科", "DRAM 製造", LEADER, "看 DRAM 報價、位元出貨成長與資本支出，記憶體是半導體裡循環最明顯的產品。")]},
+            ]},
+            {"key": "backend", "title": "後段：把晶片變成可出貨的產品", "stages": [
+                {"title": "封裝與測試", "companies": [("3711", "日月光投控", "封裝、測試與異質整合", LEADER, "看封測稼動率、先進封裝營收比重與資本支出，反映晶片實際出貨的量。")]},
+                {"title": "測試機台", "companies": [("6857-JP", "愛德萬", "SoC 與記憶體測試機台", LEADER, "看 SoC 與 HBM 測試機的訂單與交期，AI 晶片測試時間拉長，測試機需求通常早於晶片放量出現。")]},
+                {"title": "測試介面", "companies": [("6515", "穎崴", "測試座與探針卡", LEADER, "看高階測試座的接單與新產品導入，測試介面需求通常早於晶片放量出現。")]},
+                {"title": "IC 載板", "companies": [("3037", "欣興", "ABF 與 BT 載板", LEADER, "看載板報價、稼動率與擴產節奏，載板供需是高效能運算晶片能否如期出貨的條件。")]},
+            ]},
+            {"key": "demand", "title": "需求端：雲端資本支出", "stages": [
+                {"title": "雲端服務商", "companies": [
+                    ("GOOGL-US", "Alphabet", "Google Cloud 與自研 TPU", LEADER, "看資本支出指引與 Google Cloud 的產能限制說法，同時採購 GPU 與自研 TPU，可以看出通用 GPU 與客製晶片的比重變化。"),
+                    ("MSFT-US", "Microsoft", "Azure 與 AI 基礎建設", LEADER, "看資本支出與 Azure 產能是否仍供不應求，經營階層對 AI 需求與資料中心建置節奏的說法是需求端最常被引用的指引。"),
+                    ("AMZN-US", "Amazon", "AWS 與自研 Trainium", LEADER, "看 AWS 資本支出與自研 Trainium 的規模，雲端市占最大的業者投資節奏決定整體資料中心需求的底部。"),
+                    ("META-US", "Meta", "AI 訓練與推論叢集", LEADER, "看資本支出指引與 AI 叢集規模，Meta 不出租算力，投資完全用在自家 AI，反映的是模型訓練本身的需求。"),
+                ]},
+            ]},
+        ],
+        "flows": [
+            {"from": "design", "to": "fab", "label": "委託製造"},
+            {"from": "inputs", "to": "fab", "label": "供應材料與機台"},
+            {"from": "support", "to": "fab", "label": "建廠與驗證"},
+            {"from": "fab", "to": "backend", "label": "晶圓出貨"},
+            {"from": "backend", "to": "demand", "label": "AI 伺服器晶片"},
+        ],
+        "terminals": [{"key": "market", "title": "終端產品：手機、PC、車用"}],
+        "links": [
+            {"from": "NVDA-US", "to": "2330", "label": "先進製程與 CoWoS 投片"},
+            {"from": "2454", "to": "2330", "label": "先進製程投片"},
+            {"from": "2454", "to": "2303", "label": "成熟製程投片"},
+            {"from": "3443", "to": "2330", "label": "替雲端客戶設計後投片"},
+            {"from": "6488", "to": "2330", "label": "矽晶圓"},
+            {"from": "6488", "to": "2303", "label": "矽晶圓"},
+            {"from": "6488", "to": "2408", "label": "矽晶圓"},
+            {"from": "3131", "to": "2330", "label": "先進封裝濕製程機台"},
+            {"from": "3131", "to": "3711", "label": "濕製程機台"},
+            {"from": "2404", "to": "2330", "label": "無塵室與機電工程"},
+            {"from": "3587", "to": "2330", "label": "材料與故障分析"},
+            {"from": "3587", "to": "2454", "label": "晶片除錯與驗證"},
+            {"from": "000660-KR", "to": "2330", "label": "HBM 送 CoWoS 封裝"},
+            {"from": "6857-JP", "to": "3711", "label": "SoC 測試機台"},
+            {"from": "6857-JP", "to": "000660-KR", "label": "HBM 測試機台"},
+            {"from": "2330", "to": "3711", "label": "晶圓送封裝測試"},
+            {"from": "2303", "to": "3711", "label": "晶圓送封裝測試"},
+            {"from": "6515", "to": "3711", "label": "測試座"},
+            {"from": "3037", "to": "3711", "label": "IC 載板"},
+            {"from": "NVDA-US", "to": "GOOGL-US", "label": "AI 加速器"},
+            {"from": "NVDA-US", "to": "MSFT-US", "label": "AI 加速器"},
+            {"from": "NVDA-US", "to": "AMZN-US", "label": "AI 加速器"},
+            {"from": "NVDA-US", "to": "META-US", "label": "AI 加速器"},
+            {"from": "3711", "to": "market", "label": "成品晶片"},
+            {"from": "2408", "to": "market", "label": "記憶體"},
+        ],
+    },
 )
 
 

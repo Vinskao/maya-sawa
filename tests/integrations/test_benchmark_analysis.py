@@ -33,7 +33,7 @@ def test_model_sees_only_selected_pages_and_keeps_technical_numbers():
 def test_retries_do_not_send_a_report_with_an_existing_proposal(monkeypatch):
     conn = Mock()
     conn.scalar.return_value = b"pdf bytes"
-    monkeypatch.setattr(benchmark_analysis, "extract_pdf_pages", lambda _: ["2 奈米製程預計於下半年量產。"])
+    monkeypatch.setattr(benchmark_analysis, "document_pages", lambda _: ["2 奈米製程預計於下半年量產。"])
     reports, inbox = Mock(), Mock()
     reports.save_extracted.return_value = ({"id": "report-1", "status": "claims_pending"}, True)
     inbox.has_proposal.return_value = True

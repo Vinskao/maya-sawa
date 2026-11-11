@@ -9,7 +9,7 @@ from maya_sawa.api import tw_benchmark
 
 
 def test_every_version_is_a_complete_lineup():
-    assert [v["version"] for v in versions.VERSIONS] == [1, 2, 3]
+    assert [v["version"] for v in versions.VERSIONS] == [1, 2, 3, 4]
     for version in versions.VERSIONS:
         rows = versions.members(version)
         codes = [row["code"] for row in rows]
@@ -55,7 +55,7 @@ def _sync(monkeypatch, applied):
 def test_a_new_version_is_applied_once_and_retires_companies_it_drops(monkeypatch):
     calls = _sync(monkeypatch, 1)
     recorded = [params["version"] for sql, params in calls if "INSERT INTO benchmark_version" in sql]
-    assert recorded == [1, 2, 3]
+    assert recorded == [1, 2, 3, 4]
     upserted = {params["code"] for sql, params in calls if "INSERT INTO benchmark\n" in sql}
     assert upserted == {row["code"] for row in versions.members(versions.VERSIONS[-1])}
     retire = [params for sql, params in calls if "SET is_active=FALSE" in sql]
@@ -63,11 +63,11 @@ def test_a_new_version_is_applied_once_and_retires_companies_it_drops(monkeypatc
 
 
 def test_an_applied_version_is_left_alone_so_manual_selection_survives(monkeypatch):
-    calls = _sync(monkeypatch, 3)
+    calls = _sync(monkeypatch, 4)
     assert not any("INSERT INTO benchmark\n" in sql or "SET is_active=FALSE" in sql for sql, _ in calls)
     # the drawing of a version still follows the code, so a corrected diagram reaches the page
     refreshed = [sql for sql, _ in calls if "INSERT INTO benchmark_version" in sql]
-    assert len(refreshed) == 3 and all("DO UPDATE SET" in sql for sql in refreshed)
+    assert len(refreshed) == 4 and all("DO UPDATE SET" in sql for sql in refreshed)
 
 
 def test_version_three_says_how_every_company_connects_to_another():
@@ -111,3 +111,26 @@ class _connection:
 
     def __exit__(self, *_):
         pass
+
+
+def test_version_four_adds_the_demand_side_and_overseas_leaders_each_with_its_own_annual_report():
+    """2026-11-11: four CSPs are separate nodes because each one's annual report is read on its own."""
+    from maya_sawa import overseas_benchmark_filings as overseas
+    v4 = versions.VERSIONS[3]
+    codes = [row["code"] for row in versions.members(v4)]
+    added = {"GOOGL-US", "META-US", "MSFT-US", "AMZN-US", "NVDA-US", "000660-KR", "6857-JP"}
+    assert added <= set(codes) and len(codes) == 19
+    assert all(overseas.is_overseas(code) for code in added)
+    assert all(code.isdigit() or overseas.is_overseas(code) for code in codes)  # every member has a report source
+    demand = next(layer for layer in versions.definition(v4)["layers"] if layer["key"] == "demand")
+    assert [len(stage["companies"]) for stage in demand["stages"]] == [4]
+    stages = [stage for layer in versions.definition(v4)["layers"] for stage in layer["stages"] if stage["title"] != "雲端服務商"]
+    assert all(len(stage["companies"]) == 1 for stage in stages)  # one leader per supply-chain stage
+
+
+def test_version_four_connects_every_company():
+    drawing = versions.definition(versions.VERSIONS[3])
+    codes = {row["code"] for row in versions.members(versions.VERSIONS[3])}
+    ends = codes | {terminal["key"] for terminal in drawing["terminals"]}
+    assert all(link["from"] in ends and link["to"] in ends and link["label"] for link in drawing["links"])
+    assert codes <= {link["from"] for link in drawing["links"]} | {link["to"] for link in drawing["links"]}

@@ -15,6 +15,7 @@ from sqlalchemy import text
 from maya_sawa.databases.market_dashboard_db import market_dashboard_db
 from maya_sawa.services.benchmark_analysis import process_annual_filings
 from maya_sawa.tw_benchmark_filings import catalog_url, download, listing
+from maya_sawa import overseas_benchmark_filings as overseas
 from maya_sawa.api.market_reports import _verify_agent
 from maya_sawa.benchmark_versions import VERSIONS, definition, members
 
@@ -78,7 +79,7 @@ def sync():
                             VALUES (:code, :company_name, :segment, :significance, :location, TRUE)
                             ON CONFLICT (code) DO UPDATE SET company_name=excluded.company_name,
                               segment=excluded.segment, significance=excluded.significance, is_active=TRUE
-                        """), {**company, "location": catalog_url(company["code"], year - 1, "F")})
+                        """), {**company, "location": report_location(company["code"], year)})
                     conn.execute(text("UPDATE benchmark SET is_active=FALSE WHERE code <> ALL(:codes)"),
                                  dict(codes=[company["code"] for company in lineup]))
             conn.commit()
@@ -87,6 +88,9 @@ def sync():
             )).mappings().all()
             for company_row in active_companies:
                 code = company_row["code"]
+                if overseas.is_overseas(code):
+                    sync_overseas(conn, code)
+                    continue
                 # Benchmarks set the guidance and cycle view, they are not holdings: only the newest
                 # shareholder annual report is kept. This year's is tried first, then last year's.
                 for fiscal_year in (year, year - 1):
@@ -119,6 +123,37 @@ def sync():
             conn.rollback()
             conn.execute(text("SELECT pg_advisory_unlock(72405839)"))
             conn.commit()
+
+
+def report_location(code, year):
+    """Where a reader finds the company's annual reports: MOPS for Taiwan, the official source abroad."""
+    return overseas.catalog_url(code) if overseas.is_overseas(code) else catalog_url(code, year - 1, "F")
+
+
+def sync_overseas(conn, code):
+    """Store the newest annual report of an overseas benchmark (SEC ARS, Advantest IR, OpenDART)."""
+    try:
+        report = overseas.latest_report(code)
+        if report is None:
+            logger.warning("Benchmark annual report not found: %s", code)
+            return
+        known = conn.scalar(text(
+            "SELECT 1 FROM benchmark_filing WHERE code=:code AND filename=:filename LIMIT 1"
+        ), dict(code=code, filename=report["filename"]))
+        conn.commit()
+        if known:
+            return
+        document = overseas.download(code, report)
+        conn.execute(text("""
+            INSERT INTO benchmark_filing (code,fiscal_year,kind,filename,source_url,sha256,pdf)
+            VALUES (:code,:year,'F',:filename,:source,:sha,:pdf)
+            ON CONFLICT DO NOTHING
+        """), dict(code=code, year=report["fiscal_year"], filename=report["filename"],
+                   source=report["url"], sha=sha256(document).hexdigest(), pdf=document))
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        logger.warning("Benchmark annual report sync failed: %s %s", code, type(exc).__name__)
 
 
 @asynccontextmanager
@@ -184,7 +219,8 @@ def benchmark_versions():
 
 
 class BenchmarkCompany(BaseModel):
-    code: str = Field(pattern=r"^\d{4}$")
+    # Taiwan four-digit codes, or an overseas record code with a supported annual-report source.
+    code: str = Field(pattern=r"^(\d{4}|[A-Z0-9]{1,6}-(US|JP|KR))$")
     company_name: str = Field(min_length=1, max_length=100)
     segment: str = Field(min_length=1, max_length=200)
     significance: str = Field(min_length=10, max_length=3000)
@@ -205,6 +241,8 @@ def upsert_benchmark_company(
     _verify_agent(x_market_agent_key)
     if code != company.code:
         raise HTTPException(422, "Path code and company code must match")
+    if "-" in code and not overseas.is_overseas(code):
+        raise HTTPException(422, "No annual report source for this overseas code")
     engine = market_dashboard_db.engine
     if engine is None:
         raise HTTPException(503, "Benchmark database unavailable")
@@ -218,7 +256,7 @@ def upsert_benchmark_company(
               segment=excluded.segment, significance=excluded.significance,
               annual_report_location=excluded.annual_report_location, is_active=excluded.is_active
         """), {**company.model_dump(exclude={"active"}),
-               "location": catalog_url(code, year - 1, "F"), "active": company.active})
+               "location": report_location(code, year), "active": company.active})
     return {"code": code, "is_active": company.active}
 
 
