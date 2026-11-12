@@ -1,5 +1,7 @@
 # Maya Sawa - Agent 開發指南
 
+Benchmark 年報強弱、持股定位與量化驗證：[方法、API 與測試](docs/BENCHMARK_MONITOR.md)。
+
 市場快報語音的設計、測試與未完成事項：[docs/MARKET_AUDIO.md](docs/MARKET_AUDIO.md)。
 北極星指標（每週回訪的研究讀者數）的事件收集、計算與隱私界線：[docs/NORTH_STAR_METRIC.md](docs/NORTH_STAR_METRIC.md)。
 Maya 每日精讀的編輯規則、流程與未完成事項：[docs/DAILY_MAYA_BRIEF.md](docs/DAILY_MAYA_BRIEF.md)。

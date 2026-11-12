@@ -18,11 +18,13 @@ from maya_sawa.tw_benchmark_filings import catalog_url, download, listing
 from maya_sawa import overseas_benchmark_filings as overseas
 from maya_sawa.api.market_reports import _verify_agent
 from maya_sawa.benchmark_versions import VERSIONS, definition, members
+from maya_sawa.services import benchmark_monitor
 
 router = APIRouter(prefix="/market/benchmark")
 logger = logging.getLogger(__name__)
 
 SCHEMA = (
+    benchmark_monitor.SCHEMA,
     """CREATE TABLE IF NOT EXISTS benchmark (
         code TEXT PRIMARY KEY, company_name TEXT NOT NULL,
         segment TEXT NOT NULL, significance TEXT NOT NULL, annual_report_location TEXT NOT NULL,
@@ -37,6 +39,7 @@ SCHEMA = (
         PRIMARY KEY (code, filename, sha256)
     )""",
     "ALTER TABLE benchmark_filing ADD COLUMN IF NOT EXISTS analysis_status TEXT",
+    "ALTER TABLE benchmark_filing ADD COLUMN IF NOT EXISTS analysis_profile TEXT",
     "ALTER TABLE benchmark_filing ADD COLUMN IF NOT EXISTS analysis_attempted_at TIMESTAMPTZ",
     """CREATE TABLE IF NOT EXISTS benchmark_version (
         version INTEGER PRIMARY KEY, name TEXT NOT NULL, rationale TEXT NOT NULL,
@@ -216,6 +219,50 @@ def benchmark_versions():
     return [{"version": row["version"], "name": row["name"], "rationale": row["rationale"],
              "adopted_at": row["adopted_at"], "is_current": index == 0, **row["definition"]}
             for index, row in enumerate(rows)]
+
+
+@router.get('/monitor')
+def benchmark_monitor_view():
+    from maya_sawa.databases.market_reports_db import market_reports_db
+    engine = market_dashboard_db.engine
+    if engine is None:
+        raise HTTPException(503, 'Benchmark database unavailable')
+    try:
+        with engine.connect() as connection:
+            definitions = connection.execute(text('SELECT definition FROM benchmark_monitor_rule')).scalars().all()
+        codes = {check['code'] for rule in definitions for check in rule.get('checks', [])}
+        return benchmark_monitor.snapshot(engine, market_dashboard_db, market_reports_db,
+                                          benchmark_monitor.current_observations(codes))
+    except Exception as exc:
+        logger.warning('Benchmark monitor unavailable: %s', type(exc).__name__)
+        raise HTTPException(503, 'Benchmark monitor initializing or unavailable') from None
+
+
+class MonitorRule(BaseModel):
+    code: str = Field(min_length=1, max_length=24)
+    checks: list[dict] = Field(max_length=20)
+    holdings: list[dict] = Field(max_length=50)
+    reviewNote: str = Field(min_length=10, max_length=2000)
+
+
+@router.put('/monitor/{code}')
+def save_benchmark_monitor(code: str, body: MonitorRule, x_market_agent_key: str | None = Header(None)):
+    _verify_agent(x_market_agent_key)
+    if code != body.code:
+        raise HTTPException(422, 'Path and body codes differ')
+    current = benchmark_monitor_view()
+    node = next((item for item in current['nodes'] if item['code'] == code), None)
+    try:
+        benchmark_monitor.validate_rule(body.model_dump(), node['claims'] if node else [],
+                                        {item['code'] for item in current['nodes']})
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    with market_dashboard_db.engine.begin() as connection:
+        connection.execute(text('''INSERT INTO benchmark_monitor_rule (code, definition)
+            VALUES (:code, CAST(:definition AS JSONB)) ON CONFLICT (code)
+            DO UPDATE SET definition=excluded.definition, updated_at=now()'''),
+            {'code': code, 'definition': json.dumps(body.model_dump(), ensure_ascii=False)})
+    return {'code': code, 'saved': True}
 
 
 class BenchmarkCompany(BaseModel):

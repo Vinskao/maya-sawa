@@ -7,7 +7,7 @@ import logging
 from openai import OpenAI
 from sqlalchemy import text
 
-from maya_sawa.benchmark_evidence import UPLOADER, select_pages, validate_evidence
+from maya_sawa.benchmark_evidence import PROFILE, UPLOADER, select_pages, validate_evidence
 from maya_sawa.core.config import Config
 from maya_sawa.databases.market_report_claims_inbox_db import market_report_claims_inbox_db
 from maya_sawa.databases.market_reports_db import market_reports_db
@@ -24,7 +24,14 @@ SYSTEM = """你分析半導體供應鏈與雲端服務公司的股東年報（�
 優先找可判別產業走勢、需求變化、技術路線與規格、製程方法、試產或量產時間、
 產能與設備擴充、客戶驗證、供應鏈瓶頸和風險的主張。可用任何章節的相關證據，包括
 致股東報告、公司簡介、治理及 ESG、募資用途、營運展望與風險事項。
-排除歷史財務數字、財報比率、董事名單、制式敘述。保留有意義的技術規格與時程。
+排除純歷史財務表格、董事名單、制式敘述。營收、毛利、資本支出若是需求、產能或交付主張的依據，
+必須保留必要的數字、比較期間、單位、產品範圍與限制，不能因句子提到財務數字就略過。
+分別檢查需求與訂單、供應與擴產、技術與量產、交付與驗證、限制與反證，
+正面與負面敘述都要找，不能只挑成長或擴產。不把同一段落換句話重複計數。
+claim 必須分清實績或公司計畫、適用年度與產品，並說明可用什麼後續數據驗證、
+看到什麼會反駁它。沒有量化門檻就明說未揭露，禁止自行捏造百分比或市場機率。
+單一公司總營收只可作需求的代理指標，不代表特定 AI 產品或整個產業已驗證。
+保留有意義的技術規格與時程。
 區分已完成、公司計畫和推論。不得把單一公司的說法擴大成產業共識。
 回傳 JSON 物件 {"claims": [...]}，最多 8 筆。每筆須有 page（原始 PDF 頁序）、
 segment、dimension（cycle/technology/delivery/timing）、direction（tailwind/neutral/headwind）、
@@ -66,12 +73,12 @@ def process_annual_filings(conn):
     keys = conn.execute(text("""
         SELECT f.code, f.filename, f.sha256, f.fiscal_year, f.source_url, b.company_name
         FROM benchmark_filing f JOIN benchmark b ON f.code=b.code
-        WHERE f.kind='F' AND f.analysis_status IS NULL AND b.is_active=TRUE
+        WHERE f.kind='F' AND (f.analysis_status IS NULL OR f.analysis_profile IS DISTINCT FROM :profile) AND b.is_active=TRUE
           AND f.fiscal_year = (SELECT max(fiscal_year) FROM benchmark_filing
                                WHERE code=f.code AND kind='F')
         ORDER BY f.analysis_attempted_at NULLS FIRST, f.code, f.filename
         LIMIT :limit
-    """), {"limit": DAILY_LIMIT}).mappings().all()
+    """), {"limit": DAILY_LIMIT, "profile": PROFILE}).mappings().all()
     conn.commit()
     for key in keys:
         conn.execute(text("""
@@ -82,12 +89,15 @@ def process_annual_filings(conn):
         try:
             status = process_filing(conn, key, client)
             conn.execute(text("""
-                UPDATE benchmark_filing SET analysis_status=:status
+                UPDATE benchmark_filing SET analysis_status=:status, analysis_profile=:profile
                 WHERE code=:code AND filename=:filename AND sha256=:sha256
-            """), {**key, "status": status})
+            """), {**key, "status": status, "profile": PROFILE})
             conn.commit()
         except Exception as exc:
             conn.rollback()
+            if getattr(exc, 'code', None) in {'insufficient_quota', 'credit_balance_exhausted'} or getattr(exc, 'type', None) == 'insufficient_quota':
+                logger.warning('Benchmark analysis stopped: provider credit balance exhausted; retry after funding')
+                break
             logger.warning("Benchmark analysis retry needed for %s: %s", key["filename"], type(exc).__name__)
 
 
@@ -106,7 +116,7 @@ def process_filing(conn, key, client):
     pages = select_pages(pages)
     if not any(pages):
         return "no_evidence"
-    digest = hashlib.sha256(f"benchmark-evidence-v1:{key['code']}:{key['sha256']}".encode()).hexdigest()
+    digest = hashlib.sha256(f"{PROFILE}:{key['code']}:{key['sha256']}".encode()).hexdigest()
     report, _ = market_reports_db.save_extracted(
         title=f"{key['company_name']} {key['fiscal_year']} 年{'股東年報' if '-' in key['code'] else '股東會年報'}｜產業與技術摘錄",
         publisher=key["company_name"], published_at=None, visibility="public",

@@ -42,7 +42,7 @@ def test_analysis_queue_only_selects_current_benchmarks(monkeypatch):
     assert "b.is_active=TRUE" in query
     # Only the newest annual report of each company, a whole line-up per daily run.
     assert "max(fiscal_year)" in query
-    assert conn.execute.call_args.args[1] == {"limit": 24}
+    assert conn.execute.call_args.args[1] == {"limit": 24, "profile": "benchmark-evidence-v2"}
 
 
 def test_sync_fetches_only_the_newest_shareholder_annual_report(monkeypatch):

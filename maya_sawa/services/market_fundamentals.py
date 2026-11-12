@@ -117,7 +117,7 @@ class MarketFundamentalsService:
                         logger.warning("Official fundamentals warm-up failed for %s: %s", key, exc)
                 for code in await asyncio.to_thread(self._watch_symbols):
                     self._enqueue(code)
-                await asyncio.sleep(60 * 60)
+                await asyncio.sleep(15 * 60)
             except asyncio.CancelledError:
                 raise
             except Exception:

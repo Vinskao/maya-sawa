@@ -3,6 +3,24 @@ from datetime import date
 from maya_sawa.services.market_fundamentals import MarketFundamentalsService, build_fundamental_metrics, fundamental_start_date
 
 
+def test_official_feed_collector_rechecks_releases_within_fifteen_minutes(monkeypatch):
+    import asyncio
+    service = MarketFundamentalsService()
+    fetched, delays = [], []
+    async def official(key):
+        fetched.append(key)
+    async def sleep(seconds):
+        delays.append(seconds)
+        raise asyncio.CancelledError
+    monkeypatch.setattr(service, '_official', official)
+    monkeypatch.setattr(service, '_watch_symbols', lambda: [])
+    monkeypatch.setattr(asyncio, 'sleep', sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(service._collector_loop())
+    assert set(fetched) == set(service.OFFICIAL_FEEDS)
+    assert delays == [900]
+
+
 def test_fundamental_backfill_starts_five_calendar_years_ago_including_leap_day():
     assert fundamental_start_date(date(2026, 10, 29)) == "2021-10-29"
     assert fundamental_start_date(date(2024, 2, 29)) == "2019-02-28"

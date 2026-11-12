@@ -47,3 +47,33 @@ def test_retries_do_not_send_a_report_with_an_existing_proposal(monkeypatch):
     assert status == "submitted"
     client.chat.completions.create.assert_not_called()
     inbox.submit.assert_not_called()
+
+
+def test_profile_change_reprocesses_existing_filings_and_records_the_version(monkeypatch):
+    conn = Mock()
+    key = dict(code='2330', filename='annual.pdf', sha256='original')
+    conn.execute.return_value.mappings.return_value.all.return_value = [key]
+    monkeypatch.setattr(benchmark_analysis.Config, 'OPENAI_API_KEY', 'fixture-key')
+    monkeypatch.setattr(benchmark_analysis, 'OpenAI', Mock())
+    monkeypatch.setattr(benchmark_analysis, 'process_filing', Mock(return_value='submitted'))
+    benchmark_analysis.process_annual_filings(conn)
+    query, parameters = conn.execute.call_args_list[0].args
+    assert 'analysis_profile IS DISTINCT FROM :profile' in str(query)
+    assert parameters['profile'] == 'benchmark-evidence-v2'
+    updates = [call.args for call in conn.execute.call_args_list if 'analysis_status=:status' in str(call.args[0])]
+    assert updates[0][1]['profile'] == 'benchmark-evidence-v2'
+
+
+@pytest.mark.parametrize('error_code', ['insufficient_quota', 'credit_balance_exhausted'])
+def test_exhausted_quota_stops_the_batch_instead_of_retrying_every_company(monkeypatch, error_code):
+    class Exhausted(Exception):
+        code = error_code
+    conn = Mock()
+    conn.execute.return_value.mappings.return_value.all.return_value = [
+        dict(code=code, filename=f'{code}.pdf', sha256=code) for code in ('2330', 'NVDA-US')]
+    monkeypatch.setattr(benchmark_analysis.Config, 'OPENAI_API_KEY', 'fixture-key')
+    monkeypatch.setattr(benchmark_analysis, 'OpenAI', Mock())
+    process = Mock(side_effect=Exhausted())
+    monkeypatch.setattr(benchmark_analysis, 'process_filing', process)
+    benchmark_analysis.process_annual_filings(conn)
+    assert process.call_count == 1

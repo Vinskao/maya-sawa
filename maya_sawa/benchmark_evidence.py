@@ -3,6 +3,7 @@
 import re
 
 UPLOADER = "tw-benchmark-annual"
+PROFILE = 'benchmark-evidence-v2'
 
 FOCUS = re.compile(
     r"產業(?:趨勢|展望|變化)|市場(?:展望|需求|趨勢|規模)|需求(?:成長|增加|減少|放緩|帶動|回升|下滑)|"
@@ -12,7 +13,8 @@ FOCUS = re.compile(
     # English (SEC annual reports, Advantest) and Korean (DART) annual reports
     r"capital expenditure|data ?cent(?:er|re)|AI infrastructure|accelerat|GPU|TPU|custom silicon|"
     r"demand|capacity|ramp|yield|roadmap|process node|advanced packaging|supply (?:chain|constraint)|"
-    r"tester|test time|SoC test|memory test|"
+    r"tester|test time|SoC test|memory test|export restrictions?|order cancell|inventory correction|"
+    r"出口限制|訂單取消|庫存調整|需求疲弱|產能過剩|"
     r"수요|생산능력|설비투자|양산|공정|고대역폭|데이터센터",
     re.I,
 )
@@ -30,6 +32,10 @@ SPECIFIC = re.compile(
     re.I,
 )
 
+OPERATING = re.compile(
+    r'需求|擴產|擴充|產能|量產|良率|瓶頸|限制|延遲|供應風險|'
+    r'demand|capacity|ramp|yield|constraint|restriction|delay|shortage|수요|생산능력|양산', re.I)
+
 
 def select_pages(pages: list[str], max_chars: int = 16_000) -> list[str]:
     """Keep technical and forward-looking statements, with bounded space per page."""
@@ -43,7 +49,7 @@ def select_pages(pages: list[str], max_chars: int = 16_000) -> list[str]:
             # Keep complete statements, not TOC headings or oversized tables.
             if not 12 <= len(sentence) <= 600:
                 continue
-            if sentence in seen or not FOCUS.search(sentence) or FINANCIAL.search(sentence):
+            if sentence in seen or not FOCUS.search(sentence) or (FINANCIAL.search(sentence) and not OPERATING.search(sentence)):
                 continue
             seen.add(sentence)
             candidates.append((index, sentence))
