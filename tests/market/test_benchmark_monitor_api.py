@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -17,6 +17,17 @@ def client(monkeypatch):
 
 def test_monitor_unavailable_is_explicit(client):
     assert client.get('/market/benchmark/monitor').status_code == 503
+
+
+def test_live_monitor_cannot_be_cached_across_portfolio_updates(client, monkeypatch):
+    engine = MagicMock()
+    engine.connect.return_value.__enter__.return_value.execute.return_value.scalars.return_value.all.return_value = []
+    monkeypatch.setattr(api.market_dashboard_db, 'engine', engine)
+    monkeypatch.setattr(api.benchmark_monitor, 'current_observations', lambda codes: {})
+    monkeypatch.setattr(api.benchmark_monitor, 'snapshot', lambda *args: {'revision': 'new-holdings'})
+    result = client.get('/market/benchmark/monitor')
+    assert result.status_code == 200
+    assert result.headers['cache-control'] == 'no-store'
 
 
 def test_rule_cannot_be_written_anonymously(client):

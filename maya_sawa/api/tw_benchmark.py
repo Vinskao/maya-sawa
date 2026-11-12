@@ -8,7 +8,7 @@ from datetime import datetime
 from hashlib import sha256
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -222,8 +222,10 @@ def benchmark_versions():
 
 
 @router.get('/monitor')
-def benchmark_monitor_view():
+def benchmark_monitor_view(response: Response = None):
     from maya_sawa.databases.market_reports_db import market_reports_db
+    if response is not None:
+        response.headers['Cache-Control'] = 'no-store'
     engine = market_dashboard_db.engine
     if engine is None:
         raise HTTPException(503, 'Benchmark database unavailable')
