@@ -151,3 +151,27 @@ def test_public_pending_index_excludes_private_and_processed_reports(monkeypatch
     response = TestClient(app).get("/market/reports/claim-proposals/sources")
     assert response.status_code == 200
     assert response.json() == {"reports": [{"id": report_id}]}
+
+
+def test_keyed_claude_proposals_skip_the_anonymous_weekly_limit(monkeypatch, tmp_path):
+    """2026-11-12: the anonymous GPT quota (100/week) was used up and benchmark annual reports waited behind 300 others."""
+    import hashlib
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market_reports
+
+    reports, engine, report_id = _reports(tmp_path)
+    inbox = ClaimInboxDatabase(engine)
+    monkeypatch.setattr(inbox, "WEEKLY_LIMIT", 0)
+    monkeypatch.setattr(market_reports, "market_reports_db", reports)
+    monkeypatch.setattr(market_reports, "market_report_claims_inbox_db", inbox)
+    monkeypatch.setenv("MARKET_AGENT_KEY_SHA256", hashlib.sha256(b"k").hexdigest())
+    app = FastAPI()
+    app.include_router(market_reports.router)
+    client = TestClient(app)
+    claim = {"page": 1, "segment": "memory", "codes": ["2408"], "dimension": "cycle",
+             "direction": "tailwind", "claim": "需求上升", "evidence": "報告明載需求上升"}
+    url = f"/market/reports/claim-proposals/{report_id}"
+    assert client.post(url, json={"claims": [claim]}).status_code == 429
+    assert client.post(url, json={"claims": [claim]}, headers={"X-Market-Agent-Key": "wrong"}).status_code == 401
+    assert client.post(url, json={"claims": [claim]}, headers={"X-Market-Agent-Key": "k"}).json()["created"] is True

@@ -402,11 +402,18 @@ class ClaimProposalReviewBody(BaseModel):
 
 
 @router.post("/claim-proposals/{report_id}")
-async def submit_gpt_claim_proposal(report_id: str, body: ClaimProposalBody):
-    """Store untrusted model output for keyed review; this never changes live claims."""
+async def submit_gpt_claim_proposal(report_id: str, body: ClaimProposalBody,
+                                    x_market_agent_key: str | None = Header(None)):
+    """Store untrusted model output for keyed review; this never changes live claims.
+
+    Anonymous (ChatGPT) submissions share a weekly cap. A Claude routine sending the agent key is not capped; its
+    proposals still wait for the same review, and annual-report evidence is still checked verbatim against the page."""
+    if x_market_agent_key is not None:
+        _verify_agent(x_market_agent_key)
     try:
         proposal, created = await asyncio.to_thread(
-            market_report_claims_inbox_db.submit, report_id, body.claims, market_reports_db
+            market_report_claims_inbox_db.submit, report_id, body.claims, market_reports_db,
+            limited=x_market_agent_key is None,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="Public pending report not found") from exc

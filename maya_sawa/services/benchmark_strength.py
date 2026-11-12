@@ -37,6 +37,9 @@ def position_from_groups(holdings, groups, benchmark_codes):
             holding['positionSource'] = '既有產業分組，非供貨證據'
 
 
+MIN_CHECKS_FOR_PERCENT = 3
+
+
 def finite(value):
     return type(value) in (int, float) and isfinite(value)
 
@@ -87,6 +90,9 @@ def evaluate_checks(checks, observations, today):
         results.append({**check, 'value': value if finite(value) else None, 'period': period,
                         'source': row.get('source'), 'outcome': outcome})
     denominator = sum(totals.values())
-    return {**{key + 'Percent': round(value / denominator * 100, 2) if denominator else None
-               for key, value in totals.items()}, 'checks': results,
+    counts = {key: sum(1 for item in results if item['outcome'] == key) for key in totals}
+    # With one or two checks a percentage reads as far more certain than it is; publish the counts instead.
+    shown = denominator and len(results) >= MIN_CHECKS_FOR_PERCENT
+    return {**{key + 'Percent': round(value / denominator * 100, 2) if shown else None
+               for key, value in totals.items()}, 'counts': {**counts, 'total': len(results)}, 'checks': results,
             'method': 'weighted-evidence-v1', 'denominator': denominator}

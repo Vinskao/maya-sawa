@@ -247,6 +247,8 @@ class MonitorRule(BaseModel):
     checks: list[dict] = Field(max_length=20)
     holdings: list[dict] = Field(max_length=50)
     reviewNote: str = Field(min_length=10, max_length=2000)
+    # Read configuration.revision from GET /monitor and send it back; a stale value gets 409 instead of overwriting.
+    expectedRevision: int = Field(ge=0)
 
 
 @router.put('/monitor/{code}')
@@ -261,12 +263,19 @@ def save_benchmark_monitor(code: str, body: MonitorRule, x_market_agent_key: str
                                         {item['code'] for item in current['nodes']})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    rule = body.model_dump()
+    expected = rule.pop('expectedRevision')
+    rule['revision'] = expected + 1
     with market_dashboard_db.engine.begin() as connection:
-        connection.execute(text('''INSERT INTO benchmark_monitor_rule (code, definition)
-            VALUES (:code, CAST(:definition AS JSONB)) ON CONFLICT (code)
-            DO UPDATE SET definition=excluded.definition, updated_at=now()'''),
-            {'code': code, 'definition': json.dumps(body.model_dump(), ensure_ascii=False)})
-    return {'code': code, 'saved': True}
+        connection.execute(text("INSERT INTO benchmark_monitor_rule (code, definition) VALUES (:code, '{}'::jsonb) "
+                                "ON CONFLICT (code) DO NOTHING"), {'code': code})
+        current = connection.execute(text("SELECT COALESCE((definition->>'revision')::int, 0) FROM benchmark_monitor_rule "
+                                          "WHERE code=:code FOR UPDATE"), {'code': code}).scalar()
+        if current != expected:
+            raise HTTPException(409, f'Rule is at revision {current}; GET /market/benchmark/monitor and merge again')
+        connection.execute(text("UPDATE benchmark_monitor_rule SET definition=CAST(:definition AS JSONB), updated_at=now() "
+                                "WHERE code=:code"), {'code': code, 'definition': json.dumps(rule, ensure_ascii=False)})
+    return {'code': code, 'saved': True, 'revision': rule['revision']}
 
 
 class BenchmarkCompany(BaseModel):

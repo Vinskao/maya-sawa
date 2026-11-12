@@ -97,7 +97,8 @@ class ClaimInboxDatabase:
         with self.sessions() as session:
             return session.query(ReportClaimProposal.id).filter_by(report_id=report_id).first() is not None
 
-    def submit(self, report_id, claims, reports_db, now=None):
+    def submit(self, report_id, claims, reports_db, now=None, limited=True):
+        """`limited=False` is for keyed Claude routines; the weekly cap bounds anonymous GPT submissions only."""
         self._require()
         from .market_reports_db import MarketReport
 
@@ -120,7 +121,7 @@ class ClaimInboxDatabase:
                 return self._row(duplicate), False
             start = datetime.strptime(week + "-1", "%G-%V-%u").replace(tzinfo=timezone.utc)
             end = datetime.strptime(week + "-7", "%G-%V-%u").replace(tzinfo=timezone.utc)
-            if session.query(ReportClaimProposal).filter(
+            if limited and session.query(ReportClaimProposal).filter(
                 ReportClaimProposal.submitted_at >= start, ReportClaimProposal.submitted_at < end
             ).count() >= self.WEEKLY_LIMIT:
                 raise OverflowError("Weekly report proposal limit reached")

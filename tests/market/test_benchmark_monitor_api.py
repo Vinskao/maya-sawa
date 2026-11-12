@@ -33,7 +33,7 @@ def test_live_monitor_cannot_be_cached_across_portfolio_updates(client, monkeypa
 
 
 def test_rule_cannot_be_written_anonymously(client):
-    body = dict(code='2330', checks=[], holdings=[], reviewNote='已確認來源及定位，測試用審核紀錄')
+    body = dict(code='2330', checks=[], holdings=[], reviewNote='已確認來源及定位，測試用審核紀錄', expectedRevision=0)
     assert client.put('/market/benchmark/monitor/2330', json=body).status_code == 401
 
 
@@ -42,6 +42,6 @@ def test_reviewed_rule_refuses_missing_or_wrong_report_evidence(client, monkeypa
     monkeypatch.setattr(api, 'benchmark_monitor_view', lambda: {'nodes': [dict(code='2330', claims=[])]})
     body = dict(code='2330', checks=[dict(code='3037', metric='monthly.yoyPercent', operator='gte',
         threshold=60, maxAgeDays=60, weight=1, reportId='made-up', page=1,
-        evidence='not reviewed', rationale='代理指標門檻')], holdings=[], reviewNote='已確認來源及定位，測試用審核紀錄')
+        evidence='not reviewed', rationale='代理指標門檻')], holdings=[], reviewNote='已確認來源及定位，測試用審核紀錄', expectedRevision=0)
     assert client.put('/market/benchmark/monitor/2330', json=body).status_code == 422
     assert client.put('/market/benchmark/monitor/2454', json=body).status_code == 422

@@ -10,22 +10,24 @@ def test_evidence_percentages_keep_missing_and_stale_checks_in_denominator():
                    operator='gte', threshold=60, maxAgeDays=60, weight=1)]
     observations = {'3037': {'monthly': {'period': '2026-10', 'yoyPercent': 67.62,
                                         'source': 'MOPS'}}}
-    result = evaluate_checks(checks + [{**checks[0], 'code': 'missing'}], observations, date(2026, 11, 12))
-    assert result['supportPercent'] == 50
-    assert result['unknownPercent'] == 50
+    result = evaluate_checks(checks + [{**checks[0], 'code': 'missing'}, {**checks[0], 'code': 'gone'},
+                                       {**checks[0], 'code': 'none'}], observations, date(2026, 11, 12))
+    assert result['supportPercent'] == 25
+    assert result['unknownPercent'] == 75
     assert result['headwindPercent'] == 0
+    assert result['counts'] == {'support': 1, 'headwind': 0, 'unknown': 3, 'total': 4}
     assert result['checks'][0]['value'] == 67.62
     observations['3037']['monthly']['period'] = '2025-10'
-    assert evaluate_checks(checks, observations, date(2026, 11, 12))['unknownPercent'] == 100
+    assert evaluate_checks(checks, observations, date(2026, 11, 12))['counts']['unknown'] == 1
 
 
 def test_comparisons_do_not_treat_zero_as_missing_or_future_as_evidence():
     check = dict(code='2330', metric='monthly.yoyPercent', operator='gte', threshold=0,
                  maxAgeDays=60, weight=1)
     data = {'2330': {'monthly': {'period': '2026-10', 'yoyPercent': 0, 'source': 'MOPS'}}}
-    assert evaluate_checks([check], data, date(2026, 11, 12))['supportPercent'] == 100
+    assert evaluate_checks([check], data, date(2026, 11, 12))['counts']['support'] == 1
     data['2330']['monthly']['period'] = '2026-12'
-    assert evaluate_checks([check], data, date(2026, 11, 12))['unknownPercent'] == 100
+    assert evaluate_checks([check], data, date(2026, 11, 12))['counts']['unknown'] == 1
 
 
 def test_unknown_is_not_neutral_and_annual_directions_are_not_current_validation():
@@ -43,7 +45,7 @@ def test_identity_and_nonfinite_or_untraceable_observations():
                  maxAgeDays=60, weight=1)
     for value in [None, float('nan'), True]:
         data = {'2330': {'monthly': {'period': '2026-10', 'yoyPercent': value, 'source': 'MOPS'}}}
-        assert evaluate_checks([check], data, date(2026, 11, 12))['unknownPercent'] == 100
+        assert evaluate_checks([check], data, date(2026, 11, 12))['counts']['unknown'] == 1
 
 
 def test_invalid_check_is_rejected_instead_of_silently_scoring():
@@ -57,7 +59,8 @@ def test_rule_requires_current_reviewed_page_and_threshold_reason():
     claim = dict(report_id='new', page=12, evidence='原始逐字引文')
     check = dict(code='3037', metric='monthly.yoyPercent', operator='gte', threshold=60,
                  maxAgeDays=60, weight=1, reportId='old', page=12,
-                 evidence='原始逐字引文', rationale='總營收代理指標，非 AI 訂單直接證據')
+                 evidence='原始逐字引文', rationale='總營收代理指標，非 AI 訂單直接證據',
+                 theme='T1', relation='customer')
     rule = dict(code='2330', checks=[check], holdings=[])
     with pytest.raises(ValueError, match='latest annual'):
         validate_rule(rule, [claim], {'2330'})
@@ -72,7 +75,7 @@ def test_quarterly_units_and_periods_are_kept_separate():
     check = dict(code='2330', metric='quarterly.grossMarginYoYPp', operator='gte', threshold=2,
                  maxAgeDays=180, weight=1)
     data = {'2330': {'quarterly': {'period': '2026Q3', 'grossMarginYoYPp': 1.5, 'source': 'MOPS'}}}
-    assert evaluate_checks([check], data, date(2026, 11, 12))['headwindPercent'] == 100
+    assert evaluate_checks([check], data, date(2026, 11, 12))['counts']['headwind'] == 1
 
 
 def test_live_snapshot_changes_on_portfolio_updates_without_leaking_account_values():
@@ -144,3 +147,27 @@ def test_overseas_verification_reads_the_correct_market_without_taiwan_fallback(
     assert calls == [('NVDA', 'US')]
     assert result['NVDA-US']['quarterly']['revenueYoYPercent'] == 20
     assert result['NVDA-US']['quarterly']['grossMarginYoYPp'] == 2
+
+
+def test_few_checks_show_counts_not_a_percentage():
+    """Two checks out of four is not '50% support': below three checks only counts are published."""
+    check = dict(code='2330', metric='monthly.yoyPercent', operator='gte', threshold=0, maxAgeDays=60, weight=1)
+    data = {'2330': {'monthly': {'period': '2026-10', 'yoyPercent': 5, 'source': 'MOPS'}}}
+    result = evaluate_checks([check, {**check, 'code': 'x'}], data, date(2026, 11, 12))
+    assert result['supportPercent'] is None and result['unknownPercent'] is None
+    assert result['counts'] == {'support': 1, 'headwind': 0, 'unknown': 1, 'total': 2}
+
+
+def test_checks_belong_to_an_outlook_theme_and_do_not_only_grade_the_company_by_itself():
+    from maya_sawa.services.benchmark_monitor import validate_rule
+    claim = dict(report_id='r', page=3, evidence='逐字')
+    base = dict(metric='monthly.yoyPercent', operator='gte', threshold=10, maxAgeDays=60, weight=1,
+                reportId='r', page=3, evidence='逐字', rationale='客戶營收印證上游需求主張')
+    own = {**base, 'code': '2330', 'theme': 'T1', 'relation': 'self'}
+    with pytest.raises(ValueError, match='theme'):
+        validate_rule(dict(code='2330', checks=[{**own, 'theme': ''}], holdings=[]), [claim], {'2330'})
+    with pytest.raises(ValueError, match='customer or supplier'):
+        validate_rule(dict(code='2330', checks=[own, {**own, 'metric': 'quarterly.grossMarginYoYPp'}], holdings=[]),
+                      [claim], {'2330'})
+    validate_rule(dict(code='2330', checks=[own, {**base, 'code': 'NVDA-US', 'theme': 'T1', 'relation': 'customer'}],
+                       holdings=[]), [claim], {'2330'})

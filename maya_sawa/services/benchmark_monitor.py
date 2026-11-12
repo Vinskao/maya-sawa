@@ -1,5 +1,6 @@
 """Live benchmark evidence view, rebuilt from the current portfolio and reviewed rules."""
 import hashlib
+import re
 import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -8,6 +9,7 @@ from sqlalchemy import text
 
 from .benchmark_strength import annual_strength, evaluate_checks, holding_identity, validate_check, position_from_groups
 
+RELATIONS = {'customer', 'supplier', 'self'}
 SCHEMA = """CREATE TABLE IF NOT EXISTS benchmark_monitor_rule (
     code TEXT PRIMARY KEY, definition JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"""
 
@@ -36,11 +38,20 @@ def validate_rule(rule, claims, companies):
     evaluate_checks(rule['checks'], {}, datetime.now(ZoneInfo('Asia/Taipei')).date())
     for check in rule['checks']:
         validate_check(check)
+        # Every check tests one theme of the annual AI outlook, so the outlook stays the single narrative.
+        if not re.fullmatch(r'T[1-9]', str(check.get('theme', ''))):
+            raise ValueError('Check needs the outlook theme it tests (T1-T9)')
+        if check.get('relation') not in RELATIONS:
+            raise ValueError('Check relation must be customer, supplier or self')
         if not any(check.get('reportId') == claim['report_id'] and check.get('page') == claim['page']
                    and check.get('evidence') == claim['evidence'] for claim in claims):
             raise ValueError('Check must cite a reviewed claim from the latest annual report')
         if not isinstance(check.get('rationale'), str) or not check['rationale'].strip():
             raise ValueError('Explain threshold and direction; proxy checks are not direct causal proof')
+    # A company's own revenue mostly restates its own annual-report optimism: two or more checks must include a
+    # customer or supplier along the benchmark links.
+    if len(rule['checks']) >= 2 and all(check['relation'] == 'self' for check in rule['checks']):
+        raise ValueError('At least one check must come from a customer or supplier, not only the company itself')
 
 
 def snapshot(engine, portfolio_db, reports_db, observations=None, industry_groups=None):
@@ -70,6 +81,7 @@ def snapshot(engine, portfolio_db, reports_db, observations=None, industry_group
         code = company['code']
         claims = claims_by_code.get(code, [])
         rule = rules.get(code, {'code': code, 'checks': [], 'holdings': []})
+        rule_revision = int(rule.get('revision') or 0)
         try:
             validate_rule(rule, claims, {item['code'] for item in lineup})
         except ValueError:
@@ -85,7 +97,8 @@ def snapshot(engine, portfolio_db, reports_db, observations=None, industry_group
                 holding.setdefault('benchmarks', []).append(code)
         nodes.append({'code': code, 'annual': annual_strength(claims), 'claims': claims,
                       'filing': latest.get(code), 'validation': validation,
-                      'configuration': {'checks': rule['checks'], 'holdings': rule['holdings']}})
+                      'configuration': {'checks': rule['checks'], 'holdings': rule['holdings'],
+                                        'revision': rule_revision}})
     position_from_groups(holdings, industry_groups or [], {company['code'] for company in lineup})
     content = {'nodes': nodes, 'holdings': holdings, 'holdingsSnapshotAt': portfolio['snapshotAt']}
     revision = hashlib.sha256(json.dumps(content, sort_keys=True, default=str).encode()).hexdigest()[:16]
