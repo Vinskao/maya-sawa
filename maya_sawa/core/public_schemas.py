@@ -53,7 +53,7 @@ OVERSEAS = _obj({
 }, "海外標的或加密貨幣：資料庫中保存的報價、日線與技術摘要（不連券商、不含帳戶資料）")
 
 ANALYSIS = _obj({
-    "code": _str, "productType": {"type": "string", "enum": ["stock", "futures", "crypto", "macro", "macro-node", "research"]},
+    "code": _str, "productType": {"type": "string", "enum": ["stock", "futures", "crypto", "macro", "macro-node", "research", "outlook"]},
     "analysis": {"type": ["object", "null"], "description": "目前版本（model、content、revision、updatedAt）；尚未撰寫時為 null"},
     "history": _arr({"type": "object"}), "historyLimit": {"type": "integer"},
     "writeMethod": _str, "writeAccess": _str, "instructions": _str,

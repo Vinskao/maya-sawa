@@ -123,7 +123,8 @@ async def get_market_ai_analysis(code: str, productType: str = "stock"):
         logger.exception("AI analysis read failed")
         raise HTTPException(status_code=503, detail="Analysis database unavailable") from exc
     return {"code": target[1], "productType": target[0], **result,
-            "historyLimit": 20, "writeMethod": "PUT", "writeAccess": "authenticated",
+            "historyLimit": 20, "writeMethod": "PUT",
+            "writeAccess": "owner SSO or configured X-Market-Agent-Key",
             "instructions": "Read the current analysis, review this instrument's data, then update the same analysis. "
                 "Send model, content and expectedRevision (current revision, or 0 if absent). "
                 "On 409 reload and reconcile your draft. Verify the returned saved revision."}

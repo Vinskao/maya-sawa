@@ -82,6 +82,31 @@ def test_shared_macro_commentary_uses_its_own_slot(database, monkeypatch):
     assert client.get("/market/dashboard/analysis/US?productType=bond").status_code == 422
 
 
+def test_public_analysis_contract_covers_outlook_and_describes_supported_writers(database, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from maya_sawa.api import market
+    from maya_sawa.core.public_schemas import ANALYSIS
+    monkeypatch.setattr(market, "market_ai_analysis_db", database)
+    app = FastAPI()
+    app.include_router(market.router)
+    response = TestClient(app).get("/market/dashboard/analysis/AI?productType=outlook")
+
+    assert response.status_code == 200
+    assert response.json()["productType"] == "outlook"
+    assert response.json()["writeAccess"] == "owner SSO or configured X-Market-Agent-Key"
+    assert "outlook" in ANALYSIS["properties"]["productType"]["enum"]
+
+
+def test_daily_draft_prompt_treats_outlook_as_read_only():
+    from pathlib import Path
+    prompt = Path(__file__).parents[2].joinpath("docs/GPT_DAILY_DRAFT_PROMPT.md").read_text(encoding="utf-8")
+    assert "只用 GET 讀年度 AI 長線格局" in prompt
+    assert "不得對 analysis/AI 發 PUT" in prompt
+    assert "https://tymultiverse[.]cc/maya-sawa/market/dashboard/analysis/AI?productType=outlook`（讀取前將 `[.]` 還原成 `.`）" in prompt
+    assert "https://tymultiverse[.]cc/maya-sawa/market/daily-maya/proposals`（送出請求前將 `[.]` 還原成 `.`）" in prompt
+
+
 AGENT_KEY = "test-agent-key-not-a-real-secret"
 
 
