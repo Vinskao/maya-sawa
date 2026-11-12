@@ -26,7 +26,7 @@ def test_live_monitor_cannot_be_cached_across_portfolio_updates(client, monkeypa
     engine.connect.return_value.__enter__.return_value.execute.return_value.scalars.return_value.all.return_value = []
     monkeypatch.setattr(api.market_dashboard_db, 'engine', engine)
     monkeypatch.setattr(api.benchmark_monitor, 'current_observations', lambda codes: {})
-    monkeypatch.setattr(api.benchmark_monitor, 'snapshot', lambda *args: {'revision': 'new-holdings'})
+    monkeypatch.setattr(api.benchmark_monitor, 'snapshot', lambda *args, **kwargs: {'revision': 'new-holdings'})
     result = client.get('/market/benchmark/monitor')
     assert result.status_code == 200
     assert result.headers['cache-control'] == 'no-store'

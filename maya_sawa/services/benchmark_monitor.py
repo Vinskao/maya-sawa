@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
-from .benchmark_strength import annual_strength, evaluate_checks, holding_identity, validate_check, position_from_groups
+from .benchmark_strength import annual_strength, evaluate_checks, holding_identity, validate_check, position_from_groups, pace_verdict
 
 RELATIONS = {'customer', 'supplier', 'self'}
 SCHEMA = """CREATE TABLE IF NOT EXISTS benchmark_monitor_rule (
@@ -54,7 +54,27 @@ def validate_rule(rule, claims, companies):
         raise ValueError('At least one check must come from a customer or supplier, not only the company itself')
 
 
-def snapshot(engine, portfolio_db, reports_db, observations=None, industry_groups=None):
+def dropped_holdings(previous, rule):
+    """PUT replaces the whole rule; a routine that forgets an existing holding mapping must not silently erase it."""
+    kept = {item.get('code') for item in rule.get('holdings', [])}
+    return sorted(item['code'] for item in (previous or {}).get('holdings', []) if item.get('code') not in kept)
+
+
+def attach_pace(holdings, observations, observe=None):
+    """Ahead / in line / behind for each holding against every benchmark it is compared with."""
+    needed = {code for holding in holdings for code in [holding['code'], *holding.get('benchmarks', [])]}
+    missing = sorted(needed - set(observations))
+    if observe and missing:
+        try:
+            observations = {**observations, **observe(missing)}
+        except Exception:  # pace is advisory; a data outage leaves it unknown
+            pass
+    for holding in holdings:
+        holding['pace'] = [{'benchmark': code, **pace_verdict(observations.get(holding['code']), observations.get(code))}
+                           for code in holding.get('benchmarks', []) if code != holding['code']]
+
+
+def snapshot(engine, portfolio_db, reports_db, observations=None, industry_groups=None, observe=None):
     from maya_sawa.benchmark_versions import VERSIONS, members
 
     lineup = members(VERSIONS[-1])
@@ -100,6 +120,7 @@ def snapshot(engine, portfolio_db, reports_db, observations=None, industry_group
                       'configuration': {'checks': rule['checks'], 'holdings': rule['holdings'],
                                         'revision': rule_revision}})
     position_from_groups(holdings, industry_groups or [], {company['code'] for company in lineup})
+    attach_pace(holdings, observations or {}, observe)
     content = {'nodes': nodes, 'holdings': holdings, 'holdingsSnapshotAt': portfolio['snapshotAt']}
     revision = hashlib.sha256(json.dumps(content, sort_keys=True, default=str).encode()).hexdigest()[:16]
     return {**content, 'revision': revision, 'generatedAt': datetime.now(ZoneInfo('Asia/Taipei')).isoformat(),

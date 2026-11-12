@@ -171,3 +171,39 @@ def test_checks_belong_to_an_outlook_theme_and_do_not_only_grade_the_company_by_
                       [claim], {'2330'})
     validate_rule(dict(code='2330', checks=[own, {**base, 'code': 'NVDA-US', 'theme': 'T1', 'relation': 'customer'}],
                        holdings=[]), [claim], {'2330'})
+
+
+def test_pace_compares_holding_growth_with_its_benchmark_for_the_same_period():
+    from maya_sawa.services.benchmark_strength import pace_verdict
+    bench = {'monthly': {'period': '2026-10', 'yoyPercent': 20.0}}
+    assert pace_verdict({'monthly': {'period': '2026-10', 'yoyPercent': 45.0}}, bench)['verdict'] == 'ahead'
+    assert pace_verdict({'monthly': {'period': '2026-10', 'yoyPercent': 5.0}}, bench)['verdict'] == 'behind'
+    assert pace_verdict({'monthly': {'period': '2026-10', 'yoyPercent': 25.0}}, bench)['verdict'] == 'inline'
+    # different months are not comparable, and missing data is unknown rather than in line
+    assert pace_verdict({'monthly': {'period': '2026-09', 'yoyPercent': 45.0}}, bench)['verdict'] == 'unknown'
+    assert pace_verdict({}, bench)['verdict'] == 'unknown'
+    quarter = pace_verdict({'quarterly': {'period': '2026Q3', 'revenueYoYPercent': 8.0}},
+                           {'quarterly': {'period': '2026Q3', 'revenueYoYPercent': 30.0}})
+    assert quarter['verdict'] == 'behind' and quarter['gapPp'] == -22.0
+
+
+def test_attach_pace_fetches_missing_observations_and_skips_self_comparison():
+    from maya_sawa.services.benchmark_monitor import attach_pace
+    holdings = [{'code': '8996', 'benchmarks': ['2308']}, {'code': '2330', 'benchmarks': ['2330']}]
+    fetched = []
+    def observe(codes):
+        fetched.extend(codes)
+        return {'8996': {'monthly': {'period': '2026-10', 'yoyPercent': 60.0}},
+                '2308': {'monthly': {'period': '2026-10', 'yoyPercent': 30.0}}}
+    attach_pace(holdings, {}, observe)
+    assert sorted(fetched) == ['2308', '2330', '8996']
+    assert holdings[0]['pace'][0]['benchmark'] == '2308' and holdings[0]['pace'][0]['verdict'] == 'ahead'
+    assert holdings[1]['pace'] == []
+
+
+def test_a_rule_update_that_forgets_an_existing_holding_mapping_is_detected():
+    from maya_sawa.services.benchmark_monitor import dropped_holdings
+    previous = {'holdings': [{'code': '8996', 'role': 'AI 液冷', 'evidence': 'x'}]}
+    assert dropped_holdings(previous, {'holdings': []}) == ['8996']
+    assert dropped_holdings(previous, {'holdings': [{'code': '8996'}, {'code': '3017'}]}) == []
+    assert dropped_holdings(None, {'holdings': []}) == []

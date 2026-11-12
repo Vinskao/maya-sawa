@@ -236,7 +236,8 @@ def benchmark_monitor_view(response: Response = None):
         codes = {check['code'] for rule in definitions for check in rule.get('checks', [])}
         groups = market_industry_db.list_groups() if market_industry_db.sessions else []
         return benchmark_monitor.snapshot(engine, market_dashboard_db, market_reports_db,
-                                          benchmark_monitor.current_observations(codes), groups)
+                                          benchmark_monitor.current_observations(codes), groups,
+                                          observe=benchmark_monitor.current_observations)
     except Exception as exc:
         logger.warning('Benchmark monitor unavailable: %s', type(exc).__name__)
         raise HTTPException(503, 'Benchmark monitor initializing or unavailable') from None
@@ -273,6 +274,14 @@ def save_benchmark_monitor(code: str, body: MonitorRule, x_market_agent_key: str
                                           "WHERE code=:code FOR UPDATE"), {'code': code}).scalar()
         if current != expected:
             raise HTTPException(409, f'Rule is at revision {current}; GET /market/benchmark/monitor and merge again')
+        previous = connection.execute(text('SELECT definition FROM benchmark_monitor_rule WHERE code=:code'),
+                                      {'code': code}).scalar()
+        if isinstance(previous, str):
+            previous = json.loads(previous)
+        dropped = benchmark_monitor.dropped_holdings(previous, rule)
+        if dropped:
+            raise HTTPException(422, f"Keep existing holding mappings {', '.join(dropped)}; "
+                                     'copy configuration.holdings from GET /market/benchmark/monitor')
         connection.execute(text("UPDATE benchmark_monitor_rule SET definition=CAST(:definition AS JSONB), updated_at=now() "
                                 "WHERE code=:code"), {'code': code, 'definition': json.dumps(rule, ensure_ascii=False)})
     return {'code': code, 'saved': True, 'revision': rule['revision']}

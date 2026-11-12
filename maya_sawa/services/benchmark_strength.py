@@ -96,3 +96,28 @@ def evaluate_checks(checks, observations, today):
     return {**{key + 'Percent': round(value / denominator * 100, 2) if shown else None
                for key, value in totals.items()}, 'counts': {**counts, 'total': len(results)}, 'checks': results,
             'method': 'weighted-evidence-v1', 'denominator': denominator}
+
+
+PACE_GAP_PP = 10
+PACE_METRICS = (('monthly', 'yoyPercent', '月營收年增率'), ('quarterly', 'revenueYoYPercent', '季營收年增率'))
+
+
+def pace_verdict(holding, benchmark):
+    """Holding vs. its benchmark: is it running ahead of, with, or behind the story the benchmark sets?
+
+    Uses the first growth metric both sides report for the same period (monthly YoY first, then quarterly).
+    A gap of PACE_GAP_PP percentage points or more is ahead/behind; anything less is in line. Without a
+    comparable pair the verdict is unknown, never in line.
+    """
+    for group, key, label in PACE_METRICS:
+        mine, theirs = (holding or {}).get(group) or {}, (benchmark or {}).get(group) or {}
+        a, b = mine.get(key), theirs.get(key)
+        if not (finite(a) and finite(b)):
+            continue
+        if mine.get('period') and theirs.get('period') and mine['period'] != theirs['period']:
+            continue
+        gap = round(a - b, 2)
+        verdict = 'ahead' if gap >= PACE_GAP_PP else 'behind' if gap <= -PACE_GAP_PP else 'inline'
+        return {'verdict': verdict, 'metric': label, 'period': mine.get('period'),
+                'holdingValue': a, 'benchmarkValue': b, 'gapPp': gap}
+    return {'verdict': 'unknown', 'metric': None, 'period': None, 'holdingValue': None, 'benchmarkValue': None, 'gapPp': None}

@@ -91,6 +91,14 @@ flowchart TD
    - 少於三條條件時只公布條數。
    - PUT 加入 `expectedRevision`。
 
+8. 2026-11-12 第二輪（使用者指示）：
+   - 目的重申：龍頭年報定敘事，持股用自己的財報與高頻數據判斷超前或落後。
+   - 新增 `holdings[].pace`：與對照龍頭同期月營收（無則季營收）年增率相差 ≥10pp 為超前、≤−10pp 為落後，其餘同步；期別不同或缺值為資料不足。由 `benchmark_strength.pace_verdict` 計算，`attach_pace` 補抓持股與龍頭的觀測值。
+   - 8996 高力依使用者指定對照 2308 台達電（rule holdings，正式資料庫直接寫入 revision 1）。
+   - PUT 若漏掉既有 holdings 對照回 422，避免排程整份替換時誤刪。
+   - 前端：無證據的節點不再加「待審／缺資料」字樣；未定位持股不畫，改列在圖下；顯示主張覆蓋數。
+   - 操作規則整併成 skill：`.claude/skills/benchmark-monitor/SKILL.md`，routine 第 1.4、8.5 節改為引用它。
+
 ## 測試與限制
 
 `poetry run python -m pytest tests/market/test_benchmark_strength.py tests/market/test_benchmark_monitor_api.py tests/market/test_market_fundamentals.py tests/integrations/test_benchmark_analysis.py tests/integrations/test_benchmark_evidence.py -q`

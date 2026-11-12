@@ -53,6 +53,7 @@ body.json = {"model": "Claude Sonnet 5.5（排程：美股與總經）", "conten
 
 ## 3.4 持股歸組（強制，2026-11-11）
 先 GET https://tymultiverse.cc/maya-sawa/market/dashboard/industries/unclassified，列出不屬於任何產業分組的持股（只處理本例程市場範圍的代碼）。每檔依公司申報、法說與年報的主要業務，先找 GET https://tymultiverse.cc/maya-sawa/market/dashboard/industries 裡最貼切的分組；首頁 benchmark 有這家公司時，以 benchmark 的環節為準。找到就把整個分組原樣帶回、members 加上這檔（recordCode、market、name、role 一句話寫它在分組裡做什麼），用第 4 節同樣的 curl 寫法與 X-Market-Agent-Key，以 PUT 送到 https://tymultiverse.cc/maya-sawa/market/dashboard/industries/{group-id}。既有成員不能刪，刪了會被拒。沒有合適分組才新建一個（id 用小寫英文連字號，name 附中英文），不要為了歸組硬塞進不相干的分組。存完再 GET unclassified 確認清空；判斷不了的列在最後回報的「尚未歸組」並寫原因。
+歸完組後，若該族群沒有任何 benchmark 成員，持股在 Benchmark 圖上就無法定位：本班只在最後回報列出，由美股總經 Opus 依 `.claude/skills/benchmark-monitor/SKILL.md` 加對照；台股班不 PUT monitor rule。
 
 ## 6. IB 資料斷線提醒
 讀 overseas 資料時，若美國持股的最新日線比最近一個已收盤的美股交易日還舊（例如 gaps 寫 broker 抓取失敗，或 datasets 的 quote／history_raw fetchedAt 超過 24 小時），就用 PushNotification 送一則通知：「IB gateway 需要重新登入：在電腦執行 powershell -ExecutionPolicy Bypass -File F:\002-workspace\ty-multiverse\maya-sawa\ibkr-gateway\login.ps1，完成帳密與 2FA。美股日線停在 {最新日線日期}。」美國休市造成的沒有新日線不算。每輪最多一則，最後回報寫明是否已通知。

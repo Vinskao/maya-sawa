@@ -64,6 +64,7 @@ C. 主張查完後，才可用具體問題做全文語意搜尋，例如 GET htt
 
 ## 7.2 持股歸組（強制，2026-11-11）
 先 GET https://tymultiverse.cc/maya-sawa/market/dashboard/industries/unclassified，列出不屬於任何產業分組的持股（只處理本例程市場範圍的代碼）。每檔依公司申報、法說與年報的主要業務，先找 GET https://tymultiverse.cc/maya-sawa/market/dashboard/industries 裡最貼切的分組；首頁 benchmark 有這家公司時，以 benchmark 的環節為準。找到就把整個分組原樣帶回、members 加上這檔（recordCode、market、name、role 一句話寫它在分組裡做什麼），用第 4 節同樣的 curl 寫法與 X-Market-Agent-Key，以 PUT 送到 https://tymultiverse.cc/maya-sawa/market/dashboard/industries/{group-id}。既有成員不能刪，刪了會被拒。沒有合適分組才新建一個（id 用小寫英文連字號，name 附中英文），不要為了歸組硬塞進不相干的分組。存完再 GET unclassified 確認清空；判斷不了的列在最後回報的「尚未歸組」並寫原因。
+歸完組後，若該族群沒有任何 benchmark 成員，持股在 Benchmark 圖上就無法定位：本班只在最後回報列出，由美股總經 Opus 依 `.claude/skills/benchmark-monitor/SKILL.md` 加對照；台股班不 PUT monitor rule。
 
 ## 8. 通知本人（Telegram，最後一步）
 全部做完後，以 curl POST https://tymultiverse.cc/maya-sawa/market/notify，Content-Type application/json，body 為 {"kind":"update" 或 "attention","title":"市場 AI 分析｜台股收盤後","body":"..."}，用 python json.dump 產生 body。代理會自動加入 X-Market-Agent-Key，不要自行設定。
