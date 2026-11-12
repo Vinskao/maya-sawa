@@ -60,13 +60,26 @@ def dropped_holdings(previous, rule):
     return sorted(item['code'] for item in (previous or {}).get('holdings', []) if item.get('code') not in kept)
 
 
-def attach_pace(holdings, observations, observe=None):
+# Monthly and quarterly figures change at most a few times a day. Re-reading them for every holding on every GET took
+# 20+ seconds on the 1 vCPU node and got the pod killed (2026-11-12), so observations for pace are cached in memory.
+PACE_CACHE_SECONDS = 30 * 60
+_pace_cache = {}
+
+
+def attach_pace(holdings, observations, observe=None, now=None):
     """Ahead / in line / behind for each holding against every benchmark it is compared with."""
+    import time
+    now = time.monotonic() if now is None else now
     needed = {code for holding in holdings for code in [holding['code'], *holding.get('benchmarks', [])]}
+    cached = {code: entry[1] for code, entry in _pace_cache.items() if code in needed and entry[0] > now}
+    observations = {**cached, **observations}
     missing = sorted(needed - set(observations))
     if observe and missing:
         try:
-            observations = {**observations, **observe(missing)}
+            fetched = observe(missing)
+            for code in missing:
+                _pace_cache[code] = (now + PACE_CACHE_SECONDS, fetched.get(code) or {})
+            observations = {**observations, **fetched}
         except Exception:  # pace is advisory; a data outage leaves it unknown
             pass
     for holding in holdings:

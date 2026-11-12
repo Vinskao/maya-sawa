@@ -195,6 +195,7 @@ def test_attach_pace_fetches_missing_observations_and_skips_self_comparison():
         fetched.extend(codes)
         return {'8996': {'monthly': {'period': '2026-10', 'yoyPercent': 60.0}},
                 '2308': {'monthly': {'period': '2026-10', 'yoyPercent': 30.0}}}
+    from maya_sawa.services import benchmark_monitor as bm; bm._pace_cache.clear()
     attach_pace(holdings, {}, observe)
     assert sorted(fetched) == ['2308', '2330', '8996']
     assert holdings[0]['pace'][0]['benchmark'] == '2308' and holdings[0]['pace'][0]['verdict'] == 'ahead'
@@ -207,3 +208,18 @@ def test_a_rule_update_that_forgets_an_existing_holding_mapping_is_detected():
     assert dropped_holdings(previous, {'holdings': []}) == ['8996']
     assert dropped_holdings(previous, {'holdings': [{'code': '8996'}, {'code': '3017'}]}) == []
     assert dropped_holdings(None, {'holdings': []}) == []
+
+
+def test_pace_observations_are_cached_instead_of_refetched_on_every_request():
+    from maya_sawa.services import benchmark_monitor
+    benchmark_monitor._pace_cache.clear()
+    calls = []
+    def observe(codes):
+        calls.append(list(codes))
+        return {code: {'monthly': {'period': '2026-10', 'yoyPercent': 10.0}} for code in codes}
+    for now in (0, 60, 600):
+        benchmark_monitor.attach_pace([{'code': '8996', 'benchmarks': ['2308']}], {}, observe, now=now)
+    assert calls == [['2308', '8996']]
+    benchmark_monitor.attach_pace([{'code': '8996', 'benchmarks': ['2308']}], {}, observe, now=benchmark_monitor.PACE_CACHE_SECONDS + 1)
+    assert len(calls) == 2
+    benchmark_monitor._pace_cache.clear()
