@@ -122,6 +122,13 @@ WORLD_MONEY_SERIES = {
 }
 DERIVED_SERIES = {
     "US_NET_LIQUIDITY": ("Fed net liquidity: total assets - TGA - overnight reverse repo", "USD billion", "weekly"),
+    # Same formula on every business day: daily TGA (Daily Treasury Statement) and daily ON RRP, with the latest weekly
+    # Fed total assets carried forward. The weekly series stays for the macro chain; charts read this one first.
+    "US_NET_LIQUIDITY_DAILY": ("Fed net liquidity, daily: latest total assets - daily TGA - daily ON RRP", "USD billion", "daily"),
+}
+# FRED's WTREGEN is a Wednesday level; the Daily Treasury Statement publishes the TGA closing balance every business day.
+TREASURY_DTS_SERIES = {
+    "TGA_DAILY": ("U.S. Treasury General Account closing balance (Daily Treasury Statement)", "USD billion", "daily"),
 }
 CBC_SERIES = {
     "CBC_REDISCOUNT": ("Taiwan CBC rediscount rate", "percent", "daily"),
@@ -147,9 +154,11 @@ YAHOO_SERIES = {
     "EUR_USD": ("EUR/USD (U.S. dollars per euro), daily close", "USD/EUR", "daily"),
     # FRED's WTI (DCOILWTICO, EIA) trails by about a week (2026-11-03: last day 10-27); the oil node reads this one first.
     "WTI_CRUDE_USD": ("WTI crude oil futures (front month) daily close", "USD/barrel", "daily"),
+    # FRED's DEXKOUS (H.10) is published weekly, so it trails by up to a week; the FX chart reads this one first.
+    "USD_KRW": ("South Korean won per U.S. dollar, daily close", "KRW/USD", "daily"),
 }
 YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB", "US_VIX": "^VIX", "EUR_USD": "EURUSD=X",
-                 "WTI_CRUDE_USD": "CL=F"}
+                 "WTI_CRUDE_USD": "CL=F", "USD_KRW": "KRW=X"}
 # TWSE publishes no market-wide margin maintenance ratio; it is estimated from two public tables (margin_maintenance).
 TWSE_MARGIN_SERIES = {
     "TW_MARGIN_MAINTENANCE": ("Taiwan listed-market margin maintenance ratio (TWSE: collateral value / margin loans)", "percent", "daily"),
@@ -251,10 +260,11 @@ LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 # Past freshForSeconds a series is shown as stale; past this window it is dropped.
 FREE_SERIES_FALLBACK_SECONDS = 30 * 24 * 3600
 FREE_HTTP_TTL_SECONDS = 4 * 3600
+DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES))
 
 
 def parse_bis_policy_rates(raw: bytes) -> list[dict]:
@@ -296,7 +306,8 @@ def parse_bis_cpi_csv(raw: bytes) -> list[dict]:
 # Money and central-bank liquidity series keep history since 2019, so charts show the 2020 expansion, the 2022-23
 # contraction and the reverse repo draining to zero; two years of these slow-moving levels drew flat lines.
 LONG_HISTORY_START = "2019-01"
-LONG_HISTORY_CODES = {"M2SL", "WALCL", "WTREGEN", "RRPONTSYD", "ECBASSETSW", "JPNASSETS", "US_NET_LIQUIDITY"} | set(WORLD_MONEY_SERIES)
+LONG_HISTORY_CODES = {"M2SL", "WALCL", "WTREGEN", "RRPONTSYD", "ECBASSETSW", "JPNASSETS", "US_NET_LIQUIDITY",
+    "US_NET_LIQUIDITY_DAILY", "TGA_DAILY"} | set(WORLD_MONEY_SERIES)
 
 
 def fred_fetch_order(codes, fetched_at: dict) -> list:
@@ -531,6 +542,37 @@ def net_liquidity_rows(walcl: list[dict], tga: list[dict], rrp: list[dict]) -> l
     return rows
 
 
+def parse_dts_tga(payload: dict) -> list[dict]:
+    """TGA closing balance rows (USD million in the API) as USD billion, one per record date."""
+    rows = {}
+    for item in payload.get("data") or []:
+        if item.get("account_type") != DTS_TGA_ACCOUNT:
+            continue
+        try: value = float(item.get("open_today_bal"))
+        except (TypeError, ValueError): continue
+        rows[item["record_date"]] = {"code": "TGA_DAILY", "period": item["record_date"], "value": f"{value / 1000:.1f}"}
+    return [rows[day] for day in sorted(rows)]
+
+
+def daily_net_liquidity_rows(walcl: list[dict], tga: list[dict], rrp: list[dict]) -> list[dict]:
+    """Net liquidity for every TGA business day: latest Fed total assets within 8 days, that day's ON RRP (or up to 4
+    days earlier for a holiday). Days missing an input are skipped rather than guessed."""
+    assets = sorted((row["period"], float(row["value"])) for row in walcl)
+    repo = sorted((row["period"], float(row["value"])) for row in rrp)
+    def latest(series, day, days):
+        floor = (date.fromisoformat(day) - timedelta(days=days)).isoformat()
+        return next((value for period, value in reversed(series) if floor <= period <= day), None)
+    rows = []
+    for row in sorted(tga, key=lambda item: item["period"]):
+        day = row["period"]
+        total, reverse_repo = latest(assets, day, 8), latest(repo, day, 4)
+        if total is None or reverse_repo is None:
+            continue
+        rows.append({"code": "US_NET_LIQUIDITY_DAILY", "period": day,
+                     "value": f"{total - float(row['value']) - reverse_repo:.1f}"})
+    return rows
+
+
 def _request(url: str, body: dict | None = None, extra_headers: dict | None = None) -> tuple[int, bytes]:
     data = json.dumps(body).encode() if body is not None else None
     # Keep urllib's standard User-Agent and Accept headers. FRED stalls when it
@@ -737,7 +779,8 @@ class MarketMacroService:
                 ("WorldBank", self._fetch_world_bank_gold),
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series),
-                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi)):
+                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi),
+                ("TreasuryDTS", self._fetch_treasury_dts)):
                 try: output["sources"][source_name] = fetch()
                 except Exception as exc:
                     logger.warning("%s refresh failed: %s", source_name, str(exc)[:80])
@@ -911,6 +954,35 @@ class MarketMacroService:
             count += self._cache_free_series(net_liquidity_rows(*histories), DERIVED_SERIES, "FRED (derived)",
                 "https://fred.stlouisfed.org/series/WALCL", fresh_for_seconds=48 * 3600)
         return count
+
+    def _fetch_treasury_dts(self) -> int:
+        """Daily TGA from the Daily Treasury Statement (free, no key), then daily net liquidity from it.
+
+        Runs after FRED in the refresh so WALCL and ON RRP are already cached. Skipped when fetched within five hours."""
+        if _fetched_within("TGA_DAILY", 5 * 3600):
+            return 0
+        run_id = market_macro_db.reserve_source_call("TreasuryDTS", daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError("treasury_dts_daily_budget_exhausted")
+        try:
+            query = urllib.parse.urlencode({
+                "filter": f"record_date:gte:{LONG_HISTORY_START}-01,account_type:eq:{DTS_TGA_ACCOUNT}",
+                "fields": "record_date,account_type,open_today_bal", "sort": "record_date", "page[size]": "10000"})
+            url = f"https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/operating_cash_balance?{query}"
+            status, raw = _request_free_cached("treasury:dts:tga", url, ttl_seconds=4 * 3600)
+            rows = parse_dts_tga(json.loads(raw))
+            if not rows: raise RuntimeError("treasury_dts_empty")
+            saved = self._cache_free_series(rows, TREASURY_DTS_SERIES, "U.S. Treasury Daily Treasury Statement",
+                "https://fiscaldata.treasury.gov/datasets/daily-treasury-statement/", fresh_for_seconds=48 * 3600)
+            walcl, rrp = ((_macro_local_cache.get(f"series:{code}") or {}).get("history") or [] for code in ("WALCL", "RRPONTSYD"))
+            derived = daily_net_liquidity_rows(walcl, rows, rrp)
+            if derived:
+                saved += self._cache_free_series(derived, DERIVED_SERIES, "U.S. Treasury DTS and FRED (derived)",
+                    "https://fiscaldata.treasury.gov/datasets/daily-treasury-statement/", fresh_for_seconds=48 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
 
     def _fetch_asia_cpi(self) -> int:
         cached = [_macro_local_cache.get(f'series:{code}') for code in ASIA_CPI_SERIES]
