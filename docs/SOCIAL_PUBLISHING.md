@@ -183,3 +183,12 @@ stateDiagram-v2
 9. **覆蓋率取代基準線（2026-11-02）。** 需求改為「每個標的與總經的最新一篇都要發過」，所以拿掉第一次只記基準線的設計，每輪以全部最新 revision 為準補齊；`coverage()` 先寫測試，再接到 status。
 10. **Token 類型不要假設。** 線上發現存的是 user token；先用真實錯誤回應（#100 nonexisting field）寫失敗測試，再讓 `discover_page` 兩種都吃。
 11. **文件與架構圖同一個 commit。** 見工作區 `AGENTS.md`「新流程／架構要畫圖並記錄方法」。
+
+## 2026-11-12：Meta 封鎖 API 與 Facebook 貼文位置
+
+- **症狀**：11/2 23:40 之後，Facebook、Instagram、Threads 都沒有新貼文，只剩 LinkedIn 正常。
+- **原因**：Graph 與 Threads 的 `/me` 都回 `400 code 200「API access blocked」`。token 沒過期，是 Meta 封鎖了 app 的 API 權限。
+- **為什麼拖了十天**：查詢帳號失敗只記 log，不通知。
+- **改法**：
+  - 查詢帳號失敗時，每次中斷發一則 Telegram（`notify_owner(channel, 'lookup')`）。查詢成功後清掉旗標，下次中斷會再通知。
+  - Facebook 單張圖原本走 `/photos`，貼文會進粉專「相片」而不是「貼文」。現在改成和多圖相同：先上傳不公開的照片，再用 `/feed` 加 `attached_media` 發一則貼文。

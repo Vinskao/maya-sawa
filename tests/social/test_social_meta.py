@@ -160,15 +160,18 @@ def test_threads_can_publish_an_image_post_with_text():
     assert 'media_type=IMAGE' in calls[0][3] and 'image_url=https' in calls[0][3] and 'text=hello' in calls[0][3]
 
 
-def test_facebook_photo_post_uses_the_photos_edge_and_returns_the_post_permalink():
+def test_facebook_single_image_is_a_feed_post_not_a_photo_album_upload():
+    """2026-11-12: posts made on the /photos edge landed in the Page's Photos, not its Posts tab."""
     calls = []
-    routes = {'POST /v23.0/222/photos': (200, {'id': '901', 'post_id': '222_333'}),
+    routes = {'POST /v23.0/222/photos': lambda n: (200, {'id': 'p1'}),
+              'POST /v23.0/222/feed': (200, {'id': '222_333'}),
               'GET /v23.0/222_333': (200, FIXTURES['facebook_permalink'])}
-    result = FacebookPage('222', 'tok', client(routes, calls)).publish('hello', 'https://tymultiverse.cc/card.png')
+    result = FacebookPage('222', 'tok', recording_client(routes, calls)).publish('hello', 'https://tymultiverse.cc/card.png')
     assert result == {'id': '222_333', 'url': 'https://www.facebook.com/222/posts/333'}
-    assert 'url=https' in calls[0][3] and 'message=hello' in calls[0][3]
-    with pytest.raises(Ambiguous):
-        FacebookPage('222', 'tok', client({'POST /v23.0/222/photos': (500, FIXTURES['error_unknown'])}, [])).publish('x', 'https://a/b.png')
+    photo = next(call[3] for call in calls if call[1] == '/v23.0/222/photos')
+    assert 'published=false' in photo and 'message=' not in photo
+    feed = next(call[3] for call in calls if call[1] == '/v23.0/222/feed')
+    assert 'attached_media%5B0%5D=' in feed and 'message=hello' in feed
 
 
 def recording_client(routes, calls):

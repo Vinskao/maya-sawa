@@ -214,8 +214,10 @@ def build_publishers(outbox, notify=None):
                 page_id, ig_user = page_id or found['page_id'], ig_user or (found['instagram_id'] or '')
                 page_token = found.get('page_token') or page_token  # a user token is swapped for the Page's own token
                 looked_up = True
-            except meta.PublishError:
-                logger.warning('Facebook Page lookup failed; Facebook and Instagram skipped this run')
+                _lookup_alert(outbox, notify, 'facebook', None)
+            except meta.PublishError as exc:
+                logger.warning('Facebook Page lookup failed (%s); Facebook and Instagram skipped this run', exc)
+                _lookup_alert(outbox, notify, 'facebook', str(exc))
         _instagram_link_alert(outbox, notify, linked=bool(ig_user), checked=looked_up or bool(ig_user))
         if page_id:
             page = meta.FacebookPage(page_id, page_token)
@@ -239,8 +241,10 @@ def build_publishers(outbox, notify=None):
         if not threads_user:
             try:
                 threads_user = meta.discover_threads_user(token)
-            except meta.PublishError:
-                logger.warning('Threads user lookup failed; Threads skipped this run')
+                _lookup_alert(outbox, notify, 'threads', None)
+            except meta.PublishError as exc:
+                logger.warning('Threads user lookup failed (%s); Threads skipped this run', exc)
+                _lookup_alert(outbox, notify, 'threads', str(exc))
         if threads_user:
             threads = meta.Threads(threads_user, token)
             publishers['threads'] = lambda source: threads.publish(build_post(source, 'threads'), image_urls(source))
@@ -256,6 +260,16 @@ def build_publishers(outbox, notify=None):
             profile = linkedin.LinkedIn(author, linkedin_token)
             publishers['linkedin'] = lambda source: profile.publish(build_post(source, 'linkedin'), image_urls(source))
     return publishers
+
+
+def _lookup_alert(outbox, notify, channel, error):
+    """A channel whose account lookup fails publishes nothing; tell the owner once per outage, with the platform's reason."""
+    key = f'alerted:lookup:{channel}'
+    if error is None:
+        outbox.delete(key)
+    elif notify and outbox.get(key) is None:
+        outbox.set(key, error[:200])
+        notify(channel, 'lookup')
 
 
 def _instagram_link_alert(outbox, notify, linked, checked):
@@ -279,6 +293,10 @@ def notify_owner(channel, reason):
     elif reason == 'failing':
         body = (f'{name} 有貼文連續發布失敗 {MAX_ATTEMPTS} 次（平台拒絕，尚未發出）。之後每輪仍會自動重試直到發出；'
                 '請看 /maya-sawa/market/publishing/social/status 的 error 欄位。')
+    elif reason == 'lookup':
+        body = (f'{name} 查不到帳號，這個平台暫停發文（貼文留在佇列，恢復後補發）。\n'
+                '平台回應「API access blocked」代表 Meta 封鎖了 app 的 API 權限：請到 developers.facebook.com 的 app 主控台看「警示／App 審查」。'
+                '若是 token 過期，請更新 Jenkins credential 後重新部署。')
     elif reason == 'not_linked':
         body = ('Instagram 尚未連結到 Facebook 粉專，這一輪只發 Facebook 與 Threads，Instagram 被略過；'
                 '之後才連結的話，被略過的貼文不會補發。\n'

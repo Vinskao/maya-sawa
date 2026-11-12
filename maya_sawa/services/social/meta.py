@@ -113,16 +113,12 @@ class FacebookPage:
 
     def publish(self, text, images=None):
         images = _urls(images)[:self.MAX_PHOTOS]
-        if len(images) > 1:  # unpublished photos first (nothing is live), then one feed post attaching them all
+        if images:  # unpublished photos first (nothing is live), then one feed post attaching them, so it shows under Posts
             photos = [_call(self.client, 'POST', f'{GRAPH}/{self.page_id}/photos', self.token, url=url,
                             published='false')['id'] for url in images]
             attached = {f'attached_media[{index}]': json.dumps({'media_fbid': photo}) for index, photo in enumerate(photos)}
             post = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/feed', self.token, final=True, message=text,
                          **attached)['id']
-        elif images:  # photo post: the card with the analysis text as its caption
-            body = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/photos', self.token, final=True,
-                         url=images[0], message=text)
-            post = body.get('post_id') or body['id']
         else:
             post = _call(self.client, 'POST', f'{GRAPH}/{self.page_id}/feed', self.token, final=True, message=text)['id']
         return {'id': post, 'url': _permalink(self.client, GRAPH, post, self.token, 'permalink_url')}

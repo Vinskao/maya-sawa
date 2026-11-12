@@ -348,7 +348,13 @@ def test_failed_page_lookup_is_not_reported_as_a_missing_instagram_link(outbox, 
     monkeypatch.setattr(meta, 'discover_page', fail)
     notices = []
     assert runner.build_publishers(outbox, lambda channel, reason: notices.append((channel, reason))) == {}
-    assert notices == []
+    # 2026-11-12: a blocked app skipped Facebook for ten days with only a log line. Say so once, never claim "not linked".
+    assert notices == [('facebook', 'lookup')]
+    runner.build_publishers(outbox, lambda channel, reason: notices.append((channel, reason)))
+    assert notices == [('facebook', 'lookup')]
+    monkeypatch.setattr(meta, 'discover_page', lambda token: {'page_id': '1', 'instagram_id': '2', 'page_token': 'x'})
+    runner.build_publishers(outbox, lambda channel, reason: notices.append((channel, reason)))
+    assert outbox.get('alerted:lookup:facebook') is None
 
 
 def test_owner_message_for_a_missing_instagram_link_says_what_to_do(monkeypatch):
