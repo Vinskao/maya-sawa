@@ -59,7 +59,7 @@ def test_existing_table_without_title_column_is_upgraded_in_place():
 
 def test_api_accepts_a_title_and_publishes_it():
     client, _ = client_and_db()
-    body = {'day': '2026-11-03', 'title': '  淨流動性與聯發科的出貨驗證  ', 'content': '內容。', 'sources': ['stock:2330:2']}
+    body = {'day': '2026-11-03', 'title': '  淨流動性與聯發科的出貨驗證  ', 'content': '內容。今天的市場精讀到這裡，我們下次見。', 'sources': ['stock:2330:2']}
     created = client.post('/market/daily-maya/proposals', json=body).json()
     assert created['created']
     headers = {'x-market-agent-key': 'test'}
@@ -71,7 +71,7 @@ def test_api_accepts_a_title_and_publishes_it():
 
 def test_missing_title_gets_a_dated_default_so_the_episode_is_never_untitled():
     client, _ = client_and_db()
-    body = {'day': '2026-11-03', 'content': '沒有標題的稿。', 'sources': ['stock:2330:2']}
+    body = {'day': '2026-11-03', 'content': '沒有標題的稿。今天的市場精讀到這裡，我們下次見。', 'sources': ['stock:2330:2']}
     created = client.post('/market/daily-maya/proposals', json=body).json()
     headers = {'x-market-agent-key': 'test'}
     proposal = client.get('/market/daily-maya/proposals', headers=headers).json()['proposals'][0]
@@ -81,5 +81,5 @@ def test_missing_title_gets_a_dated_default_so_the_episode_is_never_untitled():
 @pytest.mark.parametrize('title', ['', '   ', 'x' * 121, '第一行\n第二行', '# 標題', '**粗體**'])
 def test_invalid_titles_are_rejected(title):
     client, _ = client_and_db()
-    body = {'day': '2026-11-03', 'title': title, 'content': '內容。', 'sources': ['stock:2330:2']}
+    body = {'day': '2026-11-03', 'title': title, 'content': '內容。今天的市場精讀到這裡，我們下次見。', 'sources': ['stock:2330:2']}
     assert client.post('/market/daily-maya/proposals', json=body).status_code == 422

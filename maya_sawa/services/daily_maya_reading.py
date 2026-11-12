@@ -13,6 +13,7 @@ MAX_LENGTH = 20000
 MIN_PARAGRAPHS = 3
 MAX_PARAGRAPH_LENGTH = 600
 HEADING = '## '
+FAREWELL = '今天的市場精讀到這裡，我們下次見。'  # last sentence of every episode, in both versions
 
 
 class InvalidReading(ValueError):
