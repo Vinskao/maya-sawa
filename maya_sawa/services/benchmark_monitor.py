@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
-from .benchmark_strength import annual_strength, evaluate_checks, holding_identity, validate_check
+from .benchmark_strength import annual_strength, evaluate_checks, holding_identity, validate_check, position_from_groups
 
 SCHEMA = """CREATE TABLE IF NOT EXISTS benchmark_monitor_rule (
     code TEXT PRIMARY KEY, definition JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"""
@@ -30,7 +30,7 @@ def validate_rule(rule, claims, companies):
             raise ValueError('Explain threshold and direction; proxy checks are not direct causal proof')
 
 
-def snapshot(engine, portfolio_db, reports_db, observations=None):
+def snapshot(engine, portfolio_db, reports_db, observations=None, industry_groups=None):
     from maya_sawa.benchmark_versions import VERSIONS, members
     from maya_sawa.benchmark_evidence import PROFILE, UPLOADER
 
@@ -82,6 +82,7 @@ def snapshot(engine, portfolio_db, reports_db, observations=None):
         nodes.append({'code': code, 'annual': annual_strength(claims), 'claims': claims,
                       'filing': latest.get(code), 'validation': validation,
                       'configuration': {'checks': rule['checks'], 'holdings': rule['holdings']}})
+    position_from_groups(holdings, industry_groups or [], {company['code'] for company in lineup})
     content = {'nodes': nodes, 'holdings': holdings, 'holdingsSnapshotAt': portfolio['snapshotAt']}
     revision = hashlib.sha256(json.dumps(content, sort_keys=True, default=str).encode()).hexdigest()[:16]
     return {**content, 'revision': revision, 'generatedAt': datetime.now(ZoneInfo('Asia/Taipei')).isoformat(),

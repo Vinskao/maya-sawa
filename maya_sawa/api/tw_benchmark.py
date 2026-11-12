@@ -224,6 +224,7 @@ def benchmark_versions():
 @router.get('/monitor')
 def benchmark_monitor_view(response: Response = None):
     from maya_sawa.databases.market_reports_db import market_reports_db
+    from maya_sawa.databases.market_industry_db import market_industry_db
     if response is not None:
         response.headers['Cache-Control'] = 'no-store'
     engine = market_dashboard_db.engine
@@ -233,8 +234,9 @@ def benchmark_monitor_view(response: Response = None):
         with engine.connect() as connection:
             definitions = connection.execute(text('SELECT definition FROM benchmark_monitor_rule')).scalars().all()
         codes = {check['code'] for rule in definitions for check in rule.get('checks', [])}
+        groups = market_industry_db.list_groups() if market_industry_db.sessions else []
         return benchmark_monitor.snapshot(engine, market_dashboard_db, market_reports_db,
-                                          benchmark_monitor.current_observations(codes))
+                                          benchmark_monitor.current_observations(codes), groups)
     except Exception as exc:
         logger.warning('Benchmark monitor unavailable: %s', type(exc).__name__)
         raise HTTPException(503, 'Benchmark monitor initializing or unavailable') from None

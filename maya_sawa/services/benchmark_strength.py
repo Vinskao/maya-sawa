@@ -21,6 +21,22 @@ def annual_strength(claims):
             'counts': counts, 'claimCount': len(claims)}
 
 
+def position_from_groups(holdings, groups, benchmark_codes):
+    for holding in holdings:
+        if holding['role'] != '尚未定位':
+            continue
+        roles, related = [], set()
+        for group in groups:
+            member = next((row for row in group.get('members', []) if row.get('recordCode') == holding['code']), None)
+            if member and member.get('role'):
+                roles.append(f"{group['name']['zh']}・{member['role']}")
+                related.update(row['recordCode'] for row in group['members'] if row['recordCode'] in benchmark_codes)
+        if roles:
+            holding['role'] = '；'.join(roles)
+            holding['benchmarks'] = sorted(related)
+            holding['positionSource'] = '既有產業分組，非供貨證據'
+
+
 def finite(value):
     return type(value) in (int, float) and isfinite(value)
 

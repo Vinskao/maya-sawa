@@ -20,6 +20,8 @@ def test_monitor_unavailable_is_explicit(client):
 
 
 def test_live_monitor_cannot_be_cached_across_portfolio_updates(client, monkeypatch):
+    from maya_sawa.databases.market_industry_db import market_industry_db
+    monkeypatch.setattr(market_industry_db, 'sessions', None)
     engine = MagicMock()
     engine.connect.return_value.__enter__.return_value.execute.return_value.scalars.return_value.all.return_value = []
     monkeypatch.setattr(api.market_dashboard_db, 'engine', engine)

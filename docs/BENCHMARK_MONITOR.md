@@ -2,7 +2,7 @@
 
 ## 方法與範圍
 
-年報是可受質疑的管理階層主張，不是產業強弱的客觀答案。分開呈現三層：最新股東年報已審核的方向、已審核驗證條件與最新數據的符合程度、目前持股的位置。圖中不再重複顯示整張公司比較表。綠／紅／黃／藍／灰分別表示年報順風／逆風／多空並存／中性／未知；金框星號表示持股。研究定位的虛線明確標為非供貨關係。沒有經核對的定位就獨立顯示「尚未定位」，不按股票名稱猜測。
+年報是可受質疑的管理階層主張，不是產業強弱的客觀答案。分開呈現三層：最新股東年報已審核的方向、已審核驗證條件與最新數據的符合程度、目前持股的位置。圖中不再重複顯示整張公司比較表。綠／紅／黃／藍／灰分別表示年報順風／逆風／多空並存／中性／未知；金框星號表示持股。研究定位的虛線明確標為非供貨關係。明確審核的定位優先，否則沿用既有產業分組中該市場代號的角色，並與同組 benchmark 連研究定位線，來源標為既有分組、非供貨證據。兩者都沒有才獨立顯示「尚未定位」，不按股票名稱猜測。
 
 參考原件：[台積電 2025 股東年報](https://investor.tsmc.com/static/annualReports/2025/english/index.html)、[NVIDIA FY2026 年報](https://www.sec.gov/Archives/edgar/data/1045810/000104581026000021/nvda-20260125.htm)、[IFRS Management Commentary](https://www.ifrs.org/issued-standards/list-of-standards/management-commentary-practice-statement-1/)。台積電的需求、技術與擴產敘述，以及 NVIDIA 的供應承諾、轉代與限制風險，說明必須分清「需求成長」與「能否交付」；這是本系統的方法選擇，並非 IFRS 規定的計分法。
 
@@ -38,6 +38,7 @@ flowchart TD
   Review --> Claims[公開且 ready 的最新年報主張]
   Claims --> Rules[Opus 審核指標門檻與持股定位]
   Portfolio[已公開的持股代號快照] --> Live[GET benchmark/monitor 每次重建]
+  Groups[既有產業分組的精確代號與角色] --> Live
   Rules --> Live
   Feeds[官方營收季報每十五分鐘檢查] --> Cache[官方快取與已存歷史數據]
   Cache --> Live

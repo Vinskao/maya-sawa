@@ -106,6 +106,19 @@ def test_duplicate_metrics_cannot_inflate_evidence_percentage():
         evaluate_checks([check, check], {}, date(2026, 11, 12))
 
 
+def test_existing_industry_roles_position_holdings_without_inventing_supply_relationships():
+    from maya_sawa.services.benchmark_strength import position_from_groups
+    groups = [{'name': {'zh': '測試設備'}, 'members': [
+        {'recordCode': '6857-JP', 'role': '半導體測試機'},
+        {'recordCode': '2330', 'role': '晶圓代工'}]}]
+    held = [{'code': '6857-JP', 'role': '尚未定位'}, {'code': '6857', 'role': '尚未定位'}]
+    position_from_groups(held, groups, {'2330'})
+    assert held[0]['role'] == '測試設備・半導體測試機'
+    assert held[0]['benchmarks'] == ['2330']
+    assert held[0]['positionSource'] == '既有產業分組，非供貨證據'
+    assert held[1]['role'] == '尚未定位'
+
+
 @pytest.mark.parametrize('nested', [False, True])
 def test_overseas_verification_reads_the_correct_market_without_taiwan_fallback(monkeypatch, nested):
     from maya_sawa.services import benchmark_monitor, ibkr_research
