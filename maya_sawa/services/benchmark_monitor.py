@@ -12,6 +12,19 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS benchmark_monitor_rule (
     code TEXT PRIMARY KEY, definition JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"""
 
 
+def latest_reviewed_claims(session, code, filing):
+    from maya_sawa.benchmark_evidence import PROFILE, UPLOADER
+    from maya_sawa.databases.market_reports_db import MarketReport
+    for profile in (PROFILE, 'benchmark-evidence-v1'):
+        digest = hashlib.sha256(f"{profile}:{code}:{filing['sha256']}".encode()).hexdigest()
+        report = session.query(MarketReport).filter(
+            MarketReport.sha256 == digest, MarketReport.uploaded_by == UPLOADER,
+            MarketReport.status == 'ready', MarketReport.visibility == 'public').first()
+        if report is not None:
+            return [(claim, report) for claim in report.claims]
+    return []
+
+
 def validate_rule(rule, claims, companies):
     if rule.get('code') not in companies or not isinstance(rule.get('checks'), list) or len(rule['checks']) > 20:
         raise ValueError('Unknown benchmark or invalid checks')
@@ -32,7 +45,6 @@ def validate_rule(rule, claims, companies):
 
 def snapshot(engine, portfolio_db, reports_db, observations=None, industry_groups=None):
     from maya_sawa.benchmark_versions import VERSIONS, members
-    from maya_sawa.benchmark_evidence import PROFILE, UPLOADER
 
     lineup = members(VERSIONS[-1])
     with engine.connect() as connection:
@@ -44,16 +56,8 @@ def snapshot(engine, portfolio_db, reports_db, observations=None, industry_group
     latest = {row['code']: dict(row) for row in filings}
     claims_by_code = {}
     with reports_db.sessions() as session:
-        from maya_sawa.databases.market_reports_db import MarketReport, MarketReportClaim
         for code, filing in latest.items():
-            rows = []
-            for profile in (PROFILE, 'benchmark-evidence-v1'):
-                digest = hashlib.sha256(f"{profile}:{code}:{filing['sha256']}".encode()).hexdigest()
-                rows = session.query(MarketReportClaim, MarketReport).join(MarketReport).filter(
-                    MarketReport.sha256 == digest, MarketReport.uploaded_by == UPLOADER,
-                    MarketReport.status == 'ready', MarketReport.visibility == 'public').all()
-                if rows:
-                    break
+            rows = latest_reviewed_claims(session, code, filing)
             claims_by_code[code] = [dict(report_id=report.id, page=claim.page, evidence=claim.evidence,
                 claim=claim.claim, direction=claim.direction, dimension=claim.dimension,
                 source=filing['source_url'], year=filing['fiscal_year']) for claim, report in rows]

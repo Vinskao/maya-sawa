@@ -119,6 +119,16 @@ def test_existing_industry_roles_position_holdings_without_inventing_supply_rela
     assert held[1]['role'] == '尚未定位'
 
 
+def test_new_reviewed_report_with_no_claims_does_not_revive_old_positive_claims():
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from maya_sawa.services.benchmark_monitor import latest_reviewed_claims
+    session = MagicMock()
+    session.query.return_value.filter.return_value.first.return_value = SimpleNamespace(id='new-reviewed', claims=[])
+    assert latest_reviewed_claims(session, '2330', {'sha256': 'pdf'}) == []
+    assert session.query.call_count == 1
+
+
 @pytest.mark.parametrize('nested', [False, True])
 def test_overseas_verification_reads_the_correct_market_without_taiwan_fallback(monkeypatch, nested):
     from maya_sawa.services import benchmark_monitor, ibkr_research
