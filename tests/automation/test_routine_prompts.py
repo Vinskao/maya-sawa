@@ -151,3 +151,15 @@ def test_market_writers_track_revenue_deceleration_and_post_news_underperformanc
             body = path.read_text(encoding="utf-8").split("## 4. 儲存")[0]
             assert "營收成長連續放緩" in body, path.name
             assert "重大利多後連續跑輸" in body and "不以三個交易日結束" in body, path.name
+
+
+def test_taiwan_streaks_name_reachable_benchmark_data_and_roll_breaks():
+    # The site stores no TAIEX index history, and /dashboard/history/TXF splices front months without the contract month.
+    for path in FILES:
+        if path.name.startswith("market-taiwan-"):
+            before_save = path.read_text(encoding="utf-8").split("## 4. 儲存")[0]
+            for item in ("rwd/zh/TAIEX/MI_5MINS_HIST", "/maya-sawa/market/dashboard/history/TXF", "近月接續", "換月日",
+                         "不得以 TXF 近月接續序列代替"):
+                assert item in before_save, (path.name, item)
+    skill = (ROOT / "skills" / "stock-signal-analysis" / "SKILL.md").read_text(encoding="utf-8")
+    assert "近月接續" in skill and "MI_5MINS_HIST" in skill
