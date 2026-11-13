@@ -127,3 +127,11 @@ def test_holding_signal_workflow_reaches_both_market_shifts_and_all_daily_roles(
     for path in market:
         prompt = path.read_text(encoding="utf-8")
         assert prompt.index("利空不跌") < prompt.index("## 4. 儲存")
+
+
+def test_all_stock_writers_include_company_peer_and_market_evidence():
+    for path in FILES:
+        if path.name.startswith("market-"):
+            before_save = path.read_text(encoding="utf-8").split("## 4. 儲存")[0]
+            for label in ("【個股綜合判讀】", "公司營收與獲利", "同業營收與獲利", "內部人申報"):
+                assert label in before_save, (path.name, label)
