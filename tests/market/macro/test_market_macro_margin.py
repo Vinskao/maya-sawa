@@ -122,18 +122,36 @@ def test_turnover_refetches_the_current_month_and_backfills_only_missing_months(
     monkeypatch.setattr(market_macro.market_macro_db, "finish_source_call", lambda *args, **kwargs: None)
     monkeypatch.setattr(market_macro.time, "sleep", lambda seconds: None)
     stored = {"series:TW_MARKET_TURNOVER": {"fetchedAt": "2026-10-28T00:00:00+00:00",
-              "history": [{"period": "2026-09-30", "value": "9000.00"}]}}
+              "history": [{"period": "2026-09-30", "value": "9000.00"}]},
+              "series:TW_TAIEX": {"history": [{"period": "2026-09-30", "value": "47000.00"}]}}
     monkeypatch.setattr(market_macro._macro_local_cache, "get", lambda key: stored.get(key))
     service = market_macro.MarketMacroService()
     saved = []
     monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
     service._fetch_twse_turnover(today=date(2026, 10, 29), months=3)
     assert calls == ["20261001", "20260801"]            # September is stored; October is still filling in
-    values = {row["period"]: row["value"] for row in saved}
+    values = {row["period"]: row["value"] for row in saved if row["code"] == "TW_MARKET_TURNOVER"}
     assert values["2026-09-30"] == "9000.00" and values["2026-10-28"] == "7503.41" and len(values) == 18
+    taiex = {row["period"]: row["value"] for row in saved if row["code"] == "TW_TAIEX"}
+    assert taiex["2026-10-01"] == "48353.49" and taiex["2026-10-28"] == "47035.58" and len(taiex) == 18
+
+
+def test_taiex_month_missing_alone_triggers_backfill(monkeypatch):
+    calls = []
+    monkeypatch.setattr(market_macro, "_request_free_cached",
+        lambda key, url, **k: calls.append(url.split("date=")[1][:8]) or (200, json.dumps(HOLIDAY_MARGIN).encode()))
+    monkeypatch.setattr(market_macro.market_macro_db, "reserve_source_call", lambda *a, **k: 1)
+    monkeypatch.setattr(market_macro.market_macro_db, "finish_source_call", lambda *a, **k: None)
+    monkeypatch.setattr(market_macro.time, "sleep", lambda seconds: None)
+    stored = {"series:TW_MARKET_TURNOVER": {"history": [{"period": "2026-09-30", "value": "9000.00"}]}}
+    monkeypatch.setattr(market_macro._macro_local_cache, "get", lambda key: stored.get(key))
+    service = market_macro.MarketMacroService()
+    monkeypatch.setattr(service, "_cache_free_series", lambda rows, *a, **k: len(rows))
+    service._fetch_twse_turnover(today=date(2026, 10, 29), months=2)
+    assert calls == ["20261001", "20260901"]
 
 
 def test_balance_and_turnover_are_defined_for_the_dashboard():
     assert market_macro.TWSE_MARGIN_SERIES["TW_MARGIN_BALANCE"][1:] == ("TWD 100 million", "daily")
     assert market_macro.TWSE_TURNOVER_SERIES["TW_MARKET_TURNOVER"][1:] == ("TWD 100 million", "daily")
-    assert {"TW_MARGIN_BALANCE", "TW_MARKET_TURNOVER"} <= market_macro.FREE_CACHE_CODES
+    assert {"TW_MARGIN_BALANCE", "TW_MARKET_TURNOVER", "TW_TAIEX"} <= market_macro.FREE_CACHE_CODES

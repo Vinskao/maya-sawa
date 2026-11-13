@@ -50,6 +50,8 @@ from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
 from ..services.market_company_events import market_company_events_service
 from ..services.market_brief import brief_markdown, market_brief_service
+from ..services.relative_strength import closes_from_history, relative_streak
+from ..services import market_macro as market_macro_service
 from ..services.market_macro import market_macro_service, MACRO_ENABLED
 from ..services import market_automation, market_watch, telegram_notify
 from ..services.routine_cost import estimate_cost
@@ -897,6 +899,23 @@ async def get_market_dashboard_history(code: str, start: date | None = None, end
 
 
 HISTORY_BACKFILL_COOLDOWN_SECONDS = 600
+
+
+@router.get("/dashboard/relative/{code}", **public_data("個股相對加權指數的連續跑贏／跑輸", "行情與標的"))
+async def get_market_relative_strength(code: str, days: int = 120):
+    """Server-computed daily gap to TAIEX, signed streak and cumulative gap (services/relative_strength.py).
+    The analysis routines read this instead of fetching TWSE themselves."""
+    normalized = code.strip().upper()
+    if not (normalized.isdigit() and 4 <= len(normalized) <= 6):
+        raise HTTPException(status_code=422, detail="Taiwan stock code required")
+    end_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
+    start = (end_date - timedelta(days=min(max(days, 10), 400))).isoformat()
+    series = market_macro_service._macro_local_cache.get("series:TW_TAIEX") or {}
+    benchmark = {row["period"]: float(row["value"]) for row in series.get("history") or [] if row["period"] >= start}
+    if not benchmark:
+        return {"code": normalized, "status": "pending", "reason": "TAIEX series not collected yet"}
+    history = market_history_db.history(normalized, date.fromisoformat(start), end_date, sources=["twse:daily-price", "tpex:daily-price"])
+    return {"code": normalized, **relative_streak(closes_from_history(history["points"]), benchmark)}
 _history_backfill_requested: dict[str, float] = {}
 
 

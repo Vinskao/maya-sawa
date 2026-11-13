@@ -177,6 +177,8 @@ TWSE_MARGIN_SERIES = {
 # Listed-market daily trading value; FMTQIK returns every trading day of one month per request.
 TWSE_TURNOVER_SERIES = {
     "TW_MARKET_TURNOVER": ("Taiwan listed-market trading value (TWSE FMTQIK)", "TWD 100 million", "daily"),
+    # Same FMTQIK response; the benchmark for stock relative strength (services/relative_strength.py).
+    "TW_TAIEX": ("TAIEX close (TWSE FMTQIK)", "index points", "daily"),
 }
 TWSE_TURNOVER_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={day}&response=json"
 # TAIEX futures roll cost (services/futures_roll.py): next-month minus near-month settlement, and that spread above fair
@@ -498,6 +500,21 @@ def twse_turnover_rows(payload: dict) -> list[dict]:
         if match and value:
             period = f"{int(match.group(1)) + 1911}-{match.group(2)}-{match.group(3)}"
             rows.append({"period": period, "value": f"{value / 1e8:.2f}"})
+    return rows
+
+
+def twse_taiex_rows(payload: dict) -> list[dict]:
+    """FMTQIK rows as {period: ISO date, value: TAIEX close}."""
+    fields = payload.get("fields") or []
+    if "日期" not in fields or "發行量加權股價指數" not in fields:
+        return []
+    day_at, value_at = fields.index("日期"), fields.index("發行量加權股價指數")
+    rows = []
+    for row in payload.get("data") or []:
+        match = re.fullmatch(r"(\d{2,3})/(\d{2})/(\d{2})", str(row[day_at]).strip())
+        value = _twse_number(row[value_at])
+        if match and value:
+            rows.append({"period": f"{int(match.group(1)) + 1911}-{match.group(2)}-{match.group(3)}", "value": f"{value:.2f}"})
     return rows
 
 
@@ -1264,18 +1281,23 @@ class MarketMacroService:
         if _fetched_within(code, 5 * 3600): return 0
         run_id = market_macro_db.reserve_source_call("TWSETurnover", daily_limit=8, minute_limit=2)
         if run_id is None: raise RuntimeError("twse_turnover_daily_budget_exhausted")
-        history = {row["period"]: row["value"] for row in (_macro_local_cache.get(f"series:{code}") or {}).get("history") or []}
+        stored = {name: {row["period"]: row["value"] for row in (_macro_local_cache.get(f"series:{name}") or {}).get("history") or []}
+                  for name in TWSE_TURNOVER_SERIES}
+        parsers = {"TW_MARKET_TURNOVER": twse_turnover_rows, "TW_TAIEX": twse_taiex_rows}
         month, status = (today or datetime.now(ZoneInfo("Asia/Taipei")).date()).replace(day=1), None
         try:
             for index in range(months):
                 prefix = month.strftime("%Y-%m")
-                if index == 0 or not any(period.startswith(prefix) for period in history):
+                if index == 0 or any(not any(period.startswith(prefix) for period in history) for history in stored.values()):
                     compact = month.strftime("%Y%m%d")
                     status, raw = _request_free_cached(f"twse:turnover:{compact}", TWSE_TURNOVER_URL.format(day=compact))
                     time.sleep(1)                         # TWSE throttles bursts
-                    history.update({row["period"]: row["value"] for row in twse_turnover_rows(json.loads(raw))})
+                    payload = json.loads(raw)
+                    for name, parse in parsers.items():
+                        stored[name].update({row["period"]: row["value"] for row in parse(payload)})
                 month = (month - timedelta(days=1)).replace(day=1)
-            rows = [{"code": code, "period": period, "value": value} for period, value in sorted(history.items())]
+            rows = [{"code": name, "period": period, "value": value}
+                    for name, history in stored.items() for period, value in sorted(history.items())]
             saved = self._cache_free_series(rows, TWSE_TURNOVER_SERIES, "TWSE FMTQIK",
                                             "https://www.twse.com.tw/zh/trading/historical/fmtqik.html") if rows else 0
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)

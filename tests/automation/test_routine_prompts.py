@@ -158,8 +158,8 @@ def test_taiwan_streaks_name_reachable_benchmark_data_and_roll_breaks():
     for path in FILES:
         if path.name.startswith("market-taiwan-"):
             before_save = path.read_text(encoding="utf-8").split("## 4. 儲存")[0]
-            for item in ("rwd/zh/TAIEX/MI_5MINS_HIST", "/maya-sawa/market/dashboard/history/TXF", "近月接續", "換月日",
+            for item in ("rwd/zh/TAIEX/MI_5MINS_HIST", "/maya-sawa/market/dashboard/relative/{code}", "streakDays", "/maya-sawa/market/dashboard/history/TXF", "近月接續", "換月日",
                          "不得以 TXF 近月接續序列代替"):
                 assert item in before_save, (path.name, item)
     skill = (ROOT / "skills" / "stock-signal-analysis" / "SKILL.md").read_text(encoding="utf-8")
-    assert "近月接續" in skill and "MI_5MINS_HIST" in skill
+    assert "近月接續" in skill and "relative_strength" in skill
