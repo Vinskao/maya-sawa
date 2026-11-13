@@ -50,8 +50,9 @@ from ..services.market_history_collector import market_history_collector
 from ..services.market_fundamentals import market_fundamentals_service
 from ..services.market_company_events import market_company_events_service
 from ..services.market_brief import brief_markdown, market_brief_service
-from ..services.relative_strength import closes_from_history, relative_streak
-from ..services import market_macro as market_macro_service
+from ..services.relative_strength import closes_from_history, event_tracking, relative_streak
+from ..databases.market_signal_events_db import market_signal_events_db
+from ..services import market_macro as market_macro_module
 from ..services.market_macro import market_macro_service, MACRO_ENABLED
 from ..services import market_automation, market_watch, telegram_notify
 from ..services.routine_cost import estimate_cost
@@ -901,6 +902,57 @@ async def get_market_dashboard_history(code: str, start: date | None = None, end
 HISTORY_BACKFILL_COOLDOWN_SECONDS = 600
 
 
+def _taiex_closes(start: str) -> dict[str, float]:
+    series = market_macro_module._macro_local_cache.get("series:TW_TAIEX") or {}
+    return {row["period"]: float(row["value"]) for row in series.get("history") or [] if row["period"] >= start}
+
+
+class SignalEventBody(BaseModel):
+    code: str = Field(pattern=r"^\d{4,6}$")
+    publishedAt: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")   # Taipei local time
+    direction: str = Field(pattern="^(positive|negative)$")
+    title: str = Field(min_length=4, max_length=200)
+    sourceUrl: str = Field(pattern=r"^https://", max_length=500)
+    reason: str = Field(default="", max_length=500)
+
+
+@router.post("/signal-events")
+async def post_signal_event(body: SignalEventBody, request: Request):
+    """A routine records a material Taiwan-stock event once (agent key); re-posting the same event is a no-op."""
+    _verify_agent_key(request)
+    return market_signal_events_db.record(body.code, body.publishedAt, body.direction, body.title, body.sourceUrl, body.reason)
+
+
+@router.get("/signal-events", **public_data("重大消息後相對加權指數的逐日追蹤", "行情與標的"))
+async def get_signal_events(code: str | None = None, days: int = 60):
+    """Events from the last `days` days, each with its post-event run against TAIEX recomputed from stored closes."""
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+    since = (today - timedelta(days=min(max(days, 1), 180))).isoformat()
+    events = market_signal_events_db.since(since, code.strip().upper() if code else None)
+    benchmark = _taiex_closes((today - timedelta(days=200)).isoformat())
+    closes: dict[str, dict[str, float]] = {}
+    for event in events:
+        if event["code"] not in closes:
+            history = market_history_db.history(event["code"], today - timedelta(days=200), today,
+                                                sources=["twse:daily-price", "tpex:daily-price"])
+            closes[event["code"]] = closes_from_history(history["points"])
+        event["tracking"] = event_tracking(event["publishedAt"], event["direction"], closes[event["code"]], benchmark)             if benchmark else {"status": "pending", "reason": "TAIEX series not collected yet"}
+    return {"since": since, "benchmark": "TAIEX", "events": events}
+
+
+@router.get("/dashboard/tx-settlements", **public_data("臺股期貨 TX 各月份合約每日結算價", "行情與標的"))
+async def get_tx_settlements(month: str | None = None):
+    """Per-contract TX settlements (TAIFEX), for comparing a stock future with the same-month TX. Without `month`,
+    lists the contract months available."""
+    contracts = market_macro_module.tx_contract_settlements()
+    if not month:
+        return {"months": sorted({m for prices in contracts.values() for m in prices}), "days": len(contracts)}
+    if not (len(month) == 6 and month.isdigit()):
+        raise HTTPException(status_code=422, detail="month must be YYYYMM")
+    return {"month": month, "settlements": [{"date": day, "settlement": prices[month]}
+                                            for day, prices in sorted(contracts.items()) if month in prices]}
+
+
 @router.get("/dashboard/relative/{code}", **public_data("個股相對加權指數的連續跑贏／跑輸", "行情與標的"))
 async def get_market_relative_strength(code: str, days: int = 120):
     """Server-computed daily gap to TAIEX, signed streak and cumulative gap (services/relative_strength.py).
@@ -910,8 +962,7 @@ async def get_market_relative_strength(code: str, days: int = 120):
         raise HTTPException(status_code=422, detail="Taiwan stock code required")
     end_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
     start = (end_date - timedelta(days=min(max(days, 10), 400))).isoformat()
-    series = market_macro_service._macro_local_cache.get("series:TW_TAIEX") or {}
-    benchmark = {row["period"]: float(row["value"]) for row in series.get("history") or [] if row["period"] >= start}
+    benchmark = _taiex_closes(start)
     if not benchmark:
         return {"code": normalized, "status": "pending", "reason": "TAIEX series not collected yet"}
     history = market_history_db.history(normalized, date.fromisoformat(start), end_date, sources=["twse:daily-price", "tpex:daily-price"])

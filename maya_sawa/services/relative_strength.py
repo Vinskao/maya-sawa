@@ -59,3 +59,46 @@ def closes_from_history(points: Iterable[dict]) -> dict[str, float]:
                 closes[point["date"]] = float(close)
                 break
     return closes
+
+
+TAIPEI_CLOSE = "13:30"
+
+
+def event_tracking(published_at: str, direction: str, stock: dict[str, float], benchmark: dict[str, float]) -> dict:
+    """After a material positive (negative) event, the stock's daily gap to the benchmark from the first tradable close.
+
+    published_at is Taipei local ISO ("2026-11-10T14:05"); news after the 13:30 close reacts on the next trading day.
+    If the first day lags (positive) or leads (negative), the run continues day by day, with no three-day cap, until a
+    day's gap reaches zero or flips; a missing close stops it as pending (never skipped over). notable: the run's
+    cumulative gap reached 0.5 percentage points against the event's direction.
+    """
+    day, clock = published_at[:10], published_at[11:16] or "00:00"
+    days = sorted(d for d, v in benchmark.items() if v)
+    first_index = next((i for i, d in enumerate(days) if d > day or (d == day and clock < TAIPEI_CLOSE)), None)
+    if first_index is None or first_index == 0:
+        return {"status": "pending", "reason": "first tradable close not collected yet"}
+    against = -1 if direction == "positive" else 1          # the sign of a gap that goes against the news
+    base = days[first_index - 1]
+    run, last_day = [], None
+    for before, after in zip(days[first_index - 1:], days[first_index:]):
+        if not (stock.get(before) and stock.get(after)):
+            status = "pending"
+            break
+        gap = _pct(stock[after], stock[before]) - _pct(benchmark[after], benchmark[before])
+        if not run and (gap > 0) - (gap < 0) != against:
+            return {"status": "no-divergence", "firstDay": after, "firstGapPp": round(gap, 2)}
+        if run and (gap > 0) - (gap < 0) != against:
+            last_day = after
+            status = "ended"
+            break
+        run.append((after, gap))
+    else:
+        status = "ongoing"
+    if not run:
+        return {"status": status, "firstDay": days[first_index]}
+    end = run[-1][0]
+    cumulative = _pct(stock[end], stock[base]) - _pct(benchmark[end], benchmark[base])
+    return {"status": status, "firstDay": run[0][0], "firstGapPp": round(run[0][1], 2), "divergingDays": len(run),
+            "lastDivergingDay": end, "endedOn": last_day, "cumulativeGapPp": round(cumulative, 2),
+            "notable": cumulative * against >= 0.5,
+            "daily": [{"date": d, "gapPp": round(g, 2)} for d, g in run]}

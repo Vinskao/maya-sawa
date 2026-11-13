@@ -503,6 +503,35 @@ def twse_turnover_rows(payload: dict) -> list[dict]:
     return rows
 
 
+TX_CONTRACTS_CODE = "TX_CONTRACT_SETTLEMENTS"   # not a dashboard series: {day: {YYYYMM: settlement}} per TX contract
+
+
+def tx_contract_settlements() -> dict[str, dict[str, float]]:
+    """Daily settlement of every monthly TX contract, kept from the roll-spread fetch, so a stock future can be
+    compared with the same-month TX (TXF in market history is a near-month chain without the contract month)."""
+    entry = _macro_local_cache.get(f"series:{TX_CONTRACTS_CODE}")
+    if entry is None:
+        try:
+            entry = next((item for item in market_macro_db.load_cached_series(max_age_days=400)
+                          if item.get("code") == TX_CONTRACTS_CODE), None)
+        except Exception:
+            entry = None
+        if entry:
+            _macro_local_cache.set(f"series:{TX_CONTRACTS_CODE}", entry, FREE_SERIES_FALLBACK_SECONDS)
+    return {row["period"]: row["contracts"] for row in (entry or {}).get("history") or []}
+
+
+def _save_tx_contract_settlements(contracts: dict[str, dict[str, float]], keep_days: int = 400) -> None:
+    cutoff = (datetime.now(UTC).date() - timedelta(days=keep_days)).isoformat()
+    entry = {"code": TX_CONTRACTS_CODE, "fetchedAt": datetime.now(UTC).isoformat(), "source": "TAIFEX futDataDown",
+             "history": [{"period": day, "contracts": prices} for day, prices in sorted(contracts.items()) if day >= cutoff]}
+    _macro_local_cache.set(f"series:{TX_CONTRACTS_CODE}", entry, FREE_SERIES_FALLBACK_SECONDS)
+    try:
+        market_macro_db.save_cached_series([entry])
+    except Exception:
+        logger.warning("Unable to save TX contract settlements")
+
+
 def twse_taiex_rows(payload: dict) -> list[dict]:
     """FMTQIK rows as {period: ISO date, value: TAIEX close}."""
     fields = payload.get("fields") or []
@@ -1320,12 +1349,13 @@ class MarketMacroService:
         today = today or datetime.now(ZoneInfo("Asia/Taipei")).date()
         stored = {code: {row["period"]: row["value"] for row in (_macro_local_cache.get(f"series:{code}") or {}).get("history") or []}
                   for code in TX_ROLL_SERIES}
+        contracts = tx_contract_settlements()
         status = None
         try:
             settlements: dict[date, dict[str, float]] = {}
             for index, (start, end) in enumerate(futures_roll.month_ranges(today, months)):
                 prefix = start.strftime("%Y-%m")
-                if index == 0 or not any(period.startswith(prefix) for period in stored["TX_CALENDAR_SPREAD"]):
+                if index == 0 or not any(period.startswith(prefix) for period in stored["TX_CALENDAR_SPREAD"])                         or not any(period.startswith(prefix) for period in contracts):
                     settlements.update(futures_roll.parse_tx_settlements(_taifex_tx_csv(start, end)))
                     time.sleep(1)                     # TAIFEX throttles bursts
             status, raw = _request_free_cached("twse:shares", TWSE_SHARES_URL, ttl_seconds=24 * 3600)
@@ -1347,6 +1377,8 @@ class MarketMacroService:
             for row in futures_roll.roll_rows(settlements, dividends, shares, divisor, rate_on):
                 stored["TX_CALENDAR_SPREAD"][row["period"]] = f"{row['spread']:.2f}"
                 stored["TX_ROLL_EXCESS_SPREAD"][row["period"]] = f"{row['excess']:.2f}"
+            contracts.update({day.isoformat(): prices for day, prices in settlements.items()})
+            _save_tx_contract_settlements(contracts)
             rows = [{"code": code, "period": period, "value": value}
                     for code, history in stored.items() for period, value in sorted(history.items())]
             saved = self._cache_free_series(rows, TX_ROLL_SERIES, "TAIFEX, TWSE (computed)",

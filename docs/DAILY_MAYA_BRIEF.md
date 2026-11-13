@@ -249,4 +249,5 @@ flowchart LR
 6. 臺股每日相對強弱使用證交所 TAIEX 收盤及期交所 TX 每日結算價，更新至每檔個股分析。先逐日比較，再從最近交易日回溯同向序列，累計差距用兩邊各自複利後相減。換月及缺資料中斷可驗證區間。提示測試覆蓋兩個輪班，實際行情與雲端輸出待下一輪驗證。
 7. 營收每次解讀時用同頻率年增率回溯放緩期數。重大利多後首日跑輸時另存每日相對報酬，連續期間不限三日，延續到追平或跑贏。
 8. 2026-11-14 審查：站內沒有 TAIEX 指數日線，`/dashboard/history/TXF` 是未記合約月份的近月接續序列（換月日為第三個星期三後首個交易日）。臺股提示改指證交所 `MI_5MINS_HIST` JSON，換月日中斷連續，非近月的同月份 TX 不得用 TXF 代替。長期應由收集器存 TAIEX 日線與 TX 各月份結算價。
-9. 2026-11-14 實作：TAIEX 日線隨成交量一起從 FMTQIK 存成 macro 序列 `TW_TAIEX`（不多打請求）；`GET /market/dashboard/relative/{code}` 由 `services/relative_strength.py` 算當日差距、連續日數與累計差距，缺收盤即中斷。臺股提示改讀此端點。尚未做：TX 各月份結算價（個股期貨對同月份 TX）、利多後連續跑輸的結構化事件紀錄，仍靠提示與前版文字。
+9. 2026-11-14 實作：TAIEX 日線隨成交量一起從 FMTQIK 存成 macro 序列 `TW_TAIEX`（不多打請求）；`GET /market/dashboard/relative/{code}` 由 `services/relative_strength.py` 算當日差距、連續日數與累計差距，缺收盤即中斷。臺股提示改讀此端點。
+10. 2026-11-14 第二步：`POST /market/signal-events`（agent key）存重大消息，`GET /market/signal-events` 每次讀取時用已存收盤重算事件後逐日差距（`relative_strength.event_tracking`：13:30 後公布算次一交易日，缺收盤停在 pending，不跳日）。台指期轉倉作業下載的期交所 CSV 另存各月份合約結算價（快取代碼 `TX_CONTRACT_SETTLEMENTS`，不進總經圖），`GET /market/dashboard/tx-settlements?month=YYYYMM` 讀取。仍未做：個股期貨本身的日結算價沒有入庫，期貨對同月份 TX 的差距還要排程自行計算；收盤價未還原除權息。

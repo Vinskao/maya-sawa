@@ -33,3 +33,31 @@ def test_reads_listed_or_otc_close():
               {"date": "2026-11-13", "sources": {"tpex:daily-price": {"close": "11"}}},
               {"date": "2026-11-14", "sources": {"twse:institutional": {}}}]
     assert closes_from_history(points) == {"2026-11-12": 10.5, "2026-11-13": 11.0}
+
+
+from maya_sawa.services.relative_strength import event_tracking
+
+BENCH = {"2026-11-09": 100.0, "2026-11-10": 100.0, "2026-11-11": 100.0, "2026-11-12": 100.0, "2026-11-13": 100.0,
+         "2026-11-16": 100.0}
+
+
+def test_good_news_lag_runs_past_three_days_until_it_catches_up():
+    stock = {"2026-11-09": 100.0, "2026-11-10": 99.0, "2026-11-11": 98.0, "2026-11-12": 97.5, "2026-11-13": 97.0,
+             "2026-11-16": 97.5}
+    out = event_tracking("2026-11-09T15:00", "positive", stock, BENCH)       # after the close -> reacts 11-10
+    assert out["status"] == "ended" and out["firstDay"] == "2026-11-10" and out["divergingDays"] == 4
+    assert out["endedOn"] == "2026-11-16" and out["cumulativeGapPp"] == -3.0 and out["notable"]
+
+
+def test_news_before_close_reacts_same_day_and_no_divergence_is_not_tracked():
+    stock = {"2026-11-09": 100.0, "2026-11-10": 101.0}
+    assert event_tracking("2026-11-10T09:00", "positive", stock, BENCH)["status"] == "no-divergence"
+
+
+def test_missing_close_leaves_run_pending_and_bad_news_mirrors():
+    stock = {"2026-11-09": 100.0, "2026-11-10": 99.8, "2026-11-11": 99.6}
+    out = event_tracking("2026-11-09T20:00", "positive", stock, BENCH)
+    assert out["status"] == "pending" and out["divergingDays"] == 2 and not out["notable"]
+    up = event_tracking("2026-11-09T20:00", "negative", {"2026-11-09": 100.0, "2026-11-10": 101.0}, BENCH)
+    assert up["status"] == "pending" and up["divergingDays"] == 1 and up["notable"]
+    assert event_tracking("2026-11-16T20:00", "positive", stock, BENCH)["status"] == "pending"

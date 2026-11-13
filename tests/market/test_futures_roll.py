@@ -99,6 +99,10 @@ def test_the_service_backfills_missing_months_and_stores_spread_and_excess(monke
         "history": [{"period": "2024-03-22", "value": "2.000"}]}, 3600)
     market_macro._macro_local_cache.set("series:TX_CALENDAR_SPREAD", {"code": "TX_CALENDAR_SPREAD", "fetchedAt": "2026-10-28T00:00:00+00:00",
         "history": [{"period": "2026-09-30", "value": "160.00"}]}, 3600)
+    market_macro._macro_local_cache.set("series:TX_CONTRACT_SETTLEMENTS", {"code": "TX_CONTRACT_SETTLEMENTS",
+        "history": [{"period": "2026-09-30", "contracts": {"202610": 26000.0}}]}, 3600)
+    persisted = []
+    monkeypatch.setattr(market_macro.market_macro_db, "save_cached_series", lambda entries: persisted.extend(entries))
     gets, posts = [], []
 
     def fake_get(key, url, ttl_seconds=0, extra_headers=None):
@@ -130,6 +134,10 @@ def test_the_service_backfills_missing_months_and_stores_spread_and_excess(monke
     assert by[("TX_CALENDAR_SPREAD", "2026-10-28")] == "122.00"
     assert by[("TX_CALENDAR_SPREAD", "2026-09-30")] == "160.00"            # kept from the stored history
     assert float(by[("TX_ROLL_EXCESS_SPREAD", "2026-10-28")]) == pytest.approx(49.5, abs=0.1)
+    # 2026-11-14: every contract month's settlement is kept, so a stock future can use the same-month TX.
+    contracts = market_macro.tx_contract_settlements()
+    assert contracts["2026-09-30"] == {"202610": 26000.0} and len(contracts["2026-10-28"]) >= 2
+    assert persisted[-1]["code"] == "TX_CONTRACT_SETTLEMENTS"
 
 
 def test_the_service_waits_for_the_policy_rate(monkeypatch):
