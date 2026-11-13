@@ -178,3 +178,5 @@ flowchart TD
 
 - Local API Docs: `http://localhost:8000/maya-sawa/docs`
 - Production: `https://tymultiverse.cc/maya-sawa/docs`
+
+Maya routing deployment: [Gateway phase 2](docs/MAYA_GATEWAY_PHASE2.md).
