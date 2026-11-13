@@ -135,3 +135,11 @@ def test_all_stock_writers_include_company_peer_and_market_evidence():
             before_save = path.read_text(encoding="utf-8").split("## 4. 儲存")[0]
             for label in ("【個股綜合判讀】", "公司營收與獲利", "同業營收與獲利", "內部人申報"):
                 assert label in before_save, (path.name, label)
+
+
+def test_taiwan_stock_writers_require_daily_streaks_for_cash_and_futures():
+    for path in FILES:
+        if path.name.startswith("market-taiwan-"):
+            before_save = path.read_text(encoding="utf-8").split("## 4. 儲存")[0]
+            for item in ("連續跑贏／跑輸", "TAIEX", "臺股期貨 TX", "不受選題門檻限制"):
+                assert item in before_save, (path.name, item)
