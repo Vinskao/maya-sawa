@@ -114,3 +114,16 @@ def test_benchmark_outlook_is_written_by_opus_and_read_by_every_analysis_and_dai
         assert "outlook:AI:" in (ROOT / "routines" / name).read_text(encoding="utf-8"), name
     draft = (ROOT / "docs" / "GPT_DAILY_DRAFT_PROMPT.md").read_text(encoding="utf-8")
     assert "productType=outlook" in draft and "outlook:AI:" in draft
+
+
+def test_holding_signal_workflow_reaches_both_market_shifts_and_all_daily_roles():
+    market = [p for p in FILES if p.name.startswith("market-")]
+    daily = [p for p in FILES if p.name.startswith("maya-daily-")]
+    daily.append(ROOT / "docs" / "GPT_DAILY_DRAFT_PROMPT.md")
+    for path in market + daily:
+        prompt = path.read_text(encoding="utf-8")
+        for signal in ("利空不跌", "利多不漲", "次一交易日", "相對大盤", "箱型", "爆量", "第三個交易日", "研究報告"):
+            assert signal in prompt, (path.name, signal)
+    for path in market:
+        prompt = path.read_text(encoding="utf-8")
+        assert prompt.index("利空不跌") < prompt.index("## 4. 儲存")
