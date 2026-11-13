@@ -143,3 +143,11 @@ def test_taiwan_stock_writers_require_daily_streaks_for_cash_and_futures():
             before_save = path.read_text(encoding="utf-8").split("## 4. 儲存")[0]
             for item in ("連續跑贏／跑輸", "TAIEX", "臺股期貨 TX", "不受選題門檻限制"):
                 assert item in before_save, (path.name, item)
+
+
+def test_market_writers_track_revenue_deceleration_and_post_news_underperformance():
+    for path in FILES:
+        if path.name.startswith("market-"):
+            body = path.read_text(encoding="utf-8").split("## 4. 儲存")[0]
+            assert "營收成長連續放緩" in body, path.name
+            assert "重大利多後連續跑輸" in body and "不以三個交易日結束" in body, path.name
