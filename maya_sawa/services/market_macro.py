@@ -135,6 +135,16 @@ CBC_SERIES = {
     "CBC_SECURED_LOAN": ("Taiwan CBC secured loan rate", "percent", "daily"),
     "CBC_SHORT_TERM_LOAN": ("Taiwan CBC short-term loan rate", "percent", "daily"),
 }
+# What borrowing to invest costs in Taiwan (macro page, top). 場外: the five major banks' new-loan rates by purpose
+# (CBC EH45m01, monthly; consumer loans are the closest public proxy for unsecured / stock-pledge borrowing).
+# 場內: brokers' margin rates have no official series, so the chart benchmarks them with the interbank overnight
+# rate (CBC EG37D01, daily, published about a month late) and the CBC rediscount rate.
+CBC_BORROWING_SERIES = {
+    "TW_BANK_LOAN_RATE": ("Taiwan five major banks, new loans, weighted average rate", "percent", "monthly"),
+    "TW_CONSUMER_LOAN_RATE": ("Taiwan five major banks, new consumer loans, weighted average rate", "percent", "monthly"),
+    "TW_WORKING_CAPITAL_LOAN_RATE": ("Taiwan five major banks, new working-capital loans, weighted average rate", "percent", "monthly"),
+    "TW_INTERBANK_OVERNIGHT": ("Taiwan interbank call loan rate, overnight, weighted average", "percent", "daily"),
+}
 TAIWAN_SERIES = {
     "CBC_USD_TWD": ("Taiwan interbank USD/TWD closing rate", "TWD/USD", "daily"),
     "TW_EXPORTS": ("Taiwan exports, customs value", "NTD thousand", "monthly"),
@@ -264,7 +274,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES))
 
 
 def parse_bis_policy_rates(raw: bytes) -> list[dict]:
@@ -554,6 +564,30 @@ def parse_dts_tga(payload: dict) -> list[dict]:
     return [rows[day] for day in sorted(rows)]
 
 
+def parse_cbc_lending_rates(payload: dict) -> list[dict]:
+    """CBC EH45m01 rows: [YYYYMmm, 購屋 amt, rate, 資本支出 amt, rate, 週轉金 amt, rate, 消費性 amt, rate, 總計 amt, rate]."""
+    rows = []
+    for item in payload.get("data", {}).get("dataSets", []):
+        match = re.fullmatch(r"(\d{4})M(\d{2})", str(item[0])) if item else None
+        if not match or len(item) < 11: continue
+        period = f"{match.group(1)}-{match.group(2)}"
+        for code, index in (("TW_BANK_LOAN_RATE", 10), ("TW_CONSUMER_LOAN_RATE", 8), ("TW_WORKING_CAPITAL_LOAN_RATE", 6)):
+            if item[index] not in (None, "", "-"):
+                rows.append({"code": code, "period": period, "value": item[index]})
+    return rows
+
+
+def parse_cbc_interbank_overnight(payload: dict, since: str) -> list[dict]:
+    """CBC EG37D01 rows: [YYYYMMDD, overnight weighted average, high, low, ...]; keeps days on or after `since`."""
+    rows = []
+    for item in payload.get("data", {}).get("dataSets", []):
+        if len(item) < 2 or not re.fullmatch(r"\d{8}", str(item[0])): continue
+        period = f"{item[0][:4]}-{item[0][4:6]}-{item[0][6:8]}"
+        if period >= since and item[1] not in (None, "", "-"):
+            rows.append({"code": "TW_INTERBANK_OVERNIGHT", "period": period, "value": item[1]})
+    return rows
+
+
 def daily_net_liquidity_rows(walcl: list[dict], tga: list[dict], rrp: list[dict]) -> list[dict]:
     """Net liquidity for every TGA business day: latest Fed total assets within 8 days, that day's ON RRP (or up to 4
     days earlier for a holiday). Days missing an input are skipped rather than guessed."""
@@ -770,7 +804,7 @@ class MarketMacroService:
             try: output["sources"]["FederalReserve"] = self._fetch_fed_calendar()
             except Exception as exc:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
-            for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("TaiwanCustoms", self._fetch_taiwan_trade),
+            for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("CBCBorrowing", self._fetch_cbc_borrowing_rates), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
                 ("TWSEMargin", self._fetch_twse_margin_maintenance), ("TWSEMarketTurnover", self._fetch_twse_turnover),
                 ("TAIFEXRollSpread", self._fetch_tx_roll_spread), ("BISPolicyRates", self._fetch_policy_rates),
@@ -1035,6 +1069,26 @@ class MarketMacroService:
             raise RuntimeError("world_money_all_sources_failed")
         market_macro_db.finish_source_call(run_id, "success", saved, detail=";".join(failures), http_status=status)
         return saved
+
+    def _fetch_cbc_borrowing_rates(self) -> int:
+        """Bank new-loan rates (EH45m01) and the interbank overnight rate (EG37D01). Both update monthly, so skipped
+        when fetched within 12 hours."""
+        if _fetched_within("TW_BANK_LOAN_RATE", 12 * 3600):
+            return 0
+        rows = []
+        for file_name, parse in (("EH45m01", parse_cbc_lending_rates),
+                                 ("EG37D01", lambda payload: parse_cbc_interbank_overnight(payload, since=f"{LONG_HISTORY_START}-01"))):
+            run_id = market_macro_db.reserve_source_call("CBC", daily_limit=24, minute_limit=5)
+            if run_id is None: raise RuntimeError("cbc_daily_budget_exhausted")
+            try:
+                status, raw = _request_free_cached(f"cbc:{file_name}", f"https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName={file_name}")
+                parsed = parse(json.loads(raw.decode("utf-8-sig") if isinstance(raw, bytes) else raw))
+                market_macro_db.finish_source_call(run_id, "success", len(parsed), http_status=status)
+                rows += parsed
+            except Exception as exc:
+                market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+                raise
+        return self._cache_free_series(rows, CBC_BORROWING_SERIES, "CBC", "https://cpx.cbc.gov.tw/Data/ExportToAPIInfo")
 
     def _fetch_cbc_observations(self) -> int:
         """Persist official CBC policy-rate history and daily interbank USD/TWD history."""
