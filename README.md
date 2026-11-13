@@ -49,7 +49,72 @@ GPT weekly opportunity discovery: [flow, validation and cloud task setup](docs/G
 
 ## Architecture
 
-### System Architecture
+### Overall Architecture
+
+```mermaid
+flowchart LR
+    Client["Client / Frontend / Gateway"] --> Main["FastAPI app<br/>(maya_sawa/main.py)"]
+
+    subgraph API["API routers (maya_sawa/api)"]
+        QA["qa / ask / people / voyeur"]
+        Content["articles / blog / videos / git_commits"]
+        Conv["conversations / ai_models"]
+        Market["market / market_reports / market_audio"]
+        Daily["daily_maya"]
+        Social["social_publishing / publisher_mcp"]
+        Research["research_pipeline"]
+        Misc["admin_users / otel_usage / runpod / proxy"]
+    end
+    Main --> API
+
+    subgraph Svc["Services and workers"]
+        QAChain["QA chain (core/qa)"]
+        PeopleMods["people modules (maya_sawa/people)"]
+        MarketSvc["market_* services (maya_sawa/services)"]
+        Pipeline["research_pipeline"]
+        SocialSvc["social services (services/social)"]
+        Celery["Celery tasks (maya_sawa/tasks)"]
+        Providers["AI providers (services/ai_providers)"]
+    end
+    QA --> QAChain
+    QA --> PeopleMods
+    Conv --> Providers
+    Conv --> Celery
+    Market --> MarketSvc
+    Daily --> MarketSvc
+    Research --> Pipeline
+    Social --> SocialSvc
+
+    subgraph Store["Storage (maya_sawa/databases)"]
+        PG["PostgreSQL + pgvector"]
+        Redis["Redis"]
+    end
+    QAChain --> PG
+    PeopleMods --> PG
+    MarketSvc --> PG
+    MarketSvc --> Redis
+    Pipeline --> PG
+    SocialSvc --> PG
+    Celery --> Redis
+
+    subgraph Ext["External services"]
+        LLM["OpenAI / Gemini / Qwen"]
+        Shioaji["Shioaji (broker SDK)"]
+        Filings["Filing and financial data sources"]
+        Telegram["Telegram"]
+        SocialNet["LinkedIn / Meta"]
+        Speech["Azure Speech"]
+    end
+    QAChain --> LLM
+    Providers --> LLM
+    MarketSvc --> Shioaji
+    MarketSvc --> Filings
+    MarketSvc --> Speech
+    MarketSvc --> Telegram
+    SocialSvc --> SocialNet
+```
+
+### Q&A Flow (maya_sawa/core/qa)
 
 ```mermaid
 graph TD
@@ -79,6 +144,8 @@ graph TD
     O --> P["Return AI answer"];
     P --> B;
 ```
+
+### Q&A Components (maya_sawa/api/qa.py)
 
 ```mermaid
 flowchart TD
