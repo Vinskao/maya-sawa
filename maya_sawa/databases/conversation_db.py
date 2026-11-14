@@ -51,7 +51,7 @@ from enum import Enum
 
 try:
     from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Float, ForeignKey, JSON, pool
-    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import declarative_base
     from sqlalchemy.orm import sessionmaker, relationship
 except ImportError as e:
     raise ImportError(f"SQLAlchemy is required but not installed. Please install it with: poetry install") from e

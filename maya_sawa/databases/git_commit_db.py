@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
 
 from sqlalchemy import BigInteger, Boolean, Column, DateTime, String, Text, create_engine, pool, text
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from ..core.config.config import Config
