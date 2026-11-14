@@ -55,7 +55,7 @@ from .api.conversations import router as conversations_router, legacy_router as 
 from .api.ask import router as ask_router
 from .api.people import router as people_router
 from .api.voyeur import router as voyeur_router
-from .api.proxy import router as proxy_router
+from .api.proxy import router as proxy_router, close_http_client as close_proxy_http_client
 from .api.videos import router as videos_router
 from .api.git_commits import router as git_commits_router
 from .api.otel_usage import router as otel_usage_router
@@ -119,6 +119,7 @@ async def lifespan(app: FastAPI):
         await stop_publishing_monitor()
         await social_runner.stop()
         await _shutdown_event()
+        await close_proxy_http_client()
         get_research_pipeline_container().shutdown()
 
 

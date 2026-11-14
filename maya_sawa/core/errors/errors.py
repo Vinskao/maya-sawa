@@ -76,7 +76,7 @@ class ErrorCode(Enum):
         "E1002", 
         "資料驗證失敗", 
         "Validation failed",
-        status.HTTP_422_UNPROCESSABLE_ENTITY
+        status.HTTP_422_UNPROCESSABLE_CONTENT
     )
     UNAUTHORIZED = (
         "E1003", 
@@ -152,7 +152,7 @@ class ErrorCode(Enum):
         "E3001", 
         "文章已存在", 
         "Article already exists",
-        status.HTTP_422_UNPROCESSABLE_ENTITY
+        status.HTTP_422_UNPROCESSABLE_CONTENT
     )
     ARTICLE_CREATE_FAILED = (
         "E3002", 
@@ -517,7 +517,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         status.HTTP_404_NOT_FOUND: ErrorCode.NOT_FOUND,
         status.HTTP_405_METHOD_NOT_ALLOWED: ErrorCode.METHOD_NOT_ALLOWED,
         status.HTTP_409_CONFLICT: ErrorCode.CONFLICT,
-        status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorCode.VALIDATION_ERROR,
+        status.HTTP_422_UNPROCESSABLE_CONTENT: ErrorCode.VALIDATION_ERROR,
         status.HTTP_429_TOO_MANY_REQUESTS: ErrorCode.TOO_MANY_REQUESTS,
         status.HTTP_500_INTERNAL_SERVER_ERROR: ErrorCode.INTERNAL_SERVER_ERROR,
         status.HTTP_502_BAD_GATEWAY: ErrorCode.REMOTE_API_ERROR,
@@ -583,7 +583,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
     
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
             "success": False,
             "error_code": ErrorCode.VALIDATION_ERROR.code,
