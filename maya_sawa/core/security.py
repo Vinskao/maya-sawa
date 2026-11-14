@@ -51,6 +51,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         )
 
     async def dispatch(self, request: Request, call_next):
+        # Kubelet probes: no Redis rate limit, no logging (2026-11-14: probes on a DB route killed the pod under load).
+        if request.url.path == "/healthz":
+            return await call_next(request)
         started = time.monotonic()
         request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
         request.state.request_id = request_id

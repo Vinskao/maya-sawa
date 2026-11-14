@@ -580,6 +580,13 @@ async def public_openapi():
     return build_public_openapi(app)
 
 
+@app.get("/healthz", include_in_schema=False)
+async def healthz():
+    """Liveness/readiness: proves the event loop answers, touches no database or Redis. A probe on /paprika/articles
+    (a DB query, 1 s timeout) failed whenever startup refreshes made queries slow, and the kubelet killed the pod."""
+    return {"status": "ok"}
+
+
 @app.get("/")
 async def root():
     """

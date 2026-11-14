@@ -394,20 +394,22 @@ spec:
           mountPath: /app/temp
         startupProbe:
           httpGet:
-            path: /paprika/articles  # 使用一個輕量級的 GET 端點
+            path: /healthz  # 不碰資料庫；DB 查詢當探針會在忙時被誤殺
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
           failureThreshold: 30
         livenessProbe:
           httpGet:
-            path: /paprika/articles
+            path: /healthz
             port: 8000
           initialDelaySeconds: 60
           periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /paprika/articles
+            path: /healthz
             port: 8000
           initialDelaySeconds: 45
           periodSeconds: 10
