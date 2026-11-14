@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
+from .daily_maya_reading import reading_blocks
+
 logger = logging.getLogger(__name__)
 
 DISCLAIMER = '內容由 AI 整理，僅供參考，不構成投資建議。'
@@ -44,8 +46,10 @@ def confirmation_message(email, token, *, sender, site):
 def daily_message(brief, email, token, *, sender, site, links):
     unsubscribe = f'{site}{SUBSCRIPTION_PATH}/unsubscribe?token={token}'
     title = (brief.get('title') or '').strip() or '每日市場精讀'
+    reading = (brief.get('reading') or '').strip()
+    body = '\n\n'.join(text for _, text in reading_blocks(reading)) if reading else brief['content'].strip()
     message = _message(email, f"{title}｜{brief['day']} 每日市場精讀", '\n'.join([
-        title, brief['day'], '', brief['content'].strip(), '',
+        title, brief['day'], '', body, '',
         '收聽與追蹤', f'網站與語音：{site}/learn/',
         *[f"{link['label']}：{link['href']}" for link in links], '',
         DISCLAIMER, f'取消訂閱：{unsubscribe}',

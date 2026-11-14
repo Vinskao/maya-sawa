@@ -95,6 +95,24 @@ def test_messages_are_plain_text_with_the_disclaimer():
     assert 'tok' in confirmation_message('r@example.com', 'tok', sender='Birch <b@x.cc>', site='https://tymultiverse.cc').get_content()
 
 
+def test_daily_mail_uses_reading_version_and_keeps_spoken_script_untouched():
+    brief = {**BRIEF, 'content': '上漲百分之一點五二。',
+             'reading': '## 市場\n\n上漲 1.52%。\n\n營收 25 億元。'}
+    body = daily_message(brief, 'r@example.com', 'tok', sender='b@x.cc',
+                         site='https://tymultiverse.cc', links=[]).get_content()
+    assert '市場\n\n上漲 1.52%。\n\n營收 25 億元。' in body
+    assert '## 市場' not in body
+    assert '百分之一點五二' not in body
+    assert brief['content'] == '上漲百分之一點五二。'
+
+
+def test_daily_mail_falls_back_to_spoken_script_for_missing_or_blank_reading():
+    for reading in (None, '', '  '):
+        body = daily_message({**BRIEF, 'reading': reading}, 'r@example.com', 'tok',
+                             sender='b@x.cc', site='https://tymultiverse.cc', links=[]).get_content()
+        assert BRIEF['content'] in body
+
+
 def _client(db, limit=200):
     app = FastAPI()
     app.include_router(make_router(db, lambda: NOW, daily_limit=limit))
