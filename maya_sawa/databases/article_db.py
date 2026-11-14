@@ -57,7 +57,7 @@ from contextlib import contextmanager
 
 try:
     from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, pool
-    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import declarative_base
     from sqlalchemy.orm import sessionmaker, Session
 except ImportError as e:
     raise ImportError(f"SQLAlchemy is required but not installed. Please install it with: poetry install") from e

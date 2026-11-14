@@ -224,7 +224,6 @@ def _stale_or_503(username: str) -> Dict[str, Any]:
     )
 
 
-@router.on_event("shutdown")
-async def shutdown_event():
-    """Clean up HTTP client on shutdown"""
+async def close_http_client():
+    """Close the shared HTTP client; called from the app lifespan in main.py."""
     await http_client.aclose()

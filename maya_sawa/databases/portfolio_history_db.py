@@ -28,7 +28,7 @@ from sqlalchemy import (
     create_engine,
     pool,
 )
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import insert
 from decimal import Decimal, InvalidOperation
