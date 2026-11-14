@@ -63,6 +63,7 @@ from .api.market import router as market_router
 from .api.market_reports import router as market_reports_router
 from .api.admin_users import router as admin_users_router
 from .api.reader_events import router as reader_events_router
+from .api.ai_visibility import router as ai_visibility_router
 from .api.publisher_mcp import router as publisher_mcp_router
 from .api.social_publishing import router as social_publishing_router
 from .services.social import runner as social_runner
@@ -300,6 +301,7 @@ async def _brief_mail_loop(mailer):
 app.include_router(make_podcast_router(market_audio_db, daily_maya_db))
 app.include_router(admin_users_router)
 app.include_router(reader_events_router)
+app.include_router(ai_visibility_router)
 app.include_router(publisher_mcp_router)
 app.include_router(social_publishing_router)
 

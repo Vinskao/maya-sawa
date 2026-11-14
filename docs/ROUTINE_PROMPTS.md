@@ -27,6 +27,7 @@ flowchart TD
 | `market-taiwan-sonnet.md` / `market-taiwan-opus.md` | 市場 AI 分析｜台股收盤後（Sonnet／Opus 輪班），週一至週五 21:15 |
 | `weekly-maintenance-{backend,maya-sawa,frontend}.md` | 每週維護，各自週三／週六／週日 01:00 |
 | `report-claim-extraction.md` | 市場報告｜萃取主張，每天 20:30 |
+| `ai-visibility-fix.md` | AI 曝光審核與網站修繕，週二、週五 05:30（見 AI_VISIBILITY.md） |
 | `GPT_REPORT_CLAIM_EXTRACTION.md` | GPT 萃取並提交隔離提案；Claude 只做審核與資料庫寫入。API 部署後才切換雲端排程 |
 
 **未遷移（原因）：**
