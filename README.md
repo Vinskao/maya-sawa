@@ -49,25 +49,93 @@ GPT weekly opportunity discovery: [flow, validation and cloud task setup](docs/G
 
 ## Architecture
 
-### System Architecture
+### 整體架構
+
+maya-sawa 是 TY Multiverse 的 Python AI／市場研究服務（FastAPI，Ingress 前綴 `/maya-sawa`）。下圖只畫程式碼裡看得到的元件與連線。
+
+```mermaid
+flowchart LR
+    Client["Frontend / 瀏覽器"]
+    Agent["排程 Agent（agent key）"]
+
+    subgraph App["maya-sawa（maya_sawa/main.py）"]
+        Sec["SecurityMiddleware + Keycloak JWT（core/security.py、core/auth）"]
+        QA["QA・對話・人物 API（api/qa、conversations、ask、people）"]
+        Content["文章・Blog API（api/articles、blog）"]
+        Market["市場 API（api/market、market_reports、tw_benchmark、publisher_mcp）"]
+        Daily["每日簡報・Podcast（api/daily_maya、market_audio、podcast、brief_subscriptions）"]
+        Social["社群發文（api/social_publishing、services/social）"]
+        Research["Research pipeline（LangGraph，research_pipeline/）"]
+        Ops["維運 API（api/otel_usage、runpod、git_commits、proxy）"]
+        Workers["lifespan 背景工作（行情刷新、歷史／基本面／目標價收集、時間戳、blog・benchmark worker、ArticleSyncScheduler）"]
+        Celery["Celery tasks（tasks/celery_app.py）"]
+        Metrics["MetricsConsumer（services/metrics_consumer.py）"]
+    end
+
+    PG[("PostgreSQL + pgvector")]
+    Redis[("Redis")]
+    Mongo[("MongoDB")]
+    Backend["TY backend（tymb）"]
+    LLM["OpenAI / Gemini / Qwen"]
+    Broker["Shioaji / IBKR Gateway / Binance"]
+    Filings["SEC / EDINET / DART / MOPS 等公開資料"]
+    Notify["Telegram / SMTP"]
+    SNS["Facebook / Instagram / Threads / LinkedIn"]
+    OTS["OpenTimestamps calendars"]
+    Ext["RunPod / LeetCode / Azure Speech"]
+
+    Client -->|HTTP| Sec
+    Agent -->|HTTP| Sec
+    Sec --> QA & Content & Market & Daily & Social & Research & Ops
+
+    QA --> LLM
+    QA -->|"HTTP /people"| Backend
+    QA --> PG
+    QA --> Redis
+    Content --> PG
+    Market --> PG
+    Market --> Redis
+    Market --> Notify
+    Daily --> PG
+    Daily --> Notify
+    Social --> SNS
+    Social --> PG
+    Research --> PG
+    Research --> LLM
+    Ops --> PG
+    Ops --> Ext
+
+    Workers --> Broker
+    Workers --> Filings
+    Workers --> OTS
+    Workers --> PG
+    Workers --> Redis
+    Celery --> Redis
+    Celery --> LLM
+    Metrics -->|WebSocket| Backend
+    Metrics --> Mongo
+    App -.->|"HTTP /ai-usage（token 用量）"| Backend
+```
+
+### QA 問答流程（maya_sawa/api/qa.py、maya_sawa/core/qa）
 
 ```mermaid
 graph TD
-    A["User Request</br>(/qa/query)"] --> B{FastAPI Router};
+    A["User Request (/qa/query)"] --> B{FastAPI Router};
     B --> C["qa_chain.get_answer(query)"];
     C --> D{"Detect names in query"};
     
     %% 名稱檢測分支
-    D -- "Names found" --> E["Fetch character profiles</br>from DB"];
+    D -- "Names found" --> E["Fetch character profiles from DB"];
     E --> F{"Profile found?"};
-    F -- "Yes" --> G["Create prompt with</br>character profile"];
+    F -- "Yes" --> G["Create prompt with character profile"];
     F -- "No" --> H["Respond 'not found'"];
     
     %% 無名稱分支
     D -- "No names found" --> I{"Semantic search for people"};
-    I -- "People found" --> J["Generate answer from</br>search results"];
-    I -- "No one found" --> K["Similarity search</br>in Vector Store"];
-    K --> L["Create prompt with</br>document context"];
+    I -- "People found" --> J["Generate answer from search results"];
+    I -- "No one found" --> K["Similarity search in Vector Store"];
+    K --> L["Create prompt with document context"];
     
     %% 統一處理
     G --> M["Invoke LLM"];
@@ -80,10 +148,12 @@ graph TD
     P --> B;
 ```
 
+### QA 模組元件（maya_sawa/core、maya_sawa/people）
+
 ```mermaid
 flowchart TD
     subgraph "API Layer"
-        APIRouter["FastAPI Router<br/>(maya_sawa/api/qa.py)"]
+        APIRouter["FastAPI Router (maya_sawa/api/qa.py)"]
     end
 
     subgraph "Q&A Layer"
@@ -97,7 +167,7 @@ flowchart TD
         PeopleWeaponManager["PeopleWeaponManager"]
         PersonalityPromptBuilder["PersonalityPromptBuilder"]
         NameAdapter["NameAdapter"]
-        VectorStore["PostgresVectorStore"]
+        VectorStore["QAVectorDatabase (databases/qa_vector_db.py)"]
         ChatHistoryManager["ChatHistoryManager"]
         ConfigManager["ConfigManager"]
         ConnectionPoolManager["ConnectionPoolManager"]
@@ -105,9 +175,9 @@ flowchart TD
     end
 
     subgraph "External Services"
-        OpenAIAPI["OpenAI API<br/>Chat & Embeddings"]
-        PeopleAPI["People System API<br/>/tymb/people/*"]
-        ArticleAPI["Public Article API<br/>/paprika/articles"]
+        OpenAIAPI["OpenAI API (Chat & Embeddings)"]
+        PeopleAPI["People System API (/tymb/people/*)"]
+        ArticleAPI["Public Article API (/paprika/articles)"]
         PostgresDB["PostgreSQL"]
         RedisDB["Redis"]
     end
