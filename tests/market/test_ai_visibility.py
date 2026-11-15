@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from maya_sawa.api import ai_visibility
 from maya_sawa.core.auth.keycloak import require_manage_users_request
 from maya_sawa.databases.ai_visibility_db import AiVisibilityDatabase, InboxFull
-from maya_sawa.services.ai_visibility import KEYWORDS, PLATFORMS, summarize, validate_results
+from maya_sawa.services.ai_visibility import KEYWORDS, MAIN_KEYWORD, PLATFORMS, summarize, validate_results, weekly_keywords
 
 NOW = datetime(2026, 11, 17, 19, 0, tzinfo=timezone.utc)  # Tuesday 03:00 Taipei
 KW = KEYWORDS[0]
@@ -48,8 +48,8 @@ def test_an_unavailable_platform_is_recorded_not_guessed():
     assert out[0]["status"] == "unavailable" and out[0]["appeared"] is False
 
 
-def run(results, day):
-    return {"id": f"r-{day}", "submittedAt": f"{day}T00:00:00+00:00", "results": results}
+def run(results, day, week=None):
+    return {"id": f"r-{day}", "week": week or day, "submittedAt": f"{day}T00:00:00+00:00", "results": results}
 
 
 def test_summary_counts_checked_cells_only_and_compares_with_the_previous_run():
@@ -128,3 +128,27 @@ def test_api_flow_from_gpt_submission_to_owner_dashboard(client):
 def test_bad_submissions_are_422(client):
     assert client.post("/market/ai-visibility/runs", json={"results": [row(keyword="x")]}).status_code == 422
     assert client.post("/market/ai-visibility/runs", json={"results": []}).status_code == 422
+
+
+def test_each_week_checks_the_main_keyword_plus_two_that_rotate_through_the_rest():
+    weeks = [weekly_keywords(f"2026-W{n:02d}") for n in range(1, 7)]
+    assert all(len(w) == 3 and w[0] == MAIN_KEYWORD for w in weeks)
+    rotated = [k for w in weeks[:6] for k in w[1:]]
+    assert set(rotated) == set(KEYWORDS) - {MAIN_KEYWORD}            # 11 others covered within six weeks
+    assert weekly_keywords("2026-W47") == weekly_keywords("2026-W47")  # stable within a week
+
+
+def test_runs_from_the_same_week_merge_into_one_column():
+    gpt = run([row(platform="chatgpt", appeared=True, rank=1)], "2026-11-17", "2026-W47")
+    manual = run([row(platform="grok"), row(platform="gemini", appeared=True, rank=3)], "2026-11-18", "2026-W47")
+    s = summarize([manual, gpt])
+    assert s["latest"]["checked"] == 3 and s["latest"]["appeared"] == 2 and s["latest"]["week"] == "2026-W47"
+    assert len(s["trend"]) == 1
+
+
+def test_owner_manual_entry_counts_without_review(client):
+    week_kw = client.get("/market/ai-visibility/keywords").json()["thisWeek"]
+    assert len(week_kw) == 3
+    sent = client.post("/market/admin/ai-visibility/manual", json={"results": [row(keyword=week_kw[0], platform="gemini", appeared=True, rank=2)]})
+    assert sent.status_code == 200 and sent.json()["status"] == "accepted"
+    assert client.get("/market/admin/ai-visibility").json()["latest"]["appeared"] == 1

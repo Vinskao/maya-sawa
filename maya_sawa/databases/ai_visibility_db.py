@@ -53,7 +53,8 @@ class AiVisibilityDatabase:
         if not self.sessions:
             raise RuntimeError("AI visibility database unavailable")
 
-    def submit(self, week: str, results: list[dict], now: datetime, limit: int) -> tuple[dict, bool]:
+    def submit(self, week: str, results: list[dict], now: datetime, limit: int, status: str = "pending") -> tuple[dict, bool]:
+        """`status='accepted'` only for the owner's own manual entries; anything unauthenticated stays pending."""
         self._require()
         text = json.dumps(results, ensure_ascii=False, sort_keys=True)
         digest = hashlib.sha256(text.encode()).hexdigest()
@@ -63,7 +64,8 @@ class AiVisibilityDatabase:
                 return _row(existing), False
             if session.query(AiVisibilityRun).filter_by(week=week).count() >= limit:
                 raise InboxFull(week)
-            row = AiVisibilityRun(id=str(uuid.uuid4()), week=week, digest=digest, results=text, status="pending", submitted_at=now)
+            row = AiVisibilityRun(id=str(uuid.uuid4()), week=week, digest=digest, results=text, status=status, submitted_at=now,
+                                  reviewed_at=now if status == "accepted" else None, note="owner manual" if status == "accepted" else None)
             session.add(row)
             session.flush()
             return _row(row), True

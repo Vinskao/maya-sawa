@@ -9,12 +9,13 @@ from pydantic import BaseModel, Field
 
 from ..core.auth.keycloak import require_manage_users_request
 from ..databases.ai_visibility_db import InboxFull, ai_visibility_db
-from ..services.ai_visibility import KEYWORDS, PLATFORMS, summarize, validate_results
+from ..services.ai_visibility import KEYWORDS, PLATFORMS, summarize, validate_results, weekly_keywords
 from .market import _verify_agent_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["ai-visibility"])
-RUNS_PER_WEEK = 6  # twice a week plus retries
+RUNS_PER_WEEK = 6  # one GPT run plus retries
+MANUAL_PER_WEEK = 20
 
 
 class VisibilityResult(BaseModel):
@@ -46,9 +47,16 @@ def _unavailable(exc: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail="AI visibility unavailable")
 
 
+def _week(now: datetime) -> str:
+    iso = now.astimezone(ZoneInfo("Asia/Taipei")).isocalendar()
+    return f"{iso.year}-W{iso.week:02d}"
+
+
 @router.get("/ai-visibility/keywords")
 async def keywords():
-    return {"keywords": list(KEYWORDS), "platforms": list(PLATFORMS), "site": "tymultiverse.cc"}
+    week = _week(datetime.now(ZoneInfo("UTC")))
+    return {"keywords": list(KEYWORDS), "platforms": list(PLATFORMS), "site": "tymultiverse.cc",
+            "week": week, "thisWeek": weekly_keywords(week)}
 
 
 @router.post("/ai-visibility/runs")
@@ -58,9 +66,8 @@ async def submit_run(body: VisibilitySubmission):
         results = validate_results([r.model_dump() for r in body.results])
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    iso = now.astimezone(ZoneInfo("Asia/Taipei")).isocalendar()
     try:
-        row, stored = await asyncio.to_thread(ai_visibility_db.submit, f"{iso.year}-W{iso.week:02d}", results, now, RUNS_PER_WEEK)
+        row, stored = await asyncio.to_thread(ai_visibility_db.submit, _week(now), results, now, RUNS_PER_WEEK)
     except InboxFull as exc:
         raise HTTPException(status_code=429, detail="This week's visibility inbox is full") from exc
     except Exception as exc:
@@ -104,5 +111,23 @@ async def owner_view(_claims: dict = Depends(require_manage_users_request)):
         pending = await asyncio.to_thread(ai_visibility_db.count, "pending")
     except Exception as exc:
         raise _unavailable(exc) from exc
+    week = _week(datetime.now(ZoneInfo("UTC")))
     fixes = [{"runId": r["id"], "at": r["reviewedAt"], "items": r["fixes"]} for r in accepted if r["fixes"]][:3]
-    return {**summarize(accepted), "pending": pending, "fixes": fixes}
+    return {**summarize(accepted), "pending": pending, "fixes": fixes, "week": week, "thisWeek": weekly_keywords(week)}
+
+
+@router.post("/admin/ai-visibility/manual")
+async def manual_entry(body: VisibilitySubmission, _claims: dict = Depends(require_manage_users_request)):
+    """The owner's own checks on Grok / Gemini / Claude web; trusted, so counted without review."""
+    now = datetime.now(ZoneInfo("UTC"))
+    try:
+        results = validate_results([r.model_dump() for r in body.results])
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        row, stored = await asyncio.to_thread(ai_visibility_db.submit, _week(now), results, now, MANUAL_PER_WEEK, "accepted")
+    except InboxFull as exc:
+        raise HTTPException(status_code=429, detail="Too many manual entries this week") from exc
+    except Exception as exc:
+        raise _unavailable(exc) from exc
+    return {"stored": stored, "id": row["id"], "status": row["status"]}

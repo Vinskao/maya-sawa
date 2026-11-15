@@ -22,6 +22,18 @@ KEYWORDS = (
     "TY 市場研究室",
     "Taiwan stock research platform",
 )
+MAIN_KEYWORD = KEYWORDS[0]  # checked every week so there is one continuous trend line
+ROTATING_PER_WEEK = 2
+
+
+def weekly_keywords(week: str) -> list[str]:
+    """This ISO week's three keywords ("2026-W47"): the main one plus two rotating through the other eleven."""
+    others = [k for k in KEYWORDS if k != MAIN_KEYWORD]
+    year, number = week.split("-W")
+    start = ((int(year) * 53 + int(number) - 1) * ROTATING_PER_WEEK) % len(others)
+    return [MAIN_KEYWORD] + [others[(start + i) % len(others)] for i in range(ROTATING_PER_WEEK)]
+
+
 STATUSES = ("checked", "unavailable")  # unavailable: the platform needed a login or refused; never guess a result
 MAX_RANK = 20
 SNIPPET_LIMIT = 300
@@ -77,11 +89,27 @@ def _change(now: dict, before: dict | None) -> str:
     return "same" if now["appeared"] else "none"
 
 
+def _by_week(runs: list[dict]) -> list[dict]:
+    """Merge runs of the same week (GPT's ChatGPT cells, the owner's manual cells); a newer run wins a cell. Newest week first."""
+    weeks: dict[str, dict] = {}
+    for run in runs:  # newest first
+        week = run.get("week") or run["submittedAt"][:10]
+        merged = weeks.setdefault(week, {"id": run["id"], "week": week, "submittedAt": run["submittedAt"], "cells": {}})
+        for r in run["results"]:
+            merged["cells"].setdefault((r["keyword"], r["platform"]), r)
+    return [{**w, "results": list(w["cells"].values())} for w in weeks.values()]
+
+
+def _head(week: dict) -> dict:
+    return {"id": week["id"], "week": week["week"], "at": week["submittedAt"], **_totals(week["results"])}
+
+
 def summarize(runs: list[dict]) -> dict:
-    """`runs`: accepted runs, newest first. Cells compare the latest run with the one before it."""
-    if not runs:
+    """`runs`: accepted runs, newest first. Cells compare the latest week with the week before it."""
+    weeks = _by_week(runs)
+    if not weeks:
         return {"latest": None, "previous": None, "byPlatform": {}, "cells": [], "trend": []}
-    latest, previous = runs[0], runs[1] if len(runs) > 1 else None
+    latest, previous = weeks[0], weeks[1] if len(weeks) > 1 else None
     before = {(r["keyword"], r["platform"]): r for r in previous["results"]} if previous else {}
     by_platform = defaultdict(lambda: {"checked": 0, "appeared": 0, "bestRank": None})
     for r in latest["results"]:
@@ -93,7 +121,5 @@ def summarize(runs: list[dict]) -> dict:
         if r["rank"] and (p["bestRank"] is None or r["rank"] < p["bestRank"]):
             p["bestRank"] = r["rank"]
     cells = [{**r, "change": _change(r, before.get((r["keyword"], r["platform"])))} for r in latest["results"]]
-    trend = [{"id": run["id"], "at": run["submittedAt"], **_totals(run["results"])} for run in reversed(runs[:12])]
-    return {"latest": {"id": latest["id"], "at": latest["submittedAt"], **_totals(latest["results"])},
-            "previous": {"id": previous["id"], "at": previous["submittedAt"], **_totals(previous["results"])} if previous else None,
-            "byPlatform": dict(by_platform), "cells": cells, "trend": trend}
+    return {"latest": _head(latest), "previous": _head(previous) if previous else None,
+            "byPlatform": dict(by_platform), "cells": cells, "trend": [_head(w) for w in reversed(weeks[:12])]}
