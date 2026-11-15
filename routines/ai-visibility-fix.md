@@ -3,6 +3,10 @@
 
 API 根路徑用 https://tymultiverse.cc/maya-sawa/market（2026-11-15 實測可連；peoplesystem.tatdvsonorth.com 被雲端代理擋 403）；代理會自動加 X-Market-Agent-Key，你不碰、不印、不寫入任何金鑰。
 
+## 0. 從 Gmail 取 GPT 結果（Gmail 只能搜尋、讀取，不寄信、不改信）
+GPT 排程（週六 03:00）連不到 API，結果只寄到擁有者 Gmail。用 Gmail search_threads 查 `from:openai.com TYAIVIS newer_than:4d`，只讀符合的那一封（get_thread），不要讀、不要引用其他任何信件內容。
+從信中取出 `TYAIVIS-JSON` 標記後的 JSON（{"week","results":[…]}），原樣 POST /ai-visibility/runs（無密鑰）。找不到信或 JSON 不完整就回報「本週沒收到 GPT 結果」，繼續第 1 節。同週重複送出會被去重，無害。
+
 ## 1. 審核
 GET /ai-visibility/runs?status=pending。pending 只有 GPT 送的 ChatGPT 格；擁有者手動填的 Grok／Gemini／Claude 格已是 accepted，不用審。沒有 pending 也繼續第 2 節（手動結果可能已有）。
 逐筆檢查：關鍵字×平台是否齊全、名次與 snippet 是否自洽（出現必須有 snippet、competitors 是網域或名稱）、unavailable 是否有原因。
