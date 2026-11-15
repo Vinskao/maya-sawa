@@ -225,6 +225,12 @@ spec:
             secretKeyRef:
               name: shioaji-market
               key: SHIOAJI_SECRET_KEY
+        - name: GEMINI_API_KEY  # free Google AI Studio key for the AI visibility probe (docs/AI_VISIBILITY.md)
+          valueFrom:
+            secretKeyRef:
+              name: gemini-visibility
+              key: GEMINI_API_KEY
+              optional: true
         - name: TELEGRAM_BOT_TOKEN
           valueFrom:
             secretKeyRef:

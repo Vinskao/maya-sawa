@@ -3,10 +3,13 @@
 
 API 根路徑用 https://tymultiverse.cc/maya-sawa/market（2026-11-15 實測可連；peoplesystem.tatdvsonorth.com 被雲端代理擋 403）；代理會自動加 X-Market-Agent-Key，你不碰、不印、不寫入任何金鑰。
 
+## 0. 自動檢視（2026-11-15 起完全由 AI，不再手填；ChatGPT／Grok 需付費 API，暫停）
+1. Gemini：POST /ai-visibility/probe/gemini（無 body）。後端用免費 Gemini API＋Google 搜尋逐字問本週 3 個關鍵字並直接記錄。503＝GEMINI_API_KEY 未設定，回報後繼續；429＝本週已滿，繼續。
+2. Claude：GET /ai-visibility/keywords 取 thisWeek。每個關鍵字用你自己的網頁搜尋，當作一般使用者逐字搜尋該關鍵字，依搜尋結果判斷：appeared＝前 20 筆結果是否有 tymultiverse.cc（或「TY 市場研究室」）；rank＝它在結果中的名次（1–20）；cited＝有該網站連結；snippet＝提到它的那段原文（300 字內）；competitors＝排在前面的其他網域（最多 5 個）。搜尋失敗就 status="unavailable"，不可猜測，也不可為了好看去搜站名。
+   POST /ai-visibility/auto {"results":[3 筆，platform 全是 "claude"]}，422 就依訊息修正後重送。
+
 ## 1. 審核
-GET /ai-visibility/runs?status=pending。2026-11-15 起四家（含 ChatGPT）都由擁有者週五／週日深夜在 /palais 手填，直接 accepted；pending 通常是空的，有的話照下列審核。沒有 pending 也繼續第 2 節（手動結果可能已有）。
-逐筆檢查：關鍵字×平台是否齊全、名次與 snippet 是否自洽（出現必須有 snippet、competitors 是網域或名稱）、unavailable 是否有原因。
-合理 → POST /ai-visibility/runs/{id}/review {"action":"accept","note":"…"}；不合理 → reject 並寫理由。同一批多個 pending 時，只對最新的修繕。
+GET /ai-visibility/runs?status=pending。自動結果已直接 accepted，pending 通常是空的；有的話（舊的外部送件）逐筆檢查關鍵字×平台是否齊全、名次與 snippet 是否自洽，合理 accept、不合理 reject 並寫理由。沒有 pending 也繼續第 2 節。
 
 ## 2. 分析落差
 GET /ai-visibility/runs?status=all，把同一週（week 欄位）的 accepted 合併後，與上一週比較。本週沒有任何 accepted 結果就回報並結束，不修繕。資料只有 3 個關鍵字，別過度解讀單週變化。列出：

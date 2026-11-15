@@ -123,3 +123,34 @@ def summarize(runs: list[dict]) -> dict:
     cells = [{**r, "change": _change(r, before.get((r["keyword"], r["platform"])))} for r in latest["results"]]
     return {"latest": _head(latest), "previous": _head(previous) if previous else None,
             "byPlatform": dict(by_platform), "cells": cells, "trend": [_head(w) for w in reversed(weeks[:12])]}
+
+
+# ---- Automatic checks (2026-11-15): Gemini via its API with Google Search grounding; Claude via the Monday routine ----
+AUTO_PLATFORMS = ("gemini", "claude")  # ChatGPT / Grok need paid API credit; off until then
+SITE = "tymultiverse.cc"
+SITE_NAMES = (SITE, "TY 市場研究室", "TY Multiverse")
+
+
+def gemini_result(keyword: str, response: dict) -> dict:
+    """Turn one Gemini generateContent answer into a result row; anything unusable is `unavailable`, never a guess."""
+    try:
+        candidate = response["candidates"][0]
+        text = "".join(p.get("text", "") for p in candidate["content"]["parts"])
+    except (KeyError, IndexError, TypeError):
+        return {"keyword": keyword, "platform": "gemini", "status": "unavailable", "appeared": False, "rank": None,
+                "cited": False, "snippet": str((response or {}).get("error", {}).get("message", "no answer"))[:SNIPPET_LIMIT],
+                "competitors": []}
+    chunks = (candidate.get("groundingMetadata") or {}).get("groundingChunks") or []
+    sources = [((c.get("web") or {}).get("title") or (c.get("web") or {}).get("uri") or "").lower() for c in chunks]
+    rank = next((i + 1 for i, s in enumerate(sources) if SITE in s), None)
+    lowered = text.lower()
+    named = next((n for n in SITE_NAMES if n.lower() in lowered), None)
+    appeared = bool(rank or named)
+    snippet = ""
+    if named:
+        at = lowered.index(named.lower())
+        snippet = text[max(0, at - 80): at + 160]
+    competitors = list(dict.fromkeys(s for s in sources if s and SITE not in s))[:5]
+    return {"keyword": keyword, "platform": "gemini", "status": "checked", "appeared": appeared,
+            "rank": rank if rank and rank <= MAX_RANK else None, "cited": bool(rank), "snippet": snippet[:SNIPPET_LIMIT],
+            "competitors": competitors}

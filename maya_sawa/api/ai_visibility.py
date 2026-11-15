@@ -9,13 +9,18 @@ from pydantic import BaseModel, Field
 
 from ..core.auth.keycloak import require_manage_users_request
 from ..databases.ai_visibility_db import InboxFull, ai_visibility_db
-from ..services.ai_visibility import KEYWORDS, PLATFORMS, summarize, validate_results, weekly_keywords
+import os
+
+import httpx
+
+from ..services.ai_visibility import AUTO_PLATFORMS, KEYWORDS, PLATFORMS, gemini_result, summarize, validate_results, weekly_keywords
 from .market import _verify_agent_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["ai-visibility"])
 RUNS_PER_WEEK = 6  # one GPT run plus retries
-MANUAL_PER_WEEK = 20
+AUTO_PER_WEEK = 10  # Gemini probe + Claude routine, with retries
+GEMINI_MODEL = os.getenv("AI_VISIBILITY_GEMINI_MODEL", "gemini-2.5-flash")
 
 
 class VisibilityResult(BaseModel):
@@ -119,18 +124,52 @@ async def owner_view(_claims: dict = Depends(require_manage_users_request)):
     return {**summarize(accepted), "pending": pending, "fixes": fixes, "week": week, "thisWeek": weekly_keywords(week)}
 
 
-@router.post("/admin/ai-visibility/manual")
-async def manual_entry(body: VisibilitySubmission, _claims: dict = Depends(require_manage_users_request)):
-    """The owner's own checks on Grok / Gemini / Claude web; trusted, so counted without review."""
+def ask_gemini(keyword: str, key: str) -> dict:
+    """Ask Gemini the keyword verbatim, as a user would, with Google Search grounding on (free tier)."""
+    response = httpx.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+        json={"contents": [{"parts": [{"text": keyword}]}], "tools": [{"google_search": {}}]}, timeout=90)
+    return response.json()
+
+
+async def _store_auto(results: list[dict]) -> dict:
     now = datetime.now(ZoneInfo("UTC"))
     try:
-        results = validate_results([r.model_dump() for r in body.results])
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    try:
-        row, stored = await asyncio.to_thread(ai_visibility_db.submit, _week(now), results, now, MANUAL_PER_WEEK, "accepted")
+        row, stored = await asyncio.to_thread(ai_visibility_db.submit, _week(now), results, now, AUTO_PER_WEEK, "accepted")
     except InboxFull as exc:
-        raise HTTPException(status_code=429, detail="Too many manual entries this week") from exc
+        raise HTTPException(status_code=429, detail="Too many automatic runs this week") from exc
     except Exception as exc:
         raise _unavailable(exc) from exc
     return {"stored": stored, "id": row["id"], "status": row["status"]}
+
+
+@router.post("/ai-visibility/probe/gemini")
+async def probe_gemini(request: Request):
+    """Called by the Monday routine: checks this week's keywords on Gemini and records them (trusted, server-side)."""
+    _verify_agent_key(request)
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
+    results = []
+    for keyword in weekly_keywords(_week(datetime.now(ZoneInfo("UTC")))):
+        try:
+            response = await asyncio.to_thread(ask_gemini, keyword, key)
+        except Exception as exc:
+            logger.warning("Gemini visibility probe failed for %s: %s", keyword, exc)
+            response = {"error": {"message": "request failed"}}
+        results.append(gemini_result(keyword, response))
+    return {**await _store_auto(validate_results(results)), "results": results}
+
+
+@router.post("/ai-visibility/auto")
+async def auto_entry(body: VisibilitySubmission, request: Request):
+    """The keyed Claude routine's own web-search checks; trusted like the probe, limited to the automatic platforms."""
+    _verify_agent_key(request)
+    try:
+        results = validate_results([r.model_dump() for r in body.results])
+        if any(r["platform"] not in AUTO_PLATFORMS for r in results):
+            raise ValueError(f"Automatic entries are limited to {', '.join(AUTO_PLATFORMS)}")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return await _store_auto(results)
