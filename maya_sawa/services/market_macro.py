@@ -218,6 +218,11 @@ DGBAS_SERIES = {
 UMICH_SERIES = {
     "UMICH_CPI_EXPECTED_1Y": ("Michigan median expected inflation over next 12 months", "percent", "monthly"),
 }
+TIER_SERIES = {
+    "TIER_TW_GDP_FORECAST": ("TIER Taiwan real GDP growth forecast", "percent", "annual"),
+    "TIER_TW_CPI_FORECAST": ("TIER Taiwan CPI inflation forecast", "percent", "annual"),
+}
+TIER_FORECAST_URL = "https://www.tier.org.tw/forecast/macro_trends_annual.aspx"
 PMI_SERIES = {
     "TW_PMI": ("Taiwan manufacturing PMI", "index points", "monthly"),
     "TW_NMI": ("Taiwan non-manufacturing NMI", "index points", "monthly"),
@@ -276,7 +281,30 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES))
+
+
+def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
+    """GDP and CPI forecasts from TIER's press release (the forecast table itself is an image).
+
+    Period is the target year; a release gives next year's forecast and this year's revised estimate.
+    Raises ValueError when neither number is found, so a redesigned page fails loudly instead of guessing."""
+    text = re.sub(r"\s+", "", unescape(re.sub(r"<[^>]+>", " ", html)))
+    patterns = {"TIER_TW_GDP_FORECAST": r"(\d{4})年經濟成長率為(-?\d+(?:\.\d+)?)%(?:，較(\d{4})年修正後的(-?\d+(?:\.\d+)?)%)?",
+                "TIER_TW_CPI_FORECAST": r"(\d{4})年CPI年增率為(-?\d+(?:\.\d+)?)%(?:，較(\d{4})年修正後的(-?\d+(?:\.\d+)?)%)?"}
+    rows: list[dict] = []
+    for code, pattern in patterns.items():
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        rows.append({"code": code, "period": match.group(1), "value": match.group(2)})
+        if match.group(3):
+            rows.append({"code": code, "period": match.group(3), "value": match.group(4)})
+    if not rows:
+        raise ValueError("tier_forecast_not_found")
+    date_match = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
+    released = f"{date_match.group(1)}-{int(date_match.group(2)):02d}-{int(date_match.group(3)):02d}" if date_match else None
+    return rows, released
 
 
 def parse_bis_policy_rates(raw: bytes) -> list[dict]:
@@ -859,6 +887,7 @@ class MarketMacroService:
                 ("WorldBank", self._fetch_world_bank_gold),
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series),
+                ("TIER", self._fetch_tier_forecast),
                 ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi),
                 ("TreasuryDTS", self._fetch_treasury_dts)):
                 try: output["sources"][source_name] = fetch()
@@ -1539,6 +1568,22 @@ class MarketMacroService:
             return saved
         except Exception as exc:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_tier_forecast(self) -> int:
+        """Cache TIER's latest GDP / CPI forecast; it changes about four times a year, so one fetch a day is plenty."""
+        if all(_fetched_within(code, 24 * 3600) for code in TIER_SERIES): return 0
+        run_id = market_macro_db.reserve_source_call("TIER", daily_limit=4, minute_limit=1)
+        if run_id is None: raise RuntimeError("tier_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("tier:macro-forecast", TIER_FORECAST_URL, ttl_seconds=24 * 3600, extra_headers=BROWSER_AGENT)
+            rows, released = parse_tier_forecast(raw.decode("utf-8", errors="replace"))
+            source = f"TIER {released}" if released else "TIER"
+            saved = self._cache_free_series(rows, TIER_SERIES, source, TIER_FORECAST_URL, fresh_for_seconds=24 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
             raise
 
     def _fetch_umich_inflation_expectations(self) -> int:
