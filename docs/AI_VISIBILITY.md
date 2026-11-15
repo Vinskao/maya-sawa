@@ -10,12 +10,12 @@
 
 ```mermaid
 flowchart TD
-    K[本週關鍵字 thisWeek：1 固定＋2 輪替] --> G[ChatGPT 排程 週二 03:00 只查 ChatGPT]
+    K[本週關鍵字 thisWeek：1 固定＋2 輪替] --> G[ChatGPT 排程 週六 03:00（週五深夜）只查 ChatGPT]
     K --> O[擁有者手動查 Grok / Gemini / Claude]
     G -->|POST /ai-visibility/runs 無密鑰| I[(待審收件匣 pending)]
     O -->|/palais 表單 → POST /admin/ai-visibility/manual| M[(直接 accepted)]
     M --> D
-    C[Claude 排程 週四 05:30，agent key] -->|GET ?status=pending| I
+    C[Claude 排程 週一 04:30（週日深夜後），agent key] -->|GET ?status=pending| I
     C --> V{格式與內容合理？}
     V -->|否| X[reject + 理由]
     V -->|是| A[accept]
@@ -31,6 +31,7 @@ flowchart TD
 - **名次定義**：網站（tymultiverse.cc）在該回答中被引用或推薦的順序，1–20；只提到但沒有排序就 `appeared=true, rank=null`；沒出現就都不填。
 - **誠實的缺口**：Gemini、Claude 網頁版常要求登入，雲端排程的無痕瀏覽器不一定進得去。進不去就送 `status=unavailable`（不得同時回報出現），儀表板顯示「無法檢視」並從出現率分母排除。不要因為整排無法檢視就當作「沒出現」。
 - **每週關鍵字**：`weekly_keywords(week)` 回傳主關鍵字（`KEYWORDS[0]`）＋依 ISO 週輪替的 2 個；`GET /keywords` 的 `thisWeek` 就是本週該查的。
+- **週界線**：檢視都在週五／週日深夜，所以台北時間週一 06:00 前仍算上一週（`WEEK_ROLLOVER`），週日深夜手填的結果才會和週六 GPT 結果同一欄。
 - **同週合併**：GPT 的 ChatGPT 格與手動填的三家格屬於同一週，儀表板按週合併（同格以較新一筆為準），再和上一週比較。
 - 儀表板比較最新一週與前一週已審核結果，每格標示新／▲／▼／消失。
 
@@ -54,14 +55,14 @@ flowchart TD
 
 | 排程 | 時間（Asia/Taipei） | 說明 |
 |---|---|---|
-| ChatGPT「TY Multiverse｜AI 搜尋曝光檢視」 | 週二 03:00（每週一次） | 只查 ChatGPT 的 3 格 |
-| 擁有者手動 | 週二到週三之間 | Grok、Gemini、Claude 各 3 格，在 `/palais` 填 |
-| Claude「AI 曝光審核與網站修繕」 | 週四 05:30（`30 5 * * 4`） | 等手動結果填完；在 07:30 美股排程前結束 |
+| ChatGPT「TY Multiverse｜AI 搜尋曝光檢視」 | 週六 03:00（週五深夜，每週一次） | 只查 ChatGPT 的 3 格 |
+| 擁有者手動 | 週五或週日深夜 02:00–03:00 | Grok、Gemini、Claude 各 3 格，在 `/palais` 填 |
+| Claude「AI 曝光審核與網站修繕」 | 週一 04:30（`30 4 * * 1`） | 等週日深夜手動結果填完；在週一 09:00 排程前結束 |
 
-## ChatGPT 任務提示詞（試跑版，每週二 03:00）
+## ChatGPT 任務提示詞（試跑版，每週六 03:00）
 
 ```text
-每週二 03:00（Asia/Taipei），執行 TY Multiverse「AI 搜尋曝光檢視」的 ChatGPT 部分。只檢視、只回報，不改任何網站、不發信。
+每週六 03:00（Asia/Taipei），執行 TY Multiverse「AI 搜尋曝光檢視」的 ChatGPT 部分。只檢視、只回報，不改任何網站、不發信。
 API 根路徑：https://tymultiverse.cc/maya-sawa/market
 1. GET /ai-visibility/keywords，只取 thisWeek 的 3 個關鍵字（其他關鍵字本週不查）。
 2. 每個關鍵字開一個全新、不帶記憶與自訂指令的對話（或用臨時聊天），逐字輸入關鍵字提問，不加站名、不加提示，並允許搜尋網頁。

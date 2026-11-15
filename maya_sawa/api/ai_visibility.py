@@ -1,7 +1,7 @@
 """AI-search visibility endpoints (docs/AI_VISIBILITY.md): keyword list for the GPT task, an unkeyed inbox, keyed review, owner view."""
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -47,8 +47,11 @@ def _unavailable(exc: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail="AI visibility unavailable")
 
 
+WEEK_ROLLOVER = timedelta(hours=6)  # checks run Friday/Sunday nights after midnight; Monday before 06:00 is still last week
+
+
 def _week(now: datetime) -> str:
-    iso = now.astimezone(ZoneInfo("Asia/Taipei")).isocalendar()
+    iso = (now.astimezone(ZoneInfo("Asia/Taipei")) - WEEK_ROLLOVER).isocalendar()
     return f"{iso.year}-W{iso.week:02d}"
 
 

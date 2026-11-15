@@ -152,3 +152,9 @@ def test_owner_manual_entry_counts_without_review(client):
     sent = client.post("/market/admin/ai-visibility/manual", json={"results": [row(keyword=week_kw[0], platform="gemini", appeared=True, rank=2)]})
     assert sent.status_code == 200 and sent.json()["status"] == "accepted"
     assert client.get("/market/admin/ai-visibility").json()["latest"]["appeared"] == 1
+
+
+def test_sunday_night_checks_after_midnight_still_count_as_that_week():
+    # 週一 02:30 台北（週日深夜）仍算上一週；週一 06:00 起才是新的一週
+    assert ai_visibility._week(datetime(2026, 11, 22, 18, 30, tzinfo=timezone.utc)) == "2026-W47"
+    assert ai_visibility._week(datetime(2026, 11, 22, 22, 0, tzinfo=timezone.utc)) == "2026-W48"
