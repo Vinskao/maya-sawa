@@ -1,7 +1,9 @@
 # AI 搜尋曝光檢視（GPT 檢視 → /palais 儀表板 → Claude 修繕）
 
+> **2026-11-15 晚間更新：** ChatGPT 定時任務實測失敗（排程執行沒有網頁搜尋，3 格都 unavailable；任務也沒寄出 email，Gmail 橋接不可行），且沒有 OpenAI API 額度，所以 ChatGPT 也改為擁有者手填，GPT 定時任務已暫停。手動在聊天中用「臨時聊天＋網頁搜尋」查詢結果正常。
+
 > **2026-11-15 改為 4 週試跑（至 2026-12-15）：** 不新增 API 費用。每週一次、每週 3 個關鍵字（1 個固定主關鍵字看趨勢＋2 個從其餘 11 個輪替，6 週輪完）× 4 平台＝12 次，只用現有訂閱。
-> ChatGPT 由 ChatGPT 排程自動查；Grok、Gemini、Claude 由擁有者在 `/palais` 面板手動填（擁有者輸入可信，直接計入，不經審核）。只記是否被引用、是第幾個引用來源。
+> 四家（ChatGPT、Grok、Gemini、Claude）都由擁有者在 `/palais` 面板手動填（擁有者輸入可信，直接計入，不經審核）。只記是否被引用、是第幾個引用來源。
 > 4 週後評估：這些資料是否真的能決定要改哪個頁面；有用再替最有價值的平台改用官方 API 全自動（OpenAI／xAI／Anthropic API 與訂閱分開計費；Gemini API 部分模型有免費搜尋額度，可先單獨試）。
 
 2026-11-15。過去以傳統 SEO（索引、sitemap、metadata）為指標，但看不到成果。現在改量測「使用者問 AI 時，我們的網站有沒有被提到、排第幾」：每週兩次由 GPT 排程用無痕模式在 ChatGPT、Grok、Gemini、Claude 查關鍵字，結果顯示在 `/palais` 最上方；Claude 審核結果後依落差修繕網站。
@@ -10,9 +12,8 @@
 
 ```mermaid
 flowchart TD
-    K[本週關鍵字 thisWeek：1 固定＋2 輪替] --> G[ChatGPT 排程 週六 03:00（週五深夜）只查 ChatGPT]
-    K --> O[擁有者手動查 Grok / Gemini / Claude]
-    G -->|POST /ai-visibility/runs 無密鑰| I[(待審收件匣 pending)]
+    K[本週關鍵字 thisWeek：1 固定＋2 輪替] --> O[擁有者週五／週日深夜手動查 ChatGPT / Grok / Gemini / Claude]
+    G[外部送入（目前停用）] -->|POST /ai-visibility/runs 無密鑰| I[(待審收件匣 pending)]
     O -->|/palais 表單 → POST /admin/ai-visibility/manual| M[(直接 accepted)]
     M --> D
     C[Claude 排程 週一 04:30（週日深夜後），agent key] -->|GET ?status=pending| I
