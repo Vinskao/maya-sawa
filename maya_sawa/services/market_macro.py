@@ -360,11 +360,11 @@ def fred_fetch_order(codes, fetched_at: dict) -> list:
 
 
 def fred_observation_start(code: str, frequency: str, today: date) -> str:
-    """First FRED observation date requested, including three calendar years for daily and weekly series."""
+    """First FRED observation date requested, including five calendar years for daily and weekly series."""
     if code in LONG_HISTORY_CODES:
         return f"{LONG_HISTORY_START}-01"
     if frequency in ("daily", "weekly"):
-        return today.replace(year=today.year - 3, day=1).isoformat()
+        return (today - timedelta(days=1) if today.month == 2 and today.day == 29 else today).replace(year=today.year - 5).isoformat()
     return f"{today.year - 6}-01-01"
 
 
@@ -1276,8 +1276,8 @@ class MarketMacroService:
         saved, failures, status = 0, [], None
         for code, symbol in due.items():
             try:
-                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}?range=1y&interval=1d"
-                status, raw = _request_free_cached(f"yahoo:{symbol}:1y", url, ttl_seconds=6 * 3600, extra_headers=BROWSER_AGENT)
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}?range=5y&interval=1d"
+                status, raw = _request_free_cached(f"yahoo:{symbol}:5y", url, ttl_seconds=6 * 3600, extra_headers=BROWSER_AGENT)
                 result = (json.loads(raw).get("chart", {}).get("result") or [{}])[0]
                 zone = ZoneInfo(result.get("meta", {}).get("exchangeTimezoneName") or "America/New_York")
                 closes = ((result.get("indicators", {}).get("quote") or [{}])[0]).get("close") or []
@@ -1334,7 +1334,7 @@ class MarketMacroService:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
             raise
 
-    def _fetch_twse_turnover(self, today: date | None = None, months: int = 13) -> int:
+    def _fetch_twse_turnover(self, today: date | None = None, months: int = 37) -> int:
         """Daily listed-market trading value, one FMTQIK request per month: the current month every run (it is
         still filling in), earlier months only while they have no stored day. Skipped within five hours of a fetch."""
         code = "TW_MARKET_TURNOVER"
