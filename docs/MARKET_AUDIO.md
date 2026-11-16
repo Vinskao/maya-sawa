@@ -199,3 +199,7 @@ flowchart LR
 - **只套用在新合成的集數**：已存的語音不重做；取不到指數時一律用一般語氣，不讓語音失敗。選用的語氣會記在日誌（`Market audio tone ...`），不改 `voice` 欄位（YouTube 影片的主播對應依賴它）。
 - 費用：風格標籤不計字元；2026-11-16 查 Azure 成本管理，11 月累計成本 NT$0.00，資源為 F0（`ty-multiverse-speech-f0`，訂閱 Azure subscription）。
 - 開發方法：先測規則門檻、SSML 內容與 worker 傳參，再接上 Azure；`poetry run python -m pytest tests/market/test_voice_tone.py -q`。
+
+## 2026-11-16 失敗通知
+
+語音工作結果為 `failed`（口播稿檢查或合成失敗）或 `budget_blocked`（月字元上限用完）時發 Telegram「每日精讀語音沒有產生」。重試中的工作（`retry`）不通知。YouTube 上傳失敗另有通知，見 `YOUTUBE_DAILY.md`。

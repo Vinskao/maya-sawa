@@ -248,6 +248,14 @@ async def _market_audio_worker_loop(worker):
         except Exception:
             logger.exception('Market audio worker failed')
             result = None
+        if result in ('failed', 'budget_blocked'):
+            # The owner used to find out only when the episode never appeared (docs/MARKET_AUDIO.md, 2026-11-16).
+            try:
+                from .services import telegram_notify
+                reason = '本月字元上限已用完，語音不會合成' if result == 'budget_blocked' else '口播稿檢查或合成失敗，請看 maya-sawa 日誌的 Market audio job'
+                await asyncio.to_thread(telegram_notify.send, 'attention', '每日精讀語音沒有產生', reason)
+            except Exception:
+                logger.warning('Market audio failure alert was not delivered')
         if result is None:
             await asyncio.sleep(30)
 
