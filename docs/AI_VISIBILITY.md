@@ -127,3 +127,42 @@ flowchart LR
 ```
 
 判斷方式與站點關鍵字相同（前 20 筆結果有 tymultiverse.cc 才算出現）。文章關鍵字沒出現時，修繕步驟優先檢查該文章的標題、摘要、結構化資料與 sitemap 收錄。
+
+## 2026-11-16 社群平台數據併入 /palais 面板
+
+要判斷「曝光有沒有上升」，除了 AI 搜尋結果，還要看各社群平台的追蹤與互動。面板在 AI 曝光表下方多一排「社群平台數據」。
+
+```mermaid
+flowchart LR
+  L[每 6 小時 _social_metrics_loop] --> C[social_metrics.collect]
+  C --> F[Facebook 粉專 追蹤 按讚]
+  C --> I[Instagram 追蹤 貼文數]
+  C --> T[Threads 追蹤 瀏覽 按讚 回覆 轉發]
+  C --> Y[YouTube 已上傳集數]
+  C --> DB[(maya_sawa_social_metric 每天一筆)]
+  DB --> V[/admin/ai-visibility 的 social 欄位/]
+  V --> P[/palais 面板：數值與週變化/]
+  DB --> R[/ai-visibility/social 給每週 routine 回報/]
+```
+
+- 只用發文功能已有的 token 能讀到的數字（2026-11-16 實測）：Facebook `fan_count`、`followers_count`；Instagram `followers_count`、`media_count`；Threads `threads_insights`。LinkedIn 個人檔案追蹤數與 YouTube 觀看、訂閱數需要額外權限，面板會寫明讀不到，不估算。
+- 每天（台北日期）存一筆，週變化是「最新值 − 至少 7 天前最近的一筆」；未滿一週時顯示自開始記錄以來的變化，不顯示 0。
+- 每週 routine 的回報也讀同一份數字（`GET /ai-visibility/social`，agent key）。
+- 開發方法：先用真實 token 探測各平台 API 回什麼，再寫收集與摘要；`poetry run python -m pytest tests/market/test_social_metrics.py -q`。
+
+## 整套流程總覽（檢查 → 呈現 → 優化）
+
+```mermaid
+flowchart TD
+  K[每週 3 個關鍵字：站點主關鍵字 + 站點輪替 + /work 文章問句] --> G[Gemini API + Google 搜尋]
+  K --> CL[Claude 自己的網頁搜尋]
+  G --> A[(accepted 結果)]
+  CL --> A
+  A --> D[/palais：出現格數、名次、趨勢、社群數據/]
+  A --> X[分析落差：哪些關鍵字與文章沒出現]
+  X --> PR[開 PR 修繕：標題 摘要 結構化資料 sitemap 可引用內容]
+  PR --> FX[POST fixes 顯示在面板]
+  FX --> K
+```
+
+每週一 04:30（台北）由雲端 routine 執行，提示在 `routines/ai-visibility-fix.md`。

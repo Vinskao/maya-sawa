@@ -274,6 +274,34 @@ def _daily_maya_authorized(request):
     _verify_agent_key(request)
     return True
 
+async def _daily_conference_check(content, day):
+    """Conferences the reading claims that are not in the event list (services/daily_maya_events.py)."""
+    from .api.market import get_market_dashboard_events
+    from .services.daily_maya_events import company_names, unlisted_conferences
+    auto = market_dashboard_db.latest_auto()
+    symbols = [*auto.get("positions", []), *market_dashboard_db.custom_symbols(), *market_dashboard_db.watch_symbols()]
+    events = (await get_market_dashboard_events())["events"]
+    return unlisted_conferences(content, day, company_names(symbols), events)
+
+
+async def _social_metrics_loop():
+    """Daily follower / reach snapshot of every social channel for /palais (services/social_metrics.py)."""
+    from .databases.youtube_db import YoutubeDatabase
+    from .services import social_metrics
+    from .services.social.outbox import SocialOutbox
+    if market_dashboard_db.engine is None:
+        return
+    database = social_metrics.SocialMetricsDatabase(market_dashboard_db.engine)
+    while True:
+        try:
+            saved = await asyncio.to_thread(social_metrics.snapshot_today, database, SocialOutbox(market_dashboard_db.engine),
+                                            YoutubeDatabase(market_dashboard_db.engine).uploaded)
+            logger.warning("Social metrics snapshot: %s values", saved)
+        except Exception:
+            logger.exception("Social metrics snapshot failed")
+        await asyncio.sleep(6 * 3600)
+
+
 async def _youtube_daily_loop():
     """Daily reading -> MP4 -> YouTube (services/youtube_daily.py). Off until the channel's OAuth credentials are configured."""
     import os
@@ -286,14 +314,24 @@ async def _youtube_daily_loop():
         youtube_daily.YouTubeClient(os.environ["YOUTUBE_CLIENT_ID"], os.environ["YOUTUBE_CLIENT_SECRET"], os.environ["YOUTUBE_REFRESH_TOKEN"]),
         youtube_daily.privacy())
     logger.warning("YouTube daily upload enabled (privacy=%s)", daily.privacy)
+    failures = 0
     while True:
         try:
             result = await asyncio.to_thread(lambda: daily.process_one(daily_maya_db.published()))
             if result:
                 logger.warning("YouTube upload: %s -> %s", *result)
                 continue  # more may be waiting; no pause between episodes
-        except Exception:
+            failures = 0
+        except Exception as exc:
             logger.exception("YouTube daily upload failed")
+            failures += 1
+            if failures in (1, 12):  # at once, then once more if it is still failing two hours later
+                try:
+                    from .services import telegram_notify
+                    await asyncio.to_thread(telegram_notify.send, "attention", "YouTube 每日上傳失敗",
+                                            f"{type(exc).__name__}：每 10 分鐘會重試。授權過期時需重新授權（docs/YOUTUBE_DAILY.md）。")
+                except Exception:
+                    logger.warning("YouTube failure alert was not delivered")
         await asyncio.sleep(600)
 
 
@@ -342,7 +380,8 @@ def _on_daily_approved(row):
 
 app.include_router(make_daily_maya_router(daily_maya_db,
                                          market_ai_analysis_db, _daily_maya_authorized,
-                                         on_approved=_on_daily_approved))
+                                         on_approved=_on_daily_approved,
+                                         conference_check=_daily_conference_check))
 app.include_router(make_market_audio_router(market_audio_db, daily_maya_db))
 
 # Daily reading by email: sign-ups are stored at once; mail goes out only once SMTP is configured.
@@ -402,6 +441,7 @@ async def _startup_event():
         asyncio.get_running_loop().run_in_executor(None, _backfill_daily_reading_blog)
         await _start_market_audio_worker_if_configured()
         asyncio.create_task(_youtube_daily_loop())
+        asyncio.create_task(_social_metrics_loop())
         global _brief_mail_task
         if _brief_mail_task is None and market_dashboard_db.engine:
             _brief_mail_task = asyncio.create_task(_brief_mail_loop(BriefMailer(brief_subscribers_db)))

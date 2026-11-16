@@ -19,6 +19,8 @@ GET /ai-visibility/runs?status=all，把同一週（week 欄位）的 accepted �
 
 - 文章關鍵字（thisWeek 的第 3 個，是 /work 某篇文章要回答的問句）沒出現時，先找對應文章（標題在 data/blog_titles.json），檢查它的 title、meta description、結構化資料與 sitemap 收錄，再看站點層級。
 
+- 社群數據：GET /ai-visibility/social 取各平台追蹤與互動數及其週變化（Facebook、Instagram、Threads、YouTube 已上傳集數；LinkedIn 與 YouTube 觀看數目前讀不到，照 unavailable 的說明回報，不可估算）。把「AI 曝光有沒有上升」與「社群有沒有成長」放在一起看：兩者都沒動時，優先改善內容本身（標題、摘要、可被引用的事實段落），不要只改技術標記。
+
 ## 3. 修繕（只改 ty-multiverse 前端倉庫，開短期 PR 分支，不直接推主分支）
 只做有把握、可測、小範圍的改動，最多三項：
 - 公開頁的 title／description／H1 與正文，讓目標關鍵字的語意自然出現（不堆砌、不編造功能、不宣稱沒有的服務或績效）。
@@ -28,4 +30,4 @@ GET /ai-visibility/runs?status=all，把同一週（week 欄位）的 accepted �
 開 PR 後，POST /ai-visibility/runs/{id}/fixes {"fixes":["一句話描述每項改動與 PR 連結"]}（id 用本週最新一筆 accepted run）。沒有值得改的就不送 fixes，並說明原因。
 
 ## 4. 回報
-繁中：審核結果、各平台出現格數與變化、無法檢視的平台、改了什麼（PR 連結）、下次建議。失敗或權限不足時用 PushNotification 通知。
+繁中：審核結果、各平台出現格數與變化（含文章關鍵字有沒有帶出 /work 文章）、社群數據的週變化、無法檢視的平台、改了什麼（PR 連結）、下次建議。失敗或權限不足時用 PushNotification 通知。

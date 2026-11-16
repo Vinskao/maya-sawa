@@ -45,8 +45,19 @@ class Review(BaseModel):
     note: str = Field(min_length=1, max_length=1000)
 
 
-def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.utc), on_approved=None):
+def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.utc), on_approved=None, conference_check=None):
     router = APIRouter(prefix='/market/daily-maya', tags=['daily maya'])
+
+    async def invented_conferences(content, day):
+        """Company names the text gives a conference to that the event list does not have; [] when the list cannot be read."""
+        if conference_check is None:
+            return []
+        try:
+            return await conference_check(content, day)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Conference check unavailable; the reviewer has to verify events by hand', exc_info=True)
+            return []
 
     def require_agent(request):
         if not authorized(request):
@@ -67,6 +78,10 @@ def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.ut
         unexplained = missing_explanations(body.content)
         if unexplained:
             raise HTTPException(422, explain_message(unexplained))
+        invented = await invented_conferences(body.content, body.day)
+        if invented:
+            from ..services.daily_maya_events import message
+            raise HTTPException(422, message(invented))
         # Most rejected drafts stopped at a stock's next checkpoint; refuse them here so the writer fixes it in the same run.
         if not body.content.strip().endswith(FAREWELL) or (body.reading is not None and not body.reading.strip().endswith(FAREWELL)):
             raise HTTPException(422, f'缺整集結語：content 與 reading 最後都要有獨立結語段，用兩到三句收束總經與個股的判斷、'
@@ -105,6 +120,10 @@ def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.ut
                 await asyncio.to_thread(validate_sources, row['sources'], analyses)
             except ValueError as exc:
                 raise HTTPException(409, 'Source revision no longer available') from exc
+            invented = await invented_conferences(row['content'], row['day'])
+            if invented:
+                from ..services.daily_maya_events import message
+                raise HTTPException(409, '不能核准：' + message(invented))
         try:
             changed = await asyncio.to_thread(db.review, proposal_id, body.decision, body.note, clock())
         except ValueError as exc:

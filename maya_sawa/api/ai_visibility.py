@@ -121,7 +121,29 @@ async def owner_view(_claims: dict = Depends(require_manage_users_request)):
         raise _unavailable(exc) from exc
     week = _week(datetime.now(ZoneInfo("UTC")))
     fixes = [{"runId": r["id"], "at": r["reviewedAt"], "items": r["fixes"]} for r in accepted if r["fixes"]][:3]
-    return {**summarize(accepted), "pending": pending, "fixes": fixes, "week": week, "thisWeek": weekly_keywords(week)}
+    return {**summarize(accepted), "pending": pending, "fixes": fixes, "week": week, "thisWeek": weekly_keywords(week),
+            "social": await asyncio.to_thread(_social_view)}
+
+
+@router.get("/ai-visibility/social")
+async def social_numbers(request: Request):
+    """Social follower / reach numbers for the weekly routine's report (same numbers as the owner dashboard)."""
+    _verify_agent_key(request)
+    return await asyncio.to_thread(_social_view) or {"items": [], "unavailable": []}
+
+
+def _social_view() -> dict | None:
+    """Follower / reach numbers of the social channels with their weekly change; None when they cannot be read."""
+    try:
+        from datetime import timedelta
+        from ..databases.market_dashboard_db import market_dashboard_db
+        from ..services import social_metrics
+        today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+        database = social_metrics.SocialMetricsDatabase(market_dashboard_db.engine)
+        return social_metrics.summarize(database.since((today - timedelta(days=60)).isoformat()), today)
+    except Exception:
+        logger.warning("Social metrics unavailable for the owner view", exc_info=True)
+        return None
 
 
 def ask_gemini(keyword: str, key: str) -> dict:

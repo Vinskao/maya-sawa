@@ -40,3 +40,7 @@ flowchart LR
 | Duo | `duo:uiobbeci:maya-pending` | `reporterDuoUiobbeci.mp4`，缺時退回 `reporterDuo.mp4` |
 
 Uiobbeci 的集數以自己的版本標記（`presenter-top-half-2-uiobbeci`）記錄，所以舊的錯誤上傳會被偵測到並重傳。
+
+## 失敗通知（2026-11-16）
+
+上傳失敗時發 Telegram（第一次失敗立刻發，持續失敗兩小時後再發一次），每 10 分鐘仍會重試。授權過期（測試狀態的 OAuth 應用約 7 天）會以這個通知呈現。
