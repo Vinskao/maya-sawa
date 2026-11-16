@@ -17,6 +17,8 @@ GET /ai-visibility/runs?status=all，把同一週（week 欄位）的 accepted �
 - 剛消失或名次下滑的格。
 - 大面積 unavailable 的平台（只回報，不當成沒出現）。
 
+- 文章關鍵字（thisWeek 的第 3 個，是 /work 某篇文章要回答的問句）沒出現時，先找對應文章（標題在 data/blog_titles.json），檢查它的 title、meta description、結構化資料與 sitemap 收錄，再看站點層級。
+
 ## 3. 修繕（只改 ty-multiverse 前端倉庫，開短期 PR 分支，不直接推主分支）
 只做有把握、可測、小範圍的改動，最多三項：
 - 公開頁的 title／description／H1 與正文，讓目標關鍵字的語意自然出現（不堆砌、不編造功能、不宣稱沒有的服務或績效）。

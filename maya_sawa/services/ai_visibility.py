@@ -8,7 +8,7 @@ from collections import defaultdict
 PLATFORMS = ("chatgpt", "grok", "gemini", "claude")
 # Keywords people would plausibly type to find this site, taken from docs/HOME_SEARCH_POSITIONING.md. Changing the list
 # starts a new comparison baseline, so edit deliberately; the dashboard compares a cell only with the same keyword.
-KEYWORDS = (
+SITE_KEYWORDS = (
     "台股研究工具",
     "台股 AI 分析",
     "半導體供應鏈 研究",
@@ -22,16 +22,30 @@ KEYWORDS = (
     "TY 市場研究室",
     "Taiwan stock research platform",
 )
+# 2026-11-16: queries the /work articles are titled to answer (data/blog_titles.json), so the weekly check also shows whether
+# individual articles surface in AI answers, not only the site as a whole.
+ARTICLE_KEYWORDS = (
+    "Redis 為什麼快 Key-Value 記憶體資料庫",
+    "React Hydration 是什麼 SSR 為什麼快",
+    "R2DBC 是什麼 Spring WebFlux 反應式資料庫",
+    "git reset --hard 與 --soft 差別 git revert",
+    "Spring Boot IoC AOP 原理",
+    "Kubernetes kind 本機部署 Spring Boot",
+)
+KEYWORDS = SITE_KEYWORDS + ARTICLE_KEYWORDS
 MAIN_KEYWORD = KEYWORDS[0]  # checked every week so there is one continuous trend line
-ROTATING_PER_WEEK = 2
+
+
+def _rotate(pool: tuple, week: str, count: int) -> list[str]:
+    year, number = week.split("-W")
+    start = ((int(year) * 53 + int(number) - 1) * count) % len(pool)
+    return [pool[(start + i) % len(pool)] for i in range(count)]
 
 
 def weekly_keywords(week: str) -> list[str]:
-    """This ISO week's three keywords ("2026-W47"): the main one plus two rotating through the other eleven."""
-    others = [k for k in KEYWORDS if k != MAIN_KEYWORD]
-    year, number = week.split("-W")
-    start = ((int(year) * 53 + int(number) - 1) * ROTATING_PER_WEEK) % len(others)
-    return [MAIN_KEYWORD] + [others[(start + i) % len(others)] for i in range(ROTATING_PER_WEEK)]
+    """This ISO week's three keywords ("2026-W47"): the main one, one more site keyword and one article keyword, each rotating."""
+    others = tuple(k for k in SITE_KEYWORDS if k != MAIN_KEYWORD)
+    return [MAIN_KEYWORD] + _rotate(others, week, 1) + _rotate(ARTICLE_KEYWORDS, week, 1)
 
 
 STATUSES = ("checked", "unavailable")  # unavailable: the platform needed a login or refused; never guess a result

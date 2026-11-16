@@ -130,12 +130,13 @@ def test_bad_submissions_are_422(client):
     assert client.post("/market/ai-visibility/runs", json={"results": []}).status_code == 422
 
 
-def test_each_week_checks_the_main_keyword_plus_two_that_rotate_through_the_rest():
-    weeks = [weekly_keywords(f"2026-W{n:02d}") for n in range(1, 7)]
-    assert all(len(w) == 3 and w[0] == MAIN_KEYWORD for w in weeks)
-    rotated = [k for w in weeks[:6] for k in w[1:]]
-    assert set(rotated) == set(KEYWORDS) - {MAIN_KEYWORD}            # 11 others covered within six weeks
-    assert weekly_keywords("2026-W47") == weekly_keywords("2026-W47")  # stable within a week
+def test_each_week_checks_the_main_keyword_one_site_keyword_and_one_article_keyword():
+    from maya_sawa.services.ai_visibility import ARTICLE_KEYWORDS, SITE_KEYWORDS
+    weeks = [weekly_keywords(f"2026-W{n:02d}") for n in range(1, 13)]
+    assert all(len(w) == 3 and w[0] == MAIN_KEYWORD and w[1] in SITE_KEYWORDS and w[2] in ARTICLE_KEYWORDS for w in weeks)
+    assert {w[1] for w in weeks} == set(SITE_KEYWORDS) - {MAIN_KEYWORD}   # all 11 other site keywords within 11 weeks
+    assert {w[2] for w in weeks} == set(ARTICLE_KEYWORDS)                 # every article query within 6 weeks
+    assert weekly_keywords("2026-W47") == weekly_keywords("2026-W47")     # stable within a week
 
 
 def test_runs_from_the_same_week_merge_into_one_column():

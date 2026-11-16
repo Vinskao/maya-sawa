@@ -8,7 +8,7 @@
 
 > **2026-11-15 晚間更新：** ChatGPT 定時任務實測失敗（排程執行沒有網頁搜尋，3 格都 unavailable；任務也沒寄出 email，Gmail 橋接不可行），且沒有 OpenAI API 額度，所以 ChatGPT 也改為擁有者手填，GPT 定時任務已暫停。手動在聊天中用「臨時聊天＋網頁搜尋」查詢結果正常。
 
-> **2026-11-15 改為 4 週試跑（至 2026-12-15）：** 不新增 API 費用。每週一次、每週 3 個關鍵字（1 個固定主關鍵字看趨勢＋2 個從其餘 11 個輪替，6 週輪完）× 4 平台＝12 次，只用現有訂閱。
+> **2026-11-15 改為 4 週試跑（至 2026-12-15）：** 不新增 API 費用。每週一次、每週 3 個關鍵字（1 個固定主關鍵字看趨勢＋1 個站點關鍵字輪替＋1 個文章關鍵字輪替）× 4 平台＝12 次，只用現有訂閱。
 > 四家（ChatGPT、Grok、Gemini、Claude）都由擁有者在 `/palais` 面板手動填（擁有者輸入可信，直接計入，不經審核）。只記是否被引用、是第幾個引用來源。
 > 4 週後評估：這些資料是否真的能決定要改哪個頁面；有用再替最有價值的平台改用官方 API 全自動（OpenAI／xAI／Anthropic API 與訂閱分開計費；Gemini API 部分模型有免費搜尋額度，可先單獨試）。
 
@@ -112,3 +112,18 @@ API 根路徑：https://tymultiverse.cc/maya-sawa/market
 - 名次只取 grounding 引用來源的順序；回答文字提到站名但沒引用 → appeared 但無名次。解析不了一律 unavailable，不猜。
 - 啟用：將 Google AI Studio 金鑰存入 Jenkins `vinskao` 的 Secret text `GEMINI_API_KEY`，再部署 Maya。
 - 2026-11-16：在部署前由 Jenkins 同步 `gemini-visibility`。以 stdin 傳遞憑證，讓金鑰留在 Jenkins 和 Kubernetes 的憑證儲存中。先用 `poetry run python -m pytest -q tests/market/test_ai_visibility_deployment.py` 重現同步階段缺失，再執行部署並確認 rollout，最後用 agent key 呼叫 probe 驗證實際查詢與寫回。
+
+## 2026-11-16 文章關鍵字（/work 文章能不能被 AI 查到）
+
+`/work` 的文章已依正文改寫成描述性標題（見 [BLOG_WORKFLOW.md](BLOG_WORKFLOW.md)）。每週檢視因此多查一個「文章關鍵字」：`ARTICLE_KEYWORDS` 六組是文章標題要回答的問句（例如「Redis 為什麼快」「React Hydration 是什麼」），6 週輪完；站點關鍵字改成每週 1 個輪替（11 週輪完），主關鍵字仍每週固定。新增關鍵字讓清單變成 18 個，舊關鍵字的比較基準不變。
+
+```mermaid
+flowchart LR
+  T[blog_titles.json 描述性標題] --> W[/work 文章]
+  W --> K[ARTICLE_KEYWORDS 文章問句]
+  K --> C[每週一 Gemini + Claude 檢視]
+  C --> D[/palais 曝光表]
+  D -->|文章沒出現| F[Claude 修繕 PR：標題、摘要、結構化資料、sitemap]
+```
+
+判斷方式與站點關鍵字相同（前 20 筆結果有 tymultiverse.cc 才算出現）。文章關鍵字沒出現時，修繕步驟優先檢查該文章的標題、摘要、結構化資料與 sitemap 收錄。
