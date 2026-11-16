@@ -18,6 +18,8 @@
 
 ```mermaid
 flowchart TD
+    JC[Jenkins vinskao Secret text] --> KS[Kubernetes Secret gemini-visibility]
+    KS --> GM
     C0[Claude 排程 週一 04:30，agent key] -->|POST /probe/gemini| GM[後端：Gemini API＋Google 搜尋，本週 3 關鍵字]
     C0 -->|自己網頁搜尋 → POST /auto| CL[Claude 3 格]
     GM --> M
@@ -108,4 +110,5 @@ API 根路徑：https://tymultiverse.cc/maya-sawa/market
 - TDD：`tests/market/test_ai_visibility_auto.py` 先寫失敗測試（Gemini 回應解析、probe 需 agent key 與 GEMINI_API_KEY、auto 只收 gemini／claude、手動端點移除），再實作 `gemini_result`、`ask_gemini`、兩個端點。
 - Gemini 回應以 fixture 測試，不打真 API；`ask_gemini` 可在測試中替換。
 - 名次只取 grounding 引用來源的順序；回答文字提到站名但沒引用 → appeared 但無名次。解析不了一律 unavailable，不猜。
-- 啟用：Google AI Studio 建免費 key → `kubectl create secret generic gemini-visibility --from-literal=GEMINI_API_KEY=…` → 重啟 maya-sawa。
+- 啟用：將 Google AI Studio 金鑰存入 Jenkins `vinskao` 的 Secret text `GEMINI_API_KEY`，再部署 Maya。
+- 2026-11-16：在部署前由 Jenkins 同步 `gemini-visibility`。以 stdin 傳遞憑證，讓金鑰留在 Jenkins 和 Kubernetes 的憑證儲存中。先用 `poetry run python -m pytest -q tests/market/test_ai_visibility_deployment.py` 重現同步階段缺失，再執行部署並確認 rollout，最後用 agent key 呼叫 probe 驗證實際查詢與寫回。
