@@ -173,3 +173,12 @@ def test_symbols_held_in_any_snapshot_this_week_are_in_scope():
     got = db.traded_since(datetime(2026, 11, 16, 0, 0, tzinfo=TZ))
     assert sorted((i["code"], i["productType"]) for i in got) == [("2330", "stock"), ("2454", "stock"), ("TXF", "futures")]
     assert db.traded_since(datetime(2026, 12, 1, tzinfo=TZ)) == []
+
+
+def test_japanese_and_other_foreign_stocks_never_go_to_the_taiwan_quote_feed():
+    # 6834 is a Japanese stock held through IBKR; Shioaji would look up Taiwan's 6834 and alert on the wrong company
+    from maya_sawa.services.shioaji_market import ShioajiMarketService
+    items = [{"code": "6834", "productType": "stock", "market": "JP"}, {"code": "2330", "productType": "stock", "market": "TW"},
+             {"code": "0050", "productType": "stock"}, {"code": "AAPL", "productType": "stock", "market": "US"},
+             {"code": "TXF", "productType": "futures", "market": "TW"}]
+    assert [i["code"] for i in ShioajiMarketService._taiwan_only(items)] == ["2330", "0050", "TXF"]

@@ -245,6 +245,10 @@ class ShioajiMarketService:
         self._refresh_task = asyncio.create_task(self._refresh_loop())
 
     @staticmethod
+    def _taiwan_only(items: list[dict[str, str]]) -> list[dict[str, str]]:
+        return [item for item in items if str(item.get("market") or "TW").upper() == "TW"]
+
+    @staticmethod
     def _traded_this_week() -> list[dict[str, str]]:
         """Stocks held or traded since Monday stay quoted (and in the intraday alert scope) after they are sold."""
         try:
@@ -263,6 +267,7 @@ class ShioajiMarketService:
             from ..databases.market_dashboard_db import market_dashboard_db
             from ..databases.market_fundamentals_db import market_fundamentals_db
             selected = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols() + market_dashboard_db.watch_symbols() + self._traded_this_week()
+            selected = self._taiwan_only(selected)  # Shioaji only knows Taiwan contracts; JP/US codes would match the wrong company
             selected = list({(item.get("productType"), item.get("code", "").upper()): item for item in selected}.values())
             if selected:
                 rows = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, selected))
