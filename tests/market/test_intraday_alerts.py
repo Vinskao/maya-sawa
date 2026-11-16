@@ -182,3 +182,127 @@ def test_japanese_and_other_foreign_stocks_never_go_to_the_taiwan_quote_feed():
              {"code": "0050", "productType": "stock"}, {"code": "AAPL", "productType": "stock", "market": "US"},
              {"code": "TXF", "productType": "futures", "market": "TW"}]
     assert [i["code"] for i in ShioajiMarketService._taiwan_only(items)] == ["2330", "0050", "TXF"]
+
+
+# ---- 2026-11-16: Japanese stocks, multi-day streaks and next-day reversals ----
+import asyncio
+
+JST = ZoneInfo("Asia/Tokyo")
+JP_MON_10AM = datetime(2026, 11, 16, 10, 0, tzinfo=JST)
+
+
+def jq(pct, history=(), code="6834", name="精工電子", ts="2026-11-16T09:58:00+09:00"):
+    return {"symbol": code, "name": name, "productType": "stock", "market": "JP", "close": 6500.0, "changePercent": pct,
+            "timestamp": ts, "history": list(history)}
+
+
+def test_japan_trades_9_to_1530_tokyo_time_and_taiwan_9_to_1330_taipei():
+    assert ia.in_trading_hours(datetime(2026, 11, 16, 14, 0, tzinfo=JST), "JP")
+    assert not ia.in_trading_hours(datetime(2026, 11, 16, 15, 31, tzinfo=JST), "JP")
+    assert not ia.in_trading_hours(datetime(2026, 11, 16, 8, 59, tzinfo=JST), "JP")
+    assert not ia.in_trading_hours(datetime(2026, 11, 14, 10, 0, tzinfo=JST), "JP")
+    # 15:00 Tokyo = 14:00 Taipei: Japan still trading, Taiwan closed
+    assert ia.in_trading_hours(datetime(2026, 11, 16, 15, 0, tzinfo=JST), "JP")
+    assert not ia.in_trading_hours(datetime(2026, 11, 16, 15, 0, tzinfo=JST))
+    assert ia.in_trading_hours(MON_10AM)
+
+
+def test_a_japanese_stock_alerts_with_its_market_named():
+    _, alerts = ia.evaluate({}, jq(5.6), JP_MON_10AM)
+    assert [a["kind"] for a in alerts] == ["rise"]
+    assert "6834 精工電子" in alerts[0]["title"] and "日股" in alerts[0]["title"]
+
+
+def test_japanese_and_taiwanese_stocks_with_the_same_code_do_not_share_state():
+    state, a1 = ia.evaluate({}, jq(5.6), JP_MON_10AM)
+    state, a2 = ia.evaluate(state, {**q(5.6, symbol="6834"), "timestamp": "2026-11-16T10:00:00+08:00"}, MON_10AM)
+    assert len(a1) == 1 and len(a2) == 1 and "日股" not in a2[0]["title"]
+
+
+def test_japan_snapshot_date_is_checked_against_the_tokyo_date():
+    _, alerts = ia.evaluate({}, jq(5.6, ts="2026-11-13T15:00:00+09:00"), JP_MON_10AM)
+    assert alerts == []
+
+
+def test_a_second_day_over_5_percent_in_a_row_is_called_out():
+    _, alerts = ia.evaluate({}, q(5.4) | {"history": [1.0, 6.2]}, MON_10AM)
+    assert len(alerts) == 1 and alerts[0]["streak"] == 2
+    assert "連續 2 天" in alerts[0]["title"] and "漲超過 5%" in alerts[0]["title"] and alerts[0]["telegram"] == "attention"
+    assert "+6.2%" in alerts[0]["body"] and "+5.4%" in alerts[0]["body"]
+
+
+def test_longer_streaks_count_every_qualifying_day_and_stop_at_the_first_gap():
+    _, alerts = ia.evaluate({}, q(-5.2) | {"history": [3.0, -5.5, -7.1, -6.0]}, MON_10AM)
+    assert alerts[0]["streak"] == 4 and "連續 4 天" in alerts[0]["title"] and "跌超過 5%" in alerts[0]["title"]
+
+
+def test_a_move_the_day_after_a_gap_is_not_a_streak():
+    _, alerts = ia.evaluate({}, q(5.4) | {"history": [6.5, 2.0]}, MON_10AM)
+    assert alerts[0].get("streak") is None and "連續" not in alerts[0]["title"]
+
+
+def test_a_5_percent_move_against_yesterdays_5_percent_move_is_a_next_day_reversal():
+    _, alerts = ia.evaluate({}, q(-5.3) | {"history": [0.4, 6.2]}, MON_10AM)
+    assert alerts[0]["reversal"] is True and "隔日反向" in alerts[0]["title"] and alerts[0]["telegram"] == "attention"
+    assert "+6.2%" in alerts[0]["body"] and "-5.3%" in alerts[0]["body"]
+    _, up = ia.evaluate({}, q(5.3) | {"history": [-7.0]}, MON_10AM)
+    assert up[0]["reversal"] is True
+
+
+def test_a_small_yesterday_means_no_special_note_and_a_rise_stays_a_plain_update():
+    _, alerts = ia.evaluate({}, q(5.4) | {"history": [4.9]}, MON_10AM)
+    assert alerts[0].get("reversal") is None and alerts[0].get("streak") is None and alerts[0]["telegram"] == "update"
+    _, none = ia.evaluate({}, q(5.4), MON_10AM)
+    assert none[0]["telegram"] == "update"
+
+
+def test_yahoo_daily_chart_gives_todays_move_and_the_completed_days_before():
+    chart = {"chart": {"result": [{
+        "meta": {"symbol": "6834.T", "shortName": "SEIKO ELECTRIC", "regularMarketPrice": 1155.0, "regularMarketTime": 1795051080,
+                 "gmtoffset": 32400, "exchangeTimezoneName": "Asia/Tokyo"},
+        "timestamp": [1794528000, 1794787200, 1794873600, 1794960000, 1795046400],  # 11/13, 11/16 .. 11/19 (JST 09:00)
+        "indicators": {"quote": [{"close": [1000.0, 1050.0, 1102.5, 1100.0, 1155.0]}]}}]}}
+    quote = ia.parse_yahoo_chart(chart, "6834", datetime(2026, 11, 19, 10, 0, tzinfo=JST).date())
+    assert quote["market"] == "JP" and quote["symbol"] == "6834" and quote["close"] == 1155.0
+    assert quote["changePercent"] == 5.0                    # 1155 vs yesterday's 1100
+    assert quote["history"] == [5.0, 5.0, -0.23]            # completed days, oldest first; first candle has no prior close
+    assert quote["timestamp"].startswith("2026-11-19")
+
+
+def test_yahoo_chart_without_a_candle_for_today_is_a_holiday_or_not_open_yet():
+    chart = {"chart": {"result": [{"meta": {"regularMarketPrice": 10}, "timestamp": [1794528000, 1794787200],
+                                   "indicators": {"quote": [{"close": [10.0, 11.0]}]}}]}}
+    assert ia.parse_yahoo_chart(chart, "6834", datetime(2026, 11, 19, tzinfo=JST).date()) is None
+    assert ia.parse_yahoo_chart({"chart": {"result": None}}, "6834", datetime(2026, 11, 19, tzinfo=JST).date()) is None
+
+
+def test_taiwan_daily_history_turns_official_closes_into_percent_moves():
+    points = [{"date": "2026-11-12", "sources": {"twse:daily-price": {"close": 100.0, "change": 1.0}}},
+              {"date": "2026-11-13", "sources": {"twse:daily-price": {"close": 106.0, "change": 6.0}}},
+              {"date": "2026-11-16", "sources": {"twse:daily-price": {"close": 112.0, "change": 6.0}}}]  # today: excluded
+    assert ia.pcts_from_points(points, "2026-11-16") == [1.01, 6.0]
+
+
+def test_monitor_alerts_japanese_stocks_through_the_fetcher_and_attaches_a_streak(monkeypatch):
+    sent = []
+    monkeypatch.setattr(ia.telegram_notify, "send", lambda kind, title, body="": sent.append((kind, title)) or {"sent": True})
+    monitor = ia.IntradayAlertMonitor(fetch_japan=lambda items, today: [jq(5.6, history=[6.0])])
+    alerts = asyncio.run(monitor.check_japan([{"code": "6834", "name": "精工電子", "productType": "stock", "market": "JP"}], JP_MON_10AM))
+    assert len(alerts) == 1 and alerts[0]["streak"] == 2 and sent and sent[0][0] == "attention"
+    # throttled: asking again right away does not hit Yahoo again
+    monitor2 = ia.IntradayAlertMonitor(fetch_japan=lambda items, today: (_ for _ in ()).throw(AssertionError("fetched twice")))
+    monitor2._last_japan = JP_MON_10AM
+    assert asyncio.run(monitor2.check_japan([{"code": "6834", "productType": "stock", "market": "JP"}], JP_MON_10AM)) == []
+
+
+def test_monitor_outside_japan_hours_does_not_call_yahoo():
+    monitor = ia.IntradayAlertMonitor(fetch_japan=lambda items, today: (_ for _ in ()).throw(AssertionError("fetched")))
+    night = datetime(2026, 11, 16, 20, 0, tzinfo=JST)
+    assert asyncio.run(monitor.check_japan([{"code": "6834", "productType": "stock", "market": "JP"}], night)) == []
+
+
+def test_monitor_gives_taiwan_quotes_their_daily_history(monkeypatch):
+    monkeypatch.setattr(ia.telegram_notify, "send", lambda *a, **k: {"sent": True})
+    monitor = ia.IntradayAlertMonitor(history_taiwan=lambda code, today: [6.0])
+    alerts = asyncio.run(monitor.check([q(5.5)], MON_10AM))
+    assert alerts and alerts[0]["streak"] == 2

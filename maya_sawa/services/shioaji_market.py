@@ -267,6 +267,7 @@ class ShioajiMarketService:
             from ..databases.market_dashboard_db import market_dashboard_db
             from ..databases.market_fundamentals_db import market_fundamentals_db
             selected = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols() + market_dashboard_db.watch_symbols() + self._traded_this_week()
+            japan = [item for item in selected if item.get("productType") == "stock" and str(item.get("market") or "").upper() == "JP"]
             selected = self._taiwan_only(selected)  # Shioaji only knows Taiwan contracts; JP/US codes would match the wrong company
             selected = list({(item.get("productType"), item.get("code", "").upper()): item for item in selected}.values())
             if selected:
@@ -312,6 +313,11 @@ class ShioajiMarketService:
                     stock_cache_id = hashlib.sha256(json.dumps(stock_selection, sort_keys=True).encode()).hexdigest()[:20]
                     await asyncio.to_thread(self._write_cached_payload,
                                             f"DASHBOARD_QUOTES_V2_{stock_cache_id}", stock_rows, 300)
+            try:  # Japanese holdings and this week's trades: Yahoo quotes, polled by the alert monitor (docs/INTRADAY_ALERTS.md)
+                from .intraday_alerts import intraday_alert_monitor
+                await intraday_alert_monitor.check_japan(list({item.get("code", "").upper(): item for item in japan}.values()))
+            except Exception:
+                logger.exception("Japan intraday alert check failed (non-fatal)")
         except Exception:
             logger.exception("Failed to refresh dashboard quote snapshot (non-fatal)")
         portfolio_due = (
