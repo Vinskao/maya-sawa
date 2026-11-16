@@ -271,3 +271,23 @@ flowchart LR
 - 與 `POST /blog/admin/import` 走同一個 `BlogService.save` 與 `publish`，只是直接在後端呼叫，不經 HTTP 與 Keycloak。`BLOG_ENABLED` 不是 true 時不動作。
 - 服務每次啟動會補寫過去已核准的精讀（最多 100 筆）。
 - 開發方法：先測文章草稿與重複略過，再接核准流程；`poetry run python -m pytest tests/market/test_daily_reading_blog.py -q`。
+
+## 2026-11-16 聽眾要聽得懂：名詞說明、折現率、事件來源
+
+使用者聽 11/16 精讀時有三個問題：「金融壓力指數低於零」不知道什麼意思、「壓力在折現率」看不懂是什麼的折現率、「早上有台積電法說但目前無數據」。
+
+```mermaid
+flowchart LR
+  A[GPT 或 Claude 備援撰稿] --> B[POST proposals]
+  B --> C{名詞說明檢查 daily_maya_glossary}
+  C -->|第一次提到金融壓力指數 折現率 實質利率 淨流動性 高收益債利差 一百字內沒說明| D[422 並附範例句]
+  C -->|通過| E[Claude 審核]
+  E --> F{稿中每場事件都在 events 清單?}
+  F -->|否| G[rejected 並寫明哪一場找不到來源]
+  F -->|是| H[核准 -> 語音 -> Learn -> YouTube]
+```
+
+- **名詞**：`services/daily_maya_glossary.py` 在提交時檢查五個名詞，第一次出現後 110 字內要有說明用語，沒有就 422 並回傳範例句；這是粗略的自動檢查，說明是否通順仍由審核者讀。
+- **折現率**：要說明它是把未來獲利換算成今天價值的利率，並指出是哪個利率（例如十年期實質利率）。
+- **事件**：11/16 的「台積電今天九點法說、週三還有一場」在事件清單（TDCC IR 平台，當天只有欣興 08:15）與台積電分析、研究、簡報中都找不到，是撰稿時憑空寫入，審核也沒擋下。現在審核提示規定稿中每場法說都必須在 `/market/dashboard/events` 清單裡。
+- 開發方法：先用 11/16 原稿當測試，確認五個名詞都被抓出；`poetry run python -m pytest tests/market/test_daily_maya_glossary.py -q`。

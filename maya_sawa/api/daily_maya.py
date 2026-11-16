@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+from ..services.daily_maya_glossary import explain_message, missing_explanations
 from ..services.daily_maya_reading import FAREWELL, InvalidReading, validate_reading
 from ..services.daily_maya_sources import validate_sources
 from ..services.daily_maya_speech import InvalidSpokenTranscript, validate_spoken_transcript
@@ -62,6 +63,10 @@ def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.ut
         except InvalidSpokenTranscript as exc:
             raise HTTPException(422, f'content 無法朗讀（{exc}）：只能用中文逗號與句號，不得有 Markdown、條列、'
                                      '其他標點或來源、版本、資料截點等製程用語，請改寫後重新提交') from exc
+        # Listeners must understand the terms: first mention of an indicator needs a plain sentence saying what it is (2026-11-16).
+        unexplained = missing_explanations(body.content)
+        if unexplained:
+            raise HTTPException(422, explain_message(unexplained))
         # Most rejected drafts stopped at a stock's next checkpoint; refuse them here so the writer fixes it in the same run.
         if not body.content.strip().endswith(FAREWELL) or (body.reading is not None and not body.reading.strip().endswith(FAREWELL)):
             raise HTTPException(422, f'缺整集結語：content 與 reading 最後都要有獨立結語段，用兩到三句收束總經與個股的判斷、'
