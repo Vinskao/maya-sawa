@@ -15,7 +15,7 @@ flowchart LR
 - **不重複上傳**：上傳成功立刻在 `maya_sawa_youtube_upload` 記錄日期與影片 ID，重啟也不會重傳。
 - **資料庫只留最新一集的 MP4**（`maya_sawa_youtube_latest_video` 單列，每次覆蓋）；其他集的 MP4 不保存。
 - 標題為「MM/DD｜每集標題」，說明欄放閱讀版摘要、文字版連結（/work/daily-reading-日期）、資料來源網址與免責聲明；分類為教育，不是兒童內容。
-- **影片畫面用 Learn 頁公開的主播片段**（`tymultiverse.cc/images/people/`）：Maya 日用 `reporter.mp4`、`reporter2.mp4`… 依網站播放器相同的順序（0,1,2,0,3,4,0,…）接起來直到涵蓋整段語音；週二、週日（Duo）用 `reporterDuoUiobbeci.mp4`，抓不到時退回 `reporterDuo.mp4`／`reporter.mp4`。這是沒有權限的訪客看到的版本，**絕不使用只有完整主播權限者才看得到的 `prison*` 系列**。輸出 1280x720，ffmpeg 已在映像裡。
+- **影片畫面用 Learn 頁公開的主播片段**（`tymultiverse.cc/images/people/`）：Maya 日用 `reporter.mp4`、`reporter2.mp4`… 依網站播放器相同的順序（0,1,2,0,3,4,0,…）接起來直到涵蓋整段語音；週二、週日（Duo）用 `reporterDuoUiobbeci.mp4`，抓不到時退回 `reporterDuo.mp4`／`reporter.mp4`。這是沒有權限的訪客看到的版本，**絕不使用只有完整主播權限者才看得到的 `prison*` 系列**。**原則：YouTube 的畫面和 Learn 頁對沒有完整主播權限的人看到的完全一樣。** Learn 頁那個畫面框是 32:9、深色底，影片高度 200%、頂端對齊，所以只露出上半部（`learn.css` 的 `data-full="false"`）。YouTube 影片就是這個畫面本身：片段先置入 16:9 框、只保留上半部，輸出 1920x540，周圍不加任何東西，下半身不會出現。 ffmpeg 已在映像裡。
 - 每集記錄影片版本（`VIDEO_VERSION`）；改版本號會讓最新幾集用新畫面重傳（舊影片需到 YouTube 工作室手動刪除，上傳權限不含刪除）。
 
 ## 啟用（需要頻道擁有者授權，程式無法代做）

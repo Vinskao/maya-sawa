@@ -18,7 +18,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 PEOPLE = "https://tymultiverse.cc/images/people/"
-VIDEO_VERSION = "presenter-clips-1"  # bump to re-upload episodes with a newer look
+VIDEO_VERSION = "presenter-top-half-2"  # bump to re-upload episodes with a newer look
 MAX_CLIPS = 600
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
@@ -79,10 +79,17 @@ def probe_seconds(path: str, run=subprocess.run) -> float:
     return float((result.stdout or "0").strip() or 0)
 
 
+# The Learn page frame for a viewer without full-presenter permission (learn.css: .presenter-frame[data-full="false"] is 32:9 with a
+# #111 background; the video is 200% tall, object-fit: contain, top-aligned, so only the top half of the clip shows). The YouTube video
+# is exactly that frame: the clip fitted into a 16:9 box, then only its top half kept. Nothing is added around it.
+PUBLIC_VIEW = ("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x111111,"
+               "crop=1920:540:0:0")
+
+
 def ffmpeg_command(audio: str, playlist: str, out: str) -> list[str]:
     return ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", playlist, "-i", audio, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264",
             "-preset", "veryfast", "-pix_fmt", "yuv420p", "-r", "30",
-            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=white",
+            "-vf", PUBLIC_VIEW,
             "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", out]
 
 

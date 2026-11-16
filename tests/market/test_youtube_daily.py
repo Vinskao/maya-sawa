@@ -109,6 +109,29 @@ def test_only_the_public_presenter_clips_are_ever_requested():
     assert all(n.startswith("reporter") and "prison" not in n for n in names)
 
 
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_the_video_shows_only_the_top_half_like_the_public_learn_page(tmp_path):
+    mp3 = tmp_path / "t.mp3"
+    subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", str(mp3)], capture_output=True, check=True)
+
+    def clip(name):  # top half red, bottom half blue, 1280x720
+        out = tmp_path / name
+        subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=red:s=1280x360:d=2:r=15", "-f", "lavfi", "-i", "color=c=blue:s=1280x360:d=2:r=15",
+                        "-filter_complex", "[0][1]vstack", "-pix_fmt", "yuv420p", str(out)], capture_output=True, check=True)
+        return out.read_bytes()
+    (tmp_path / "o.mp4").write_bytes(yd.build_mp4(mp3.read_bytes(), "maya", fetch=clip))
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(tmp_path / "o.mp4"), "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                         capture_output=True).stdout
+    assert len(raw) == 1920 * 540 * 3                      # exactly the 32:9 frame, nothing added around it
+
+    def pixel(x, y):
+        i = (y * 1920 + x) * 3
+        return tuple(raw[i:i + 3])
+    for y in (20, 270, 520):                               # the whole frame is the clip's red top half, never the blue bottom half
+        r, g, b = pixel(960, y)
+        assert r > 200 and b < 60
+
+
 def test_an_episode_uploaded_with_an_older_video_version_is_uploaded_again(db):
     db.record("2026-11-16", "old", "private", "t", version="cover")
     job = daily(db, ALL)
@@ -140,7 +163,7 @@ def test_real_ffmpeg_plays_the_presenter_clips_in_order_under_the_audio(tmp_path
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,width,height", "-of", "json", str(tmp_path / "o.mp4")],
                            capture_output=True, text=True).stdout
     streams = json.loads(probe)["streams"]
-    assert {s["codec_name"] for s in streams} >= {"h264", "aac"} and any(s.get("width") == 1280 and s.get("height") == 720 for s in streams)
+    assert {s["codec_name"] for s in streams} >= {"h264", "aac"} and any(s.get("width") == 1920 and s.get("height") == 540 for s in streams)
 
 
 def test_client_refreshes_the_token_then_uploads_with_the_resumable_protocol():
