@@ -172,3 +172,7 @@ Tests: `poetry run python -m pytest tests/market/test_market_audio_worker.py tes
 ## 2026-11-08 手機顯示「現場直播」與播放器影片停住
 
 原因：前端音訊代理把後端串流原樣轉出，沒有 `Content-Length`，`Range` 請求也回 200 整檔，手機瀏覽器因此視為直播，無法顯示長度或拖曳。修正：代理先取完整音檔，回傳固定 `Content-Length`、`Accept-Ranges: bytes`，並支援 `Range`（206／416）。測試 `tests/market/dailyMayaRoutes.test.ts`。另外播放器影片加看門狗：語音播放中影片停滯約 2 秒就從頭重播（`tests/learn/marketAudioPlayback.test.ts`）。Learn 總覽頁影片改為 walking.mp4 → hiking.mp4 接續播放並淡入淡出、重複（`tests/learn/catalogVideo.test.ts`）；`hiking.mp4` 須放在 `https://tymultiverse.cc/images/people/hiking.mp4`，缺檔時自動只循環 walking.mp4。
+
+## 2026-11-16 月字元上限調到 100,000
+
+`MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT` 由 50,000 改為 100,000（`k8s/deployment.yaml`）。原因：精讀稿從約 1,400 字增長到約 2,000 字，每天一篇，12 月（31 天）約需 62,000，原上限約在 12/25 用完。帳本月份以 UTC 切（每月 1 日台北 08:00 歸零），預留含重試與失敗的工作。上限只是自己設的保護線，不是 Azure 的帳單上限；Azure 免費額度（官方價格頁：Neural 每月 0.5 百萬字元）是否涵蓋 HD Flash 未證實。

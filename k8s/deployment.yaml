@@ -89,7 +89,7 @@ spec:
         - name: MARKET_AUDIO_AUTOGEN_ENABLED
           value: "true"
         - name: MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT
-          value: "50000"
+          value: "100000"
         - name: OPENAI_API_BASE
           value: "https://api.openai.com/v1"
         - name: DB_HOST
