@@ -74,3 +74,11 @@ flowchart TD
 ```
 
 開發方法：名次與本週摘要是純函式（`maya_sawa/services/volume_rank.py`），先寫 `tests/market/test_volume_alerts.py`（名次、門檻、各一次、價格警示附註、本週列表、資料不足、單位換算、Yahoo 解析、資料庫不足改 Yahoo）再實作。
+
+## 2026-11-16 加權指數（TAIEX）
+
+加權指數和個股一樣會推 Telegram 警示：漲跌幅、盤中回落／反彈、連續與隔日反向。指數波動比個股小，所以門檻較低：漲跌 2%、3%、5% 各通知一次，自高低點回落或反彈 2 點，連續／反向的「大日」是 3%。
+
+- 資料：Yahoo `^TWII`，台北盤中每 60 秒最多讀一次（`IntradayAlertMonitor.check_index`，掛在 Shioaji 報價刷新後）；訊息標題為「TAIEX 加權指數」。
+- 規則仍是純函式 `evaluate`，門檻由報價自帶的 `levels`、`swing`、`bigDay` 決定，個股預設不變。
+- **尚未做：指數成交量排名。** Yahoo 盤中不提供 ^TWII 當日累計成交量（當日值為 0），而全市場成交金額需要另一個盤中來源（Shioaji 指數快照的成交金額，或證交所盤中統計）與歷史成交金額；來源與單位確認前不推「爆大量」，避免誤報。

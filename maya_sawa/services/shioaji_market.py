@@ -318,6 +318,10 @@ class ShioajiMarketService:
                 await intraday_alert_monitor.check_japan(list({item.get("code", "").upper(): item for item in japan}.values()))
             except Exception:
                 logger.exception("Japan intraday alert check failed (non-fatal)")
+            try:  # the TAIEX itself, from Yahoo
+                await intraday_alert_monitor.check_index()
+            except Exception:
+                logger.exception("Index intraday alert check failed (non-fatal)")
         except Exception:
             logger.exception("Failed to refresh dashboard quote snapshot (non-fatal)")
         portfolio_due = (

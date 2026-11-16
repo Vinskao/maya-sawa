@@ -30,6 +30,9 @@ HISTORY_DAYS = 6
 JAPAN_POLL = timedelta(seconds=120)
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 PRICE_KINDS = ("rise", "fall", "pullback", "bounce")
+INDEX_LEVELS, INDEX_SWING, INDEX_BIG_DAY = (2, 3, 5), 2.0, 3.0  # a whole-market index moves far less than a single stock
+INDEX_POLL = timedelta(seconds=60)
+INDEX_CODE, INDEX_YAHOO, INDEX_NAME = "TAIEX", "^TWII", "加權指數"
 LIMIT_DAY = 9.5  # percent: a move this large is probably a locked limit-up / limit-down, where volume is tiny
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
 EPS = 1e-9
@@ -62,18 +65,18 @@ def _alert(telegram: str, kind: str, quote: dict, title: str, body: str, **extra
             "title": f"{_label(quote)} {title}", "body": body, "pct": float(quote["changePercent"]), **extra}
 
 
-def _special(pct: float, history: list[float]) -> dict:
+def _special(pct: float, history: list[float], big: float = BIG_DAY) -> dict:
     """What earlier big days say about today's ±5% move: a streak in the same direction, or a reversal of yesterday."""
     sign = 1 if pct > 0 else -1
     streak = 0
     for day in reversed(history):
-        if day * sign >= BIG_DAY - EPS:
+        if day * sign >= big - EPS:
             streak += 1
         else:
             break
     if streak:
         return {"streak": streak + 1, "recent": history[-streak:]}
-    if history and history[-1] * sign <= -BIG_DAY + EPS:
+    if history and history[-1] * sign <= -big + EPS:
         return {"reversal": True, "recent": history[-1:]}
     return {}
 
@@ -81,15 +84,16 @@ def _special(pct: float, history: list[float]) -> dict:
 def _move_alert(quote: dict, pct: float, level: int, history: list[float]) -> dict:
     up, price = pct > 0, float(quote["close"])
     verb = "上漲" if up else "下跌"
-    special = _special(pct, history)
+    big = float(quote.get("bigDay") or BIG_DAY)
+    special = _special(pct, history, big)
     note, title = "", f"盤中{verb} {_signed(pct)}"
     if "streak" in special:
         days = " → ".join(_signed(d) for d in special["recent"]) + f" → 今天 {_signed(pct)}"
-        title = f"⚡ 連續 {special['streak']} 天{'漲' if up else '跌'}超過 5%（今天{_signed(pct)}）"
-        note = f"\n⚡ 連續 {special['streak']} 天單日{'漲' if up else '跌'}幅超過 5%：{days}"
+        title = f"⚡ 連續 {special['streak']} 天{'漲' if up else '跌'}超過 {big:g}%（今天{_signed(pct)}）"
+        note = f"\n⚡ 連續 {special['streak']} 天單日{'漲' if up else '跌'}幅超過 {big:g}%：{days}"
     elif special.get("reversal"):
         title = f"⚡ 隔日反向 {_signed(pct)}（前一日 {_signed(special['recent'][0])}）"
-        note = f"\n⚡ 隔日反向：前一日 {_signed(special['recent'][0])}，今天 {_signed(pct)}，反向超過 5%"
+        note = f"\n⚡ 隔日反向：前一日 {_signed(special['recent'][0])}，今天 {_signed(pct)}，反向超過 {big:g}%"
     return _alert("attention" if special or not up else "update", "rise" if up else "fall", quote, title,
                   f"{_signed(pct)}，現價 {price:g}（較前一日收盤{'漲' if up else '跌'}超過 {level}%）{note}",
                   direction="up" if up else "down", level=level, **{k: v for k, v in special.items() if k != "recent"})
@@ -99,7 +103,7 @@ def evaluate(state: dict, quote: dict, now: datetime) -> tuple[dict, list[dict]]
     """Return (new state, alerts) for one quote. `quote["history"]` holds the completed days' change-percents, oldest first."""
     market = quote.get("market") or "TW"
     symbol = str(quote.get("symbol", "")).upper()
-    if market not in MARKETS or quote.get("productType") != "stock" or not symbol or not float(quote.get("close") or 0):
+    if market not in MARKETS or quote.get("productType") not in ("stock", "index") or not symbol or not float(quote.get("close") or 0):
         return state, []
     tz = MARKETS[market][0]
     local = now.astimezone(tz)
@@ -117,21 +121,22 @@ def evaluate(state: dict, quote: dict, now: datetime) -> tuple[dict, list[dict]]
     price = float(quote["close"])
     alerts = []
 
-    crossed_up = [lv for lv in LEVELS if pct >= lv - EPS and lv not in own["up"]]
+    levels, swing = quote.get("levels") or LEVELS, float(quote.get("swing") or SWING)
+    crossed_up = [lv for lv in levels if pct >= lv - EPS and lv not in own["up"]]
     if crossed_up:
         own["up"] += crossed_up
         alerts.append(_move_alert(quote, pct, crossed_up[-1], history))
-    crossed_down = [lv for lv in LEVELS if pct <= -lv + EPS and lv not in own["down"]]
+    crossed_down = [lv for lv in levels if pct <= -lv + EPS and lv not in own["down"]]
     if crossed_down:
         own["down"] += crossed_down
         alerts.append(_move_alert(quote, pct, crossed_down[-1], history))
 
     own["high"], own["low"] = max(own["high"], pct), min(own["low"], pct)
-    if own["high"] - pct >= SWING - EPS:
+    if own["high"] - pct >= swing - EPS:
         alerts.append(_alert("attention", "pullback", quote, f"自盤中高點回落 {own['high'] - pct:.1f} 點",
                              f"盤中最高 {_signed(own['high'])} → 現在 {_signed(pct)}，現價 {price:g}", high=own["high"], direction="down"))
         own["high"] = pct  # the next pullback has to be another full swing from here, or from a new high
-    if pct - own["low"] >= SWING - EPS:
+    if pct - own["low"] >= swing - EPS:
         alerts.append(_alert("update", "bounce", quote, f"自盤中低點反彈 {pct - own['low']:.1f} 點",
                              f"盤中最低 {_signed(own['low'])} → 現在 {_signed(pct)}，現價 {price:g}", low=own["low"], direction="up"))
         own["low"] = pct
@@ -262,6 +267,17 @@ def fetch_japan_quotes(items: list[dict], today: date, client: httpx.Client | No
     return quotes
 
 
+def fetch_index_quote(today: date) -> dict | None:
+    """The TAIEX from Yahoo (^TWII): price and change-percent while Taipei trades. Yahoo reports no running volume for it."""
+    with httpx.Client(timeout=10, headers={"User-Agent": USER_AGENT}) as client:
+        response = client.get(CHART_URL.format(symbol=INDEX_YAHOO), params={"range": "1y", "interval": "1d"})
+        response.raise_for_status()
+        quote = parse_yahoo_chart(response.json(), INDEX_CODE, today, INDEX_NAME)
+    if not quote:
+        return None
+    return {**quote, "productType": "index", "market": "TW", "levels": INDEX_LEVELS, "swing": INDEX_SWING, "bigDay": INDEX_BIG_DAY}
+
+
 def pcts_from_points(points: list[dict], today: str) -> list[float]:
     """Completed days' change-percents from stored official TWSE/TPEx daily prices (today's partial row is excluded)."""
     out = []
@@ -344,12 +360,14 @@ def notify(alerts: list[dict]) -> int:
 class IntradayAlertMonitor:
     """Called after each quote refresh. State lives in memory; a restart mid-session may repeat a level once."""
 
-    def __init__(self, fetch_japan=fetch_japan_quotes, history_taiwan=taiwan_history, volume_history_taiwan=volume_history_for):
+    def __init__(self, fetch_index=fetch_index_quote, fetch_japan=fetch_japan_quotes, history_taiwan=taiwan_history, volume_history_taiwan=volume_history_for):
         self._state: dict = {}
+        self._fetch_index = fetch_index
         self._fetch_japan, self._history_taiwan, self._volume_history_taiwan = fetch_japan, history_taiwan, volume_history_taiwan
         self._history: dict = {}  # (code, day) -> completed days' percents, read once a day
         self._volumes: dict = {}  # (code, day) -> [[date, shares], ...] for the trailing year, read once a day
         self._last_japan: datetime | None = None
+        self._last_index: datetime | None = None
 
     async def _run(self, quotes: list[dict], now: datetime) -> list[dict]:
         alerts = []
@@ -394,6 +412,18 @@ class IntradayAlertMonitor:
         self._last_japan = now
         quotes = await asyncio.to_thread(self._fetch_japan, items, now.astimezone(TOKYO).date())
         return await self._run(quotes, now)
+
+
+    async def check_index(self, now: datetime | None = None) -> list[dict]:
+        """The TAIEX (docs/INTRADAY_ALERTS.md): polled from Yahoo at most once a minute while Taipei is open."""
+        now = now or datetime.now(TAIPEI)
+        if not in_trading_hours(now, "TW"):
+            return []
+        if self._last_index and now - self._last_index < INDEX_POLL:
+            return []
+        self._last_index = now
+        quote = await asyncio.to_thread(self._fetch_index, now.astimezone(TAIPEI).date())
+        return await self._run([quote], now) if quote else []
 
 
 intraday_alert_monitor = IntradayAlertMonitor()
