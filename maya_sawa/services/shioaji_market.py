@@ -284,6 +284,11 @@ class ShioajiMarketService:
                     if _has_price(row) and key[1]:
                         unique_rows[key] = row
                 valid_rows = list(unique_rows.values())
+                try:  # intraday ±5% / pullback alerts to Telegram (docs/INTRADAY_ALERTS.md); never blocks the refresh
+                    from .intraday_alerts import intraday_alert_monitor
+                    await intraday_alert_monitor.check(valid_rows)
+                except Exception:
+                    logger.exception("Intraday alert check failed (non-fatal)")
                 await asyncio.to_thread(market_fundamentals_db.save_quote_snapshots, valid_rows)
                 cache_id = hashlib.sha256(json.dumps(selected, sort_keys=True).encode()).hexdigest()[:20]
                 await asyncio.to_thread(self._write_cached_payload, f"DASHBOARD_QUOTES_V2_{cache_id}", rows, 300)
