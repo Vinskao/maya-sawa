@@ -28,7 +28,7 @@ def audio_autogen_is_configured(environ=None):
 
 class MarketAudioWorker:
     def __init__(self, database, provider, max_attempts=3, enabled=False, monthly_char_limit=None,
-                 daily_only=False, eligible_daily_codes=None, daily_brief_day=None):
+                 daily_only=False, eligible_daily_codes=None, daily_brief_day=None, tone_provider=None):
         self.database = database
         self.provider = provider
         self.max_attempts = max_attempts
@@ -36,6 +36,7 @@ class MarketAudioWorker:
         self.daily_only = daily_only
         self.eligible_daily_codes = eligible_daily_codes
         self.daily_brief_day = daily_brief_day
+        self.tone_provider = tone_provider  # () -> (tone, last session change); None keeps every episode in the normal voice
         configured_limit = monthly_char_limit if monthly_char_limit is not None else os.getenv('MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT', '0')
         self.monthly_char_limit = int(configured_limit)
         if enabled and self.monthly_char_limit < 1:
@@ -90,8 +91,17 @@ class MarketAudioWorker:
                 monthly_reserved,
                 monthly_reserved * ESTIMATED_USD_PER_MILLION_CHARACTERS / 1_000_000,
                 self.monthly_char_limit, ESTIMATED_USD_PER_MILLION_CHARACTERS)
+            options = {'voice': presenter['voice']} if presenter else {}
+            if job['productType'] == 'daily' and self.tone_provider:
+                try:
+                    tone, change = self.tone_provider()
+                except Exception:
+                    tone, change = 'normal', None
+                if tone in ('angry', 'cheerful'):
+                    options['style'] = tone
+                logger.warning('Market audio tone code=%s tone=%s taiex_last_session_change=%s', job['code'], tone, change)
             try:
-                audio, content_type, voice = self.provider.synthesize(spoken_text, voice=presenter['voice']) if presenter else self.provider.synthesize(spoken_text)
+                audio, content_type, voice = self.provider.synthesize(spoken_text, **options)
             except TypeError as exc:
                 if presenter:
                     raise RuntimeError('Speech provider does not support presenter voice selection') from exc

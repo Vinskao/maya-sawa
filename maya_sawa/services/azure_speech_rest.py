@@ -12,6 +12,8 @@ from .market_presenters import PRESENTERS
 
 
 VOICE = PRESENTERS['maya']['voice']
+STYLES = {'angry', 'cheerful'}  # Azure speaking styles used for the narration tone (services/voice_tone.py)
+STYLE_DEGREE = '1.5'
 SUPPORTED_REGIONS = {'eastus', 'westeurope', 'southeastasia', 'chinanorth3'}
 OUTPUT_FORMAT = 'audio-24khz-48kbitrate-mono-mp3'
 
@@ -68,7 +70,7 @@ class AzureSpeechRestProvider:
         # SSML contains only the required speak/voice wrappers; metered text is XML escaped.
         return len(escape(text, quote=False))
 
-    def synthesize(self, text, voice=None):
+    def synthesize(self, text, voice=None, style=None):
         if not self.enabled:
             raise RuntimeError('Azure Speech provider is disabled')
         if not isinstance(text, str) or not text.strip():
@@ -82,6 +84,8 @@ class AzureSpeechRestProvider:
         if self.chunk_limit < 1:
             raise ValueError('Speech chunk limit must be positive')
         voice = voice or self.voice
+        if style is not None and style not in STYLES:
+            raise ValueError('Speech style is invalid')
         if not isinstance(voice, str) or not voice.strip() or len(voice) > 128:
             raise ValueError('Speech voice is invalid')
         chunks = split_speech_text(text, self.chunk_limit)
@@ -91,11 +95,18 @@ class AzureSpeechRestProvider:
                 wait = self.min_request_interval - (self.monotonic() - self.last_request_at)
                 if wait > 0:
                     self.sleep(wait)
-            ssml = (
-                '<speak version="1.0" xml:lang="zh-CN">'
-                f'<voice name="{escape(voice, quote=True)}">{escape(chunk, quote=False)}</voice>'
-                '</speak>'
-            )
+            if style:  # the style tag needs the mstts namespace; the plain SSML below stays exactly as it was
+                ssml = (
+                    '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="zh-CN">'
+                    f'<voice name="{escape(voice, quote=True)}"><mstts:express-as style="{style}" styledegree="{STYLE_DEGREE}">'
+                    f'{escape(chunk, quote=False)}</mstts:express-as></voice></speak>'
+                )
+            else:
+                ssml = (
+                    '<speak version="1.0" xml:lang="zh-CN">'
+                    f'<voice name="{escape(voice, quote=True)}">{escape(chunk, quote=False)}</voice>'
+                    '</speak>'
+                )
             request = urllib.request.Request(
                 f'https://{region}.tts.speech.microsoft.com/cognitiveservices/v1',
                 data=ssml.encode('utf-8'),

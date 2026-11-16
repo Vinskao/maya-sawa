@@ -260,11 +260,13 @@ async def _start_market_audio_worker_if_configured():
         logger.info('Market audio worker not started: another pod owns the database lease')
         return
     provider = AzureSpeechRestProvider()
+    from .services import voice_tone
     worker = MarketAudioWorker(market_audio_db, provider, enabled=True,
                                monthly_char_limit=os.environ['MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT'],
                                daily_only=True,
                                eligible_daily_codes=_today_approved_daily_audio_ids,
-                               daily_brief_day=_daily_brief_day)
+                               daily_brief_day=_daily_brief_day,
+                               tone_provider=voice_tone.current_tone)
     _market_audio_worker_task = asyncio.create_task(_market_audio_worker_loop(worker))
     logger.warning('Market audio autogeneration is enabled with the configured local character cap')
 

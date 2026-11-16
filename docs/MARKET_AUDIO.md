@@ -176,3 +176,26 @@ Tests: `poetry run python -m pytest tests/market/test_market_audio_worker.py tes
 ## 2026-11-16 月字元上限調到 100,000
 
 `MARKET_AUDIO_MONTHLY_CHARACTER_LIMIT` 由 50,000 改為 100,000（`k8s/deployment.yaml`）。原因：精讀稿從約 1,400 字增長到約 2,000 字，每天一篇，12 月（31 天）約需 62,000，原上限約在 12/25 用完。帳本月份以 UTC 切（每月 1 日台北 08:00 歸零），預留含重試與失敗的工作。上限只是自己設的保護線，不是 Azure 的帳單上限；Azure 免費額度（官方價格頁：Neural 每月 0.5 百萬字元）是否涵蓋 HD Flash 未證實。
+
+## 2026-11-16 旁白語氣（生氣／快樂／一般）
+
+每日精讀的旁白語氣由**前一個交易日加權指數的漲跌幅**決定，純規則、不經 AI：
+
+```mermaid
+flowchart LR
+  A[Yahoo ^TWII 日線] --> B[前一個已收盤交易日 vs 再前一日 漲跌幅]
+  B -->|≤ -2%| C[angry 生氣]
+  B -->|≥ +2%| D[cheerful 快樂]
+  B -->|其餘或取不到| E[normal 一般]
+  C --> F[SSML mstts:express-as style styledegree=1.5]
+  D --> F
+  E --> G[原本的 SSML 不變]
+  F --> H[Azure Speech 合成 -> 資料庫]
+  G --> H
+```
+
+- 判斷在 `services/voice_tone.py`（`tone_for_change`），worker 合成每日精讀前呼叫 `current_tone()`，把語氣傳給 `AzureSpeechRestProvider.synthesize(style=...)`。個股與總經語音不套用。
+- Azure 做法（依官方 SSML 文件）：`<speak>` 宣告 `xmlns:mstts="https://www.w3.org/2001/mstts"`，文字用 `<mstts:express-as style="angry" styledegree="1.5">` 包住；風格值不合法時 Azure 會整段忽略並回到一般語氣，所以程式只接受 `angry`、`cheerful` 兩個值。Azure 聲音清單 API 顯示 `zh-CN-XiaoyiNeural`（Uiobbeci）與 `zh-CN-Xiaoqi:DragonHDFlashLatestNeural`（Maya）都支援這兩個風格；HD 聲音的文件備註風格在英文內容才有保證，Maya 的中文效果以試聽為準（試聽時 Maya 的 angry 與一般版長度、音量幾乎相同）。
+- **只套用在新合成的集數**：已存的語音不重做；取不到指數時一律用一般語氣，不讓語音失敗。選用的語氣會記在日誌（`Market audio tone ...`），不改 `voice` 欄位（YouTube 影片的主播對應依賴它）。
+- 費用：風格標籤不計字元；2026-11-16 查 Azure 成本管理，11 月累計成本 NT$0.00，資源為 F0（`ty-multiverse-speech-f0`，訂閱 Azure subscription）。
+- 開發方法：先測規則門檻、SSML 內容與 worker 傳參，再接上 Azure；`poetry run python -m pytest tests/market/test_voice_tone.py -q`。
