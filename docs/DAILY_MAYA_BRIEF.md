@@ -251,3 +251,23 @@ flowchart LR
 8. 2026-11-14 審查：站內沒有 TAIEX 指數日線，`/dashboard/history/TXF` 是未記合約月份的近月接續序列（換月日為第三個星期三後首個交易日）。臺股提示改指證交所 `MI_5MINS_HIST` JSON，換月日中斷連續，非近月的同月份 TX 不得用 TXF 代替。長期應由收集器存 TAIEX 日線與 TX 各月份結算價。
 9. 2026-11-14 實作：TAIEX 日線隨成交量一起從 FMTQIK 存成 macro 序列 `TW_TAIEX`（不多打請求）；`GET /market/dashboard/relative/{code}` 由 `services/relative_strength.py` 算當日差距、連續日數與累計差距，缺收盤即中斷。臺股提示改讀此端點。
 10. 2026-11-14 第二步：`POST /market/signal-events`（agent key）存重大消息，`GET /market/signal-events` 每次讀取時用已存收盤重算事件後逐日差距（`relative_strength.event_tracking`：13:30 後公布算次一交易日，缺收盤停在 pending，不跳日）。台指期轉倉作業下載的期交所 CSV 另存各月份合約結算價（快取代碼 `TX_CONTRACT_SETTLEMENTS`，不進總經圖），`GET /market/dashboard/tx-settlements?month=YYYYMM` 讀取。仍未做：個股期貨本身的日結算價沒有入庫，期貨對同月份 TX 的差距還要排程自行計算；收盤價未還原除權息。
+
+## 2026-11-16 同步到 /blog
+
+核准的每日精讀除了語音，也自動發成 /blog 文章（`services/daily_reading_blog.py`，不經 AI）。
+
+```mermaid
+flowchart LR
+  A[Claude 核准] --> B[_on_daily_approved]
+  B --> Q[(音訊佇列)]
+  B --> S[BlogService.save + publish]
+  S --> P[(blog PostgreSQL)]
+  U[服務啟動] --> K[補寫已核准但尚未上 blog 的日期]
+  K --> S
+```
+
+- 每天一篇，slug 為 `daily-reading-YYYY-MM-DD`，已存在就略過，所以重啟與重複核准不會產生重複文章。
+- 內文用核准的 `reading`（閱讀排版），沒有時才用朗讀稿分段；結尾附「資料來源」。標題用每集標題，發布時間為當天台北 09:00，分類 Market，標籤 Quant Finance、Daily Reading。
+- 與 `POST /blog/admin/import` 走同一個 `BlogService.save` 與 `publish`，只是直接在後端呼叫，不經 HTTP 與 Keycloak。`BLOG_ENABLED` 不是 true 時不動作。
+- 服務每次啟動會補寫過去已核准的精讀（最多 100 筆）。
+- 開發方法：先測文章草稿與重複略過，再接核准流程；`poetry run python -m pytest tests/market/test_daily_reading_blog.py -q`。

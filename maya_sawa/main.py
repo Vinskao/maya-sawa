@@ -272,9 +272,36 @@ def _daily_maya_authorized(request):
     _verify_agent_key(request)
     return True
 
+def _daily_reading_to_blog(rows):
+    """Approved daily readings go on /blog too (services/daily_reading_blog.py); a no-op until BLOG_ENABLED."""
+    import os
+    from .services.daily_reading_blog import sync_published
+    if os.getenv('BLOG_ENABLED', 'false').lower() != 'true':
+        return None
+    from .api.blog import get_blog
+    return sync_published(rows, get_blog())
+
+
+def _backfill_daily_reading_blog():
+    try:
+        result = _daily_reading_to_blog(daily_maya_db.published())
+        if result:
+            logger.warning('Daily reading blog backfill: %s', result)
+    except Exception:
+        logger.exception('Daily reading blog backfill failed')
+
+
+def _on_daily_approved(row):
+    market_audio_db.enqueue('daily', row['id'], 1, row['content'])
+    try:
+        _daily_reading_to_blog([row])
+    except Exception:
+        logger.exception('Daily reading could not be put on the blog')
+
+
 app.include_router(make_daily_maya_router(daily_maya_db,
                                          market_ai_analysis_db, _daily_maya_authorized,
-                                         on_approved=lambda row: market_audio_db.enqueue('daily', row['id'], 1, row['content'])))
+                                         on_approved=_on_daily_approved))
 app.include_router(make_market_audio_router(market_audio_db, daily_maya_db))
 
 # Daily reading by email: sign-ups are stored at once; mail goes out only once SMTP is configured.
@@ -330,6 +357,8 @@ async def _startup_event():
     5. 記錄啟動日誌
     """
     try:
+        # Backfill: approved readings that predate the blog copy (idempotent, one article per day).
+        asyncio.get_running_loop().run_in_executor(None, _backfill_daily_reading_blog)
         await _start_market_audio_worker_if_configured()
         global _brief_mail_task
         if _brief_mail_task is None and market_dashboard_db.engine:
