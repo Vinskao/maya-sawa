@@ -360,11 +360,11 @@ def fred_fetch_order(codes, fetched_at: dict) -> list:
 
 
 def fred_observation_start(code: str, frequency: str, today: date) -> str:
-    """First FRED observation date requested: 2019 for liquidity, two years for daily/weekly, six years otherwise."""
+    """First FRED observation date requested, including three calendar years for daily and weekly series."""
     if code in LONG_HISTORY_CODES:
         return f"{LONG_HISTORY_START}-01"
     if frequency in ("daily", "weekly"):
-        return (today - timedelta(days=730)).isoformat()
+        return today.replace(year=today.year - 3, day=1).isoformat()
     return f"{today.year - 6}-01-01"
 
 
