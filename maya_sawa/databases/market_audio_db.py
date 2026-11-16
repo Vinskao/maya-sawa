@@ -189,6 +189,13 @@ class MarketAudioDatabase:
                      'voice': row.voice, 'createdAt': row.created_at.isoformat(),
                      'size': row.size or 0} for row in rows]
 
+    def voice(self, product_type, code, revision):
+        if not self.sessions:
+            raise RuntimeError('Audio database unavailable')
+        with self.sessions() as session:
+            row = session.get(MarketAudio, (product_type, code, revision))
+            return row.voice if row else None
+
     def audio(self, product_type, code, revision):
         if not self.sessions:
             raise RuntimeError('Audio database unavailable')
