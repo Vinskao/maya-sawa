@@ -136,3 +136,40 @@ def test_notify_sends_every_alert_and_survives_a_failing_send(monkeypatch):
     alerts, _ = run([10, 5.0])
     ia.notify(alerts)
     assert len(sent) == len(alerts) >= 2
+
+
+# ---- scope: current holdings + everything held or traded since Monday of this week (2026-11-16) ----
+import json
+from datetime import timezone
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from maya_sawa.databases import market_dashboard_db as mdb
+
+
+def test_the_week_starts_on_monday_taipei_midnight():
+    assert ia.week_start(datetime(2026, 11, 18, 10, 0, tzinfo=TZ)) == datetime(2026, 11, 16, 0, 0, tzinfo=TZ)
+    assert ia.week_start(datetime(2026, 11, 16, 9, 5, tzinfo=TZ)) == datetime(2026, 11, 16, 0, 0, tzinfo=TZ)
+    assert ia.week_start(datetime(2026, 11, 22, 23, 0, tzinfo=TZ)) == datetime(2026, 11, 16, 0, 0, tzinfo=TZ)
+
+
+def test_symbols_held_in_any_snapshot_this_week_are_in_scope():
+    engine = create_engine("sqlite://")
+    mdb.MarketDashboardSnapshot.metadata.create_all(engine, tables=[mdb.MarketDashboardSnapshot.__table__])
+    db = mdb.MarketDashboardDatabase.__new__(mdb.MarketDashboardDatabase)
+    db.engine, db.sessions = engine, sessionmaker(bind=engine)
+
+    ids = iter(range(1, 99))  # SQLite does not autoincrement BigInteger
+
+    def snap(at, items):
+        with db.sessions.begin() as s:
+            s.add(mdb.MarketDashboardSnapshot(id=next(ids), source="shioaji", snapshot_at=at, created_at=at,
+                                              positions=json.dumps([{"code": c, "name": c, "productType": t} for c, t in items])))
+
+    snap(datetime(2026, 11, 13, 12, 0, tzinfo=timezone.utc), [("1101", "stock")])                   # last week: out
+    snap(datetime(2026, 11, 17, 2, 0, tzinfo=timezone.utc), [("2330", "stock"), ("TXF", "futures")])  # sold since
+    snap(datetime(2026, 11, 18, 2, 0, tzinfo=timezone.utc), [("2454", "stock")])
+    got = db.traded_since(datetime(2026, 11, 16, 0, 0, tzinfo=TZ))
+    assert sorted((i["code"], i["productType"]) for i in got) == [("2330", "stock"), ("2454", "stock"), ("TXF", "futures")]
+    assert db.traded_since(datetime(2026, 12, 1, tzinfo=TZ)) == []

@@ -180,6 +180,21 @@ class MarketDashboardDatabase:
                 return {"positions": [], "snapshotAt": None}
             return {"positions": json.loads(row.positions), "snapshotAt": row.snapshot_at.isoformat()}
 
+    def traded_since(self, since: datetime) -> list[dict[str, str]]:
+        """Every instrument that appeared in any saved account snapshot since `since`: still held, or bought and sold
+        in the period (a position that opened and closed between two snapshots is not seen). Labels only."""
+        if not self.sessions:
+            return []
+        with self.sessions() as session:
+            rows = session.query(MarketDashboardSnapshot.positions).filter(MarketDashboardSnapshot.snapshot_at >= since).all()
+        found: dict[tuple[str, str], dict[str, str]] = {}
+        for (raw,) in rows:
+            for item in json.loads(raw):
+                code, kind = str(item.get("code", "")).upper(), item.get("productType")
+                if code and kind:
+                    found.setdefault((kind, code), {k: item.get(k, "") for k in ("code", "name", "productType", "market")})
+        return list(found.values())
+
     def custom_symbols(self) -> list[dict[str, str]]:
         if not self.sessions:
             return []

@@ -1,13 +1,13 @@
 """Intraday move alerts to Telegram (docs/INTRADAY_ALERTS.md).
 
-Watches the quotes the Shioaji refresh loop already fetches (holdings, custom and watch symbols) and tells the owner when
+Watches the quotes the Shioaji refresh loop already fetches (holdings, custom and watch symbols, plus every stock held or traded since Monday of this week) and tells the owner when
 a stock moves ±5% from the prior close (again at ±7%, ±9%), falls 5 points from its day high (+10% -> +5% counts), or
 bounces 5 points from its day low. Both directions are reported; every situation is reported once per day.
 Pure rules in `evaluate`; `IntradayAlertMonitor` keeps the per-day state and sends through telegram_notify.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import telegram_notify
@@ -23,6 +23,12 @@ EPS = 1e-9
 def in_trading_hours(now: datetime) -> bool:
     local = now.astimezone(TAIPEI)
     return local.weekday() < 5 and (9, 0) <= (local.hour, local.minute) <= (13, 30)
+
+
+def week_start(now: datetime) -> datetime:
+    """Monday 00:00 Taipei of the week `now` is in: stocks traded since then stay on the alert list after they are sold."""
+    local = now.astimezone(TAIPEI)
+    return (local - timedelta(days=local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _signed(pct: float) -> str:

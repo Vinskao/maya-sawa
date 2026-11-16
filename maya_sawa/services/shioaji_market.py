@@ -244,6 +244,17 @@ class ShioajiMarketService:
 
         self._refresh_task = asyncio.create_task(self._refresh_loop())
 
+    @staticmethod
+    def _traded_this_week() -> list[dict[str, str]]:
+        """Stocks held or traded since Monday stay quoted (and in the intraday alert scope) after they are sold."""
+        try:
+            from ..databases.market_dashboard_db import market_dashboard_db
+            from .intraday_alerts import week_start
+            return market_dashboard_db.traded_since(week_start(datetime.now(TAIPEI_TZ)))
+        except Exception:
+            logger.exception("This week's traded symbols unavailable")
+            return []
+
     async def refresh_cache_now(self) -> None:
         await self._refresh_payload("TXF", self._fetch_txf_quote)
         await self._refresh_payload("QFFR1", self._fetch_qff_quote)
@@ -251,7 +262,7 @@ class ShioajiMarketService:
         try:
             from ..databases.market_dashboard_db import market_dashboard_db
             from ..databases.market_fundamentals_db import market_fundamentals_db
-            selected = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols() + market_dashboard_db.watch_symbols()
+            selected = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols() + market_dashboard_db.watch_symbols() + self._traded_this_week()
             selected = list({(item.get("productType"), item.get("code", "").upper()): item for item in selected}.values())
             if selected:
                 rows = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, selected))
