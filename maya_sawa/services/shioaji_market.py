@@ -576,6 +576,10 @@ class ShioajiMarketService:
             "timestamp": ShioajiMarketService._format_timestamp(snapshot.ts),
             "fetchedAt": datetime.now(timezone.utc).isoformat(), "source": "Sinopac Shioaji",
         }
+        # Shares traded = total traded amount / volume-weighted average price. Snapshot volume units (lots vs shares)
+        # differ by product, so volume alerts never use them directly (docs/INTRADAY_ALERTS.md).
+        amount, average = float(getattr(snapshot, "total_amount", 0) or 0), float(getattr(snapshot, "average_price", 0) or 0)
+        payload["volumeShares"] = round(amount / average) if amount > 0 and average > 0 else None
         underlying_code = ShioajiMarketService._stock_underlying_code(contract)
         if underlying_code:
             payload["underlyingCode"] = underlying_code

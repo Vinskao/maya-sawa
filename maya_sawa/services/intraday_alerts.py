@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from . import telegram_notify
+from . import telegram_notify, volume_rank
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,8 @@ SWING = 5.0  # points of change-percent from the day's high / low
 HISTORY_DAYS = 6
 JAPAN_POLL = timedelta(seconds=120)
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+PRICE_KINDS = ("rise", "fall", "pullback", "bounce")
+LIMIT_DAY = 9.5  # percent: a move this large is probably a locked limit-up / limit-down, where volume is tiny
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
 EPS = 1e-9
 
@@ -111,7 +113,7 @@ def evaluate(state: dict, quote: dict, now: datetime) -> tuple[dict, list[dict]]
     own = state.get(key)
     if not own or own.get("day") != today:
         own = {"day": today, "high": pct, "low": pct, "up": [], "down": []}
-    own = {**own, "up": list(own["up"]), "down": list(own["down"])}
+    own = {**own, "up": list(own["up"]), "down": list(own["down"]), "volume": list(own.get("volume", []))}
     price = float(quote["close"])
     alerts = []
 
@@ -133,7 +135,73 @@ def evaluate(state: dict, quote: dict, now: datetime) -> tuple[dict, list[dict]]
         alerts.append(_alert("update", "bounce", quote, f"自盤中低點反彈 {pct - own['low']:.1f} 點",
                              f"盤中最低 {_signed(own['low'])} → 現在 {_signed(pct)}，現價 {price:g}", low=own["low"], direction="up"))
         own["low"] = pct
+    volume = _volume_alerts(own, quote, today, local, pct)
+    if volume:
+        alerts.append(volume)
+    note = _volume_note(quote, local, pct)
+    if note:
+        for alert in alerts:
+            if alert["kind"] in PRICE_KINDS:
+                alert["body"] += f"\n{note}"
     return {**state, key: own}, alerts
+
+
+def _volume_context(quote: dict, local: datetime):
+    """(today's rank, trailing volumes, this week's day report), or None without enough volume history."""
+    running = quote.get("volumeShares")
+    volumes = volume_rank.trailing_volumes(quote.get("volumeHistory") or [], local.date())
+    if not running or len(volumes) < volume_rank.MIN_HISTORY_DAYS:
+        return None
+    today = local.date()
+    week = volume_rank.week_summary(quote["volumeHistory"], today, today - timedelta(days=today.weekday()), running)
+    return volume_rank.rank_of(running, volumes), volumes, week
+
+
+def _volume_alerts(own: dict, quote: dict, today: str, local: datetime, pct: float) -> dict | None:
+    """Fires when today's running volume reaches the top 10, then the top 5, of the trailing year (once each per day)."""
+    context = _volume_context(quote, local)
+    if context is None:
+        return None
+    rank, volumes, week = context
+    fired = own.setdefault("volume", [])
+    reached = [level for level in volume_rank.TOP_LEVELS if rank <= level and level not in fired]
+    if not reached:
+        return None
+    level = min(reached)
+    fired.extend(reached)
+    running = int(quote["volumeShares"])
+    cutoffs = sorted(volumes, reverse=True)
+    return _alert("attention", "volume", quote, f"成交量進入近一年前 {level} 大（第 {rank} 名）",
+                  f"今日累計 {running:,} 股，近一年第 {rank} 大（前 10 門檻 {int(cutoffs[9]):,} 股、前 5 門檻 {int(cutoffs[4]):,} 股）\n{_week_line(week)}",
+                  level=level, rank=rank, direction="up")
+
+
+def _week_line(week: list[dict]) -> str:
+    parts = []
+    for day in week:
+        label = f"{day['weekday']}{'（今日）' if day['today'] else ''}"
+        mark = {"top5": "，前 5", "top10": "，前 10"}.get(day["flag"], "")
+        parts.append(f"{label} 第 {day['rank']} 名{mark}")
+    return "本週成交量排名（近一年）：" + "、".join(parts) if parts else ""
+
+
+def _volume_note(quote: dict, local: datetime, pct: float) -> str:
+    """The volume line every price alert carries: today's rank and each day of this week, with a limit-day reminder."""
+    context = _volume_context(quote, local)
+    if context is None:
+        return ""
+    rank, _, week = context
+    status = "進入前 5" if rank <= 5 else "進入前 10" if rank <= 10 else "未進前 10"
+    lines = [f"成交量（近一年排名）：今日第 {rank} 名（{status}）"]
+    past = [day for day in week if not day["today"]]
+    if past:
+        lines.append(_week_line(past).replace("本週成交量排名（近一年）：", "本週前幾日："))
+        flagged = [day for day in week if day["flag"]]
+        if flagged:
+            lines.append("本週進入前 10 的有：" + "、".join(f"{day['weekday']}第 {day['rank']} 名" for day in flagged))
+    if abs(pct) >= LIMIT_DAY:
+        lines.append("漲跌停時成交量常很小，所以本週各日都列出。")
+    return "\n".join(lines)
 
 
 # ---- data: Japanese quotes (Yahoo daily chart) and Taiwan daily history (official closes) ----
@@ -150,7 +218,11 @@ def parse_yahoo_chart(payload: dict, code: str, today: date, name: str = "") -> 
         closes = result["indicators"]["quote"][0]["close"]
     except (KeyError, IndexError, TypeError):
         return None
-    rows = [(datetime.fromtimestamp(t, TOKYO).date(), float(c)) for t, c in zip(stamps, closes) if isinstance(c, (int, float)) and c > 0]
+    volumes = (result["indicators"]["quote"][0].get("volume") or [])
+    volumes += [None] * (len(stamps) - len(volumes))
+    daily = [(datetime.fromtimestamp(t, TOKYO).date(), float(c), v) for t, c, v in zip(stamps, closes, volumes)
+             if isinstance(c, (int, float)) and c > 0]
+    rows = [(day, close) for day, close, _ in daily]
     if len(rows) < 2 or rows[-1][0] != today:
         return None
     price = float(meta.get("regularMarketPrice") or rows[-1][1])
@@ -159,7 +231,9 @@ def parse_yahoo_chart(payload: dict, code: str, today: date, name: str = "") -> 
     return {"symbol": code.upper(), "name": name or meta.get("shortName") or "", "productType": "stock", "market": "JP",
             "close": price, "changePercent": round((price / previous - 1) * 100, 2),
             "timestamp": (datetime.fromtimestamp(stamp, TOKYO) if stamp else datetime.combine(today, datetime.min.time(), TOKYO)).isoformat(),
-            "history": _pcts([c for _, c in rows[:-1]])[-HISTORY_DAYS:]}
+            "history": _pcts([c for _, c in rows[:-1]])[-HISTORY_DAYS:],
+            "volumeShares": int(daily[-1][2]) if daily[-1][2] else None,
+            "volumeHistory": [[day.isoformat(), int(v)] for day, _, v in daily[:-1] if v]}
 
 
 def fetch_japan_quotes(items: list[dict], today: date, client: httpx.Client | None = None) -> list[dict]:
@@ -175,7 +249,7 @@ def fetch_japan_quotes(items: list[dict], today: date, client: httpx.Client | No
                 symbol = (yahoo_symbols(code, "JP") or [None])[0]
                 if not symbol:
                     continue
-                response = client.get(CHART_URL.format(symbol=symbol), params={"range": "10d", "interval": "1d"})
+                response = client.get(CHART_URL.format(symbol=symbol), params={"range": "1y", "interval": "1d"})
                 response.raise_for_status()
                 quote = parse_yahoo_chart(response.json(), code, today, item.get("name") or "")
                 if quote:
@@ -204,6 +278,50 @@ def pcts_from_points(points: list[dict], today: str) -> list[float]:
     return out[-HISTORY_DAYS:]
 
 
+def _db_volume_history(code: str, today: date) -> list:
+    from ..databases.market_history_db import market_history_db
+    points = market_history_db.history(code, today - timedelta(days=370), today,
+                                       sources=["twse:daily-price", "tpex:daily-price"])["points"]
+    rows = []
+    for point in points:
+        values = next((point["sources"][s] for s in ("twse:daily-price", "tpex:daily-price")
+                       if isinstance(point["sources"].get(s, {}).get("volume_shares"), (int, float))), None)
+        if values and values["volume_shares"] > 0:
+            rows.append([point["date"], int(values["volume_shares"])])
+    return rows
+
+
+def _yahoo_volume_history(code: str, today: date) -> list:
+    """A year of daily volumes (shares) from Yahoo when the database has not collected that much for this stock."""
+    with httpx.Client(timeout=10, headers={"User-Agent": USER_AGENT}) as client:
+        for suffix in (".TW", ".TWO"):
+            response = client.get(CHART_URL.format(symbol=f"{code}{suffix}"), params={"range": "1y", "interval": "1d"})
+            if response.status_code != 200:
+                continue
+            result = (response.json().get("chart") or {}).get("result") or []
+            if not result:
+                continue
+            stamps, volumes = result[0].get("timestamp") or [], (result[0]["indicators"]["quote"][0].get("volume") or [])
+            rows = [[datetime.fromtimestamp(t, TAIPEI).date().isoformat(), int(v)] for t, v in zip(stamps, volumes) if v]
+            return [row for row in rows if row[0] < today.isoformat()]
+    return []
+
+
+def volume_history_for(code: str, today: date, db=_db_volume_history, yahoo=_yahoo_volume_history) -> list:
+    """Daily volumes for the trailing year: the database's own records when they reach far enough back, else Yahoo."""
+    try:
+        rows = db(code, today)
+        if len(rows) >= volume_rank.MIN_HISTORY_DAYS:
+            return rows
+    except Exception:
+        logger.warning("Volume history from the database unavailable for %s", code, exc_info=True)
+    try:
+        return yahoo(code, today)
+    except Exception:
+        logger.warning("Volume history from Yahoo unavailable for %s", code, exc_info=True)
+        return []
+
+
 def taiwan_history(code: str, today: date) -> list[float]:
     from ..databases.market_history_db import market_history_db
     points = market_history_db.history(code, today - timedelta(days=14), today,
@@ -226,10 +344,11 @@ def notify(alerts: list[dict]) -> int:
 class IntradayAlertMonitor:
     """Called after each quote refresh. State lives in memory; a restart mid-session may repeat a level once."""
 
-    def __init__(self, fetch_japan=fetch_japan_quotes, history_taiwan=taiwan_history):
+    def __init__(self, fetch_japan=fetch_japan_quotes, history_taiwan=taiwan_history, volume_history_taiwan=volume_history_for):
         self._state: dict = {}
-        self._fetch_japan, self._history_taiwan = fetch_japan, history_taiwan
+        self._fetch_japan, self._history_taiwan, self._volume_history_taiwan = fetch_japan, history_taiwan, volume_history_taiwan
         self._history: dict = {}  # (code, day) -> completed days' percents, read once a day
+        self._volumes: dict = {}  # (code, day) -> [[date, shares], ...] for the trailing year, read once a day
         self._last_japan: datetime | None = None
 
     async def _run(self, quotes: list[dict], now: datetime) -> list[dict]:
@@ -256,7 +375,13 @@ class IntradayAlertMonitor:
                 except Exception:
                     logger.warning("Taiwan daily history unavailable for %s", quote.get("symbol"), exc_info=True)
                     self._history[key] = []
-            with_history.append({**quote, "history": self._history[key]})
+            if key not in self._volumes:
+                try:
+                    self._volumes[key] = await asyncio.to_thread(self._volume_history_taiwan, str(quote.get("symbol")), today)
+                except Exception:
+                    logger.warning("Taiwan volume history unavailable for %s", quote.get("symbol"), exc_info=True)
+                    self._volumes[key] = []
+            with_history.append({**quote, "history": self._history[key], "volumeHistory": quote.get("volumeHistory") or self._volumes[key]})
         return await self._run(with_history, now)
 
     async def check_japan(self, items: list[dict], now: datetime | None = None) -> list[dict]:
