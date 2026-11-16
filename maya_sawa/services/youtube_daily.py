@@ -62,16 +62,42 @@ def clip_order(sequence_index: int) -> int:
     return 0 if position == 2 else group * 2 + position + 1
 
 
+DUO_VOICES = ("duo:maya+uiobbeci", "test:duo", "duo:uiobbeci:maya-pending")
+UIOBBECI_VOICES = ("zh-CN-XiaoyiNeural", "zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural", "test:uiobbeci")
+
+
+def presenter_for_voice(voice: str) -> str:
+    """Who reads the episode, exactly as the Learn page decides it (presenterForAudio in presenterSchedule.ts): the stored voice."""
+    if voice in DUO_VOICES:
+        return "duo"
+    if voice in UIOBBECI_VOICES:
+        return "uiobbeci"
+    return "maya"  # Xiaoqi and any other stored voice
+
+
+def video_version(voice: str) -> str:
+    """Recorded with each upload. Versions before 2026-11-16 treated every non-Duo voice as Maya, so Uiobbeci episodes carry their own
+    tag and are uploaded again; Maya and Duo episodes were already right."""
+    presenter = presenter_for_voice(voice)
+    return VIDEO_VERSION if presenter in ("maya", "duo") else f"{VIDEO_VERSION}-{presenter}"
+
+
 def clip_name(voice: str, sequence_index: int) -> str:
-    """The public presenter clip the Learn page plays at this point: Duo days use the Duo clip, Maya days the numbered clips."""
-    if (voice or "").startswith("duo"):
+    """The public presenter clip the Learn page plays at this point (marketClipUrl): Duo and Uiobbeci have one clip each, Maya the
+    numbered clips."""
+    presenter = presenter_for_voice(voice)
+    if presenter == "duo":
         return "reporterDuoUiobbeci.mp4"
+    if presenter == "uiobbeci":
+        return "reporterUiobbeci.mp4"
     number = clip_order(sequence_index) + 1
     return f"reporter{'' if number == 1 else number}.mp4"
 
 
-def fallback_clip(voice: str) -> str:
-    return "reporterDuo.mp4" if (voice or "").startswith("duo") else "reporter.mp4"
+def fallback_clip(voice: str) -> str | None:
+    """When a clip is missing the page falls back for Maya and Duo; Uiobbeci has none, so the upload fails rather than show someone else."""
+    presenter = presenter_for_voice(voice)
+    return {"duo": "reporterDuo.mp4", "maya": "reporter.mp4"}.get(presenter)
 
 
 def probe_seconds(path: str, run=subprocess.run) -> float:
@@ -116,6 +142,8 @@ def build_mp4(mp3: bytes, voice: str = "", fetch=fetch_clip, run=subprocess.run)
                     data = fetch(name)
                 except Exception:
                     name = fallback_clip(voice)
+                    if name is None:
+                        raise RuntimeError(f"presenter clip {name or clip_name(voice, index)} is unavailable and has no fallback")
                     data = fetch(name) if name not in cache else cache[name]
                 cache[name] = data
                 path = Path(folder, name)
@@ -172,7 +200,8 @@ class YoutubeDaily:
     def pending(self, rows: list[dict]) -> list[dict]:
         done = self.db.uploaded()
         newest = sorted((r for r in rows if r.get("status", "approved") == "approved"), key=lambda r: r["day"], reverse=True)
-        return [r for r in newest[: self.backfill] if (done.get(r["day"]) or (None, None))[1] != VIDEO_VERSION]
+        return [r for r in newest[: self.backfill]
+                if (done.get(r["day"]) or (None, None))[1] != video_version(self.audio.voice("daily", r["id"], 1) or "")]
 
     def process_one(self, rows: list[dict]):
         """Returns (day, video_id) for what it uploaded, or None when nothing was ready."""
@@ -181,9 +210,10 @@ class YoutubeDaily:
             if not audio:
                 continue  # narration not generated yet; try again on the next pass
             meta = metadata(row)
-            mp4 = self.builder(audio[0], self.audio.voice("daily", row["id"], 1) or "")
+            voice = self.audio.voice("daily", row["id"], 1) or ""
+            mp4 = self.builder(audio[0], voice)
             video_id = self.client.upload(mp4, meta, self.privacy)
-            self.db.record(row["day"], video_id, self.privacy, meta["title"], VIDEO_VERSION)  # recorded at once: never uploaded twice
+            self.db.record(row["day"], video_id, self.privacy, meta["title"], video_version(voice))  # recorded at once: never uploaded twice
             latest_day = max(r["day"] for r in rows)
             if row["day"] == latest_day:
                 self.db.save_latest(row["day"], mp4)

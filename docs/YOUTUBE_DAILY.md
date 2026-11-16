@@ -28,3 +28,15 @@ flowchart LR
 5. `videos.insert` 每次約耗 1,600 配額單位，預設每日 10,000，每天一集綽綽有餘；補三集不會超額。
 
 開發方法：先用假的 YouTube 用戶端與假的 ffmpeg 測重複、順序與只留最新一集，再用真 ffmpeg 驗證輸出是 H.264 + AAC；`poetry run python -m pytest tests/market/test_youtube_daily.py -q`。
+
+## 主播對應（2026-11-16 修正）
+
+影片裡的主播由**資料庫裡那集語音的 `voice`** 決定，規則與 Learn 頁 `presenterForAudio` 完全相同：`duo:*` 是 Duo、`zh-CN-XiaoyiNeural` 等是 Uiobbeci、其他（Xiaoqi 等）是 Maya。曾經把所有非 Duo 都當成 Maya，導致 Uiobbeci 的集數（如 11/14）配上 Maya 的畫面。
+
+| 主播 | 聲音 | 畫面片段 |
+|---|---|---|
+| Maya | `zh-CN-Xiaoqi:DragonHDFlashLatestNeural` | `reporter.mp4`、`reporter2.mp4`… 依網站順序 |
+| Uiobbeci | `zh-CN-XiaoyiNeural` | `reporterUiobbeci.mp4`（無備援，缺片段就不上傳，不用別人頂替） |
+| Duo | `duo:uiobbeci:maya-pending` | `reporterDuoUiobbeci.mp4`，缺時退回 `reporterDuo.mp4` |
+
+Uiobbeci 的集數以自己的版本標記（`presenter-top-half-2-uiobbeci`）記錄，所以舊的錯誤上傳會被偵測到並重傳。

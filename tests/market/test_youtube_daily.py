@@ -25,7 +25,7 @@ class Audio:
         return (b"MP3:" + code.encode(), "audio/mpeg") if code in self.ready else None
 
     def voice(self, product_type, code, revision):
-        return "duo:uiobbeci:maya-pending" if code.endswith("15") else "maya"
+        return {"15": "duo:uiobbeci:maya-pending", "14": "zh-CN-XiaoyiNeural"}.get(code[-2:], "zh-CN-Xiaoqi:DragonHDFlashLatestNeural")
 
 
 class Client:
@@ -86,7 +86,7 @@ def test_only_the_latest_episodes_mp4_is_kept_in_the_database(db):
     job = daily(db, ALL)
     for _ in range(3):
         job.process_one(ROWS)
-    assert db.latest() == ("2026-11-16", b"MP4(MP3:id-2026-11-16,maya)")
+    assert db.latest() == ("2026-11-16", b"MP4(MP3:id-2026-11-16,zh-CN-Xiaoqi:DragonHDFlashLatestNeural)")
 
 
 def test_audio_not_ready_yet_is_retried_later_and_unapproved_days_are_ignored(db):
@@ -101,11 +101,35 @@ def test_clip_order_and_names_follow_the_learn_page_player():
     assert [yd.clip_order(i) for i in range(10)] == [0, 1, 2, 0, 3, 4, 0, 5, 6, 0]
     assert [yd.clip_name("maya", i) for i in range(4)] == ["reporter.mp4", "reporter2.mp4", "reporter3.mp4", "reporter.mp4"]
     assert yd.clip_name("duo:uiobbeci:maya-pending", 3) == "reporterDuoUiobbeci.mp4"
-    assert yd.fallback_clip("duo") == "reporterDuo.mp4" and yd.fallback_clip("maya") == "reporter.mp4"
+    assert yd.fallback_clip("duo:uiobbeci:maya-pending") == "reporterDuo.mp4" and yd.fallback_clip("zh-CN-Xiaoqi:DragonHDFlashLatestNeural") == "reporter.mp4"
+
+
+def test_the_presenter_follows_the_stored_voice_exactly_like_the_learn_page():
+    maya, uiobbeci, duo = "zh-CN-Xiaoqi:DragonHDFlashLatestNeural", "zh-CN-XiaoyiNeural", "duo:uiobbeci:maya-pending"
+    assert [yd.presenter_for_voice(v) for v in (maya, uiobbeci, duo, "zh-CN-Xiaoxiao2:DragonHDFlashLatestNeural", "test:duo", "something-new")] ==         ["maya", "uiobbeci", "duo", "uiobbeci", "duo", "maya"]
+    assert {yd.clip_name(uiobbeci, i) for i in range(30)} == {"reporterUiobbeci.mp4"}   # never a Maya clip on a Uiobbeci episode
+    assert not {yd.clip_name(maya, i) for i in range(30)} & {"reporterUiobbeci.mp4", "reporterDuoUiobbeci.mp4", "reporterDuo.mp4"}
+    assert yd.fallback_clip(uiobbeci) is None
+
+
+def test_a_missing_uiobbeci_clip_fails_the_upload_instead_of_showing_another_presenter(tmp_path):
+    def boom(name):
+        raise RuntimeError("404")
+    with pytest.raises(RuntimeError):
+        yd.build_mp4(b"x", "zh-CN-XiaoyiNeural", fetch=boom, run=lambda cmd, **kw: SimpleNamespace(returncode=0, stdout="3"))
+
+
+def test_uiobbeci_episodes_uploaded_with_a_maya_look_are_uploaded_again_but_correct_ones_are_not(db):
+    db.record("2026-11-14", "wrong", "private", "t", version=yd.VIDEO_VERSION)   # Xiaoyi voice, uploaded with Maya clips
+    db.record("2026-11-15", "duo-ok", "private", "t", version=yd.VIDEO_VERSION)
+    db.record("2026-11-16", "maya-ok", "private", "t", version=yd.VIDEO_VERSION)
+    job = daily(db, ALL)
+    assert job.process_one(ROWS)[0] == "2026-11-14" and job.process_one(ROWS) is None
+    assert db.uploaded()["2026-11-14"][1] == yd.VIDEO_VERSION + "-uiobbeci" and db.uploaded()["2026-11-15"][0] == "duo-ok"
 
 
 def test_only_the_public_presenter_clips_are_ever_requested():
-    names = {yd.clip_name(v, i) for v in ("maya", "duo:x") for i in range(60)}
+    names = {yd.clip_name(v, i) for v in ("zh-CN-Xiaoqi:DragonHDFlashLatestNeural", "zh-CN-XiaoyiNeural", "duo:uiobbeci:maya-pending") for i in range(60)}
     assert all(n.startswith("reporter") and "prison" not in n for n in names)
 
 
@@ -137,7 +161,7 @@ def test_an_episode_uploaded_with_an_older_video_version_is_uploaded_again(db):
     job = daily(db, ALL)
     assert job.process_one(ROWS)[0] == "2026-11-14"           # the cover-era upload of 11/16 is redone too, in order
     assert [job.process_one(ROWS) for _ in range(3)][1][0] == "2026-11-16"
-    assert db.uploaded()["2026-11-16"][1] == yd.VIDEO_VERSION
+    assert db.uploaded()["2026-11-16"][1] == yd.video_version("zh-CN-Xiaoqi:DragonHDFlashLatestNeural")
 
 
 def test_mp4_build_fails_loudly_when_ffmpeg_does_not_produce_a_video():
