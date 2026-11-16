@@ -1,5 +1,5 @@
 ---
-title: "from-synchronous-api-to-streaming-api"
+title: 從同步 API 到串流 API：架構轉型完整指南
 publishDate: "2025-09-08 14:30:00"
 img: /assets/django.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

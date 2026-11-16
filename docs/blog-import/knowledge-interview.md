@@ -1,5 +1,5 @@
 ---
-title: "knowledge-interview"
+title: Spring IoC、AOP 與例外處理面試題
 publishDate: "2025-05-26 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

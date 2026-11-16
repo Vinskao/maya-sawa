@@ -1,10 +1,9 @@
----
-title: "sql-join-operations"
+---title: SQL JOIN Types
 publishDate: "2024-02-26 16:00:00"
 img: /assets/SQL.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/26
+  本文介紹了 SQL 中不同類型的 JOIN 操作，包括 INNER JOIN、LEFT/RIGHT OUTER JOIN 以及 FULL OUTER。
 category: Database
 tags:
   - INNER JOIN

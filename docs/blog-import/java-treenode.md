@@ -1,10 +1,9 @@
----
-title: "java-treenode"
+---title: Java TreeNode 與二元搜尋樹遞迴插入
 publishDate: "2025-09-10 16:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/26
+  Exactly, that's the correct way to handle the base case. The line if(root == null) return new TreeNode(val); is the key to the entire recursive solution. When。
 category: Java
 tags:
   - Java

@@ -1,5 +1,5 @@
 ---
-title: "speech-to-speech-framework"
+title: Pipecat 語音 AI 框架指南
 publishDate: "2025-09-19 15:30:00"
 img: /assets/langchain.png
 img_alt: Real-time speech AI framework illustration

@@ -1,5 +1,5 @@
 ---
-title: "spring-boot-async"
+title: Spring Boot 非同步處理深度解析
 publishDate: "2025-08-26 01:00:00"
 img: "/assets/java.jpg"
 img_alt: "A bright pink sheet of paper used to wrap flowers curves in front of rich blue background"

@@ -1,5 +1,5 @@
 ---
-title: "angular-output"
+title: Angular Signal-based Outputs：output() 使用指南
 publishDate: "2025-12-26 13:00:00"
 img: /assets/angular.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

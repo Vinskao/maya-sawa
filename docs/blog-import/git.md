@@ -1,5 +1,5 @@
 ---
-title: "git"
+title: Git reset --hard、--soft 與 revert 的使用時機
 publishDate: "2025-09-24 10:00:00"
 img: /assets/git.png
 img_alt: Git version control system with branching and merging visualization

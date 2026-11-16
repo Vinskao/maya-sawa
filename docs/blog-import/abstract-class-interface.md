@@ -1,5 +1,5 @@
 ---
-title: "abstract-class-interface"
+title: Abstract Classes vs Interfaces in Java
 publishDate: "2024-02-24 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

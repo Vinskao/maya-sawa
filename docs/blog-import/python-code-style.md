@@ -1,5 +1,5 @@
 ---
-title: "python-code-style"
+title: Python 程式碼風格與專案架構指南
 publishDate: "2025-09-16 15:00:00"
 img: /assets/python.png
 img_alt: Python programming and code style illustration

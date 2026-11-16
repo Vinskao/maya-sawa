@@ -1,5 +1,5 @@
 ---
-title: "r2dbc"
+title: R2DBC 反應式資料庫存取與 Spring Boot 實作
 publishDate: "2025-09-28 10:00:00"
 img: /assets/java.jpg
 img_alt: R2DBC reactive database connectivity logo with non-blocking operations

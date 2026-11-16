@@ -1,9 +1,9 @@
----
-title: "io-multiplexing"
+---title: 高併發架構深度剖析：I/O 多工技術與事件驅動設計
 publishDate: "2025-08-27 01:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: 高併發架構深度剖析：從 I/O 多工技術到事件驅動設計的完整演進
+description: |
+  現代 Web 開發的性能瓶頸，往往在於如何高效處理大量併發連線。本文從操作系統的 I/O 多工技術出發，深入探討事件驅動架構的設計理念，並比較不同 Web。
 level: advance
 category: Concurrency
 tags:

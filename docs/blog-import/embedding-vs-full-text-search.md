@@ -1,5 +1,5 @@
 ---
-title: "embedding-vs-full-text-search"
+title: Embedding vs Full-text Search：AI 搜索的兩種武器
 publishDate: "2025-08-27 02:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

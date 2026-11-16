@@ -1,5 +1,5 @@
 ---
-title: "langchain-vs-langgraph"
+title: LangChain vs LangGraph：精要教學指南
 publishDate: "2025-09-05 15:30:00"
 img: /assets/langchain.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

@@ -1,9 +1,9 @@
----
-title: "nio"
+---title: Nio
 publishDate: "2025-09-16 18:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: 深入理解 Java NIO：非阻塞 I/O 的核心原理與實戰應用
+description: |
+  在高併發網路程式設計中，I/O 效能是關鍵瓶頸。Java NIO（New I/O）作為解決方案，徹底改變了我們處理網路連線的方式。本文將用簡單易懂的方式，帶你理解 NIO。
 level: advance
 category: Concurrency
 tags:

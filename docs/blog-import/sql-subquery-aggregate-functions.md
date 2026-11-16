@@ -1,10 +1,9 @@
----
-title: "sql-subquery-aggregate-functions"
+---title: SQL 子查詢與聚合函數的進階用法
 publishDate: "2024-02-29 22:00:00"
 img: /assets/SQL.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/29
+  出現 error：Operand data type xxx is invalid for sum operator.。
 category: Database
 tags:
   - Subquery

@@ -1,9 +1,9 @@
----
-title: "spring-boot-structure"
+---title: Spring Boot IOC 實作
 publishDate: "2025-05-24T10:00:00.000Z"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: Understanding Spring Boot
+description: |
+  在 Spring Boot 啟動階段，會自動掃描所有有標註的元件（如 @Service、@Controller 等），並將它們建立成 Bean 放入 IoC。
 category: Spring Boot
 tags:
   - IOC

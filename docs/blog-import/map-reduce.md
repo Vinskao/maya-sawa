@@ -1,9 +1,9 @@
----
-title: "map-reduce"
+---title: MapReduce 原理、HDFS 與處理流程
 publishDate: "2025-09-14 01:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: MapReduce 分布式計算模型深度剖析：從 Unix 管線到大數據處理的完整演進
+description: |
+  MapReduce 完整解讀：從 Unix、Producer-Consumer 到 JavaScript 的對照。
 level: advance
 category: Algorithm
 tags:

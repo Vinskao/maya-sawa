@@ -1,10 +1,9 @@
----
-title: "java-collections-list-set-map"
+---title: List, Set, Map & Array in Java
 publishDate: "2024-03-04 16:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/26
+  本文詳細介紹了 Java 中常用的資料結構：List、Set、Map 以及。
 category: Java
 tags:
   - Java

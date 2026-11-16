@@ -1,10 +1,9 @@
----
-title: "from-spring-boot-to-django"
+---title: 從 Spring Boot 到 Django：用 Java 思維理解 Django 專案架構
 publishDate: "2025-08-25 03:00:00"
 img: /assets/django.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  Django專案基礎教學 + 設計模式對應，用Java思維理解Django架構
+  從 Spring Boot 到 Django：用 Java 思維理解 Django 專案架構。
 category: Spring Boot
 tags:
   - Django

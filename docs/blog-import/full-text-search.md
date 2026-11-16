@@ -1,5 +1,5 @@
 ---
-title: "full-text-search"
+title: 'Full Text Search: 字典索引 vs N-Gram索引'
 publishDate: "2025-09-03 14:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

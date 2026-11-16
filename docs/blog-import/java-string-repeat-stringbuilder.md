@@ -1,10 +1,9 @@
----
-title: "java-string-repeat-stringbuilder"
+---title: Java 字串重複與 StringBuilder 效能
 publishDate: "2024-02-28 23:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/26
+  repeat(int count)是 String 類別的方法，用於建立由該字串重複特定次數形成的新字串。 此方法是 Java 11。
 category: Java
 tags:
   - String

@@ -1,5 +1,5 @@
 ---
-title: "banking-system"
+title: TCS BaNCS 深度技術架構解析
 publishDate: "2025-12-14 13:00:00"
 img: /assets/java.jpg
 img_alt: A sophisticated digital interface displaying financial data and network connections

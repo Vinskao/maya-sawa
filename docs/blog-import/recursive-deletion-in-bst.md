@@ -1,5 +1,5 @@
 ---
-title: "recursive-deletion-in-bst"
+title: BST 遞歸刪除演算法詳解
 publishDate: "2025-09-13 10:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

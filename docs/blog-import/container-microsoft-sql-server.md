@@ -1,10 +1,9 @@
----
-title: "container-microsoft-sql-server"
+---title: Microsoft SQL Server 容器部署與維運
 publishDate: "2024-03-16 12:00:00"
 img: /assets/container.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/03/16
+  Microsoft 並沒有官方支援 macOS 版本的 MSSQL Server。 但是，他們提供了適用於 macOS 的 SQL Server 相關工具，例如 SQL Server 命令列工具（mssql-tools），以及 Azure Data Studio 等，也沒有提供 MSSQL 適用於 ARM64。
 category: Docker
 tags:
   - MSSQL

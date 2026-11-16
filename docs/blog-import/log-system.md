@@ -1,9 +1,9 @@
----
-title: "log-system"
+---title: 從傳統日誌到雲端日誌：打造結構化、可追溯的日誌系統
 publishDate: "2025-09-15 10:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: TY Multiverse 專案 - 從傳統日誌系統升級到現代雲端日誌系統的完整指南
+description: |
+  假設您的專案目前使用了 SLF4J + Logback 的標準組合，這是一個穩定且廣泛使用的選擇。目前的日誌系統已經具備基本的日誌記錄功能，並透過 application.yml。
 category: DevOps
 tags:
   - 日誌系統

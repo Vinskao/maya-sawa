@@ -1,9 +1,9 @@
----
-title: "self-balancing-trees"
+---title: 自平衡樹 (Self-Balancing Trees)
 publishDate: "2025-08-27T10:00:00.000Z"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: Understanding Self-Balancing Trees
+description: |
+  二元搜尋樹（Binary Search Tree, BST）是一種常見的資料結構，能夠支援高效的搜尋、插入與刪除。然而，如果沒有額外機制保持「平衡」，一般 BST。
 level: advance
 category: Algorithm
 tags:

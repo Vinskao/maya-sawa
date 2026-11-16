@@ -1,10 +1,9 @@
----
-title: "data-visualization-certification"
+---title: Data Visualization Certification
 publishDate: "2023-09-12 00:00:00"
 img: /assets/stock-1.jpg
 img_alt: Iridescent ripples of a bright blue and pink liquid
 description: |
-  Click the image to verify the authentic copy.
+  As part of this certification, tianyikao built the following projects and got all automated test suites to pass:。
 category: Certification
 tags:
   - Nested Array

@@ -1,5 +1,5 @@
 ---
-title: "spring-boot-middleware"
+title: 核心概念：Filter / Middleware 是什麼？
 publishDate: "2025-02-25 12:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

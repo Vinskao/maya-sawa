@@ -1,10 +1,9 @@
----
-title: "mongodb-document-oriented-database"
+---title: Mongodb Document Oriented Database
 publishDate: "2024-02-26 22:00:00"
 img: /assets/mongodb-logo.jpg
 img_alt: mongo pic
 description: |
-  2024/02/26
+  MongoDB 是一種 NoSQL 資料庫，它以文件的形式儲存數據(Document-Oriented。
 category: Database
 tags:
   - Document

@@ -1,5 +1,5 @@
 ---
-title: "consumer"
+title: RabbitMQ Consumer 設計與訊息處理架構
 publishDate: "2025-08-23 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

@@ -1,10 +1,9 @@
----
-title: "mongo-atlas"
+---title: MongoDB Atlas
 publishDate: "2024-02-25 13:00:00"
 img: /assets/mongodb-logo.jpg
 img_alt: mongo pic
 description: |
-  2024/02/25
+  要開始使用 Atlas，首先需要創建一個 Cluster。Cluster 是一種資料庫部署架構，在 Cluster。
 category: Database
 tags:
   - MongoDB Atlas

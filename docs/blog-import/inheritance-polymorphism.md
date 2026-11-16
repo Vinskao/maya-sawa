@@ -1,10 +1,9 @@
----
-title: "inheritance-polymorphism"
+---title: Inheritance Polymorphism
 publishDate: "2024-02-25 18:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/25
+  Cat 與 Dog 使用了自己覆寫的 makeSound()，而 Human 使用了父類別的。
 category: Java
 tags:
   - Inheritance

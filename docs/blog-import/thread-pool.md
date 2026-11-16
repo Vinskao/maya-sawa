@@ -1,5 +1,5 @@
 ---
-title: "thread-pool"
+title: TY Multiverse Consumer：Virtual Threads + RabbitMQ 實戰指南
 publishDate: "2025-09-08 02:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

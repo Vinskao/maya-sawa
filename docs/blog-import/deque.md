@@ -1,5 +1,5 @@
 ---
-title: "deque"
+title: Deque (ArrayDeque) 標準語法速查
 publishDate: "2025-03-05 18:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

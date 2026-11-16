@@ -1,9 +1,9 @@
----
-title: "orm"
+---title: JPA/Hibernate 實作原理
 publishDate: "2025-05-24 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: Understanding ORM
+description: |
+  ORM（物件關聯對應）是一種程式設計技術，用來把物件導向程式中的類別（Class）與資料庫中的資料表（Table）建立對應關係，讓開發者不用手寫 SQL。
 category: Database
 tags:
   - JPA ORM

@@ -1,10 +1,9 @@
----
-title: "javascript-algorithms-certification"
+---title: Javascript Algorithms Certification
 publishDate: "2023-08-25 00:00:00"
 img: /assets/stock-3.jpg
 img_alt: Pearls of silky soft white cotton, bubble up under vibrant lighting
 description: |
-  Click the image to verify the authentic copy.
+  As part of this certification, tianyikao built the following projects and got all automated test suites to pass:。
 category: JavaScript
 tags:
   - Functional Programming

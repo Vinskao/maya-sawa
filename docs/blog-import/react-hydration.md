@@ -1,5 +1,5 @@
 ---
-title: "react-hydration"
+title: React SSR 與 Hydration：主題切換案例解析
 publishDate: "2026-01-02 13:00:00"
 img: /assets/react.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

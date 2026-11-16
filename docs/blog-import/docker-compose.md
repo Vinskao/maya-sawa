@@ -1,10 +1,9 @@
----
-title: "docker-compose"
+---title: Docker Compose 與多階段 Dockerfile 建置
 publishDate: "2024-04-10 12:00:00"
 img: /assets/container.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/04/10
+  總共需要額外撰寫 docker-compose.yml、前端 Dockerfile、後端 Dockerfile、start-services.sh、資料庫 init-db.sql。
 level: advance
 category: Docker
 tags:

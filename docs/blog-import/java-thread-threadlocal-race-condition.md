@@ -1,9 +1,9 @@
----
-title: "java-thread-threadlocal-race-condition"
+---title: Java 多執行緒競態與 ThreadLocal
 publishDate: "2025-05-26 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: Understanding Java Thread & ThreadLocal
+description: |
+  雖然變數存在 ThreadLocal 裡，但我們可以讓每個執行緒完成任務後，把結果放回一個共用的容器中（通常是執行緒安全的集合、佇列、或用回傳值的方式）：。
 level: advance
 category: Concurrency
 tags:

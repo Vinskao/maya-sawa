@@ -1,5 +1,5 @@
 ---
-title: "solid-principles"
+title: 物件導向 SOLID 設計原則
 publishDate: "2025-05-24 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background

@@ -1,10 +1,9 @@
----
-title: "java-time-api-localdatetime-zoneddatetime-duration"
+---title: Java Time API
 publishDate: "2024-02-25 11:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/25
+  本文件介紹 Java 日期時間 API，重點介紹 LocalDateTime、ZonedDateTime 與 Duration。
 category: Java
 tags:
   - LocalDateTime

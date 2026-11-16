@@ -1,5 +1,5 @@
 ---
-title: "redis"
+title: Redis 資料結構、快取與分散式鎖
 publishDate: "2025-09-28 10:00:00"
 img: /assets/redis.png
 img_alt: Redis database logo with data structures and performance metrics

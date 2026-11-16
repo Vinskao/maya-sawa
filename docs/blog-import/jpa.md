@@ -1,10 +1,9 @@
----
-title: "jpa"
+---title: Java Persistence API (JPA)
 publishDate: "2024-02-26 16:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/26
+  JPA 是 Java 平台上的 ORM 標準，它使您能夠在 Java 層面上定義資料查詢方法，而無需編寫傳統的 CRUD 指令，同時利用命名規約自動產生 SQL。
 category: Spring Boot
 tags:
   - JPA

@@ -1,10 +1,9 @@
----
-title: "java-static"
+---title: Java static 關鍵字與設計原則
 publishDate: "2024-02-24 12:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/02/24
+  如果一個在 org.service package、一個在 org.controller package，就只有 public 類別可以透過 import。
 category: Java
 tags:
   - static

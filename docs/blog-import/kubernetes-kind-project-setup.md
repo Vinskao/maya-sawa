@@ -1,10 +1,9 @@
----
-title: "kubernetes-kind-project-setup"
+---title: Kubernetes 與 Helm 指令
 publishDate: "2024-04-25 13:00:00"
 img: /assets/k8s.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/04/25
+  這份指令集涵蓋了 Kubernetes 資源的創建、更新、監控和刪除操作，以及使用 Helm 安裝和管理 Kubernetes。
 level: advance
 category: Kubernetes
 tags:

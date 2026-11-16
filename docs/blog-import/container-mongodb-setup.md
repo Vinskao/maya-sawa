@@ -1,10 +1,9 @@
----
-title: "container-mongodb-setup"
+---title: Docker 部署 MongoDB 與 Mongo Express
 publishDate: "2024-03-17 12:00:00"
 img: /assets/container.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/03/17
+  建立兩個 Docker Container，MongoDB Container、Mongo Express Container，其中 Mongo Express 是 MongoDB 的 GUI，兩個 Container。
 category: Docker
 tags:
   - MongoDB

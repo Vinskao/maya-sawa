@@ -1,10 +1,9 @@
----
-title: "java-access-modifiers"
+---title: Java 存取修飾子與封裝
 publishDate: "2024-03-05 18:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/03/05
+  私有建構子是指只有在該類別內部可以訪問的建構子，外部無法直接使用 new。
 category: Java
 tags:
   - public

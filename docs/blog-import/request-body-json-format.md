@@ -1,10 +1,9 @@
----
-title: "request-body-json-format"
+---title: HTTP Request Body 的 JSON 格式與解析
 publishDate: "2024-03-19 22:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
 description: |
-  2024/03/19
+  請求的 JSON 資料會被映射到一個 Map<String, String> 對象中，其中的鍵值對表示了 JSON。
 category: API
 tags:
   - RequestBody

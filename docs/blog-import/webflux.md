@@ -1,5 +1,5 @@
 ---
-title: "webflux"
+title: WebFlux 從零開始：初學者友好指南
 publishDate: "2025-09-16 16:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
