@@ -139,3 +139,23 @@ flowchart LR
 - 上線方式：服務啟動時（需 `BLOG_ENABLED=true`）呼叫 `services/blog_retitle.py`，只改標題仍是 slug 或純日期的文章，正文與已人工改過的標題不動；已發布的會重新發布，草稿維持草稿；重跑不會重複。
 - 封存稿的 title／description 與對照表一致，測試會檢查兩邊相同且仍能匯入。
 - 開發方法：新增文章時直接寫描述性標題與摘要；`poetry run python -m pytest tests/market/test_blog_retitle.py tests/blog -q`。
+
+## 2026-11-16 整合雷同文章、移除空洞文章
+
+雷同的文章會分散搜尋與 AI 引用的權重，內容空洞的文章拉低整體品質。`data/blog_consolidation.json` 列出要刪的文章與整合的組別，服務啟動時由 `services/blog_consolidate.py` 執行（接在標題同步之後）。
+
+```mermaid
+flowchart LR
+  P[blog_consolidation.json] --> C[consolidate]
+  C -->|每組| M[主文 append 併入文章 標題降一級]
+  M --> R[新標題與摘要 重新發布]
+  M --> B[併入的文章移到回收區]
+  C -->|空洞文章| B
+  B -.可復原.-> X[POST /admin/articles/slug/restore]
+```
+
+- 整合是機械式的：主文保留網址，併入文章以自己的標題當 `##` 小節接在後面，內文標題整體降一級（程式碼區塊內不動），不用 AI 改寫、不新增內容。
+- 被併入或刪除的文章進入可復原的回收區（`delete` 動作），不是永久刪除；要救回用 `restore`，管理頁也可以。
+- 重跑不會重複：已在回收區的略過，主文已包含的內文不會再附加。
+- 這次共 15 組、吸收 17 篇，另刪 3 篇，69 篇變 49 篇。分組原則：同一技術問題的多篇短文合併，長文且各自完整的（如 `nio` 與 `io-multiplexing`）保留。
+- 開發方法：先用正式站的文章內容做乾跑，確認結果，再測試與部署；`poetry run python -m pytest tests/market/test_blog_consolidate.py -q`。

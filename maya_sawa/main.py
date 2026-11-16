@@ -291,8 +291,10 @@ def _retitle_blog_articles():
         from .api.blog import get_blog
         from .services.blog_retitle import sync_titles
         logger.warning('Blog retitle: %s', sync_titles(get_blog()))
+        from .services.blog_consolidate import consolidate
+        logger.warning('Blog consolidate: %s', consolidate(get_blog()))
     except Exception:
-        logger.exception('Blog retitle failed')
+        logger.exception('Blog retitle/consolidate failed')
 
 
 def _backfill_daily_reading_blog():
