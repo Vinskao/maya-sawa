@@ -89,3 +89,71 @@ def test_live_readings_are_cached_for_half_a_minute_and_a_failing_source_is_null
 def test_the_taiwan_vix_series_is_kept_in_the_free_series_cache():
     assert "TW_VIX" in market_macro.FREE_CACHE_CODES
     assert market_macro.TW_VIX_SERIES["TW_VIX"][2] == "daily"
+
+
+# ---- 2026-11-16: VIX futures (Cboe settlement) and the VIXY overnight stand-in ----
+from datetime import date
+
+SETTLEMENT = (
+    "Product,Symbol,Expiration Date,Price\n"
+    "VX,VX35/U6,2026-09-02,17.2528\n"
+    "VX,VX36/U6,2026-09-09,17.2528\n"
+    "VX,VX/U6,2026-09-16,17.4000\n"
+    "VX,VX/V6,2026-10-21,18.1000\n"
+    "VX,VX/X6,2026-11-18,19.2000\n"
+)
+
+
+def test_front_month_is_the_nearest_standard_monthly_not_a_weekly():
+    row = volatility.parse_cboe_settlement(SETTLEMENT, date(2026, 9, 1))
+    assert row == {"code": "VIX_FUT_FRONT", "period": "2026-09-01", "value": "17.40", "contract": "VX/U6", "expiry": "2026-09-16"}
+
+
+def test_after_expiry_the_next_monthly_is_the_front_month():
+    assert volatility.parse_cboe_settlement(SETTLEMENT, date(2026, 9, 17))["contract"] == "VX/V6"
+    assert volatility.parse_cboe_settlement(SETTLEMENT, date(2026, 9, 16))["contract"] == "VX/U6"  # expiry day itself still settles
+
+
+def test_settlement_file_without_prices_gives_nothing():
+    assert volatility.parse_cboe_settlement("Product,Symbol,Expiration Date,Price\n", date(2026, 11, 15)) is None
+    assert volatility.parse_cboe_settlement("<html>nope</html>", date(2026, 11, 15)) is None
+
+
+def test_a_settlement_file_identical_to_the_previous_day_is_a_holiday_repeat():
+    rows = volatility.settlement_rows({date(2026, 11, 12): SETTLEMENT, date(2026, 11, 13): SETTLEMENT.replace("19.2000", "19.3000"),
+                                      date(2026, 11, 16): SETTLEMENT.replace("19.2000", "19.3000")})
+    assert [(r["period"], r["value"]) for r in rows] == [("2026-11-12", "19.20"), ("2026-11-13", "19.30")]
+
+
+def _vixy(ts_closes, regular=(1000, 2000), prev=17.51, close=17.94):
+    stamps = [t for t, _ in ts_closes]
+    return {"chart": {"result": [{
+        "meta": {"symbol": "VIXY", "regularMarketPrice": close, "chartPreviousClose": prev,
+                 "currentTradingPeriod": {"regular": {"start": regular[0], "end": regular[1]}}},
+        "timestamp": stamps, "indicators": {"quote": [{"close": [c for _, c in ts_closes]}]}}]}}
+
+
+def test_vixy_after_hours_is_measured_against_the_regular_close_and_yesterdays_close():
+    live = volatility.parse_yahoo_vixy(_vixy([(900, 17.6), (1500, 17.94), (2500, 18.54), (2600, None)]))
+    assert live["value"] == 18.54 and live["session"] == "post"
+    assert live["regularClose"] == 17.94 and live["changeFromClose"] == 0.6 and live["changeFromClosePercent"] == 3.34
+    assert live["previousClose"] == 17.51 and live["changePercent"] == 5.88
+
+
+def test_vixy_sessions():
+    assert volatility.parse_yahoo_vixy(_vixy([(900, 17.7)]))["session"] == "pre"
+    assert volatility.parse_yahoo_vixy(_vixy([(1500, 17.7)]))["session"] == "regular"
+    assert volatility.parse_yahoo_vixy({"chart": {"result": None}}) is None
+
+
+def test_live_endpoint_carries_the_vix_futures_stand_in_and_a_failing_one_is_null():
+    live = volatility.VolatilityLive(fetch_taiwan=lambda: None, fetch_us=lambda: None,
+                                     fetch_futures=lambda: (_ for _ in ()).throw(RuntimeError("yahoo")))
+    assert live.get()["VIX_FUT_PROXY"] is None
+    ok = volatility.VolatilityLive(fetch_taiwan=lambda: None, fetch_us=lambda: None, fetch_futures=lambda: {"value": 18.54})
+    assert ok.get()["VIX_FUT_PROXY"] == {"value": 18.54}
+
+
+def test_front_month_settlement_series_is_kept_in_the_free_series_cache():
+    assert "VIX_FUT_FRONT" in market_macro.FREE_CACHE_CODES
+    assert market_macro.VIX_FUTURES_SERIES["VIX_FUT_FRONT"][2] == "daily"

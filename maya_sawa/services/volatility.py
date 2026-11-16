@@ -7,7 +7,7 @@ Yahoo's one-minute ^VIX chart. Both are unofficial for programmatic use, so a fa
 import logging
 import re
 import threading
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -16,9 +16,12 @@ logger = logging.getLogger(__name__)
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 CHICAGO = ZoneInfo("America/Chicago")
+NEW_YORK = ZoneInfo("America/New_York")
 TW_VIX_MONTHLY_URL = "https://www.taifex.com.tw/file/taifex/Dailydownload/vix/log2data/{month}new.txt"
 TAIFEX_QUOTE_URL = "https://mis.taifex.com.tw/futures/api/getQuoteDetail"
 YAHOO_VIX_URL = "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX"
+YAHOO_VIXY_URL = "https://query1.finance.yahoo.com/v8/finance/chart/VIXY"
+CBOE_SETTLEMENT_URL = "https://www.cboe.com/us/futures/market_statistics/settlement/csv?dt={day}"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
 LIVE_TTL_SECONDS = 30
 
@@ -41,11 +44,47 @@ def parse_taifex_vix_monthly(text: str) -> list[dict]:
     return rows
 
 
-def merge_history(stored: list[dict], rows: list[dict]) -> list[dict]:
+def merge_history(stored: list[dict], rows: list[dict], code: str = "TW_VIX") -> list[dict]:
     """Everything stored so far plus the new rows; a new row replaces the stored value for the same day."""
     by_day = {row["period"]: row["value"] for row in stored}
     by_day.update({row["period"]: row["value"] for row in rows})
-    return [{"code": "TW_VIX", "period": day, "value": value} for day, value in sorted(by_day.items())]
+    return [{"code": code, "period": day, "value": value} for day, value in sorted(by_day.items())]
+
+
+_MONTHLY_VX = re.compile(r"^VX/[FGHJKMNQUVXZ]\d$")  # the standard monthly; VX35/U6-style symbols are weeklies
+
+
+def parse_cboe_settlement(text: str, as_of: date) -> dict | None:
+    """Front-month VIX future settlement: the standard monthly contract expiring soonest on or after `as_of`."""
+    best = None
+    for line in text.splitlines():
+        cells = [cell.strip() for cell in line.split(",")]
+        if len(cells) < 4 or cells[0] != "VX" or not _MONTHLY_VX.match(cells[1]):
+            continue
+        try:
+            expiry, price = date.fromisoformat(cells[2]), float(cells[3])
+        except ValueError:
+            continue
+        if expiry >= as_of and price > 0 and (best is None or expiry < best[0]):
+            best = (expiry, cells[1], price)
+    if best is None:
+        return None
+    return {"code": "VIX_FUT_FRONT", "period": as_of.isoformat(), "value": f"{best[2]:.2f}", "contract": best[1], "expiry": best[0].isoformat()}
+
+
+def settlement_rows(files: dict[date, str]) -> list[dict]:
+    """Front-month rows for each day's file. Cboe answers a holiday or not-yet-settled day with the previous settlement,
+    so a file identical to the one before it is not a new day."""
+    rows, previous = [], None
+    for day in sorted(files):
+        text = files[day]
+        if text == previous:
+            continue
+        previous = text
+        row = parse_cboe_settlement(text, day)
+        if row:
+            rows.append(row)
+    return rows
 
 
 def _number(value) -> float | None:
@@ -92,6 +131,42 @@ def parse_yahoo_vix(payload: dict) -> dict | None:
                  date=moment.date().isoformat())
 
 
+def parse_yahoo_vixy(payload: dict) -> dict | None:
+    """VIXY (ProShares VIX Short-Term Futures ETF) including pre and after hours: a stand-in for VIX futures while they
+    trade overnight, NOT the futures themselves. Moves are given from the last regular close and from yesterday's close."""
+    try:
+        result = payload["chart"]["result"][0]
+        meta, stamps = result["meta"], result["timestamp"]
+        closes = result["indicators"]["quote"][0]["close"]
+        regular = meta["currentTradingPeriod"]["regular"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    last = next(((t, float(c)) for t, c in zip(reversed(stamps), reversed(closes)) if isinstance(c, (int, float)) and c > 0), None)
+    if last is None:
+        return None
+    moment = datetime.fromtimestamp(last[0], NEW_YORK)
+    session = "pre" if last[0] < regular["start"] else "post" if last[0] >= regular["end"] else "regular"
+    close, previous = _number(meta.get("regularMarketPrice")), _number(meta.get("chartPreviousClose") or meta.get("previousClose"))
+    value = last[1]
+    from_close = round(value - close, 2) if close else None
+    return {"value": value, "session": session, "regularClose": close, "previousClose": previous,
+            "changeFromClose": from_close, "changeFromClosePercent": round(from_close / close * 100, 2) if close else None,
+            "changePercent": round((value - previous) / previous * 100, 2) if previous else None,
+            "asOf": moment.isoformat(), "date": moment.date().isoformat()}
+
+
+def fetch_vix_futures_proxy(client: httpx.Client | None = None) -> dict | None:
+    own = client is None
+    client = client or httpx.Client(timeout=10, headers={"User-Agent": USER_AGENT})
+    try:
+        response = client.get(YAHOO_VIXY_URL, params={"range": "1d", "interval": "1m", "includePrePost": "true"})
+        response.raise_for_status()
+        return parse_yahoo_vixy(response.json())
+    finally:
+        if own:
+            client.close()
+
+
 def fetch_taiwan_vix(client: httpx.Client | None = None) -> dict | None:
     own = client is None
     client = client or httpx.Client(timeout=10, headers={"User-Agent": USER_AGENT})
@@ -119,8 +194,9 @@ def fetch_us_vix(client: httpx.Client | None = None) -> dict | None:
 class VolatilityLive:
     """Both live readings, refetched at most every 30 seconds however many browsers ask."""
 
-    def __init__(self, fetch_taiwan=fetch_taiwan_vix, fetch_us=fetch_us_vix, clock=lambda: datetime.now(timezone.utc)):
-        self._fetchers = {"TW_VIX": fetch_taiwan, "US_VIX": fetch_us}
+    def __init__(self, fetch_taiwan=fetch_taiwan_vix, fetch_us=fetch_us_vix, fetch_futures=fetch_vix_futures_proxy,
+                 clock=lambda: datetime.now(timezone.utc)):
+        self._fetchers = {"TW_VIX": fetch_taiwan, "US_VIX": fetch_us, "VIX_FUT_PROXY": fetch_futures}
         self._clock = clock
         self._lock = threading.Lock()
         self._at: datetime | None = None

@@ -219,6 +219,7 @@ UMICH_SERIES = {
     "UMICH_CPI_EXPECTED_1Y": ("Michigan median expected inflation over next 12 months", "percent", "monthly"),
 }
 TW_VIX_SERIES = {"TW_VIX": ("Taiwan VIX (TAIFEX TAIEX options volatility index), daily close", "index points", "daily")}
+VIX_FUTURES_SERIES = {"VIX_FUT_FRONT": ("Cboe VIX futures, front-month settlement", "index points", "daily")}
 TIER_SERIES = {
     "TIER_TW_GDP_FORECAST": ("TIER Taiwan real GDP growth forecast", "percent", "annual"),
     "TIER_TW_CPI_FORECAST": ("TIER Taiwan CPI inflation forecast", "percent", "annual"),
@@ -282,7 +283,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -888,7 +889,7 @@ class MarketMacroService:
                 ("WorldBank", self._fetch_world_bank_gold),
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series),
-                ("TIER", self._fetch_tier_forecast), ("TAIFEXVix", self._fetch_tw_vix),
+                ("TIER", self._fetch_tier_forecast), ("TAIFEXVix", self._fetch_tw_vix), ("CboeVixFutures", self._fetch_vix_futures),
                 ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi),
                 ("TreasuryDTS", self._fetch_treasury_dts)):
                 try: output["sources"][source_name] = fetch()
@@ -1591,6 +1592,42 @@ class MarketMacroService:
             stored = (_macro_local_cache.get("series:TW_VIX") or {}).get("history") or []
             saved = self._cache_free_series(volatility.merge_history(stored, rows), TW_VIX_SERIES, "TAIFEX",
                                             "https://www.taifex.com.tw/cht/7/vixDaily3MNew", fresh_for_seconds=6 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
+            raise
+
+    def _fetch_vix_futures(self, days: int = 45, max_requests: int = 16) -> int:
+        """Front-month VIX future settlement per past US trading day from Cboe's public settlement CSV, added to what is
+        stored. Today is skipped (Cboe repeats the last settlement until the day settles); every six hours."""
+        from maya_sawa.services import volatility
+        if _fetched_within("VIX_FUT_FRONT", 6 * 3600): return 0
+        run_id = market_macro_db.reserve_source_call("CboeVixFutures", daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError("cboe_vix_futures_daily_budget_exhausted")
+        try:
+            today = datetime.now(ZoneInfo("America/Chicago")).date()
+            stored = (_macro_local_cache.get("series:VIX_FUT_FRONT") or {}).get("history") or []
+            have = {row["period"] for row in stored}
+            weekdays = [today - timedelta(days=back) for back in range(1, days + 1) if (today - timedelta(days=back)).weekday() < 5]
+            missing = [day for day in weekdays if day.isoformat() not in have]
+            if not missing:
+                market_macro_db.finish_source_call(run_id, "success", 0)
+                return 0
+            # the weekday before the oldest wanted day is fetched too, to tell a holiday repeat from a new settlement
+            wanted = sorted(missing)[-(max_requests - 1):]
+            earlier = max((day for day in weekdays if day < wanted[0]), default=None)
+            files, status = {}, None
+            for day in ([earlier] if earlier else []) + wanted:
+                status, raw = _request_free_cached(f"cboe:vx-settle:{day}", volatility.CBOE_SETTLEMENT_URL.format(day=day.isoformat()),
+                                                   ttl_seconds=24 * 3600, extra_headers=BROWSER_AGENT)
+                files[day] = raw.decode("utf-8", errors="replace")
+                time.sleep(0.3)
+            keep = {day.isoformat() for day in wanted}
+            rows = [row for row in volatility.settlement_rows(files) if row["period"] in keep]
+            if not rows and not stored: raise ValueError("cboe_vix_settlement_not_found")
+            saved = self._cache_free_series(volatility.merge_history(stored, rows, "VIX_FUT_FRONT"), VIX_FUTURES_SERIES, "Cboe",
+                                            "https://www.cboe.com/tradable_products/vix/vix_futures/", fresh_for_seconds=6 * 3600)
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
         except Exception as exc:
