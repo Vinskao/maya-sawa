@@ -272,6 +272,29 @@ def _daily_maya_authorized(request):
     _verify_agent_key(request)
     return True
 
+async def _youtube_daily_loop():
+    """Daily reading -> MP4 -> YouTube (services/youtube_daily.py). Off until the channel's OAuth credentials are configured."""
+    import os
+    from .services import youtube_daily
+    if not youtube_daily.configured():
+        return
+    from .databases.youtube_db import YoutubeDatabase
+    daily = youtube_daily.YoutubeDaily(
+        YoutubeDatabase(market_dashboard_db.engine), market_audio_db,
+        youtube_daily.YouTubeClient(os.environ["YOUTUBE_CLIENT_ID"], os.environ["YOUTUBE_CLIENT_SECRET"], os.environ["YOUTUBE_REFRESH_TOKEN"]),
+        youtube_daily.privacy())
+    logger.warning("YouTube daily upload enabled (privacy=%s)", daily.privacy)
+    while True:
+        try:
+            result = await asyncio.to_thread(lambda: daily.process_one(daily_maya_db.published()))
+            if result:
+                logger.warning("YouTube upload: %s -> %s", *result)
+                continue  # more may be waiting; no pause between episodes
+        except Exception:
+            logger.exception("YouTube daily upload failed")
+        await asyncio.sleep(600)
+
+
 def _daily_reading_to_blog(rows):
     """Approved daily readings go on /blog too (services/daily_reading_blog.py); a no-op until BLOG_ENABLED."""
     import os
@@ -376,6 +399,7 @@ async def _startup_event():
         # Backfill: approved readings that predate the blog copy (idempotent, one article per day).
         asyncio.get_running_loop().run_in_executor(None, _backfill_daily_reading_blog)
         await _start_market_audio_worker_if_configured()
+        asyncio.create_task(_youtube_daily_loop())
         global _brief_mail_task
         if _brief_mail_task is None and market_dashboard_db.engine:
             _brief_mail_task = asyncio.create_task(_brief_mail_loop(BriefMailer(brief_subscribers_db)))
