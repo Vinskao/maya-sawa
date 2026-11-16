@@ -1,9 +1,9 @@
----title: Java Time API
+---
+title: "Java Time API 教學：LocalDateTime、ZonedDateTime 與 Duration 用法"
 publishDate: "2024-02-25 11:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  本文件介紹 Java 日期時間 API，重點介紹 LocalDateTime、ZonedDateTime 與 Duration。
+description: "介紹 Java 日期時間 API 中 LocalDateTime、ZonedDateTime 與 Duration 的建立、解析與運算方式。"
 category: Java
 tags:
   - LocalDateTime

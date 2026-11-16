@@ -1,9 +1,9 @@
----title: Spring Boot IOC 實作
+---
+title: "Spring Boot IoC 與 AOP 原理：Bean 容器如何掃描、建立與代理"
 publishDate: "2025-05-24T10:00:00.000Z"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  在 Spring Boot 啟動階段，會自動掃描所有有標註的元件（如 @Service、@Controller 等），並將它們建立成 Bean 放入 IoC。
+description: "解析 Spring Boot 啟動時如何掃描 @Service、@Controller 等元件放入 IoC 容器，以及 AOP 的實作原理。"
 category: Spring Boot
 tags:
   - IOC

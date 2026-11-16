@@ -1,9 +1,9 @@
----title: Java Lambda 與 Stream 實務用法
+---
+title: "Java Lambda 表達式與 Stream API：方法參考與資料處理實務"
 publishDate: "2024-03-04 17:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  Lambda 表達式是 Java 8 中引入的一個重要特性，它可以用來建立匿名函數（或稱為閉包），從而實現函數式程式設計的一些特性。 Lambda 表達式主要用於簡化函數式介面（Functional。
+description: "說明 Java 8 的 Lambda、方法參考（::）與 Stream 流的資料來源與常用操作，以簡潔方式處理集合。"
 category: Java
 tags:
   - Lambda

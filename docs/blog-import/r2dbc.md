@@ -1,9 +1,9 @@
 ---
-title: R2DBC 反應式資料庫存取與 Spring Boot 實作
+title: "R2DBC 是什麼？反應式資料庫連線與 JDBC 差異，Spring WebFlux 實戰"
 publishDate: "2025-09-28 10:00:00"
 img: /assets/java.jpg
 img_alt: R2DBC reactive database connectivity logo with non-blocking operations
-description: R2DBC 在 TY Multiverse Backend 中的完整應用指南，從基礎概念到專案實戰，涵蓋反應式程式設計、非阻塞操作、高併發處理等核心場景。
+description: "說明 R2DBC（Reactive Relational Database Connectivity）的概念、為什麼需要它、與 JDBC 的差異，以及在 TY Multiverse 後端的應用。"
 level: advance
 category: Spring Boot
 tags:

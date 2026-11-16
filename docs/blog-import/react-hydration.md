@@ -1,10 +1,9 @@
 ---
-title: React SSR 與 Hydration：主題切換案例解析
+title: "React Hydration 是什麼？SSR 為什麼快，按鈕看得到卻點不動的原因"
 publishDate: "2026-01-02 13:00:00"
 img: /assets/react.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  從根本探討為什麼需要服務端渲染 (SSR)，以及 SSR 為什麼會更快。深入解析 React Hydration 機制，通過實際主題切換按鈕案例，學習如何正確處理 SSR/CSR 協作，避免常見的 hydration 失敗問題。
+description: "從網頁渲染演進談 SSR 為何更快，並解析 React Hydration 機制，說明畫面出現但按鈕無法點擊的成因。"
 level: advance
 category: React
 tags:

@@ -1,10 +1,9 @@
 ---
-title: Angular Signal-based Outputs：output() 使用指南
+title: "Angular 17.3 的 output() 是什麼？Signal-based Outputs 取代 @Output 的用法"
 publishDate: "2025-12-26 13:00:00"
 img: /assets/angular.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  探索 Angular 17.3 中引入的 Signal-based Outputs (output()) 如何取代傳統的 @Output 裝飾器，提供更簡潔且效能更好的組件間通信方式。
+description: "從 TypeScript 類別屬性與 readonly 講起，解析 Angular 17.3 新增的 output() 如何取代傳統 @Output 與 EventEmitter。"
 level: advance
 category: Angular
 tags:

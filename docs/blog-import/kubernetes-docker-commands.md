@@ -1,9 +1,9 @@
----title: Docker 與 Kubernetes 指令大全
+---
+title: "Docker 與 Kubernetes 常用指令速查：容器、映像與 kubectl 管理"
 publishDate: "2024-05-06 13:00:00"
 img: /assets/k8s.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  Docker 和 Kubernetes 是現代軟件開發中非常關鍵的容器化和集群管理技術。Docker 用於建立和管理容器，而 Kubernetes（簡稱。
+description: "整理 Docker 基本管理與映像指令，以及 Kubernetes（k8s）常用 kubectl 操作的指令大全。"
 level: advance
 category: Kubernetes
 tags:

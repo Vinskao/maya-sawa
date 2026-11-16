@@ -1,9 +1,9 @@
----title: Java 多執行緒競態與 ThreadLocal
+---
+title: "Java 多執行緒競態條件（Race Condition）與 ThreadLocal 解法"
 publishDate: "2025-05-26 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  雖然變數存在 ThreadLocal 裡，但我們可以讓每個執行緒完成任務後，把結果放回一個共用的容器中（通常是執行緒安全的集合、佇列、或用回傳值的方式）：。
+description: "說明多個執行緒讀寫共享變數產生的競態條件，以及 ThreadLocal 的 set、get、remove 方法如何解決。"
 level: advance
 category: Concurrency
 tags:

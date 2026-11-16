@@ -1,9 +1,9 @@
----title: JPA/Hibernate 實作原理
+---
+title: "ORM 是什麼？物件關聯對應如何運作：JPA、Hibernate 與反射"
 publishDate: "2025-05-24 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  ORM（物件關聯對應）是一種程式設計技術，用來把物件導向程式中的類別（Class）與資料庫中的資料表（Table）建立對應關係，讓開發者不用手寫 SQL。
+description: "說明 ORM 如何把類別對應到資料表，不必手寫 SQL，並解析反射的使用情境與框架設計考量。"
 category: Database
 tags:
   - JPA ORM

@@ -1,9 +1,9 @@
----title: 從傳統日誌到雲端日誌：打造結構化、可追溯的日誌系統
+---
+title: "Spring Boot 結構化日誌：從傳統日誌升級到可追溯的雲端日誌系統"
 publishDate: "2025-09-15 10:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  假設您的專案目前使用了 SLF4J + Logback 的標準組合，這是一個穩定且廣泛使用的選擇。目前的日誌系統已經具備基本的日誌記錄功能，並透過 application.yml。
+description: "說明傳統 SLF4J 日誌難以追溯與關聯的問題，並逐步升級為結構化、可追溯的雲端日誌系統。"
 category: DevOps
 tags:
   - 日誌系統

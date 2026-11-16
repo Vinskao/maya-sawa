@@ -1,9 +1,9 @@
----title: Docker Compose 與多階段 Dockerfile 建置
+---
+title: "Docker Compose 與多階段 Dockerfile：Spring Boot Maven 專案容器化建置"
 publishDate: "2024-04-10 12:00:00"
 img: /assets/container.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  總共需要額外撰寫 docker-compose.yml、前端 Dockerfile、後端 Dockerfile、start-services.sh、資料庫 init-db.sql。
+description: "示範撰寫 Spring Boot 的多階段 Dockerfile（Maven 與 OpenJDK 11 建置階段）並用 Docker Compose 串接多個服務。"
 level: advance
 category: Docker
 tags:

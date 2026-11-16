@@ -1,9 +1,9 @@
----title: Kubernetes Infrastructure as Code (IaC)
+---
+title: "Kubernetes 基礎架構即程式碼（IaC）：Cloud Controller Manager 與自動化配置"
 publishDate: "2024-12-26 13:00:00"
 img: /assets/k8s.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  Infrastructure as Code (IaC) 實現了基礎架構的自動化配置和管理，特別適用於 Kubernetes 集群環境。本文著重介紹 Kubernetes 中的 IaC 實踐，並說明 Cloud Controller。
+description: "說明 Infrastructure as Code 如何自動化 Kubernetes 叢集的配置與管理，並介紹 Cloud Controller Manager。"
 level: advance
 category: Kubernetes
 tags:

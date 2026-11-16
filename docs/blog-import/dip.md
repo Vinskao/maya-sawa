@@ -1,9 +1,9 @@
 ---
-title: Dependency Injection & Dependency Inversion Principle (DIP)
+title: "依賴注入（DI）與依賴反轉原則（DIP）：用 Java 範例說明如何降低耦合"
 publishDate: "2024-02-24 12:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: An introduction to Dependency Injection, DIP, and relevant design patterns in Java.
+description: "說明緊耦合的問題，並以 Java 範例解釋依賴注入與依賴反轉原則如何讓程式更容易測試與擴充。"
 category: Design Pattern
 tags:
   - DIP

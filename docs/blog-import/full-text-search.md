@@ -1,10 +1,9 @@
 ---
-title: 'Full Text Search: 字典索引 vs N-Gram索引'
+title: "全文檢索索引原理：倒排索引、字典索引與 N-Gram 索引比較"
 publishDate: "2025-09-03 14:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  深入探討字典索引（Lexicon Index）與N-Gram索引的技術原理、實現方式及應用場景，比較兩種索引技術在全文檢索系統中的優劣勢
+description: "解釋倒排索引，並比較字典索引（Lexicon Index）與 N-Gram 索引在全文檢索的實作方式與適用場景。"
 level: advance
 category: AI
 tags:

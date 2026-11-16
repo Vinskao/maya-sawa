@@ -1,9 +1,9 @@
 ---
-title: Abstract Classes vs Interfaces in Java
+title: "Java 抽象類別與介面差在哪？abstract class vs interface 比較與選擇"
 publishDate: "2024-02-24 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: A comprehensive comparison between abstract classes and interfaces in Java.
+description: "比較 Java 抽象類別（abstract class）與介面（interface）的特性、使用情境與範例，說明什麼時候該用哪一個。"
 category: Java
 tags:
   - Java

@@ -1,9 +1,9 @@
----title: 以容器整合資料庫、Spring Boot 後端與前端
+---
+title: "Docker 整合 SQL Server、Spring Boot 與前端：容器網路、備份與還原資料"
 publishDate: "2024-04-09 12:00:00"
 img: /assets/container.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  docker cp sqlvolume:/var/opt/mssql /Users/vinskao/volume/temp。
+description: "記錄用 Docker 串接 SQL Server 資料庫與 Spring Boot 後端的做法，包含共用網路、容器資料備份與複製到新容器。"
 level: advance
 category: Docker
 tags:

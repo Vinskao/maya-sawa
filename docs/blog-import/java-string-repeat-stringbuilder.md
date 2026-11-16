@@ -1,9 +1,9 @@
----title: Java 字串重複與 StringBuilder 效能
+---
+title: "Java 字串重複 repeat() 與 StringBuilder：效能差異與初始容量"
 publishDate: "2024-02-28 23:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  repeat(int count)是 String 類別的方法，用於建立由該字串重複特定次數形成的新字串。 此方法是 Java 11。
+description: "比較 Java 11 String.repeat() 與 StringBuilder 的用法，並說明設定初始容量對效能的影響。"
 category: Java
 tags:
   - String

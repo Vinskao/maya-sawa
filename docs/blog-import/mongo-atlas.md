@@ -1,9 +1,9 @@
----title: MongoDB Atlas
+---
+title: "MongoDB Atlas 雲端資料庫入門：建立 Cluster、連線與取得 MONGO_URI"
 publishDate: "2024-02-25 13:00:00"
 img: /assets/mongodb-logo.jpg
 img_alt: mongo pic
-description: |
-  要開始使用 Atlas，首先需要創建一個 Cluster。Cluster 是一種資料庫部署架構，在 Cluster。
+description: "說明 MongoDB Atlas 是什麼、如何建立 Cluster 與資料庫、設定連線並取得 MONGO_URI。"
 category: Database
 tags:
   - MongoDB Atlas

@@ -1,9 +1,9 @@
 ---
-title: BST 遞歸刪除演算法詳解
+title: "二元搜尋樹（BST）遞迴刪除節點：三種情況與雙子節點的處理"
 publishDate: "2025-09-13 10:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: Understanding BST Recursive Deletion Algorithm
+description: "詳解 BST 刪除節點的三種情況，特別是有兩個子節點時如何用後繼節點取代，並說明遞迴邏輯。"
 level: advance
 category: Algorithm
 tags:

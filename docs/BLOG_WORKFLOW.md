@@ -121,3 +121,21 @@ poetry run python -m pytest tests/blog/test_blog.py tests/blog/test_blog_postgre
 涵蓋生命週期、授權、MD 匯入、真實舊文、CAS、修訂、交易 rollback、來源與 QA 正文一致、舊向量清除、工作重試與舊 sync 保護。另以 `tests/infrastructure/integration_blog_postgres.py` 在獨立 PostgreSQL schema 實測 JSONB、原 ID／向量保留、multipart CRUD、真實向量 SQL 搜尋及下架過濾；測試結束只清除此測試 schema。
 
 前端：`<bundled-node> node_modules/vitest/vitest.mjs run tests/work`。本機視覺預覽使用明確的暫存測試資料，不是正式 DB，也未呼叫付費向量 API。
+
+## 2026-11-16 文章標題與摘要（AI 與搜尋引擎可找到）
+
+早期匯入的文章標題直接用檔名（`redis`、`r2dbc`）或日期，摘要也只有日期，搜尋與 AI 都看不出文章在解答什麼。
+
+```mermaid
+flowchart LR
+  M[data/blog_titles.json 依正文寫的標題與摘要] --> S[服務啟動 sync_titles]
+  S -->|標題仍是 slug 或日期| U[BlogService.save + publish]
+  S -->|人工改過的標題| K[略過]
+  U --> DB[(blog PostgreSQL)]
+  M --> A[docs/blog-import 封存稿同步]
+```
+
+- 標題用讀者會搜尋的問題或關鍵字（例如「Redis 為什麼快？…」「React Hydration 是什麼？…」），摘要一到兩句說明內容；網址 slug 不變。
+- 上線方式：服務啟動時（需 `BLOG_ENABLED=true`）呼叫 `services/blog_retitle.py`，只改標題仍是 slug 或純日期的文章，正文與已人工改過的標題不動；已發布的會重新發布，草稿維持草稿；重跑不會重複。
+- 封存稿的 title／description 與對照表一致，測試會檢查兩邊相同且仍能匯入。
+- 開發方法：新增文章時直接寫描述性標題與摘要；`poetry run python -m pytest tests/market/test_blog_retitle.py tests/blog -q`。

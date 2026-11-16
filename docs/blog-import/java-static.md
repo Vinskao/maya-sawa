@@ -1,9 +1,9 @@
----title: Java static 關鍵字與設計原則
+---
+title: "Java static 關鍵字與 final：JVM 類別載入、權限修飾與設計原則"
 publishDate: "2024-02-24 12:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  如果一個在 org.service package、一個在 org.controller package，就只有 public 類別可以透過 import。
+description: "從權限修飾與 final 談起，說明 static 成員的基本概念、JVM 載入類別的過程與使用時的設計考量。"
 category: Java
 tags:
   - static

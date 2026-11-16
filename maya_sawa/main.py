@@ -282,7 +282,21 @@ def _daily_reading_to_blog(rows):
     return sync_published(rows, get_blog())
 
 
+def _retitle_blog_articles():
+    """Descriptive titles for articles still titled by their slug (services/blog_retitle.py); no-op until BLOG_ENABLED."""
+    import os
+    if os.getenv('BLOG_ENABLED', 'false').lower() != 'true':
+        return
+    try:
+        from .api.blog import get_blog
+        from .services.blog_retitle import sync_titles
+        logger.warning('Blog retitle: %s', sync_titles(get_blog()))
+    except Exception:
+        logger.exception('Blog retitle failed')
+
+
 def _backfill_daily_reading_blog():
+    _retitle_blog_articles()
     try:
         result = _daily_reading_to_blog(daily_maya_db.published())
         if result:

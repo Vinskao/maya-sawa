@@ -1,9 +1,9 @@
----title: Java Persistence API (JPA)
+---
+title: "JPA 查詢方法命名規則：Spring Data JPA 不寫 SQL 也能查資料"
 publishDate: "2024-02-26 16:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  JPA 是 Java 平台上的 ORM 標準，它使您能夠在 Java 層面上定義資料查詢方法，而無需編寫傳統的 CRUD 指令，同時利用命名規約自動產生 SQL。
+description: "說明 Java Persistence API（JPA）作為 ORM 標準的用法，以及 Query Method 命名關鍵字如何自動產生 SQL。"
 category: Spring Boot
 tags:
   - JPA

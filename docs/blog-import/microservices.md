@@ -1,9 +1,9 @@
 ---
-title: Spring Boot 微服務的合理範圍
+title: "Spring Boot 微服務怎麼拆？依業務切分的認證、員工與組織服務"
 publishDate: "2025-02-24 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: A comprehensive guide to Spring Boot microservices architecture, covering API Gateway, gRPC communication, and practical implementation strategies.
+description: "討論 Spring Boot 微服務的合理範圍，依業務拆出認證授權、員工資料與組織等最小服務。"
 level: advance
 category: Spring Boot
 tags:

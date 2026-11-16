@@ -1,9 +1,9 @@
----title: HTTP Request Body 的 JSON 格式與解析
+---
+title: "Spring Boot 接收 JSON Request Body：Map 與 POJO 兩種做法比較"
 publishDate: "2024-03-19 22:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  請求的 JSON 資料會被映射到一個 Map<String, String> 對象中，其中的鍵值對表示了 JSON。
+description: "比較在 Spring Boot 用 Map<String, String> 與 POJO 接收請求 JSON 的方式與使用時機。"
 category: API
 tags:
   - RequestBody

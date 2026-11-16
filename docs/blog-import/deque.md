@@ -1,10 +1,9 @@
 ---
-title: Deque (ArrayDeque) 標準語法速查
+title: "Java ArrayDeque 速查：用 Deque 實作 Stack、Queue 與雙端操作"
 publishDate: "2025-03-05 18:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  Deque (ArrayDeque) 標準語法速查表，包含 Stack、Queue 和雙端操作的完整語法對照
+description: "Java Deque（ArrayDeque）標準語法速查表，對照 Stack（LIFO）、Queue（FIFO）與雙端操作的方法與使用範例。"
 category: Algorithm
 tags:
   - algorithm

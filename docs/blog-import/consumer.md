@@ -1,9 +1,9 @@
 ---
-title: RabbitMQ Consumer 設計與訊息處理架構
+title: "RabbitMQ 消費者設計：生產者、佇列、Consumer 到資料庫的訊息處理架構"
 publishDate: "2025-08-23 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: A comprehensive guide to consumer design and architecture in message queue systems, covering backend producer to RabbitMQ to consumer to database patterns.
+description: "說明生產者－消費者模式，從後端發佈訊息到 RabbitMQ、消費者處理並寫入資料庫的流程與關鍵元件設計。"
 level: advance
 category: Spring Boot
 tags:

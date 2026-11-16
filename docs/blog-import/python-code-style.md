@@ -1,10 +1,9 @@
 ---
-title: Python 程式碼風格與專案架構指南
+title: "Python 程式碼風格與專案架構：__init__.py 用途與現代專案結構"
 publishDate: "2025-09-16 15:00:00"
 img: /assets/python.png
 img_alt: Python programming and code style illustration
-description: |
-  Python 程式碼風格深度指南：從 __init__.py 的基本概念到現代專案架構設計，掌握專業 Python 開發的最佳實踐
+description: "從 __init__.py 的作用講到 Python 語法特點（與 Java 對比），整理專業的 Python 專案風格與架構設計。"
 category: Python
 tags:
   - Python

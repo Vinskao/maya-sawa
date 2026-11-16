@@ -1,9 +1,9 @@
 ---
-title: SQL WHERE & HAVING Clauses
+title: "SQL WHERE、HAVING 與 GROUP BY 差在哪？過濾原始資料與分組結果"
 publishDate: "2024-03-04 15:00:00"
 img: /assets/SQL.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: An in-depth guide on using WHERE, HAVING, and GROUP BY in SQL queries.
+description: "說明 SQL 中 WHERE 過濾原始資料、HAVING 過濾分組後結果的差異，附 GROUP BY 的實例。"
 category: Database
 tags:
   - SQL

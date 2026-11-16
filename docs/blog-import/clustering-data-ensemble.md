@@ -1,9 +1,9 @@
----title: 新手零基礎入門：Clustering 分群術 - 為什麼你要學？讓資料自己說話！
+---
+title: "Clustering 分群入門：K-Means、階層式分群與集成分群的白話教學"
 publishDate: "2025-12-29 01:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  最近剛學完一門 Clustering（分群）的課程，覺得超實用！如果你是完全小白，連「機器學習」是什麼都搞不清楚，別擔心，這篇文就是為你寫的。我會從最基本的解釋開始，告訴你 Clustering。
+description: "給機器學習新手的分群（Clustering）教學，說明為什麼要學分群、基礎概念與常見演算法，讓資料自己分出類別。"
 level: basic
 category: Data Science
 tags:

@@ -1,9 +1,9 @@
----title: Mongodb Document Oriented Database
+---
+title: "MongoDB 是什麼？文件導向資料庫、BSON 與 Schema-less 特性"
 publishDate: "2024-02-26 22:00:00"
 img: /assets/mongodb-logo.jpg
 img_alt: mongo pic
-description: |
-  MongoDB 是一種 NoSQL 資料庫，它以文件的形式儲存數據(Document-Oriented。
+description: "介紹 MongoDB 這種 NoSQL 資料庫如何以文件儲存資料，以及 BSON 格式與無固定結構（Schema-less）的特性。"
 category: Database
 tags:
   - Document

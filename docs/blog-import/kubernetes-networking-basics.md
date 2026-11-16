@@ -1,9 +1,9 @@
----title: Kubernetes Networking
+---
+title: "Kubernetes 網路基礎：kube-proxy、Service、Ingress 與叢集內外通訊"
 publishDate: "2024-12-26 13:00:00"
 img: /assets/k8s.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  本文從集群內部通訊與外部連線兩大方面，介紹 Kubernetes 中網絡架構的基本原理與組件，包括 kube-proxy、Service、Ingress。
+description: "從叢集內部通訊與外部連線兩方面，介紹 Kubernetes 網路架構、kube-proxy、Service、Ingress 與排錯方向。"
 level: advance
 category: Kubernetes
 tags:

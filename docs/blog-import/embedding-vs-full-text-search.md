@@ -1,9 +1,9 @@
 ---
-title: Embedding vs Full-text Search：AI 搜索的兩種武器
+title: "Embedding 向量搜尋與全文檢索差在哪？PostgreSQL 混合檢索實作"
 publishDate: "2025-08-27 02:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: 深入比較Embedding向量搜索與傳統全文檢索的差異，以Maya V2專案為例，展示PostgreSQL驅動混合檢索的實際實現與最佳實踐
+description: "比較 Embedding 向量搜尋與傳統全文檢索的原理與適用情境，以 Maya V2 專案說明 PostgreSQL 如何做混合檢索。"
 level: advance
 category: AI
 tags:

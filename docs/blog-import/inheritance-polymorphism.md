@@ -1,9 +1,9 @@
----title: Inheritance Polymorphism
+---
+title: "Java 繼承與多型：子類別覆寫方法與父類別參考變數呼叫"
 publishDate: "2024-02-25 18:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  Cat 與 Dog 使用了自己覆寫的 makeSound()，而 Human 使用了父類別的。
+description: "用 Java 範例說明繼承（Inheritance）與多型（Polymorphism），包含方法覆寫與以父類別型別呼叫子類別方法。"
 category: Java
 tags:
   - Inheritance

@@ -1,10 +1,9 @@
 ---
-title: TCS BaNCS 深度技術架構解析
+title: "TCS BaNCS 核心銀行系統技術架構：微服務、事件驅動與多租戶雲原生"
 publishDate: "2025-12-14 13:00:00"
 img: /assets/java.jpg
 img_alt: A sophisticated digital interface displaying financial data and network connections
-description: |
-  深入剖析支撐全球金融業的企業級平台 TCS BaNCS 的底層技術架構。從微服務、雲原生設計到高頻交易處理引擎，全面解析其設計哲學與關鍵組件。
+description: "剖析全球金融業使用的 TCS BaNCS 平台，從微服務與事件驅動設計、多租戶雲原生到高頻交易處理引擎。"
 level: advance
 category: Other
 tags:

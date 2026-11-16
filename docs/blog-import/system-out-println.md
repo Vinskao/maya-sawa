@@ -1,9 +1,9 @@
----title: Java System.out.println 輸出原理
+---
+title: "System.out.println 怎麼運作？Java System 類別與 PrintStream 解析"
 publishDate: "2024-02-27T12:00:00.000Z"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  這是一個靜態類別，就是 System.out.print 中的 System，其中包含 out 屬性，就是 System.out.print 中的 out，out 是 PrintStream。
+description: "拆解 System.out.println：System 是靜態類別、out 是 PrintStream 實例，說明輸出的原理。"
 category: Java
 tags:
   - System

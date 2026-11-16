@@ -1,9 +1,9 @@
----title: Microsoft SQL Server 容器部署與維運
+---
+title: "用 Docker 跑 Microsoft SQL Server：Mac 上的 Azure SQL Edge 與 Volume 資料保存"
 publishDate: "2024-03-16 12:00:00"
 img: /assets/container.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  Microsoft 並沒有官方支援 macOS 版本的 MSSQL Server。 但是，他們提供了適用於 macOS 的 SQL Server 相關工具，例如 SQL Server 命令列工具（mssql-tools），以及 Azure Data Studio 等，也沒有提供 MSSQL 適用於 ARM64。
+description: "說明在 macOS 以 Docker 部署 SQL Server（Azure SQL Edge 與 MSSQL 的差異）、建立 Volume 保存資料與連線設定。"
 category: Docker
 tags:
   - MSSQL

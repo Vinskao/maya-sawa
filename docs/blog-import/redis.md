@@ -1,9 +1,9 @@
 ---
-title: Redis 資料結構、快取與分散式鎖
+title: "Redis 為什麼快？Key-Value 記憶體資料庫與分散式鎖、非同步結果實戰"
 publishDate: "2025-09-28 10:00:00"
 img: /assets/redis.png
 img_alt: Redis database logo with data structures and performance metrics
-description: Redis 在 TY Multiverse Backend 中的完整應用指南，從基礎概念到專案實戰，涵蓋非同步結果、分散式鎖、快取等核心場景。
+description: "說明 Redis 以記憶體為核心的設計理由，以及在 TY Multiverse 後端用於非同步結果與分散式情境的做法。"
 level: advance
 category: Database
 tags:

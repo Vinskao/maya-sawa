@@ -1,9 +1,9 @@
----title: 高併發架構深度剖析：I/O 多工技術與事件驅動設計
+---
+title: "I/O 多工與高併發架構：select、poll、epoll 到事件驅動設計"
 publishDate: "2025-08-27 01:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  現代 Web 開發的性能瓶頸，往往在於如何高效處理大量併發連線。本文從操作系統的 I/O 多工技術出發，深入探討事件驅動架構的設計理念，並比較不同 Web。
+description: "用白話比喻說明 select、poll、epoll 三種 I/O 多工機制，並延伸到事件驅動的高併發 Web 架構設計。"
 level: advance
 category: Concurrency
 tags:

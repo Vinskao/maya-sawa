@@ -1,9 +1,9 @@
 ---
-title: WebFlux 從零開始：初學者友好指南
+title: "Spring WebFlux 入門：Reactive 響應式編程，何時該用、何時不必用"
 publishDate: "2025-09-16 16:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: WebFlux 與 MQ 的最佳結合策略：只在需要的地方用，從 MVC 到全 Reactive 的演進路徑
+description: "從零說明 Reactive 與 WebFlux，並討論與 MQ 結合時只在需要的地方使用，從 MVC 演進到全響應式的路徑。"
 level: advance
 category: Spring Boot
 tags:

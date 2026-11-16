@@ -1,9 +1,9 @@
 ---
-title: Spring IoC、AOP 與例外處理面試題
+title: "Spring 面試題整理：IoC 實作機制、Bean 建立與循環依賴"
 publishDate: "2025-05-26 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: Interview Questions
+description: "整理 Java 後端面試常見問題與解答，包含 IoC 的反射實作、Bean 建立與注入、循環依賴的處理。"
 category: Other
 tags:
   - IOC

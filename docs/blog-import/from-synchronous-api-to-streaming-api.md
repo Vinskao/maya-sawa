@@ -1,10 +1,9 @@
 ---
-title: 從同步 API 到串流 API：架構轉型完整指南
+title: "同步 API 改串流 API：Streaming 架構轉型的原理、實作與效能優化"
 publishDate: "2025-09-08 14:30:00"
 img: /assets/django.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  深入探討從傳統同步 API 轉型到串流 API 的完整架構變更，包括技術原理、實作細節、效能優化與部署策略，幫助開發者建構即時響應的現代化應用
+description: "說明從傳統同步 API 轉成串流 API 的技術原理、實作細節、效能優化與部署策略，並以生活比喻解釋差異。"
 level: advance
 category: Spring Boot
 tags:

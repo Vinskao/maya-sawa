@@ -1,9 +1,9 @@
 ---
-title: Spring Boot 非同步處理深度解析
+title: "Spring Boot 非同步處理：@Async 執行緒池與 WebFlux 非阻塞比較"
 publishDate: "2025-08-26 01:00:00"
 img: "/assets/java.jpg"
 img_alt: "A bright pink sheet of paper used to wrap flowers curves in front of rich blue background"
-description: "Spring Boot 非同步處理深度解析：從 @Async 到 WebFlux 的完整指南"
+description: "比較 Spring Boot 兩種非同步模式：同步 I/O 搭配 Thread Pool（@Async），與原生非阻塞的 WebFlux。"
 level: advance
 category: Spring Boot
 tags: ["Spring Boot", "Java", "Async", "Reactive", "WebFlux", "Netty"]

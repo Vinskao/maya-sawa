@@ -1,9 +1,9 @@
----title: SQL JOIN Types
+---
+title: "SQL JOIN 種類：INNER JOIN、LEFT／RIGHT OUTER JOIN 與 FULL OUTER JOIN 差別"
 publishDate: "2024-02-26 16:00:00"
 img: /assets/SQL.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  本文介紹了 SQL 中不同類型的 JOIN 操作，包括 INNER JOIN、LEFT/RIGHT OUTER JOIN 以及 FULL OUTER。
+description: "介紹 SQL 各種 JOIN 的語法、結果差異與使用場景，並以範例說明該用哪一種。"
 category: Database
 tags:
   - INNER JOIN

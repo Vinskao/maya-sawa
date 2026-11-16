@@ -1,9 +1,9 @@
----title: Kind 建立 Kubernetes Hello World 環境
+---
+title: "用 kind 在本機跑 Kubernetes：部署 Spring Boot Hello World 完整步驟"
 publishDate: "2024-04-25 12:00:00"
 img: /assets/k8s.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  建立一個 Spring Boot Hello World 專案並放上 kind。需要以下四個檔案：。
+description: "以 kind 建立本機 Kubernetes 叢集並部署 Spring Boot Hello World，包含 kind-config、Dockerfile 與清理指令。"
 level: advance
 category: Kubernetes
 tags:

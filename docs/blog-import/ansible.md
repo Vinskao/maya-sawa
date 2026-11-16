@@ -1,10 +1,9 @@
 ---
-title: Ansible Overview
+title: "Ansible 入門：無代理架構、Playbook 與角色的自動化部署概念"
 publishDate: "2025-01-08 13:00:00"
 img: /assets/ansible.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  2024/01/08
+description: "整理 Ansible 無代理（agentless）架構、透過 SSH 管理伺服器、模組與角色等核心元件，適合第一次接觸組態管理的人。"
 category: DevOps
 tags:
   - Ansible

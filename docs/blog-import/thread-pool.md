@@ -1,9 +1,9 @@
 ---
-title: TY Multiverse Consumer：Virtual Threads + RabbitMQ 實戰指南
+title: "Thread Pool 與 Virtual Threads：搭配 RabbitMQ 的 Java Consumer 實戰"
 publishDate: "2025-09-08 02:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: TY Multiverse Consumer 專案 - Virtual Threads + RabbitMQ 實戰指南
+description: "用咖啡師比喻說明執行緒池，並介紹 TY Multiverse Consumer 以 Virtual Threads 搭配 RabbitMQ 處理訊息。"
 level: advance
 category: Concurrency
 tags:

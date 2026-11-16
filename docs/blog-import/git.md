@@ -1,9 +1,9 @@
 ---
-title: Git reset --hard、--soft 與 revert 的使用時機
+title: "git reset --hard 與 --soft 差在哪？團隊協作為什麼該用 git revert"
 publishDate: "2025-09-24 10:00:00"
 img: /assets/git.png
 img_alt: Git version control system with branching and merging visualization
-description: 深入探討 Git reset --hard 與 --soft 的差異，以及團隊協作中為何 prefer revert 而非 reset 的實戰策略。
+description: "比較 git reset --hard、--soft 對 HEAD 與暫存區的影響，並說明團隊協作時為何優先使用 git revert。"
 category: Git
 tags:
   - Git

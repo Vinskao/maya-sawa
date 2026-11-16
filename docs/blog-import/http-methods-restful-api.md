@@ -1,9 +1,9 @@
----title: HTTP 請求結構與 RESTful API 方法
+---
+title: "HTTP 請求格式與 RESTful API 方法：GET、POST、PUT、PATCH、DELETE 怎麼用"
 publishDate: "2024-02-26 14:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  HTTP 方法是指定在與 Web 伺服器或其他資源進行通訊時所採取的操作，是 HTTP 協定的一部分，用於定義客戶端對伺服器進行的請求的性質，常見的 HTTP 方法包括 GET、POST、PUT、DELETE。
+description: "整理 HTTP 請求的請求行、標頭與主體，以及 RESTful API 常用方法的語意與使用時機。"
 category: API
 tags:
   - RESTful API

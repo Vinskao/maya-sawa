@@ -1,9 +1,9 @@
----title: 24小時制轉12小時制算法
+---
+title: "24 小時制轉 12 小時制演算法：用 Java 實作時間格式轉換"
 publishDate: "2024-03-05 18:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  return String.valueOf(hr12) + ":" + String.valueOf(min);。
+description: "說明如何把 24 小時制時間字串轉成 12 小時制，包含以冒號分割字串，並用 (hr24 + 11) % 12 + 1 公式轉換小時。"
 category: Algorithm
 tags:
   - algorithm

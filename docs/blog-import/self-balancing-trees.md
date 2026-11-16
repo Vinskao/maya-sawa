@@ -1,9 +1,9 @@
----title: 自平衡樹 (Self-Balancing Trees)
+---
+title: "自平衡樹是什麼？AVL 與紅黑樹如何避免二元搜尋樹退化"
 publishDate: "2025-08-27T10:00:00.000Z"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  二元搜尋樹（Binary Search Tree, BST）是一種常見的資料結構，能夠支援高效的搜尋、插入與刪除。然而，如果沒有額外機制保持「平衡」，一般 BST。
+description: "說明一般二元搜尋樹在極端資料下退化的問題，以及自平衡樹（Self-Balancing Trees）的優勢與運作方式。"
 level: advance
 category: Algorithm
 tags:

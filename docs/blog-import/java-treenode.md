@@ -1,9 +1,9 @@
----title: Java TreeNode 與二元搜尋樹遞迴插入
+---
+title: "Java TreeNode 與二元搜尋樹：遞迴插入節點的解法與底層實作"
 publishDate: "2025-09-10 16:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  Exactly, that's the correct way to handle the base case. The line if(root == null) return new TreeNode(val); is the key to the entire recursive solution. When。
+description: "解析二元搜尋樹（BST）以遞迴插入節點的做法、base case 的處理與 TreeNode 的 Java 實作。"
 category: Java
 tags:
   - Java

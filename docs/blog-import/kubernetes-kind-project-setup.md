@@ -1,9 +1,9 @@
----title: Kubernetes 與 Helm 指令
+---
+title: "Kubernetes 與 Helm 指令：在 kind 部署客戶端、伺服器與資料庫服務"
 publishDate: "2024-04-25 13:00:00"
 img: /assets/k8s.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  這份指令集涵蓋了 Kubernetes 資源的創建、更新、監控和刪除操作，以及使用 Helm 安裝和管理 Kubernetes。
+description: "整理 kind 專案部署三個服務所需的 Kubernetes 與 Helm 指令，包含安裝 Helm、建立與更新資源。"
 level: advance
 category: Kubernetes
 tags:

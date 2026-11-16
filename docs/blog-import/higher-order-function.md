@@ -1,9 +1,9 @@
 ---
-title: Higher-Order Functions in Reactive Programming
+title: "高階函式與 flatMap：Reactor 響應式程式設計的遞迴與函式組合"
 publishDate: "2025-04-24 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: Understanding higher-order functions and flatMap in Reactor framework - clarifying the confusion between recursion and functional composition.
+description: "解釋響應式編程中 flatMap 為什麼容易讓人誤以為是遞迴，並說明 Reactor 裡高階函式的執行流程。"
 category: Design Pattern
 tags:
   - Java

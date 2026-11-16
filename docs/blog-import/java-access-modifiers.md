@@ -1,9 +1,9 @@
----title: Java 存取修飾子與封裝
+---
+title: "Java 存取修飾詞：public、private、protected 與私有建構子"
 publishDate: "2024-03-05 18:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  私有建構子是指只有在該類別內部可以訪問的建構子，外部無法直接使用 new。
+description: "整理 Java 四種存取權限修飾詞的可見範圍，並說明私有建構子如何用於單例模式等設計。"
 category: Java
 tags:
   - public

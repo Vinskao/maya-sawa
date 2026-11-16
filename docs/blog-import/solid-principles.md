@@ -1,9 +1,9 @@
 ---
-title: 物件導向 SOLID 設計原則
+title: "SOLID 五大物件導向設計原則：用範例理解 OOP 好設計"
 publishDate: "2025-05-24 10:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: Understanding SOLID
+description: "從物件導向（OOP）出發，概述 SOLID 五大設計原則，說明各原則要解決的問題。"
 category: Design Pattern
 tags:
   - SRP

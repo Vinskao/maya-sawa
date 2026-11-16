@@ -1,9 +1,9 @@
----title: List, Set, Map & Array in Java
+---
+title: "Java 集合怎麼選？List、Set、Map 與 Array 的特性與範例"
 publishDate: "2024-03-04 16:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  本文詳細介紹了 Java 中常用的資料結構：List、Set、Map 以及。
+description: "介紹 Java 常用資料結構 List、Set、Map 與 Array 的特性、操作與範例，幫助判斷該用哪一種。"
 category: Java
 tags:
   - Java

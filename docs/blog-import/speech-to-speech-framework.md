@@ -1,10 +1,9 @@
 ---
-title: Pipecat 語音 AI 框架指南
+title: "Pipecat 語音 AI 框架教學：即時語音對話（Speech-to-Speech）應用開發"
 publishDate: "2025-09-19 15:30:00"
 img: /assets/langchain.png
 img_alt: Real-time speech AI framework illustration
-description: |
-  Pipecat 語音 AI 框架完整指南：從 Python 基礎到實時語音處理，掌握現代語音 AI 應用開發的核心技術與最佳實踐
+description: "從 Python 基礎與術語表開始，介紹 Pipecat 如何建構即時語音 AI 應用與語音處理管線。"
 level: advance
 category: AI
 tags:

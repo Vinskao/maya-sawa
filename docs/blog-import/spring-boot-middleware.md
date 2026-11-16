@@ -1,10 +1,9 @@
 ---
-title: 核心概念：Filter / Middleware 是什麼？
+title: "Spring Boot Filter 與中間件：責任鏈模式的概念與專案應用"
 publishDate: "2025-02-25 12:00:00"
 img: /assets/java.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  TY Multiverse Spring Boot 中間件與責任鏈模式實戰指南：從核心概念到專案應用，掌握 Filter、Interceptor、ControllerAdvice 的實戰技巧
+description: "說明 Filter／Middleware 的概念與責任鏈模式，並以 TY Multiverse 專案示範在 Spring Boot 的實際應用。"
 level: advance
 category: Spring Boot
 tags:

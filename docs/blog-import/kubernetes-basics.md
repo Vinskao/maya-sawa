@@ -1,9 +1,9 @@
----title: Kubernetes Basics
+---
+title: "Kubernetes 入門：核心元件、Cgroups 與 OS 層級虛擬化架構"
 publishDate: "2024-12-13 13:00:00"
 img: /assets/k8s.png
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  本文件為 Kubernetes 入門指南，介紹其基本元件和架構，幫助初學者理解 Kubernetes。
+description: "Kubernetes 初學指南，介紹叢集的基本元件與架構、容器背後的 Cgroups 與 OS 層級虛擬化。"
 level: advance
 category: Kubernetes
 tags:

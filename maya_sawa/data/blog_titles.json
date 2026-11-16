@@ -1,0 +1,270 @@
+{
+ "abstract-class-interface": [
+  "Java 抽象類別與介面差在哪？abstract class vs interface 比較與選擇",
+  "比較 Java 抽象類別（abstract class）與介面（interface）的特性、使用情境與範例，說明什麼時候該用哪一個。"
+ ],
+ "algorithm-24hour-to-12hour": [
+  "24 小時制轉 12 小時制演算法：用 Java 實作時間格式轉換",
+  "說明如何把 24 小時制時間字串轉成 12 小時制，包含以冒號分割字串，並用 (hr24 + 11) % 12 + 1 公式轉換小時。"
+ ],
+ "angular-output": [
+  "Angular 17.3 的 output() 是什麼？Signal-based Outputs 取代 @Output 的用法",
+  "從 TypeScript 類別屬性與 readonly 講起，解析 Angular 17.3 新增的 output() 如何取代傳統 @Output 與 EventEmitter。"
+ ],
+ "ansible": [
+  "Ansible 入門：無代理架構、Playbook 與角色的自動化部署概念",
+  "整理 Ansible 無代理（agentless）架構、透過 SSH 管理伺服器、模組與角色等核心元件，適合第一次接觸組態管理的人。"
+ ],
+ "banking-system": [
+  "TCS BaNCS 核心銀行系統技術架構：微服務、事件驅動與多租戶雲原生",
+  "剖析全球金融業使用的 TCS BaNCS 平台，從微服務與事件驅動設計、多租戶雲原生到高頻交易處理引擎。"
+ ],
+ "clustering-data-ensemble": [
+  "Clustering 分群入門：K-Means、階層式分群與集成分群的白話教學",
+  "給機器學習新手的分群（Clustering）教學，說明為什麼要學分群、基礎概念與常見演算法，讓資料自己分出類別。"
+ ],
+ "consumer": [
+  "RabbitMQ 消費者設計：生產者、佇列、Consumer 到資料庫的訊息處理架構",
+  "說明生產者－消費者模式，從後端發佈訊息到 RabbitMQ、消費者處理並寫入資料庫的流程與關鍵元件設計。"
+ ],
+ "container-database-frontend-backend": [
+  "Docker 整合 SQL Server、Spring Boot 與前端：容器網路、備份與還原資料",
+  "記錄用 Docker 串接 SQL Server 資料庫與 Spring Boot 後端的做法，包含共用網路、容器資料備份與複製到新容器。"
+ ],
+ "container-microsoft-sql-server": [
+  "用 Docker 跑 Microsoft SQL Server：Mac 上的 Azure SQL Edge 與 Volume 資料保存",
+  "說明在 macOS 以 Docker 部署 SQL Server（Azure SQL Edge 與 MSSQL 的差異）、建立 Volume 保存資料與連線設定。"
+ ],
+ "container-mongodb-setup": [
+  "Docker 部署 MongoDB 與 Mongo Express：兩個容器的網路與資料保存設定",
+  "逐步建立 MongoDB 與 Mongo Express（MongoDB 的 GUI）兩個 Docker 容器，包含 Docker 網路、Volume 與連線方式。"
+ ],
+ "data-visualization-certification": [
+  "資料視覺化認證（Data Visualization）：D3.js 長條圖、散佈圖、熱圖、Choropleth 與 Treemap",
+  "完成資料視覺化認證的五個專案：長條圖、散佈圖、熱圖、Choropleth 地圖與 Treemap，並通過所有自動化測試。"
+ ],
+ "deque": [
+  "Java ArrayDeque 速查：用 Deque 實作 Stack、Queue 與雙端操作",
+  "Java Deque（ArrayDeque）標準語法速查表，對照 Stack（LIFO）、Queue（FIFO）與雙端操作的方法與使用範例。"
+ ],
+ "digital-transformation-award": [
+  "數位轉型獎項證書：天逸 KAO 的得獎紀錄（2023）",
+  "天逸 KAO 於 2023 年取得的數位轉型（Digital Transformation）獎項證書，附可驗證正本的連結。"
+ ],
+ "dip": [
+  "依賴注入（DI）與依賴反轉原則（DIP）：用 Java 範例說明如何降低耦合",
+  "說明緊耦合的問題，並以 Java 範例解釋依賴注入與依賴反轉原則如何讓程式更容易測試與擴充。"
+ ],
+ "docker-compose": [
+  "Docker Compose 與多階段 Dockerfile：Spring Boot Maven 專案容器化建置",
+  "示範撰寫 Spring Boot 的多階段 Dockerfile（Maven 與 OpenJDK 11 建置階段）並用 Docker Compose 串接多個服務。"
+ ],
+ "embedding-vs-full-text-search": [
+  "Embedding 向量搜尋與全文檢索差在哪？PostgreSQL 混合檢索實作",
+  "比較 Embedding 向量搜尋與傳統全文檢索的原理與適用情境，以 Maya V2 專案說明 PostgreSQL 如何做混合檢索。"
+ ],
+ "from-spring-boot-to-django": [
+  "從 Spring Boot 到 Django：Java 開發者的 Django 專案架構對照",
+  "用 Spring Boot 的概念對應 Django 的專案結構與設計模式，幫助熟悉 Java 的人快速理解 Django。"
+ ],
+ "from-synchronous-api-to-streaming-api": [
+  "同步 API 改串流 API：Streaming 架構轉型的原理、實作與效能優化",
+  "說明從傳統同步 API 轉成串流 API 的技術原理、實作細節、效能優化與部署策略，並以生活比喻解釋差異。"
+ ],
+ "full-text-search": [
+  "全文檢索索引原理：倒排索引、字典索引與 N-Gram 索引比較",
+  "解釋倒排索引，並比較字典索引（Lexicon Index）與 N-Gram 索引在全文檢索的實作方式與適用場景。"
+ ],
+ "git": [
+  "git reset --hard 與 --soft 差在哪？團隊協作為什麼該用 git revert",
+  "比較 git reset --hard、--soft 對 HEAD 與暫存區的影響，並說明團隊協作時為何優先使用 git revert。"
+ ],
+ "higher-order-function": [
+  "高階函式與 flatMap：Reactor 響應式程式設計的遞迴與函式組合",
+  "解釋響應式編程中 flatMap 為什麼容易讓人誤以為是遞迴，並說明 Reactor 裡高階函式的執行流程。"
+ ],
+ "http-methods-restful-api": [
+  "HTTP 請求格式與 RESTful API 方法：GET、POST、PUT、PATCH、DELETE 怎麼用",
+  "整理 HTTP 請求的請求行、標頭與主體，以及 RESTful API 常用方法的語意與使用時機。"
+ ],
+ "inheritance-polymorphism": [
+  "Java 繼承與多型：子類別覆寫方法與父類別參考變數呼叫",
+  "用 Java 範例說明繼承（Inheritance）與多型（Polymorphism），包含方法覆寫與以父類別型別呼叫子類別方法。"
+ ],
+ "io-multiplexing": [
+  "I/O 多工與高併發架構：select、poll、epoll 到事件驅動設計",
+  "用白話比喻說明 select、poll、epoll 三種 I/O 多工機制，並延伸到事件驅動的高併發 Web 架構設計。"
+ ],
+ "java-access-modifiers": [
+  "Java 存取修飾詞：public、private、protected 與私有建構子",
+  "整理 Java 四種存取權限修飾詞的可見範圍，並說明私有建構子如何用於單例模式等設計。"
+ ],
+ "java-collections-list-set-map": [
+  "Java 集合怎麼選？List、Set、Map 與 Array 的特性與範例",
+  "介紹 Java 常用資料結構 List、Set、Map 與 Array 的特性、操作與範例，幫助判斷該用哪一種。"
+ ],
+ "java-lambda-stream-api": [
+  "Java Lambda 表達式與 Stream API：方法參考與資料處理實務",
+  "說明 Java 8 的 Lambda、方法參考（::）與 Stream 流的資料來源與常用操作，以簡潔方式處理集合。"
+ ],
+ "java-static": [
+  "Java static 關鍵字與 final：JVM 類別載入、權限修飾與設計原則",
+  "從權限修飾與 final 談起，說明 static 成員的基本概念、JVM 載入類別的過程與使用時的設計考量。"
+ ],
+ "java-string-repeat-stringbuilder": [
+  "Java 字串重複 repeat() 與 StringBuilder：效能差異與初始容量",
+  "比較 Java 11 String.repeat() 與 StringBuilder 的用法，並說明設定初始容量對效能的影響。"
+ ],
+ "java-thread-threadlocal-race-condition": [
+  "Java 多執行緒競態條件（Race Condition）與 ThreadLocal 解法",
+  "說明多個執行緒讀寫共享變數產生的競態條件，以及 ThreadLocal 的 set、get、remove 方法如何解決。"
+ ],
+ "java-time-api-localdatetime-zoneddatetime-duration": [
+  "Java Time API 教學：LocalDateTime、ZonedDateTime 與 Duration 用法",
+  "介紹 Java 日期時間 API 中 LocalDateTime、ZonedDateTime 與 Duration 的建立、解析與運算方式。"
+ ],
+ "java-treenode": [
+  "Java TreeNode 與二元搜尋樹：遞迴插入節點的解法與底層實作",
+  "解析二元搜尋樹（BST）以遞迴插入節點的做法、base case 的處理與 TreeNode 的 Java 實作。"
+ ],
+ "javascript-algorithms-certification": [
+  "JavaScript 演算法與資料結構認證：迴文檢查、羅馬數字、凱薩密碼等五個專案",
+  "完成 JavaScript 演算法認證的五個專案：Palindrome Checker、Roman Numeral Converter、Caesars Cipher、電話號碼驗證與收銀機，並通過自動化測試。"
+ ],
+ "jpa": [
+  "JPA 查詢方法命名規則：Spring Data JPA 不寫 SQL 也能查資料",
+  "說明 Java Persistence API（JPA）作為 ORM 標準的用法，以及 Query Method 命名關鍵字如何自動產生 SQL。"
+ ],
+ "knowledge-interview": [
+  "Spring 面試題整理：IoC 實作機制、Bean 建立與循環依賴",
+  "整理 Java 後端面試常見問題與解答，包含 IoC 的反射實作、Bean 建立與注入、循環依賴的處理。"
+ ],
+ "kubernetes-basics": [
+  "Kubernetes 入門：核心元件、Cgroups 與 OS 層級虛擬化架構",
+  "Kubernetes 初學指南，介紹叢集的基本元件與架構、容器背後的 Cgroups 與 OS 層級虛擬化。"
+ ],
+ "kubernetes-docker-commands": [
+  "Docker 與 Kubernetes 常用指令速查：容器、映像與 kubectl 管理",
+  "整理 Docker 基本管理與映像指令，以及 Kubernetes（k8s）常用 kubectl 操作的指令大全。"
+ ],
+ "kubernetes-infrastructure-as-code": [
+  "Kubernetes 基礎架構即程式碼（IaC）：Cloud Controller Manager 與自動化配置",
+  "說明 Infrastructure as Code 如何自動化 Kubernetes 叢集的配置與管理，並介紹 Cloud Controller Manager。"
+ ],
+ "kubernetes-kind-hello-world": [
+  "用 kind 在本機跑 Kubernetes：部署 Spring Boot Hello World 完整步驟",
+  "以 kind 建立本機 Kubernetes 叢集並部署 Spring Boot Hello World，包含 kind-config、Dockerfile 與清理指令。"
+ ],
+ "kubernetes-kind-project-setup": [
+  "Kubernetes 與 Helm 指令：在 kind 部署客戶端、伺服器與資料庫服務",
+  "整理 kind 專案部署三個服務所需的 Kubernetes 與 Helm 指令，包含安裝 Helm、建立與更新資源。"
+ ],
+ "kubernetes-networking-basics": [
+  "Kubernetes 網路基礎：kube-proxy、Service、Ingress 與叢集內外通訊",
+  "從叢集內部通訊與外部連線兩方面，介紹 Kubernetes 網路架構、kube-proxy、Service、Ingress 與排錯方向。"
+ ],
+ "langchain-vs-langgraph": [
+  "LangChain 與 LangGraph 差在哪？LLM 框架比較與選擇",
+  "比較 LangChain 與 LangGraph 兩個 LLM 框架的差異、適用場景與實作範例，幫助判斷什麼時候該用哪一個。"
+ ],
+ "log-system": [
+  "Spring Boot 結構化日誌：從傳統日誌升級到可追溯的雲端日誌系統",
+  "說明傳統 SLF4J 日誌難以追溯與關聯的問題，並逐步升級為結構化、可追溯的雲端日誌系統。"
+ ],
+ "map-reduce": [
+  "MapReduce 原理：HDFS、執行流程與 Producer-Consumer 比較",
+  "從 Unix 管線談到 MapReduce，說明 HDFS 分散式檔案系統、Map 與 Reduce 的執行流程與大數據處理概念。"
+ ],
+ "microservices": [
+  "Spring Boot 微服務怎麼拆？依業務切分的認證、員工與組織服務",
+  "討論 Spring Boot 微服務的合理範圍，依業務拆出認證授權、員工資料與組織等最小服務。"
+ ],
+ "mongo-atlas": [
+  "MongoDB Atlas 雲端資料庫入門：建立 Cluster、連線與取得 MONGO_URI",
+  "說明 MongoDB Atlas 是什麼、如何建立 Cluster 與資料庫、設定連線並取得 MONGO_URI。"
+ ],
+ "mongodb-document-oriented-database": [
+  "MongoDB 是什麼？文件導向資料庫、BSON 與 Schema-less 特性",
+  "介紹 MongoDB 這種 NoSQL 資料庫如何以文件儲存資料，以及 BSON 格式與無固定結構（Schema-less）的特性。"
+ ],
+ "nio": [
+  "Java NIO 非阻塞 I/O 原理：Buffer、Channel、Selector 與高併發實戰",
+  "對照傳統 BIO 的問題，用簡單方式說明 Java NIO（New I/O）非阻塞 I/O 的核心原理與高併發應用。"
+ ],
+ "orm": [
+  "ORM 是什麼？物件關聯對應如何運作：JPA、Hibernate 與反射",
+  "說明 ORM 如何把類別對應到資料表，不必手寫 SQL，並解析反射的使用情境與框架設計考量。"
+ ],
+ "python-code-style": [
+  "Python 程式碼風格與專案架構：__init__.py 用途與現代專案結構",
+  "從 __init__.py 的作用講到 Python 語法特點（與 Java 對比），整理專業的 Python 專案風格與架構設計。"
+ ],
+ "r2dbc": [
+  "R2DBC 是什麼？反應式資料庫連線與 JDBC 差異，Spring WebFlux 實戰",
+  "說明 R2DBC（Reactive Relational Database Connectivity）的概念、為什麼需要它、與 JDBC 的差異，以及在 TY Multiverse 後端的應用。"
+ ],
+ "react-hydration": [
+  "React Hydration 是什麼？SSR 為什麼快，按鈕看得到卻點不動的原因",
+  "從網頁渲染演進談 SSR 為何更快，並解析 React Hydration 機制，說明畫面出現但按鈕無法點擊的成因。"
+ ],
+ "recursive-deletion-in-bst": [
+  "二元搜尋樹（BST）遞迴刪除節點：三種情況與雙子節點的處理",
+  "詳解 BST 刪除節點的三種情況，特別是有兩個子節點時如何用後繼節點取代，並說明遞迴邏輯。"
+ ],
+ "redis": [
+  "Redis 為什麼快？Key-Value 記憶體資料庫與分散式鎖、非同步結果實戰",
+  "說明 Redis 以記憶體為核心的設計理由，以及在 TY Multiverse 後端用於非同步結果與分散式情境的做法。"
+ ],
+ "request-body-json-format": [
+  "Spring Boot 接收 JSON Request Body：Map 與 POJO 兩種做法比較",
+  "比較在 Spring Boot 用 Map<String, String> 與 POJO 接收請求 JSON 的方式與使用時機。"
+ ],
+ "self-balancing-trees": [
+  "自平衡樹是什麼？AVL 與紅黑樹如何避免二元搜尋樹退化",
+  "說明一般二元搜尋樹在極端資料下退化的問題，以及自平衡樹（Self-Balancing Trees）的優勢與運作方式。"
+ ],
+ "solid-principles": [
+  "SOLID 五大物件導向設計原則：用範例理解 OOP 好設計",
+  "從物件導向（OOP）出發，概述 SOLID 五大設計原則，說明各原則要解決的問題。"
+ ],
+ "speech-to-speech-framework": [
+  "Pipecat 語音 AI 框架教學：即時語音對話（Speech-to-Speech）應用開發",
+  "從 Python 基礎與術語表開始，介紹 Pipecat 如何建構即時語音 AI 應用與語音處理管線。"
+ ],
+ "spring-boot-async": [
+  "Spring Boot 非同步處理：@Async 執行緒池與 WebFlux 非阻塞比較",
+  "比較 Spring Boot 兩種非同步模式：同步 I/O 搭配 Thread Pool（@Async），與原生非阻塞的 WebFlux。"
+ ],
+ "spring-boot-middleware": [
+  "Spring Boot Filter 與中間件：責任鏈模式的概念與專案應用",
+  "說明 Filter／Middleware 的概念與責任鏈模式，並以 TY Multiverse 專案示範在 Spring Boot 的實際應用。"
+ ],
+ "spring-boot-structure": [
+  "Spring Boot IoC 與 AOP 原理：Bean 容器如何掃描、建立與代理",
+  "解析 Spring Boot 啟動時如何掃描 @Service、@Controller 等元件放入 IoC 容器，以及 AOP 的實作原理。"
+ ],
+ "sql-clauses": [
+  "SQL WHERE、HAVING 與 GROUP BY 差在哪？過濾原始資料與分組結果",
+  "說明 SQL 中 WHERE 過濾原始資料、HAVING 過濾分組後結果的差異，附 GROUP BY 的實例。"
+ ],
+ "sql-join-operations": [
+  "SQL JOIN 種類：INNER JOIN、LEFT／RIGHT OUTER JOIN 與 FULL OUTER JOIN 差別",
+  "介紹 SQL 各種 JOIN 的語法、結果差異與使用場景，並以範例說明該用哪一種。"
+ ],
+ "sql-subquery-aggregate-functions": [
+  "SQL 子查詢與聚合函數：WHERE 子查詢、COUNT、SUM 與進階技巧",
+  "說明在 WHERE 使用子查詢的規則、常見聚合函數用法，以及撰寫進階查詢時的注意事項。"
+ ],
+ "system-out-println": [
+  "System.out.println 怎麼運作？Java System 類別與 PrintStream 解析",
+  "拆解 System.out.println：System 是靜態類別、out 是 PrintStream 實例，說明輸出的原理。"
+ ],
+ "thread-pool": [
+  "Thread Pool 與 Virtual Threads：搭配 RabbitMQ 的 Java Consumer 實戰",
+  "用咖啡師比喻說明執行緒池，並介紹 TY Multiverse Consumer 以 Virtual Threads 搭配 RabbitMQ 處理訊息。"
+ ],
+ "webflux": [
+  "Spring WebFlux 入門：Reactive 響應式編程，何時該用、何時不必用",
+  "從零說明 Reactive 與 WebFlux，並討論與 MQ 結合時只在需要的地方使用，從 MVC 演進到全響應式的路徑。"
+ ]
+}

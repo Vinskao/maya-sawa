@@ -1,9 +1,9 @@
----title: MapReduce 原理、HDFS 與處理流程
+---
+title: "MapReduce 原理：HDFS、執行流程與 Producer-Consumer 比較"
 publishDate: "2025-09-14 01:00:00"
 img: /assets/algorithm.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  MapReduce 完整解讀：從 Unix、Producer-Consumer 到 JavaScript 的對照。
+description: "從 Unix 管線談到 MapReduce，說明 HDFS 分散式檔案系統、Map 與 Reduce 的執行流程與大數據處理概念。"
 level: advance
 category: Algorithm
 tags:

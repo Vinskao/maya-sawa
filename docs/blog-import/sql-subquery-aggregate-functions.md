@@ -1,9 +1,9 @@
----title: SQL 子查詢與聚合函數的進階用法
+---
+title: "SQL 子查詢與聚合函數：WHERE 子查詢、COUNT、SUM 與進階技巧"
 publishDate: "2024-02-29 22:00:00"
 img: /assets/SQL.jpg
 img_alt: A bright pink sheet of paper used to wrap flowers curves in front of rich blue background
-description: |
-  出現 error：Operand data type xxx is invalid for sum operator.。
+description: "說明在 WHERE 使用子查詢的規則、常見聚合函數用法，以及撰寫進階查詢時的注意事項。"
 category: Database
 tags:
   - Subquery
