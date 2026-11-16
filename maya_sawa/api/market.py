@@ -834,6 +834,13 @@ async def get_market_macro_dashboard(historyMonths: int = 24):
         raise HTTPException(status_code=503, detail="Macroeconomic data is temporarily unavailable") from exc
 
 
+@router.get("/dashboard/volatility/live", **public_data("台指選擇權波動率指數（TAIFEX）與美國 VIX 的即時值", "總體經濟"))
+async def get_volatility_live():
+    """Latest Taiwan VIX and U.S. VIX with the day's range; each is null when its source is down. Cached 30 seconds."""
+    from ..services.volatility import volatility_live
+    return await asyncio.to_thread(volatility_live.get)
+
+
 @router.get("/dashboard/brief", **public_data("持股籌碼摘要", "AI 分析與研究"))
 async def get_market_brief(format: str = "json", lang: str = "zh"):
     """Public agent-readable chip summary of the selected holdings; codes only, never account values."""

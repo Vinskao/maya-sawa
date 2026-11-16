@@ -218,6 +218,7 @@ DGBAS_SERIES = {
 UMICH_SERIES = {
     "UMICH_CPI_EXPECTED_1Y": ("Michigan median expected inflation over next 12 months", "percent", "monthly"),
 }
+TW_VIX_SERIES = {"TW_VIX": ("Taiwan VIX (TAIFEX TAIEX options volatility index), daily close", "index points", "daily")}
 TIER_SERIES = {
     "TIER_TW_GDP_FORECAST": ("TIER Taiwan real GDP growth forecast", "percent", "annual"),
     "TIER_TW_CPI_FORECAST": ("TIER Taiwan CPI inflation forecast", "percent", "annual"),
@@ -281,7 +282,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -887,7 +888,7 @@ class MarketMacroService:
                 ("WorldBank", self._fetch_world_bank_gold),
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series),
-                ("TIER", self._fetch_tier_forecast),
+                ("TIER", self._fetch_tier_forecast), ("TAIFEXVix", self._fetch_tw_vix),
                 ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi),
                 ("TreasuryDTS", self._fetch_treasury_dts)):
                 try: output["sources"][source_name] = fetch()
@@ -1568,6 +1569,32 @@ class MarketMacroService:
             return saved
         except Exception as exc:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
+            raise
+
+    def _fetch_tw_vix(self, months: int = 6) -> int:
+        """Taiwan VIX daily closes from TAIFEX's monthly files (about four months stay online, so what was stored is kept
+        and extended). Every six hours; the live value comes from services/volatility.py, not from here."""
+        from maya_sawa.services import volatility
+        if _fetched_within("TW_VIX", 6 * 3600): return 0
+        run_id = market_macro_db.reserve_source_call("TAIFEXVix", daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError("taifex_vix_daily_budget_exhausted")
+        try:
+            today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+            rows, status = [], None
+            for back in range(months):
+                year, month = divmod(today.year * 12 + today.month - 1 - back, 12)
+                status, raw = _request_free_cached(f"taifex:vix:{year}{month + 1:02d}", volatility.TW_VIX_MONTHLY_URL.format(month=f"{year}{month + 1:02d}"),
+                                                   ttl_seconds=3 * 3600 if back == 0 else 24 * 3600, extra_headers=BROWSER_AGENT)
+                rows += volatility.parse_taifex_vix_monthly(raw.decode("cp950", errors="replace"))
+                time.sleep(0.5)
+            if not rows: raise ValueError("taifex_vix_not_found")
+            stored = (_macro_local_cache.get("series:TW_VIX") or {}).get("history") or []
+            saved = self._cache_free_series(volatility.merge_history(stored, rows), TW_VIX_SERIES, "TAIFEX",
+                                            "https://www.taifex.com.tw/cht/7/vixDaily3MNew", fresh_for_seconds=6 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
             raise
 
     def _fetch_tier_forecast(self) -> int:
