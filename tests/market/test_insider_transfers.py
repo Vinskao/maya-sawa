@@ -88,3 +88,94 @@ def test_company_events_include_open_insider_sales_for_the_selected_stocks(monke
     result = asyncio.run(service.get(["1734", "2330"]))
     assert [(event["code"], event["type"]) for event in result["events"]] == [("1734", "insider_transfer")]
     assert result["sources"]["insiderTransfers"].startswith("TWSE")
+
+
+# --- 2026-11-17: untransferred filings (t187ap13) and month-over-month insider holdings (t187ap11) ----------------------
+UNTRANSFERRED = json.loads((FIXTURES / "insider_untransferred_twse.json").read_text(encoding="utf-8"))
+UNTRANSFERRED_OTC = json.loads((FIXTURES / "insider_untransferred_tpex.json").read_text(encoding="utf-8"))
+HOLDINGS = json.loads((FIXTURES / "insider_holdings_twse.json").read_text(encoding="utf-8"))
+
+
+def test_untransferred_filings_keep_shares_reason_and_skip_the_blank_otc_row():
+    rows = it.parse_untransferred(UNTRANSFERRED, "TWSE") + it.parse_untransferred(UNTRANSFERRED_OTC, "TPEx")
+    assert rows == [{"market": "TWSE", "code": "2313", "name": "華通", "role": "經理人本人", "holder": "吳柏毅",
+                     "shares": 600000, "planned": 600000, "reason": "股價不理想", "filed": date(2026, 11, 16)}]
+
+
+def test_an_untransferred_filing_is_shown_for_two_weeks():
+    rows = it.parse_untransferred(UNTRANSFERRED, "TWSE")
+    event = it.untransferred_events(rows, {"2313"}, today=date(2026, 11, 20))[0]
+    assert event["type"] == "insider_untransferred" and event["status"] == "recent"
+    assert "未轉讓 600,000 股" in event["period"] and "股價不理想" in event["period"]
+    assert it.untransferred_events(rows, {"2313"}, today=date(2026, 12, 1)) == []
+
+
+def test_holdings_are_summed_per_person_once_even_with_several_titles():
+    month, snapshot = it.parse_holdings(HOLDINGS)
+    assert month == "2026-10"
+    people = snapshot["1101"]["persons"]
+    assert people["張安平"] == 4624351                        # 法人代表人 and 總經理: one person, counted once
+    assert people["嘉新水泥股份有限公司"] == 279426776        # two board seats, one holder
+    assert snapshot["1101"]["name"] == "台泥" and "2330" in snapshot
+
+
+def _with(snapshot, code, changes):
+    copy = json.loads(json.dumps(snapshot))
+    for person, shares in changes.items():
+        copy[code]["persons"][person] = shares
+    return copy
+
+
+def test_a_rise_by_some_insiders_is_a_buy_and_new_or_departed_insiders_do_not_count():
+    _, previous = it.parse_holdings(HOLDINGS)
+    current = _with(previous, "1101", {"張安平": 4624351 + 300000, "新任董事": 9_000_000})
+    del current["1101"]["persons"]["陳振源"]
+    change = it.holding_changes(previous, current)["1101"]
+    assert change["net"] == 300000 and change["increased"] == 1 and not change["uniform"]
+    assert "2330" not in it.holding_changes(previous, previous)   # nothing moved, nothing recorded
+
+
+def test_a_uniform_rise_for_every_holder_looks_like_a_stock_dividend_not_a_buy():
+    _, previous = it.parse_holdings(HOLDINGS)
+    current = json.loads(json.dumps(previous))
+    for person, shares in current["1101"]["persons"].items():
+        current["1101"]["persons"][person] = round(shares * 1.05)
+    change = it.holding_changes(previous, current)["1101"]
+    assert change["uniform"]
+    assert it.holding_events([{"market": "TWSE", "code": "1101", "month": "2026-10", **change}], {"1101"}) == []
+
+
+def test_a_net_buy_of_ten_lots_or_more_is_marked_with_the_month():
+    change = {"market": "TWSE", "code": "1101", "name": "台泥", "month": "2026-10", "net": 300000, "increased": 1,
+              "compared": 40, "uniform": False}
+    event = it.holding_events([change], {"1101", "2330"})[0]
+    assert event["type"] == "insider_buy" and event["highlight"] and "增加 300,000 股" in event["period"]
+    assert "2026-10" in event["period"]
+    assert it.holding_events([dict(change, net=9000)], {"1101"}) == []        # under ten lots
+    assert it.holding_events([dict(change, net=-500000)], {"1101"}) == []     # a net sale is not a buy
+
+
+def test_holdings_are_compared_only_when_a_new_month_arrives():
+    db = InsiderTransferDatabase(create_engine("sqlite://"))
+    month, snapshot = it.parse_holdings(HOLDINGS)
+    assert it.store_holdings(db, "TWSE", "2026-09", snapshot) == 0          # first month: nothing to compare with
+    bought = _with(snapshot, "1101", {"張安平": 4624351 + 300000})
+    assert it.store_holdings(db, "TWSE", "2026-10", bought) == 1
+    assert it.store_holdings(db, "TWSE", "2026-10", bought) == 0            # same month again: skipped
+    assert [(row["code"], row["net"]) for row in db.latest_changes()] == [("1101", 300000)]
+
+
+def test_company_events_add_untransferred_filings_and_insider_buys(monkeypatch):
+    import asyncio
+    from maya_sawa.services import market_company_events as mce
+
+    service = mce.MarketCompanyEventsService()
+    async def none(*a, **k): return []
+    monkeypatch.setattr(mce.market_fundamentals_service, "published_events", none)
+    monkeypatch.setattr(service, "_conferences", none)
+    monkeypatch.setattr(mce, "_today", lambda: date(2026, 11, 20))
+    service.insider_source = lambda day: []
+    buy = {"market": "TWSE", "code": "1101", "name": "台泥", "month": "2026-10", "net": 300000, "increased": 1, "compared": 40, "uniform": False}
+    service.insider_extra_source = lambda day: (it.parse_untransferred(UNTRANSFERRED, "TWSE"), [buy])
+    result = asyncio.run(service.get(["2313", "1101"]))
+    assert sorted((event["code"], event["type"]) for event in result["events"]) == [("1101", "insider_buy"), ("2313", "insider_untransferred")]

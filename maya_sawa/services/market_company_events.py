@@ -11,7 +11,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from .market_fundamentals import market_fundamentals_service
-from .market_insider_transfers import insider_events
+from .market_insider_transfers import holding_events, insider_events, untransferred_events
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo("Asia/Taipei")
@@ -76,6 +76,8 @@ class MarketCompanyEventsService:
         self._result_cache: dict[tuple[str, ...], tuple[float, dict[str, Any]]] = {}
         # Set at startup to InsiderTransferDatabase.open_on; without a database no insider filings are shown.
         self.insider_source = lambda day: []
+        # (untransferred filings, latest month's holding changes); set at startup like insider_source.
+        self.insider_extra_source = lambda day: ([], [])
 
     async def _conferences(self) -> list[dict[str, Any]]:
         now = time.monotonic()
@@ -153,6 +155,9 @@ class MarketCompanyEventsService:
         try:
             filings = await asyncio.to_thread(self.insider_source, today)
             all_events.extend(insider_events(filings, set(normalized), today))
+            untransferred, changes = await asyncio.to_thread(self.insider_extra_source, today)
+            all_events.extend(untransferred_events(untransferred, set(normalized), today))
+            all_events.extend(holding_events(changes, set(normalized)))
         except Exception:
             logger.exception("Insider transfer filings unavailable")
         all_events.sort(key=lambda event: (event["date"], event["code"], event["type"]))

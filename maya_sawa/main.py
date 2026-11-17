@@ -23,7 +23,7 @@ import os
 import logging
 import asyncio
 import pathlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 
@@ -319,12 +319,20 @@ async def _insider_transfer_loop():
     from .services.market_company_events import market_company_events_service
     db = InsiderTransferDatabase(market_dashboard_db.engine)
     market_company_events_service.insider_source = db.open_on
+    market_company_events_service.insider_extra_source = lambda day: (
+        db.untransferred_since(day - timedelta(days=market_insider_transfers.UNTRANSFERRED_DAYS)), db.latest_changes())
+    rounds = 0
     while True:
         try:
             saved = await asyncio.to_thread(market_insider_transfers.collect, db.save)
             logger.info("Insider transfer filings stored: %s", saved)
+            # Untransferred filings and the ~10 MB monthly holdings file: once a day is enough.
+            if rounds % 6 == 0:
+                counts = await asyncio.to_thread(market_insider_transfers.collect_monthly_and_untransferred, db)
+                logger.info("Insider untransferred / holdings: %s", counts)
         except Exception:
             logger.exception("Insider transfer collection failed")
+        rounds += 1
         await asyncio.sleep(4 * 3600)  # published once a business day; four checks a day never miss one
 
 
