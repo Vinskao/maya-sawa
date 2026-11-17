@@ -97,6 +97,9 @@ class MarketCompanyEventsService:
         # (code, today) -> [[date, shares], ...] for the trailing year; the intraday monitor's loader (database, else Yahoo).
         self.volume_history_source = None
         self._volume_histories: dict[tuple[str, str], list] = {}
+        # (code, today) -> (history rows, today's running volume) for a Japanese stock; Yahoo's .T chart.
+        self.japan_volume_source = None
+        self._japan_volumes: dict[tuple[str, str], tuple[list, int | None]] = {}
 
     async def _conferences(self) -> list[dict[str, Any]]:
         now = time.monotonic()
@@ -163,11 +166,37 @@ class MarketCompanyEventsService:
                 events.append(event)
         return events
 
-    async def get(self, codes: list[str], live_volumes: dict[str, float] | None = None) -> dict[str, Any]:
+    def _japan_volume_events(self, japan: list[dict], today: date) -> list[dict]:
+        """The same weekly volume-rank mark for Tokyo-listed stocks, tagged market JP so it never lands on a Taiwan stock with the same digits."""
+        source = self.japan_volume_source
+        if source is None:
+            from .intraday_alerts import japan_volume_history as source
+        events = []
+        week_start = today - timedelta(days=today.weekday())
+        for item in japan:
+            code = str(item.get("code", "")).strip().upper()
+            key = (code, today.isoformat())
+            if key not in self._japan_volumes:
+                try:
+                    self._japan_volumes[key] = source(code, today)
+                except Exception:
+                    logger.warning("Japan volume history unavailable for %s", code, exc_info=True)
+                    self._japan_volumes[key] = ([], None)
+            history, live = self._japan_volumes[key]
+            if len(volume_rank.trailing_volumes(history, today)) < volume_rank.MIN_HISTORY_DAYS:
+                continue
+            event = volume_rank.volume_spike_event(code, item.get("name") or code, volume_rank.week_summary(history, today, week_start, live))
+            if event:
+                events.append({**event, "market": "JP"})
+        return events
+
+    async def get(self, codes: list[str], live_volumes: dict[str, float] | None = None, japan: list[dict] | None = None) -> dict[str, Any]:
         normalized = tuple(sorted({str(code).strip() for code in codes if str(code).strip().isdigit()
                                    and len(str(code).strip()) == 4}))
+        japan = [item for item in (japan or []) if str(item.get("code", "")).strip()]
         now_mono = time.monotonic()
-        cached = self._result_cache.get(normalized)
+        cache_key = normalized + tuple(sorted("JP:" + str(item["code"]).strip().upper() for item in japan))
+        cached = self._result_cache.get(cache_key)
         if cached and now_mono - cached[0] < 300:
             return cached[1]
         today = _today()
@@ -208,13 +237,17 @@ class MarketCompanyEventsService:
             all_events.extend(await asyncio.to_thread(self._volume_events, list(normalized), names, live_volumes or {}, today))
         except Exception:
             logger.exception("Volume spikes unavailable")
+        try:
+            all_events.extend(await asyncio.to_thread(self._japan_volume_events, japan, today))
+        except Exception:
+            logger.exception("Japan volume spikes unavailable")
         all_events.sort(key=lambda event: (event["date"], event["code"], event["type"]))
         result = {"events": all_events, "checkedAt": datetime.now(TZ).isoformat(),
                   "sources": {"financialReleases": "TWSE OpenAPI / MOPS OTC", "conferences": "TDCC IR Platform",
                               "insiderTransfers": "TWSE OpenAPI t187ap12_L / TPEx OpenAPI mopsfin_t187ap12_O",
                               "volume": "TWSE / TPEx daily volume (database, else Yahoo), live volume from Shioaji"},
                   "highlightPolicy": {"releaseDays": 7, "conferenceDays": 21}}
-        self._result_cache[normalized] = (time.monotonic(), result)
+        self._result_cache[cache_key] = (time.monotonic(), result)
         return result
 
 

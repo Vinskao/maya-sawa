@@ -808,8 +808,11 @@ async def get_market_dashboard_events():
     except Exception as exc:
         logger.info("Unable to resolve company underlyings for event targets: %s", exc)
     codes: set[str] = set()
+    japan: dict[str, dict] = {}   # Tokyo stocks can share digits with Taiwan codes (6857), so they are ranked on their own
     for item in symbols:
-        if item.get("productType") == "stock":
+        if item.get("productType") == "stock" and str(item.get("market") or "TW").upper() == "JP":
+            japan[str(item.get("code", "")).strip().upper()] = {"code": item.get("code"), "name": item.get("name")}
+        elif item.get("productType") == "stock":
             codes.add(str(item.get("code", "")).strip())
         elif item.get("underlyingCode"):
             codes.add(str(item["underlyingCode"]).strip())
@@ -817,7 +820,7 @@ async def get_market_dashboard_events():
         from ..services.market_company_events import live_volumes_from_quotes
         # Today's running volume (when the quote is from today) lets a spike show while the day is still trading.
         live = live_volumes_from_quotes(quote_rows, datetime.now(ZoneInfo("Asia/Taipei")).date())
-        return await market_company_events_service.get(sorted(codes), live_volumes=live)
+        return await market_company_events_service.get(sorted(codes), live_volumes=live, japan=list(japan.values()))
     except Exception as exc:
         logger.exception("Market company events request failed")
         raise HTTPException(status_code=502, detail="Company events are temporarily unavailable") from exc

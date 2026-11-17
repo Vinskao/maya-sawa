@@ -241,6 +241,37 @@ def parse_yahoo_chart(payload: dict, code: str, today: date, name: str = "") -> 
             "volumeHistory": [[day.isoformat(), int(v)] for day, _, v in daily[:-1] if v]}
 
 
+def parse_yahoo_volumes(payload: dict, today: date) -> tuple[list, int | None]:
+    """([[iso day, shares]] of days before `today`, today's running volume or None) from a Yahoo daily chart, days in Tokyo time."""
+    try:
+        result = payload["chart"]["result"][0]
+        stamps, volumes = result["timestamp"], result["indicators"]["quote"][0].get("volume") or []
+    except (KeyError, IndexError, TypeError):
+        return [], None
+    rows, live = [], None
+    for stamp, volume in zip(stamps, volumes):
+        if not volume:
+            continue
+        day = datetime.fromtimestamp(stamp, TOKYO).date()
+        if day < today:
+            rows.append([day.isoformat(), int(volume)])
+        elif day == today:
+            live = int(volume)
+    return rows, live
+
+
+def japan_volume_history(code: str, today: date) -> tuple[list, int | None]:
+    """A Japanese stock's trailing year of daily volumes plus today's running volume, from Yahoo (.T)."""
+    from .market_price_targets import yahoo_symbols
+    symbol = (yahoo_symbols(code, "JP") or [None])[0]
+    if not symbol:
+        return [], None
+    with httpx.Client(timeout=10, headers={"User-Agent": USER_AGENT}) as client:
+        response = client.get(CHART_URL.format(symbol=symbol), params={"range": "1y", "interval": "1d"})
+        response.raise_for_status()
+        return parse_yahoo_volumes(response.json(), today)
+
+
 def fetch_japan_quotes(items: list[dict], today: date, client: httpx.Client | None = None) -> list[dict]:
     """One daily-chart request per Japanese stock; a failing symbol is skipped and logged, never fatal."""
     from .market_price_targets import yahoo_symbols

@@ -221,3 +221,36 @@ def test_live_volume_is_taken_only_from_todays_stock_quotes():
         {"symbol": "3008", "productType": "stock", "volumeShares": 1_000, "timestamp": "not a time"},
     ]
     assert live_volumes_from_quotes(rows, date(2026, 11, 17)) == {"6857": 195_000}
+
+
+# 2026-11-17: Japanese stocks (6857 is ADVANTEST on the Tokyo exchange, not Taiwan's 宜特) are ranked from Yahoo's daily chart.
+def yahoo_chart(days):
+    """A Yahoo daily-chart payload from [(iso day, volume)] stamped at the Tokyo close."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    stamps = [int(datetime.fromisoformat(f"{day}T15:00:00").replace(tzinfo=ZoneInfo("Asia/Tokyo")).timestamp()) for day, _ in days]
+    return {"chart": {"result": [{"timestamp": stamps, "indicators": {"quote": [{"close": [100.0] * len(days), "volume": [v for _, v in days]}]}}]}}
+
+
+def test_yahoo_volumes_split_into_finished_days_and_todays_running_volume():
+    from maya_sawa.services import intraday_alerts as ia
+    payload = yahoo_chart([("2026-11-13", 5_000), ("2026-11-16", 7_000), ("2026-11-17", 3_000)])
+    assert ia.parse_yahoo_volumes(payload, date(2026, 11, 17)) == ([["2026-11-13", 5_000], ["2026-11-16", 7_000]], 3_000)
+    # No session today yet (before the open, or a holiday): nothing is today's, everything is history.
+    assert ia.parse_yahoo_volumes(payload, date(2026, 11, 18)) == ([["2026-11-13", 5_000], ["2026-11-16", 7_000], ["2026-11-17", 3_000]], None)
+    assert ia.parse_yahoo_volumes({}, date(2026, 11, 17)) == ([], None)
+
+
+def test_a_japanese_stock_with_a_heavy_day_this_week_gets_a_spike_event_marked_japan(monkeypatch):
+    from maya_sawa.services import market_company_events as mce
+    service = mce.MarketCompanyEventsService()
+    async def none(*a, **k): return []
+    monkeypatch.setattr(mce.market_fundamentals_service, "published_events", none)
+    monkeypatch.setattr(service, "_conferences", none)
+    monkeypatch.setattr(mce, "_today", lambda: date(2026, 11, 17))
+    # Monday (11/16) already finished as a top-5 day; no session yet today.
+    service.japan_volume_source = lambda code, day: (week_history([199_000]), None)
+    service.volume_history_source = lambda code, day: history()   # the Taiwan stock with the same digits stays quiet
+    result = asyncio.run(service.get(["6857"], japan=[{"code": "6857", "name": "ADVANTEST CORP"}]))
+    spikes = [event for event in result["events"] if event["type"] == "volume_spike"]
+    assert [(event["code"], event.get("market"), event["flag"]) for event in spikes] == [("6857", "JP", "top5")]
