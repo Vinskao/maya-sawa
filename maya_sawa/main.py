@@ -310,6 +310,24 @@ async def _social_metrics_loop():
         await asyncio.sleep(6 * 3600)
 
 
+async def _insider_transfer_loop():
+    """Insiders' pre-filed transfers: the OpenAPI lists one day at a time, so keep each day's filings (docs/INSIDER_TRANSFERS.md)."""
+    if not market_dashboard_db.engine:
+        return
+    from .databases.insider_transfer_db import InsiderTransferDatabase
+    from .services import market_insider_transfers
+    from .services.market_company_events import market_company_events_service
+    db = InsiderTransferDatabase(market_dashboard_db.engine)
+    market_company_events_service.insider_source = db.open_on
+    while True:
+        try:
+            saved = await asyncio.to_thread(market_insider_transfers.collect, db.save)
+            logger.info("Insider transfer filings stored: %s", saved)
+        except Exception:
+            logger.exception("Insider transfer collection failed")
+        await asyncio.sleep(4 * 3600)  # published once a business day; four checks a day never miss one
+
+
 async def _youtube_daily_loop():
     """Daily reading -> MP4 -> YouTube (services/youtube_daily.py). Off until the channel's OAuth credentials are configured."""
     import os
@@ -449,6 +467,7 @@ async def _startup_event():
         asyncio.get_running_loop().run_in_executor(None, _backfill_daily_reading_blog)
         await _start_market_audio_worker_if_configured()
         asyncio.create_task(_youtube_daily_loop())
+        asyncio.create_task(_insider_transfer_loop())
         asyncio.create_task(_social_metrics_loop())
         global _brief_mail_task
         if _brief_mail_task is None and market_dashboard_db.engine:

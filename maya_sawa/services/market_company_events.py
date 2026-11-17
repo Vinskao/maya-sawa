@@ -11,9 +11,16 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from .market_fundamentals import market_fundamentals_service
+from .market_insider_transfers import insider_events
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo("Asia/Taipei")
+
+
+def _today() -> date:
+    return datetime.now(TZ).date()
+
+
 TDCC_EVENTS_URL = "https://irplatform.tdcc.com.tw/ir/event/list?lang=zh&max=500&offset=1"
 
 
@@ -67,6 +74,8 @@ class MarketCompanyEventsService:
         self._conference_cache: tuple[float, list[dict[str, Any]]] | None = None
         self._conference_lock = asyncio.Lock()
         self._result_cache: dict[tuple[str, ...], tuple[float, dict[str, Any]]] = {}
+        # Set at startup to InsiderTransferDatabase.open_on; without a database no insider filings are shown.
+        self.insider_source = lambda day: []
 
     async def _conferences(self) -> list[dict[str, Any]]:
         now = time.monotonic()
@@ -116,7 +125,7 @@ class MarketCompanyEventsService:
         cached = self._result_cache.get(normalized)
         if cached and now_mono - cached[0] < 300:
             return cached[1]
-        today = datetime.now(TZ).date()
+        today = _today()
         releases = await market_fundamentals_service.published_events(list(normalized))
         conferences = await self._conferences()
         all_events: list[dict[str, Any]] = []
@@ -141,9 +150,15 @@ class MarketCompanyEventsService:
                                    "date": event["date"],
                                    "status": "upcoming" if days_until >= 0 else "recent",
                                    "highlight": True})
+        try:
+            filings = await asyncio.to_thread(self.insider_source, today)
+            all_events.extend(insider_events(filings, set(normalized), today))
+        except Exception:
+            logger.exception("Insider transfer filings unavailable")
         all_events.sort(key=lambda event: (event["date"], event["code"], event["type"]))
         result = {"events": all_events, "checkedAt": datetime.now(TZ).isoformat(),
-                  "sources": {"financialReleases": "TWSE OpenAPI / MOPS OTC", "conferences": "TDCC IR Platform"},
+                  "sources": {"financialReleases": "TWSE OpenAPI / MOPS OTC", "conferences": "TDCC IR Platform",
+                              "insiderTransfers": "TWSE OpenAPI t187ap12_L / TPEx OpenAPI mopsfin_t187ap12_O"},
                   "highlightPolicy": {"releaseDays": 7, "conferenceDays": 21}}
         self._result_cache[normalized] = (time.monotonic(), result)
         return result
