@@ -99,6 +99,8 @@ C. 主張查完後，才可用具體問題做全文語意搜尋，例如 GET htt
 歸完組後，若該族群沒有任何 benchmark 成員，持股在 Benchmark 圖上就無法定位：本班只在最後回報列出，由美股總經 Opus 依 `.claude/skills/benchmark-monitor/SKILL.md` 加對照；台股班不 PUT monitor rule。
 
 ## 8. 通知本人（Telegram，最後一步）
+
+排除 3037 欣興：不得在 Telegram 通知或本輪推薦摘要列出 3037，不得推送其買進結論或以其跌幅作為追蹤重點。其他 AI 機會池候選也不得當成持股或已放行的推薦。
 全部做完後，以 curl POST https://tymultiverse.cc/maya-sawa/market/notify，Content-Type application/json，body 為 {"kind":"update" 或 "attention","title":"市場 AI 分析｜台股收盤後","body":"..."}，用 python json.dump 產生 body。代理會自動加入 X-Market-Agent-Key，不要自行設定。
 
 內容只放本人真正關心的資訊：結論有沒有變、目標價從多少調到多少。儲存每檔之前，先記下舊版第一行的【結論】（買／中立／賣），儲存後與新版比對。有任何儲存成功時用 update，body 依序：
