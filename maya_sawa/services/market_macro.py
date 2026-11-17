@@ -170,6 +170,13 @@ YAHOO_SERIES = {
 YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB", "US_VIX": "^VIX", "EUR_USD": "EURUSD=X",
                  "WTI_CRUDE_USD": "CL=F", "USD_KRW": "KRW=X"}
 # TWSE publishes no market-wide margin maintenance ratio; it is estimated from two public tables (margin_maintenance).
+# 2026-11-17: TWSE 臺股儀表板 (launched 2026-09-23) publishes the accounts whose whole-account maintenance ratio is below 130%
+# (shown there as 追繳戶數). The trend endpoint returns the latest 60 trading days, so stored days are merged and history grows.
+TWSE_MARGIN_CALL_SERIES = {
+    "TW_MARGIN_CALL_ACCOUNTS": ("Taiwan listed-market accounts below 130% maintenance (TWSE dashboard 追繳戶數)", "accounts", "daily"),
+}
+TWSE_MARGIN_CALL_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/BFIJ3U_TREND?days=60&response=json"
+TWSE_MARGIN_CALL_PAGE = "https://www.twse.com.tw/dashboard/zh/credit/margin.html"
 TWSE_MARGIN_SERIES = {
     "TW_MARGIN_MAINTENANCE": ("Taiwan listed-market margin maintenance ratio (TWSE: collateral value / margin loans)", "percent", "daily"),
     "TW_MARGIN_BALANCE": ("Taiwan listed-market margin loan balance (TWSE MI_MARGN)", "TWD 100 million", "daily"),
@@ -294,7 +301,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -341,6 +348,16 @@ def carry_forward_weekdays(code: str, history: list[dict], start: date, end: dat
         if current is not None and day.weekday() < 5:
             rows.append({"code": code, "period": day.isoformat(), "value": current})
         day += timedelta(days=1)
+    return rows
+
+
+def parse_twse_margin_calls(payload: dict) -> list[dict]:
+    """BFIJ3U_TREND rows -> daily accounts below 130% maintenance; a refused query ("沒有符合條件的資料") gives none."""
+    rows = []
+    for item in payload.get("data") or []:
+        day, value = str(item.get("date", "")), item.get("belowAccNum")
+        if len(day) == 8 and day.isdigit() and isinstance(value, (int, float)):
+            rows.append({"code": "TW_MARGIN_CALL_ACCOUNTS", "period": f"{day[:4]}-{day[4:6]}-{day[6:]}", "value": value})
     return rows
 
 
@@ -913,7 +930,7 @@ class MarketMacroService:
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series),
                 ("TIER", self._fetch_tier_forecast), ("TAIFEXVix", self._fetch_tw_vix), ("CboeVixFutures", self._fetch_vix_futures),
-                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi), ("Population", self._fetch_population),
+                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi), ("Population", self._fetch_population), ("TWSEMarginCalls", self._fetch_twse_margin_calls),
                 ("TreasuryDTS", self._fetch_treasury_dts)):
                 try: output["sources"][source_name] = fetch()
                 except Exception as exc:
@@ -1686,6 +1703,26 @@ class MarketMacroService:
             saved = self._cache_free_series(volatility.merge_history(stored, rows, "VIX_FUT_FRONT"), VIX_FUTURES_SERIES, "Cboe",
                                             "https://www.cboe.com/tradable_products/vix/vix_futures/", fresh_for_seconds=6 * 3600)
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
+            raise
+
+    def _fetch_twse_margin_calls(self) -> int:
+        """Merge the dashboard's latest 60 days into the stored margin-call history (the endpoint has no older days)."""
+        if _fetched_within("TW_MARGIN_CALL_ACCOUNTS", 6 * 3600): return 0
+        run_id = market_macro_db.reserve_source_call("TWSEDashboard", daily_limit=8, minute_limit=2)
+        if run_id is None: raise RuntimeError("twse_dashboard_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("twse:margin-calls", TWSE_MARGIN_CALL_URL, ttl_seconds=3 * 3600, extra_headers=BROWSER_AGENT)
+            fresh = parse_twse_margin_calls(json.loads(raw))
+            if not fresh: raise RuntimeError("twse_margin_calls_empty")
+            history = {row["period"]: row["value"] for row in (_macro_local_cache.get("series:TW_MARGIN_CALL_ACCOUNTS") or {}).get("history") or []}
+            history.update({row["period"]: row["value"] for row in fresh})
+            rows = [{"code": "TW_MARGIN_CALL_ACCOUNTS", "period": period, "value": value} for period, value in sorted(history.items())]
+            saved = self._cache_free_series(rows, TWSE_MARGIN_CALL_SERIES, "TWSE 臺股儀表板 (BFIJ3U)", TWSE_MARGIN_CALL_PAGE,
+                                            fresh_for_seconds=48 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", len(fresh), http_status=status)
             return saved
         except Exception as exc:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
