@@ -273,3 +273,22 @@ def test_a_closed_us_session_reports_the_week_so_far_against_last_fridays_close(
     assert item["id"] == "sox" and item["dir"] == "down"
     assert "本週累計下跌 3.92%" in item["zh"] and "5,100→4,900" in item["zh"] and "11/16" in item["zh"]   # vs Friday's 5,100
     assert "this week" in item["en"]
+
+
+# 2026-11-17: how far below the all-time high; nothing until the fall reaches 20%.
+def test_a_fall_of_twenty_percent_from_the_all_time_high_is_an_item_and_a_shallow_one_is_not():
+    history = [{"date": "2026-03-02", "close": 8000.0}, {"date": "2026-06-01", "close": 6000.0}]
+    deep = ms.drawdown_item("sox-ath", "費城半導體指數", "SOX", history, [{"date": "2026-11-16", "close": 6320.0}])
+    assert deep["level"] == "warn" and deep["dir"] == "down" and deep["id"] == "sox-ath"
+    assert "回落 21.0%" in deep["zh"] and "2026/03" in deep["zh"] and "8,000" in deep["zh"] and "21.0%" in deep["en"]
+    assert ms.drawdown_item("sox-ath", "x", "x", history, [{"date": "2026-11-16", "close": 7000.0}]) is None   # -12.5%
+    crash = ms.drawdown_item("twii-ath", "加權指數", "TAIEX", history, [{"date": "2026-11-16", "close": 5000.0}])
+    assert crash["level"] == "alert"   # -37.5%
+    assert ms.drawdown_item("x", "x", "x", [], []) is None
+
+
+def test_a_deep_drawdown_alone_raises_the_bar_in_the_right_market_row():
+    days = [{"date": "2026-11-13", "close": 20000.0, "value": 3000.0}, {"date": "2026-11-17", "close": 20010.0, "value": 3000.0}]
+    extra = [{"id": "twii-ath", "href": "/stocks/", "level": "warn", "dir": "down", "zh": "a", "en": "a"}]
+    status = ms.build_status(days, None, [], TODAY, None, None, extra)
+    assert [(i["id"], i["group"]) for i in status["items"]] == [("twii-ath", "tw")]

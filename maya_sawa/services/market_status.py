@@ -86,6 +86,9 @@ SOX_WARN, SOX_ALERT = 2.5, 4.0
 SOX_WEEK_WARN = 4.0         # the week so far, once the U.S. session has closed
 VIX_WARN, VIX_ALERT, VIX_JUMP_WARN, VIX_JUMP_ALERT = 25.0, 30.0, 15.0, 25.0
 US_SOX_YAHOO, US_VIX_YAHOO = "^SOX", "^VIX"
+TAIEX_YAHOO = "^TWII"
+YAHOO_ALL_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=max&interval=1wk"
+DRAWDOWN_WARN, DRAWDOWN_ALERT = 20.0, 30.0   # % below the all-time closing high; shallower pullbacks are not an event
 YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=1mo&interval=1d"
 
 
@@ -170,6 +173,20 @@ def us_items(sox: list[dict], vix: list[dict], today: date, now: datetime | None
     return items
 
 
+def drawdown_item(item_id: str, name_zh: str, name_en: str, history: list[dict], recent: list[dict]) -> dict | None:
+    """How far an index sits below its all-time closing high; only a fall of 20% or more (a bear market) is an item."""
+    bars = [*history, *recent]
+    if not bars or not recent: return None
+    peak = max(bars, key=lambda bar: bar["close"])
+    last = recent[-1]["close"]
+    pct = (1 - last / peak["close"]) * 100
+    if pct < DRAWDOWN_WARN: return None
+    month = peak["date"][:7].replace("-", "/")
+    return {"id": item_id, "href": STOCKS, "level": "alert" if pct >= DRAWDOWN_ALERT else "warn", "dir": "down",
+            "zh": f"{name_zh}較歷史高點（{month}，{peak['close']:,.0f}）回落 {pct:.1f}%（現 {last:,.0f}），已達空頭等級",
+            "en": f"{name_en} is {pct:.1f}% below its all-time high ({month}, {peak['close']:,.0f}); now {last:,.0f}, bear-market territory"}
+
+
 def _value_text(value: float) -> str:
     return f"{value / 10000:.2f} 兆" if value >= 10000 else f"{value:,.0f} 億"
 
@@ -196,7 +213,7 @@ def _pe_item(pe: list[tuple[str, float]], today: date) -> dict | None:
     return {"id": "pe", "href": "/macro/#macro-leverage", "level": "warn" if accelerating else "info", "dir": "down", "zh": zh, "en": en}
 
 
-GROUPS = {"sox": "us", "sox-streak": "us", "vix": "us"}   # everything else is Taiwan
+GROUPS = {"sox": "us", "sox-streak": "us", "vix": "us", "sox-ath": "us"}   # everything else is Taiwan
 
 
 def _tag(items: list[dict]) -> list[dict]:
@@ -206,7 +223,7 @@ def _tag(items: list[dict]) -> list[dict]:
     return [{**item, "group": GROUPS.get(item["id"], "tw")} for item in items]
 
 
-def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]], today: date, night: dict | None = None, us: list[dict] | None = None) -> dict:
+def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]], today: date, night: dict | None = None, us: list[dict] | None = None, extra: list[dict] | None = None) -> dict:
     """Items for the banner, most severe first; empty when there is no data for today (yesterday is never the headline)."""
     iso = today.isoformat()
     finished = [row for row in days if row["date"] < iso]
@@ -217,7 +234,7 @@ def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]
         close, final, value = live["price"], False, None
     else:
         # No day-session data for today (before the open, at night after midnight): only the night session can speak.
-        early = list(us or []) + ([_night_item(night)] if night and abs(night["pct"]) >= NIGHT_NOTICE else [])
+        early = list(us or []) + [i for i in (extra or []) if i["id"] == "sox-ath"] + ([_night_item(night)] if night and abs(night["pct"]) >= NIGHT_NOTICE else [])
         if early:
             early.sort(key=lambda item: {"alert": 0, "warn": 1, "info": 2}[item["level"]])
             return {"items": _tag(early), "asOf": iso, "final": False, "session": "night" if night else "day"}
@@ -267,6 +284,7 @@ def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]
     items += us or []
     if night and (items or abs(night["pct"]) >= NIGHT_NOTICE): items.append(_night_item(night))
     order = {"alert": 0, "warn": 1, "info": 2}
+    items += extra or []
     items.sort(key=lambda item: order[item["level"]])
     return {"items": _tag(items), "asOf": iso, "final": final, "session": "night" if night else "day"}
 
@@ -307,6 +325,23 @@ class MarketStatusService:
         self._us_cache[symbol] = (time.monotonic(), bars)
         return bars
 
+    def _all_time(self, symbol: str) -> list[dict]:
+        cached = self._us_cache.get("ath:" + symbol)
+        if cached and time.monotonic() - cached[0] < 6 * 3600: return cached[1]
+        try:
+            with httpx.Client(timeout=15, headers=AGENT) as client:
+                bars = parse_yahoo_closes(self._get_json(client, YAHOO_ALL_URL.format(symbol=symbol)))
+        except Exception:
+            logger.warning("All-time series %s unavailable", symbol, exc_info=True)
+            return cached[1] if cached else []
+        self._us_cache["ath:" + symbol] = (time.monotonic(), bars)
+        return bars
+
+    def _drawdowns(self) -> list[dict]:
+        found = [drawdown_item("sox-ath", "費城半導體指數", "SOX", self._all_time(US_SOX_YAHOO), self._us_bars(US_SOX_YAHOO)),
+                 drawdown_item("twii-ath", "加權指數", "TAIEX", self._all_time(TAIEX_YAHOO), self._us_bars(TAIEX_YAHOO))]
+        return [item for item in found if item]
+
     def _pe_history(self) -> list[tuple[str, float]]:
         from . import market_macro
         rows = (market_macro._macro_local_cache.get("series:TW_MARKET_PE") or {}).get("history") or []
@@ -323,7 +358,7 @@ class MarketStatusService:
         today = now.astimezone(TAIPEI).date()
         days, live = self._load(today)
         status = build_status(days, live, self._pe_history(), today, parse_txf_night(txf, now),
-                              us_items(self._us_bars(US_SOX_YAHOO), self._us_bars(US_VIX_YAHOO), today))
+                              us_items(self._us_bars(US_SOX_YAHOO), self._us_bars(US_VIX_YAHOO), today), self._drawdowns())
         status["checkedAt"] = now.isoformat()
         self._cache = (time.monotonic(), status)
         return status
