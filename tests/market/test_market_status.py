@@ -260,3 +260,16 @@ def test_heavy_volume_alone_is_an_event_even_when_the_index_barely_moved():
     days = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 100.4, "value": 1300.0}]   # +0.4% on 1.6x volume
     items = ms.build_status(days, None, [], TODAY)["items"]
     assert [item["id"] for item in items] == ["volume"] and items[0]["level"] == "warn"
+
+
+# 2026-11-17: once the U.S. session has closed it is yesterday's news, so the SOX line is the week so far.
+def test_a_closed_us_session_reports_the_week_so_far_against_last_fridays_close():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    sox = us_bars([5000.0, 5100.0, 4900.0, 4800.0], start=date(2026, 11, 12))   # Thu, Fri, Mon 11/16 ... bars: 11/12, 11/13, 11/16, 11/17
+    sox = sox[:3] + []   # Thu 11/12, Fri 11/13, Mon 11/16 = 4900
+    ny = ZoneInfo("America/New_York")
+    item = ms.us_items(sox, [], date(2026, 11, 17), datetime(2026, 11, 17, 7, 0, tzinfo=ny))[0]
+    assert item["id"] == "sox" and item["dir"] == "down"
+    assert "本週累計下跌 3.92%" in item["zh"] and "5,100→4,900" in item["zh"] and "11/16" in item["zh"]   # vs Friday's 5,100
+    assert "this week" in item["en"]

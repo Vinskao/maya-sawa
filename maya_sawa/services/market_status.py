@@ -83,6 +83,7 @@ def _night_item(night: dict) -> dict:
 
 US_STALE_DAYS = 4          # a long weekend; older U.S. bars are not news
 SOX_WARN, SOX_ALERT = 2.5, 4.0
+SOX_WEEK_WARN = 4.0         # the week so far, once the U.S. session has closed
 VIX_WARN, VIX_ALERT, VIX_JUMP_WARN, VIX_JUMP_ALERT = 25.0, 30.0, 15.0, 25.0
 US_SOX_YAHOO, US_VIX_YAHOO = "^SOX", "^VIX"
 YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=1mo&interval=1d"
@@ -123,11 +124,29 @@ def us_items(sox: list[dict], vix: list[dict], today: date, now: datetime | None
         closes, day = [bar["close"] for bar in sox], date.fromisoformat(sox[-1]["date"]).strftime("%m/%d")
         st, st_en = state(sox)
         change = (closes[-1] / closes[-2] - 1) * 100
-        if abs(change) >= SOX_WARN:
-            word, word_en = ("大跌", "fell") if change < 0 else ("大漲", "rose")
-            items.append({"id": "sox", "href": STOCKS, "level": "alert" if abs(change) >= SOX_ALERT else "warn", "dir": "down" if change < 0 else "up",
-                          "zh": f"美股費城半導體指數（SOX）{word} {abs(change):.2f}%（{closes[-2]:,.0f}→{closes[-1]:,.0f}，美股 {day} {st}）",
-                          "en": f"Philadelphia Semiconductor Index (SOX) {word_en} {abs(change):.2f}% ({closes[-2]:,.0f} to {closes[-1]:,.0f}, U.S. {day} {st_en})"})
+        if st_en == "intraday":
+            if abs(change) >= SOX_WARN:
+                word, word_en = ("大跌", "fell") if change < 0 else ("大漲", "rose")
+                items.append({"id": "sox", "href": STOCKS, "level": "alert" if abs(change) >= SOX_ALERT else "warn", "dir": "down" if change < 0 else "up",
+                              "zh": f"美股費城半導體指數（SOX）{word} {abs(change):.2f}%（{closes[-2]:,.0f}→{closes[-1]:,.0f}，美股 {day} {st}）",
+                              "en": f"Philadelphia Semiconductor Index (SOX) {word_en} {abs(change):.2f}% ({closes[-2]:,.0f} to {closes[-1]:,.0f}, U.S. {day} {st_en})"})
+        else:
+            # A finished U.S. session is yesterday's news by Taiwan morning: report the week so far, not one old day.
+            last = date.fromisoformat(sox[-1]["date"])
+            monday = (last - timedelta(days=last.weekday())).isoformat()
+            week = [i for i, bar in enumerate(sox) if bar["date"] >= monday]
+            base_index = week[0] - 1 if week[0] > 0 else week[0]
+            base, sessions = closes[base_index], len(sox) - 1 - base_index
+            wk = (closes[-1] / base - 1) * 100
+            if sessions >= 1 and (abs(wk) >= SOX_WEEK_WARN or abs(change) >= SOX_WARN):
+                bigger = max(abs(wk) / SOX_WEEK_WARN * SOX_WARN, abs(change))
+                lead = wk if abs(wk) >= 0.01 else change
+                word, word_en = ("下跌", "down") if lead < 0 else ("上漲", "up")
+                zh = f"美股費城半導體指數（SOX）本週累計{word} {abs(wk):.2f}%（{base:,.0f}→{closes[-1]:,.0f}，{sessions} 個交易日，至美股 {day} {st}）"
+                en = f"Philadelphia Semiconductor Index (SOX) {word_en} {abs(wk):.2f}% this week ({base:,.0f} to {closes[-1]:,.0f}, {sessions} sessions, through U.S. {day} {st_en})"
+                if sessions > 1 and abs(change) >= 1:
+                    zh += f"，最後一天 {change:+.2f}%"; en += f", last session {change:+.2f}%"
+                items.append({"id": "sox", "href": STOCKS, "level": "alert" if bigger >= SOX_ALERT else "warn", "dir": "down" if lead < 0 else "up", "zh": zh, "en": en})
         down = _streak(closes, rising=False)
         if down >= 3:
             total = (closes[-1] / closes[-down - 1] - 1) * 100
