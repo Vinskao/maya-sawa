@@ -43,4 +43,14 @@ Uiobbeci 的集數以自己的版本標記（`presenter-top-half-2-uiobbeci`）�
 
 ## 失敗通知（2026-11-16）
 
-上傳失敗時發 Telegram（第一次失敗立刻發，持續失敗兩小時後再發一次），每 10 分鐘仍會重試。授權過期（測試狀態的 OAuth 應用約 7 天）會以這個通知呈現。
+上傳失敗時發 Telegram（第一次失敗立刻發，持續失敗兩小時後再發一次），之後每小時重試（見下節）。授權過期（測試狀態的 OAuth 應用約 7 天）會以這個通知呈現。
+
+## ffmpeg 不能跟 API 搶 CPU（2026-11-17）
+
+節點只有 1 顆 vCPU。`veryfast` 合成一集超過 30 分鐘上限（`TimeoutExpired`），期間吃滿 CPU，`/healthz` 逾時，maya-sawa 被 kubelet 殺掉重啟；失敗後每 10 分鐘重試，又再搶一次。現在：
+
+- ffmpeg 以 `nice -n 19` 執行（容器裡有 `nice` 才加），API 永遠優先拿到 CPU。
+- 預設 `-preset ultrafast`，合成上限 3 小時（`ENCODE_TIMEOUT_SECONDS`）。
+- 失敗後改為每小時重試（`retry_delay_seconds`），Telegram 第一次失敗立刻通知、第三次（約兩小時後）再通知一次。
+
+開發方法：`tests/market/test_youtube_daily.py` 測指令前綴、preset、逾時與重試間隔；兩個真 ffmpeg 測試確認輸出仍是 1920×540 H.264/AAC。

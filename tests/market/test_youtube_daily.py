@@ -205,3 +205,32 @@ def test_client_refreshes_the_token_then_uploads_with_the_resumable_protocol():
     client = yd.YouTubeClient("id", "secret", "refresh", http=httpx.Client(transport=httpx.MockTransport(handler)))
     assert client.upload(b"mp4bytes", {"title": "t", "description": "d"}, "private") == "abc123"
     assert [s[0] for s in seen] == ["POST", "POST", "PUT"] and seen[1][2] == "Bearer tok"
+
+
+# 2026-11-17: on the one-vCPU node ffmpeg ran past its 30-minute limit, starved /healthz, and kubelet killed maya-sawa.
+def test_ffmpeg_runs_at_the_lowest_cpu_priority_with_the_fastest_preset(monkeypatch):
+    monkeypatch.setattr(yd.shutil, "which", lambda name: "/usr/bin/nice" if name == "nice" else None)
+    cmd = yd.ffmpeg_command("a.mp3", "p.txt", "o.mp4")
+    assert cmd[:4] == ["nice", "-n", "19", "ffmpeg"]
+    assert cmd[cmd.index("-preset") + 1] == "ultrafast"
+
+
+def test_ffmpeg_runs_without_nice_where_nice_is_missing(monkeypatch):
+    monkeypatch.setattr(yd.shutil, "which", lambda name: None)
+    assert yd.ffmpeg_command("a.mp3", "p.txt", "o.mp4")[0] == "ffmpeg"
+
+
+def test_a_slow_encode_gets_three_hours_before_it_is_abandoned():
+    seen = {}
+
+    def fake(cmd, **kw):
+        if cmd[0] != "ffprobe": seen["timeout"] = kw.get("timeout")
+        return SimpleNamespace(returncode=1, stdout="3")
+    with pytest.raises(RuntimeError):
+        yd.build_mp4(b"x", "maya", fetch=lambda name: b"clip", run=fake)
+    assert seen["timeout"] >= 3 * 3600
+
+
+def test_after_a_failure_the_loop_waits_an_hour_instead_of_ten_minutes():
+    assert yd.retry_delay_seconds(0) == 600
+    assert yd.retry_delay_seconds(1) == 3600 and yd.retry_delay_seconds(5) == 3600

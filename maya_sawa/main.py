@@ -333,14 +333,14 @@ async def _youtube_daily_loop():
         except Exception as exc:
             logger.exception("YouTube daily upload failed")
             failures += 1
-            if failures in (1, 12):  # at once, then once more if it is still failing two hours later
+            if failures in (1, 3):  # at once, then once more if it is still failing two hours later (hourly retries)
                 try:
                     from .services import telegram_notify
                     await asyncio.to_thread(telegram_notify.send, "attention", "YouTube 每日上傳失敗",
-                                            f"{type(exc).__name__}：每 10 分鐘會重試。授權過期時需重新授權（docs/YOUTUBE_DAILY.md）。")
+                                            f"{type(exc).__name__}：每小時重試一次。授權過期時需重新授權（docs/YOUTUBE_DAILY.md）。")
                 except Exception:
                     logger.warning("YouTube failure alert was not delivered")
-        await asyncio.sleep(600)
+        await asyncio.sleep(youtube_daily.retry_delay_seconds(failures))
 
 
 def _daily_reading_to_blog(rows):

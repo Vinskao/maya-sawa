@@ -10,6 +10,7 @@ YOUTUBE_CLIENT_SECRET and YOUTUBE_REFRESH_TOKEN; without them the service stays 
 """
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -112,9 +113,20 @@ PUBLIC_VIEW = ("scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:10
                "crop=1920:540:0:0")
 
 
+# 2026-11-17: the node has one vCPU. A veryfast encode ran past 30 minutes, starved /healthz and got maya-sawa killed, so ffmpeg runs
+# at the lowest priority (the API always wins the CPU), with the fastest preset and up to three hours to finish.
+ENCODE_TIMEOUT_SECONDS = 3 * 3600
+
+
+def retry_delay_seconds(failures: int) -> int:
+    """Ten minutes between normal checks; an hour after a failure, so a failing encode does not keep the CPU busy."""
+    return 3600 if failures else 600
+
+
 def ffmpeg_command(audio: str, playlist: str, out: str) -> list[str]:
-    return ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", playlist, "-i", audio, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264",
-            "-preset", "veryfast", "-pix_fmt", "yuv420p", "-r", "30",
+    low_priority = ["nice", "-n", "19"] if shutil.which("nice") else []
+    return low_priority + ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", playlist, "-i", audio, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264",
+            "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-r", "30",
             "-vf", PUBLIC_VIEW,
             "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", out]
 
@@ -159,7 +171,7 @@ def build_mp4(mp3: bytes, voice: str = "", fetch=fetch_clip, run=subprocess.run)
         else:
             raise RuntimeError("narration is longer than the clip playlist allows")
         playlist.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        result = run(ffmpeg_command(str(audio), str(playlist), str(out)), capture_output=True, timeout=1800)
+        result = run(ffmpeg_command(str(audio), str(playlist), str(out)), capture_output=True, timeout=ENCODE_TIMEOUT_SECONDS)
         if result.returncode != 0 or not out.exists() or out.stat().st_size == 0:
             raise RuntimeError("ffmpeg could not build the episode video")
         return out.read_bytes()
