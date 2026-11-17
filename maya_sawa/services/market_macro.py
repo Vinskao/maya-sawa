@@ -177,6 +177,17 @@ TWSE_MARGIN_CALL_SERIES = {
 }
 TWSE_MARGIN_CALL_URL = "https://www.twse.com.tw/rwd/zh/marginTrading/BFIJ3U_TREND?days=60&response=json"
 TWSE_MARGIN_CALL_PAGE = "https://www.twse.com.tw/dashboard/zh/credit/margin.html"
+# 2026-11-17: TWSE publishes P/E only per stock (BWIBBU_d), so the market P/E is the whole listed market's value over its
+# earnings: sum(cap) / sum(cap / P/E) over stocks with a positive P/E, cap = close x issued shares (company basic data).
+TWSE_MARKET_PE_SERIES = {
+    "TW_MARKET_PE": ("Taiwan listed-market P/E (cap-weighted, computed from TWSE per-stock P/E)", "times", "daily"),
+}
+TWSE_PE_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date={day}&selectType=ALL&response=json"
+TWSE_SHARES_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+TWSE_PE_PAGE = "https://www.twse.com.tw/zh/trading/historical/bwibbu-day.html"
+PE_BACKFILL_DAYS = 90      # how far back a fresh install fills
+PE_DAYS_PER_RUN = 6        # one request per missing day, so a few per run keeps TWSE traffic light
+_pe_days_without_data: set[str] = set()   # holidays answer "no data"; not asked again until the process restarts
 TWSE_MARGIN_SERIES = {
     "TW_MARGIN_MAINTENANCE": ("Taiwan listed-market margin maintenance ratio (TWSE: collateral value / margin loans)", "percent", "daily"),
     "TW_MARGIN_BALANCE": ("Taiwan listed-market margin loan balance (TWSE MI_MARGN)", "TWD 100 million", "daily"),
@@ -301,7 +312,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -359,6 +370,35 @@ def parse_twse_margin_calls(payload: dict) -> list[dict]:
         if len(day) == 8 and day.isdigit() and isinstance(value, (int, float)):
             rows.append({"code": "TW_MARGIN_CALL_ACCOUNTS", "period": f"{day[:4]}-{day[4:6]}-{day[6:]}", "value": value})
     return rows
+
+
+def _today_taipei() -> date:
+    return datetime.now(timezone(timedelta(hours=8))).date()
+
+
+def parse_twse_share_counts(rows: list[dict]) -> dict[str, int]:
+    """Company basic data (t187ap03_L) -> {code: issued ordinary shares}."""
+    counts = {}
+    for row in rows or []:
+        raw = next((value for key, value in row.items() if str(key).startswith("已發行普通股數")), "")
+        code = str(row.get("公司代號", "")).strip()
+        if code and str(raw).strip().isdigit():
+            counts[code] = int(str(raw).strip())
+    return counts
+
+
+def market_pe(payload: dict, shares: dict[str, int]) -> float | None:
+    """BWIBBU_d table -> cap-weighted market P/E; stocks with no P/E (losses) or no share count are left out."""
+    if payload.get("stat") != "OK": return None
+    cap = earnings = 0.0
+    for row in payload.get("data") or []:
+        try: close, pe = float(str(row[2]).replace(",", "")), float(str(row[5]).replace(",", ""))
+        except (ValueError, IndexError): continue
+        count = shares.get(str(row[0]).strip())
+        if not count or close <= 0 or pe <= 0: continue
+        cap += close * count
+        earnings += close * count / pe
+    return round(cap / earnings, 2) if earnings > 0 else None
 
 
 def parse_owid_population_csv(raw: bytes) -> list[dict]:
@@ -930,7 +970,7 @@ class MarketMacroService:
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series),
                 ("TIER", self._fetch_tier_forecast), ("TAIFEXVix", self._fetch_tw_vix), ("CboeVixFutures", self._fetch_vix_futures),
-                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi), ("Population", self._fetch_population), ("TWSEMarginCalls", self._fetch_twse_margin_calls),
+                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi), ("Population", self._fetch_population), ("TWSEMarginCalls", self._fetch_twse_margin_calls), ("TWSEMarketPE", self._fetch_twse_market_pe),
                 ("TreasuryDTS", self._fetch_treasury_dts)):
                 try: output["sources"][source_name] = fetch()
                 except Exception as exc:
@@ -1723,6 +1763,39 @@ class MarketMacroService:
             saved = self._cache_free_series(rows, TWSE_MARGIN_CALL_SERIES, "TWSE 臺股儀表板 (BFIJ3U)", TWSE_MARGIN_CALL_PAGE,
                                             fresh_for_seconds=48 * 3600)
             market_macro_db.finish_source_call(run_id, "success", len(fresh), http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
+            raise
+
+    def _twse_share_counts(self) -> dict[str, int]:
+        _, raw = _request_free_cached("twse:company-shares", TWSE_SHARES_URL, ttl_seconds=24 * 3600, extra_headers=BROWSER_AGENT)
+        return parse_twse_share_counts(json.loads(raw))
+
+    def _twse_pe_table(self, day: date) -> dict:
+        _, raw = _request_free_cached(f"twse:pe:{day:%Y%m%d}", TWSE_PE_URL.format(day=f"{day:%Y%m%d}"), ttl_seconds=24 * 3600, extra_headers=BROWSER_AGENT)
+        return json.loads(raw)
+
+    def _fetch_twse_market_pe(self) -> int:
+        """Compute the market P/E for trading days not stored yet (newest first, a few per run) and merge into the history."""
+        if _fetched_within("TW_MARKET_PE", 6 * 3600): return 0
+        stored = {row["period"]: row["value"] for row in (_macro_local_cache.get("series:TW_MARKET_PE") or {}).get("history") or []}
+        today = _today_taipei()
+        wanted = [day for day in (today - timedelta(days=n) for n in range(PE_BACKFILL_DAYS))
+                  if day.weekday() < 5 and day.isoformat() not in stored and day.isoformat() not in _pe_days_without_data][:PE_DAYS_PER_RUN]
+        if not wanted: return 0
+        run_id = market_macro_db.reserve_source_call("TWSEMarketPE", daily_limit=40, minute_limit=8)
+        if run_id is None: raise RuntimeError("twse_pe_daily_budget_exhausted")
+        try:
+            shares = self._twse_share_counts()
+            added = 0
+            for day in wanted:
+                value = market_pe(self._twse_pe_table(day), shares)
+                if value is None: _pe_days_without_data.add(day.isoformat())
+                else: stored[day.isoformat()] = value; added += 1
+            rows = [{"code": "TW_MARKET_PE", "period": period, "value": value} for period, value in sorted(stored.items())]
+            saved = self._cache_free_series(rows, TWSE_MARKET_PE_SERIES, "TWSE 個股本益比 (BWIBBU_d)", TWSE_PE_PAGE, fresh_for_seconds=72 * 3600) if stored else 0
+            market_macro_db.finish_source_call(run_id, "success", added)
             return saved
         except Exception as exc:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
