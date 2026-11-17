@@ -5,13 +5,14 @@ import asyncio
 import logging
 import time
 import urllib.request
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from .market_fundamentals import market_fundamentals_service
 from .market_insider_transfers import holding_events, insider_events, untransferred_events
+from . import volume_rank
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo("Asia/Taipei")
@@ -69,6 +70,21 @@ class _EventParser(HTMLParser):
             self.buffer.append(data)
 
 
+def live_volumes_from_quotes(rows: list[dict], today: date) -> dict[str, float]:
+    """Shares traded so far today, per stock, from quote rows; a quote stamped on an earlier day is yesterday's volume, not today's."""
+    volumes: dict[str, float] = {}
+    for row in rows:
+        if row.get("productType") != "stock" or not row.get("volumeShares"):
+            continue
+        try:
+            stamp = datetime.fromisoformat(str(row.get("timestamp")))
+        except ValueError:
+            continue
+        if stamp.astimezone(TZ).date() == today:
+            volumes[str(row.get("symbol", "")).strip()] = float(row["volumeShares"])
+    return volumes
+
+
 class MarketCompanyEventsService:
     def __init__(self) -> None:
         self._conference_cache: tuple[float, list[dict[str, Any]]] | None = None
@@ -78,6 +94,9 @@ class MarketCompanyEventsService:
         self.insider_source = lambda day: []
         # (untransferred filings, latest month's holding changes); set at startup like insider_source.
         self.insider_extra_source = lambda day: ([], [])
+        # (code, today) -> [[date, shares], ...] for the trailing year; the intraday monitor's loader (database, else Yahoo).
+        self.volume_history_source = None
+        self._volume_histories: dict[tuple[str, str], list] = {}
 
     async def _conferences(self) -> list[dict[str, Any]]:
         now = time.monotonic()
@@ -120,7 +139,31 @@ class MarketCompanyEventsService:
                     return self._conference_cache[1]
                 return []
 
-    async def get(self, codes: list[str]) -> dict[str, Any]:
+    def _volume_events(self, codes: list[str], names: dict[str, str], live: dict[str, float], today: date) -> list[dict]:
+        """Stocks whose volume reached the yearly top 10 / top 5 on a day of this week (history read once per stock per day)."""
+        source = self.volume_history_source
+        if source is None:
+            from .intraday_alerts import volume_history_for as source
+        events = []
+        week_start = today - timedelta(days=today.weekday())
+        for code in codes:
+            key = (code, today.isoformat())
+            if key not in self._volume_histories:
+                try:
+                    self._volume_histories[key] = source(code, today)
+                except Exception:
+                    logger.warning("Volume history unavailable for %s", code, exc_info=True)
+                    self._volume_histories[key] = []
+            history = self._volume_histories[key]
+            if len(volume_rank.trailing_volumes(history, today)) < volume_rank.MIN_HISTORY_DAYS:
+                continue
+            week = volume_rank.week_summary(history, today, week_start, live.get(code))
+            event = volume_rank.volume_spike_event(code, names.get(code, code), week)
+            if event:
+                events.append(event)
+        return events
+
+    async def get(self, codes: list[str], live_volumes: dict[str, float] | None = None) -> dict[str, Any]:
         normalized = tuple(sorted({str(code).strip() for code in codes if str(code).strip().isdigit()
                                    and len(str(code).strip()) == 4}))
         now_mono = time.monotonic()
@@ -160,10 +203,16 @@ class MarketCompanyEventsService:
             all_events.extend(holding_events(changes, set(normalized)))
         except Exception:
             logger.exception("Insider transfer filings unavailable")
+        try:
+            names = {event["code"]: event.get("name") or event["code"] for event in all_events}
+            all_events.extend(await asyncio.to_thread(self._volume_events, list(normalized), names, live_volumes or {}, today))
+        except Exception:
+            logger.exception("Volume spikes unavailable")
         all_events.sort(key=lambda event: (event["date"], event["code"], event["type"]))
         result = {"events": all_events, "checkedAt": datetime.now(TZ).isoformat(),
                   "sources": {"financialReleases": "TWSE OpenAPI / MOPS OTC", "conferences": "TDCC IR Platform",
-                              "insiderTransfers": "TWSE OpenAPI t187ap12_L / TPEx OpenAPI mopsfin_t187ap12_O"},
+                              "insiderTransfers": "TWSE OpenAPI t187ap12_L / TPEx OpenAPI mopsfin_t187ap12_O",
+                              "volume": "TWSE / TPEx daily volume (database, else Yahoo), live volume from Shioaji"},
                   "highlightPolicy": {"releaseDays": 7, "conferenceDays": 21}}
         self._result_cache[normalized] = (time.monotonic(), result)
         return result

@@ -80,6 +80,7 @@ def test_company_events_include_open_insider_sales_for_the_selected_stocks(monke
     from maya_sawa.services import market_company_events as mce
 
     service = mce.MarketCompanyEventsService()
+    service.volume_history_source = lambda code, day: []   # never the real database / Yahoo in a unit test
     async def none(*a, **k): return []
     monkeypatch.setattr(mce.market_fundamentals_service, "published_events", none)
     monkeypatch.setattr(service, "_conferences", none)
@@ -170,6 +171,7 @@ def test_company_events_add_untransferred_filings_and_insider_buys(monkeypatch):
     from maya_sawa.services import market_company_events as mce
 
     service = mce.MarketCompanyEventsService()
+    service.volume_history_source = lambda code, day: []   # never the real database / Yahoo in a unit test
     async def none(*a, **k): return []
     monkeypatch.setattr(mce.market_fundamentals_service, "published_events", none)
     monkeypatch.setattr(service, "_conferences", none)

@@ -801,6 +801,7 @@ async def get_market_dashboard_events():
     """Recent revenue/report releases and upcoming investor conferences for selected stock targets."""
     auto = market_dashboard_db.latest_auto()
     symbols = [*auto.get("positions", []), *market_dashboard_db.custom_symbols(), *market_dashboard_db.watch_symbols()]
+    quote_rows: list = []
     try:
         quote_rows = await shioaji_market_service.get_dashboard_quotes(symbols)
         await asyncio.to_thread(attach_underlying, symbols, quote_rows)
@@ -813,7 +814,10 @@ async def get_market_dashboard_events():
         elif item.get("underlyingCode"):
             codes.add(str(item["underlyingCode"]).strip())
     try:
-        return await market_company_events_service.get(sorted(codes))
+        from ..services.market_company_events import live_volumes_from_quotes
+        # Today's running volume (when the quote is from today) lets a spike show while the day is still trading.
+        live = live_volumes_from_quotes(quote_rows, datetime.now(ZoneInfo("Asia/Taipei")).date())
+        return await market_company_events_service.get(sorted(codes), live_volumes=live)
     except Exception as exc:
         logger.exception("Market company events request failed")
         raise HTTPException(status_code=502, detail="Company events are temporarily unavailable") from exc

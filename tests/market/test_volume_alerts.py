@@ -147,3 +147,77 @@ def test_monitor_gives_taiwan_quotes_their_volume_history(monkeypatch):
     quote = {k: v for k, v in q(volume=300_000).items() if k != "volumeHistory"}
     alerts = asyncio.run(monitor.check([quote], TUE_10AM))
     assert [a["kind"] for a in alerts] == ["volume"] and alerts[0]["level"] == 5
+
+
+# --- 2026-11-17: the volume ranking was only sent to Telegram; stock rows never showed it. It is now a company event. ------------
+def week_history(week_volumes):
+    """200 days of 1,000 x 1..200 shares to 2026-11-13, then this week's days (Mon 11/16 ...) with the given volumes."""
+    rows = history()
+    for offset, volume in enumerate(week_volumes):
+        rows.append([(date(2026, 11, 16) + timedelta(days=offset)).isoformat(), volume])
+    return rows
+
+
+def test_a_day_this_week_in_the_yearly_top_5_becomes_a_volume_spike_event():
+    # History is 1,000 x 1..200 shares. Monday 199,000 has one larger day -> rank 2 (top 5); today's 195,000 has six above it (Monday's 199,000 is part of the window too) -> rank 7 (top 10).
+    week = vr.week_summary(week_history([199_000]), date(2026, 11, 17), date(2026, 11, 16), 195_000)
+    event = vr.volume_spike_event("6857", "宜特", week)
+    assert event["type"] == "volume_spike" and event["code"] == "6857" and event["flag"] == "top5" and event["highlight"]
+    assert event["date"] == "2026-11-17"                                    # the latest flagged day
+    assert "週一第 2 名（前 5）" in event["period"] and "週二（今日）第 7 名（前 10）" in event["period"]
+    assert event["days"] == [{"weekday": "週一", "rank": 2, "flag": "top5", "today": False},
+                             {"weekday": "週二", "rank": 7, "flag": "top10", "today": True}]
+
+
+def test_only_flagged_days_are_listed_and_ordinary_weeks_make_no_event():
+    ordinary = vr.week_summary(week_history([50_000]), date(2026, 11, 17), date(2026, 11, 16), 60_000)
+    assert vr.volume_spike_event("2330", "台積電", ordinary) is None
+    mixed = vr.week_summary(week_history([199_000, 20_000]), date(2026, 11, 18), date(2026, 11, 16), 30_000)
+    event = vr.volume_spike_event("2330", "台積電", mixed)
+    assert [day["weekday"] for day in event["days"]] == ["週一"] and "週二" not in event["period"]
+
+
+def test_the_event_labels_the_strongest_day_of_the_week():
+    # Monday 193,000 -> rank 8 (top 10); today's 199,500 has only the 200,000 day above it -> rank 2 (top 5): the week is top 5.
+    week = vr.week_summary(week_history([193_000]), date(2026, 11, 17), date(2026, 11, 16), 199_500)
+    assert vr.volume_spike_event("6857", "宜特", week)["flag"] == "top5"
+    only10 = vr.week_summary(week_history([193_000]), date(2026, 11, 17), date(2026, 11, 16), 1_000)
+    assert vr.volume_spike_event("6857", "宜特", only10)["flag"] == "top10"
+
+
+def test_company_events_carry_the_volume_spike_for_selected_stocks_using_live_volume(monkeypatch):
+    from maya_sawa.services import market_company_events as mce
+    service = mce.MarketCompanyEventsService()
+    async def none(*a, **k): return []
+    monkeypatch.setattr(mce.market_fundamentals_service, "published_events", none)
+    monkeypatch.setattr(service, "_conferences", none)
+    monkeypatch.setattr(mce, "_today", lambda: date(2026, 11, 17))
+    service.volume_history_source = lambda code, day: week_history([199_000]) if code == "6857" else history()
+    result = asyncio.run(service.get(["6857", "2330"], live_volumes={"6857": 195_000, "2330": 10_000}))
+    spikes = [event for event in result["events"] if event["type"] == "volume_spike"]
+    assert [event["code"] for event in spikes] == ["6857"]
+    assert result["sources"]["volume"]
+
+
+def test_a_stock_without_a_year_of_volume_history_makes_no_event(monkeypatch):
+    from maya_sawa.services import market_company_events as mce
+    service = mce.MarketCompanyEventsService()
+    async def none(*a, **k): return []
+    monkeypatch.setattr(mce.market_fundamentals_service, "published_events", none)
+    monkeypatch.setattr(service, "_conferences", none)
+    monkeypatch.setattr(mce, "_today", lambda: date(2026, 11, 17))
+    service.volume_history_source = lambda code, day: history(days=30)
+    result = asyncio.run(service.get(["6857"], live_volumes={"6857": 9_999_999}))
+    assert [event for event in result["events"] if event["type"] == "volume_spike"] == []
+
+
+def test_live_volume_is_taken_only_from_todays_stock_quotes():
+    from maya_sawa.services.market_company_events import live_volumes_from_quotes
+    rows = [
+        {"symbol": "6857", "productType": "stock", "volumeShares": 195_000, "timestamp": "2026-11-17T10:58:00+08:00"},
+        {"symbol": "2330", "productType": "stock", "volumeShares": 9_000_000, "timestamp": "2026-11-14T13:30:00+08:00"},   # last Friday's
+        {"symbol": "TXFK6", "productType": "futures", "volumeShares": 5, "timestamp": "2026-11-17T10:58:00+08:00"},
+        {"symbol": "2317", "productType": "stock", "volumeShares": None, "timestamp": "2026-11-17T10:58:00+08:00"},
+        {"symbol": "3008", "productType": "stock", "volumeShares": 1_000, "timestamp": "not a time"},
+    ]
+    assert live_volumes_from_quotes(rows, date(2026, 11, 17)) == {"6857": 195_000}
