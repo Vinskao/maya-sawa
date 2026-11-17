@@ -87,7 +87,7 @@ def test_market_pe_falling_for_days_with_a_widening_drop_is_flagged():
 def test_market_pe_falling_at_a_steady_pace_is_info_and_a_rise_says_nothing():
     days = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 100.0, "value": 800.0}]
     steady = [("2026-11-12", 24.0), ("2026-11-13", 23.0), ("2026-11-16", 22.0), (TODAY.isoformat(), 21.0)]
-    item = [i for i in ms.build_status(days, None, steady, TODAY)["items"] if i["id"] == "pe"][0]
+    item = ms._pe_item(steady, TODAY)
     assert item["level"] == "info" and "加快" not in item["zh"]
     rising = [("2026-11-13", 20.0), ("2026-11-16", 21.0), (TODAY.isoformat(), 22.0)]
     assert [i for i in ms.build_status(days, None, rising, TODAY)["items"] if i["id"] == "pe"] == []
@@ -224,3 +224,39 @@ def test_items_link_to_the_page_that_shows_them():
     pe = [("2026-11-12", 24.0), ("2026-11-13", 23.5), ("2026-11-16", 22.5), (TODAY.isoformat(), 20.5)]
     links = {item["id"]: item["href"] for item in ms.build_status(days, None, pe, TODAY)["items"]}
     assert links["move"] == "/stocks/" and links["pe"] == "/macro/#macro-leverage"
+
+
+# 2026-11-17: the bar has one row for Taiwan and one for the U.S.; the U.S. row says whether the session is live.
+def test_every_item_belongs_to_the_taiwan_or_the_us_row():
+    days = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 96.0, "value": 1200.0}]
+    pe = [("2026-11-12", 24.0), ("2026-11-13", 23.5), ("2026-11-16", 22.5), (TODAY.isoformat(), 20.5)]
+    us = ms.us_items(us_bars([5000.0, 5000.0, 5000.0, 4800.0], start=date(2026, 11, 11)) , us_bars([18.0, 19.0, 21.0, 23.0, 27.0], start=date(2026, 11, 10)), TODAY)
+    groups = {item["id"]: item["group"] for item in ms.build_status(days, None, pe, TODAY, {"price": 1.0, "pct": 0.2, "time": "20:00"}, us)["items"]}
+    assert groups["move"] == groups["pe"] == groups["week"] == groups["night"] == "tw"
+    assert groups["sox"] == groups["vix"] == "us"
+
+
+def test_the_us_text_says_live_during_the_us_session_and_close_otherwise():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    sox = us_bars([5000.0, 5000.0, 5000.0, 4800.0], start=date(2026, 11, 11))   # last bar 11/16
+    ny = ZoneInfo("America/New_York")
+    live = ms.us_items(sox, [], date(2026, 11, 17), datetime(2026, 11, 16, 11, 0, tzinfo=ny))[0]
+    assert "盤中" in live["zh"] and "intraday" in live["en"]
+    closed = ms.us_items(sox, [], date(2026, 11, 17), datetime(2026, 11, 16, 17, 0, tzinfo=ny))[0]
+    assert "收盤" in closed["zh"] and "close" in closed["en"]
+    before_open = ms.us_items(sox, [], date(2026, 11, 17), datetime(2026, 11, 17, 7, 0, tzinfo=ny))[0]
+    assert "收盤" in before_open["zh"]   # the bar is yesterday's finished session
+
+
+# 2026-11-17: the bar is only for a heavy-volume or big-swing event; a quiet day shows nothing at all.
+def test_calm_info_lines_alone_never_make_a_banner():
+    calm = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 100.2, "value": 800.0}]
+    steady_pe = [("2026-11-12", 24.0), ("2026-11-13", 23.0), ("2026-11-16", 22.0), (TODAY.isoformat(), 21.0)]   # info level only
+    assert ms.build_status(calm, None, steady_pe, TODAY, {"price": 40100.0, "pct": 0.4, "time": "20:00"})["items"] == []
+
+
+def test_heavy_volume_alone_is_an_event_even_when_the_index_barely_moved():
+    days = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 100.4, "value": 1300.0}]   # +0.4% on 1.6x volume
+    items = ms.build_status(days, None, [], TODAY)["items"]
+    assert [item["id"] for item in items] == ["volume"] and items[0]["level"] == "warn"

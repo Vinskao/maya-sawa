@@ -109,30 +109,38 @@ def _streak(values: list[float], rising: bool) -> int:
     return count
 
 
-def us_items(sox: list[dict], vix: list[dict], today: date) -> list[dict]:
+def us_items(sox: list[dict], vix: list[dict], today: date, now: datetime | None = None) -> list[dict]:
     """The Philadelphia semiconductor index and the VIX (with how many days it has risen) as banner items."""
     items: list[dict] = []
+    from zoneinfo import ZoneInfo
+    ny_now = (now or datetime.now(ZoneInfo("America/New_York"))).astimezone(ZoneInfo("America/New_York"))
+    def state(bars):
+        """(label zh, label en): the latest bar is a live one only while the New York session is open on that date."""
+        open_now = ny_now.weekday() < 5 and (9, 30) <= (ny_now.hour, ny_now.minute) < (16, 0) and bars[-1]["date"] == ny_now.date().isoformat()
+        return ("盤中", "intraday") if open_now else ("收盤", "close")
     fresh = lambda bars: bool(bars) and 0 <= (today - date.fromisoformat(bars[-1]["date"])).days <= US_STALE_DAYS
     if len(sox) >= 2 and fresh(sox):
         closes, day = [bar["close"] for bar in sox], date.fromisoformat(sox[-1]["date"]).strftime("%m/%d")
+        st, st_en = state(sox)
         change = (closes[-1] / closes[-2] - 1) * 100
         if abs(change) >= SOX_WARN:
             word, word_en = ("大跌", "fell") if change < 0 else ("大漲", "rose")
             items.append({"id": "sox", "href": STOCKS, "level": "alert" if abs(change) >= SOX_ALERT else "warn", "dir": "down" if change < 0 else "up",
-                          "zh": f"美股費城半導體指數（SOX）{word} {abs(change):.2f}%（{closes[-2]:,.0f}→{closes[-1]:,.0f}，美股 {day}）",
-                          "en": f"Philadelphia Semiconductor Index (SOX) {word_en} {abs(change):.2f}% ({closes[-2]:,.0f} to {closes[-1]:,.0f}, U.S. {day})"})
+                          "zh": f"美股費城半導體指數（SOX）{word} {abs(change):.2f}%（{closes[-2]:,.0f}→{closes[-1]:,.0f}，美股 {day} {st}）",
+                          "en": f"Philadelphia Semiconductor Index (SOX) {word_en} {abs(change):.2f}% ({closes[-2]:,.0f} to {closes[-1]:,.0f}, U.S. {day} {st_en})"})
         down = _streak(closes, rising=False)
         if down >= 3:
             total = (closes[-1] / closes[-down - 1] - 1) * 100
-            items.append({"id": "sox-streak", "href": STOCKS, "level": "warn", "dir": "down", "zh": f"費城半導體指數連跌 {down} 日（累計 {total:.2f}%，美股 {day}）",
-                          "en": f"SOX down {down} sessions in a row ({total:.2f}% in total, U.S. {day})"})
+            items.append({"id": "sox-streak", "href": STOCKS, "level": "warn", "dir": "down", "zh": f"費城半導體指數連跌 {down} 日（累計 {total:.2f}%，美股 {day} {st}）",
+                          "en": f"SOX down {down} sessions in a row ({total:.2f}% in total, U.S. {day} {st_en})"})
     if len(vix) >= 2 and fresh(vix):
         closes, day = [bar["close"] for bar in vix], date.fromisoformat(vix[-1]["date"]).strftime("%m/%d")
+        st, st_en = state(vix)
         jump, up = (closes[-1] / closes[-2] - 1) * 100, _streak(closes, rising=True)
         level = "alert" if closes[-1] >= VIX_ALERT or jump >= VIX_JUMP_ALERT else             "warn" if closes[-1] >= VIX_WARN or jump >= VIX_JUMP_WARN or up >= 3 else None
         if level:
-            zh = f"VIX 恐慌指數 {closes[-1]:.1f}（{jump:+.1f}%，美股 {day}）"
-            en = f"VIX {closes[-1]:.1f} ({jump:+.1f}%, U.S. {day})"
+            zh = f"VIX 恐慌指數 {closes[-1]:.1f}（{jump:+.1f}%，美股 {day} {st}）"
+            en = f"VIX {closes[-1]:.1f} ({jump:+.1f}%, U.S. {day} {st_en})"
             if up >= 2:
                 zh += f"，連漲 {up} 日（{closes[-up - 1]:.1f}→{closes[-1]:.1f}）"
                 en += f", up {up} sessions in a row ({closes[-up - 1]:.1f} to {closes[-1]:.1f})"
@@ -169,6 +177,16 @@ def _pe_item(pe: list[tuple[str, float]], today: date) -> dict | None:
     return {"id": "pe", "href": "/macro/#macro-leverage", "level": "warn" if accelerating else "info", "dir": "down", "zh": zh, "en": en}
 
 
+GROUPS = {"sox": "us", "sox-streak": "us", "vix": "us"}   # everything else is Taiwan
+
+
+def _tag(items: list[dict]) -> list[dict]:
+    """Group the items by market. The bar exists only for a heavy-volume or big-swing event: with nothing at warn level
+    or above, calm info lines (a small night move, the week total) are not worth a banner and nothing is returned."""
+    if not any(item["level"] != "info" for item in items): return []
+    return [{**item, "group": GROUPS.get(item["id"], "tw")} for item in items]
+
+
 def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]], today: date, night: dict | None = None, us: list[dict] | None = None) -> dict:
     """Items for the banner, most severe first; empty when there is no data for today (yesterday is never the headline)."""
     iso = today.isoformat()
@@ -183,7 +201,7 @@ def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]
         early = list(us or []) + ([_night_item(night)] if night and abs(night["pct"]) >= NIGHT_NOTICE else [])
         if early:
             early.sort(key=lambda item: {"alert": 0, "warn": 1, "info": 2}[item["level"]])
-            return {"items": early, "asOf": iso, "final": False, "session": "night" if night else "day"}
+            return {"items": _tag(early), "asOf": iso, "final": False, "session": "night" if night else "day"}
         return {"items": [], "asOf": None}
     if not finished: return {"items": [], "asOf": iso}
     prev = finished[-1]["close"]
@@ -206,7 +224,7 @@ def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]
             en += f", on {tag_en}: turnover {_value_text_en(value)}, {ratio:.1f}x the {VOLUME_WINDOW}-day average"
         items.append({"id": "move", "href": STOCKS, "level": "alert" if abs(change) >= STRONG_MOVE else "warn", "dir": "down" if change < 0 else "up", "zh": zh, "en": en})
     elif heavy:
-        items.append({"id": "volume", "href": STOCKS, "level": "info", "dir": "down" if change < 0 else "up", "zh": f"加權指數今日成交爆量：{_value_text(value)}，為近 {VOLUME_WINDOW} 日均量的 {ratio:.1f} 倍（漲跌 {change:+.2f}%）",
+        items.append({"id": "volume", "href": STOCKS, "level": "warn", "dir": "down" if change < 0 else "up", "zh": f"加權指數今日成交爆量：{_value_text(value)}，為近 {VOLUME_WINDOW} 日均量的 {ratio:.1f} 倍（漲跌 {change:+.2f}%）",
                       "en": f"TAIEX turnover is heavy today: {_value_text_en(value)}, {ratio:.1f}x the {VOLUME_WINDOW}-day average ({change:+.2f}%)"})
     closes = [row["close"] for row in finished] + [close]
     streak = 0
@@ -231,7 +249,7 @@ def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]
     if night and (items or abs(night["pct"]) >= NIGHT_NOTICE): items.append(_night_item(night))
     order = {"alert": 0, "warn": 1, "info": 2}
     items.sort(key=lambda item: order[item["level"]])
-    return {"items": items, "asOf": iso, "final": final, "session": "night" if night else "day"}
+    return {"items": _tag(items), "asOf": iso, "final": final, "session": "night" if night else "day"}
 
 
 class MarketStatusService:
@@ -260,7 +278,7 @@ class MarketStatusService:
 
     def _us_bars(self, symbol: str) -> list[dict]:
         cached = self._us_cache.get(symbol)
-        if cached and time.monotonic() - cached[0] < 300: return cached[1]   # U.S. bars move slowly; Yahoo is asked at most every 5 minutes
+        if cached and time.monotonic() - cached[0] < 60: return cached[1]   # live while New York trades, so Yahoo is asked about once a minute
         try:
             with httpx.Client(timeout=10, headers=AGENT) as client:
                 bars = parse_yahoo_closes(self._get_json(client, YAHOO_URL.format(symbol=symbol)))
