@@ -796,6 +796,17 @@ def crypto_quotes(rows: list[dict]) -> dict[tuple[str, str, str], dict | None]:
     return quotes
 
 
+@router.get("/dashboard/status", **public_data("大盤今日狀態（即時漲跌、量能、本益比）", "行情與標的"))
+async def get_market_status():
+    """Today's TAIEX move, whether it came with heavy volume, and a falling market P/E; empty when there is nothing to say today."""
+    from ..services.market_status import market_status_service
+    try:
+        return await asyncio.to_thread(market_status_service.get)
+    except Exception as exc:
+        logger.exception("Market status request failed")
+        raise HTTPException(status_code=502, detail="Market status is temporarily unavailable") from exc
+
+
 @router.get("/dashboard/events", **public_data("近期營收／財報發布與法說會", "行情與標的"))
 async def get_market_dashboard_events():
     """Recent revenue/report releases and upcoming investor conferences for selected stock targets."""
