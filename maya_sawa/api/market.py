@@ -801,7 +801,11 @@ async def get_market_status():
     """Today's TAIEX move, whether it came with heavy volume, and a falling market P/E; empty when there is nothing to say today."""
     from ..services.market_status import market_status_service
     try:
-        return await asyncio.to_thread(market_status_service.get)
+        txf = await shioaji_market_service.get_taiex_futures_quote()   # the night session's move; a missing quote just means no night line
+    except Exception:
+        txf = None
+    try:
+        return await asyncio.to_thread(market_status_service.get, None, txf)
     except Exception as exc:
         logger.exception("Market status request failed")
         raise HTTPException(status_code=502, detail="Market status is temporarily unavailable") from exc

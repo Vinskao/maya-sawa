@@ -115,3 +115,112 @@ def test_every_item_says_which_way_the_market_went():
     assert {item["dir"] for item in ms.build_status(days, None, [], TODAY)["items"]} == {"down"}
     up = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 104.0, "value": 1200.0}]
     assert ms.build_status(up, None, [], TODAY)["items"][0]["dir"] == "up"
+
+
+# 2026-11-17: at night the market that is moving is the TAIEX futures night session, so day and night are told apart.
+from datetime import datetime, timedelta, timezone
+
+TPE = timezone(timedelta(hours=8))
+
+
+def txf(stamp, price=40263.0, pct=0.63):
+    return {"close": price, "changePercent": pct, "timestamp": stamp}
+
+
+def test_a_fresh_night_session_quote_is_recognised_and_a_day_session_one_is_not():
+    now = datetime(2026, 11, 17, 20, 10, tzinfo=TPE)
+    assert ms.parse_txf_night(txf("2026-11-17T20:03:40+08:00"), now) == {"price": 40263.0, "pct": 0.63, "time": "20:03"}
+    assert ms.parse_txf_night(txf("2026-11-17T11:03:40+08:00"), datetime(2026, 11, 17, 11, 5, tzinfo=TPE)) is None   # day session
+    assert ms.parse_txf_night(txf("2026-11-17T20:03:40+08:00"), datetime(2026, 11, 17, 21, 30, tzinfo=TPE)) is None  # over 30 minutes old
+    assert ms.parse_txf_night(None, now) is None
+    assert ms.parse_txf_night(txf("2026-11-18T02:10:00+08:00"), datetime(2026, 11, 18, 2, 12, tzinfo=TPE))["pct"] == 0.63   # after midnight is still night
+
+
+def test_a_big_night_move_is_its_own_item_labelled_night_session():
+    days = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 100.2, "value": 800.0}]   # a calm day session
+    night = {"price": 40263.0, "pct": -2.4, "time": "20:03"}
+    items = ms.build_status(days, None, [], TODAY, night)["items"]
+    assert [item["id"] for item in items] == ["night"]
+    assert items[0]["level"] == "alert" and items[0]["dir"] == "down"
+    assert "夜盤" in items[0]["zh"] and "-2.40%" in items[0]["zh"] and "night session" in items[0]["en"]
+
+
+def test_a_small_night_move_alone_stays_silent_but_rides_along_when_the_banner_is_showing():
+    calm = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 100.2, "value": 800.0}]
+    small = {"price": 40100.0, "pct": 0.3, "time": "20:03"}
+    assert ms.build_status(calm, None, [], TODAY, small)["items"] == []
+    big_day = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 96.0, "value": 1200.0}]
+    ids = [item["id"] for item in ms.build_status(big_day, None, [], TODAY, small)["items"]]
+    assert ids[0] == "move" and "night" in ids
+
+
+def test_the_day_session_item_says_day_session_and_the_night_move_works_before_the_day_opens():
+    big_day = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 96.0, "value": 1200.0}]
+    assert "日盤" in ms.build_status(big_day, None, [], TODAY)["items"][0]["zh"]
+    # 03:00 the next morning: no day-session data for the new date yet, only the night session.
+    early = ms.build_status(big_day, None, [], date(2026, 11, 18), {"price": 39000.0, "pct": -2.5, "time": "03:00"})
+    assert [item["id"] for item in early["items"]] == ["night"]
+
+
+# 2026-11-17: U.S. context on the same bar: the Philadelphia semiconductor index (SOX) and the VIX with its run of rises.
+def us_bars(closes, start=date(2026, 11, 2)):
+    from datetime import timedelta
+    rows, day = [], start
+    for close in closes:
+        while day.weekday() > 4: day += timedelta(days=1)
+        rows.append({"date": day.isoformat(), "close": close})
+        day += timedelta(days=1)
+    return rows
+
+
+def test_yahoo_chart_becomes_dated_closes_in_new_york_time():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    stamp = int(datetime(2026, 11, 13, 16, 0, tzinfo=ZoneInfo("America/New_York")).timestamp())
+    payload = {"chart": {"result": [{"timestamp": [stamp, stamp + 86400], "indicators": {"quote": [{"close": [5000.5, None]}]}}]}}
+    assert ms.parse_yahoo_closes(payload) == [{"date": "2026-11-13", "close": 5000.5}]
+    assert ms.parse_yahoo_closes({}) == []
+
+
+def test_a_big_sox_drop_is_an_item_with_a_link_and_the_us_date():
+    sox = us_bars([5000.0, 5000.0, 5000.0, 4800.0])   # -4% on 11/05
+    items = ms.us_items(sox, [], date(2026, 11, 6))
+    item = items[0]
+    assert item["id"] == "sox" and item["level"] == "alert" and item["dir"] == "down"
+    assert "費城半導體" in item["zh"] and "4.00%" in item["zh"] and "11/05" in item["zh"]
+    assert item["href"] == "/stocks/"
+
+
+def test_sox_down_three_days_is_a_streak_and_a_calm_sox_says_nothing():
+    streak = [i for i in ms.us_items(us_bars([5000.0, 4990.0, 4980.0, 4970.0]), [], date(2026, 11, 6)) if i["id"] == "sox-streak"]
+    assert streak and "連跌 3" in streak[0]["zh"]
+    assert ms.us_items(us_bars([5000.0, 5005.0, 5010.0, 5015.0]), [], date(2026, 11, 6)) == []
+
+
+def test_vix_rising_for_days_and_into_the_fear_zone_is_one_item_with_the_run_length():
+    vix = us_bars([18.0, 19.0, 21.0, 23.0, 27.0])
+    item = ms.us_items([], vix, date(2026, 11, 6))[0]
+    assert item["id"] == "vix" and item["dir"] == "down" and item["level"] == "warn"
+    assert "連漲 4" in item["zh"] and "27.0" in item["zh"] and "恐慌" in item["zh"]
+    assert item["href"] == "/macro/#macro-volatility"
+    assert ms.us_items([], us_bars([18.0, 17.5, 17.8, 17.0]), date(2026, 11, 6)) == []
+    assert ms.us_items([], us_bars([20.0, 21.0, 25.0, 33.0]), date(2026, 11, 6))[0]["level"] == "alert"
+
+
+def test_us_data_older_than_a_long_weekend_is_not_reported():
+    sox = us_bars([5000.0, 5000.0, 5000.0, 4800.0])   # last bar 11/05
+    assert ms.us_items(sox, [], date(2026, 11, 12)) == []
+
+
+def test_us_items_join_the_banner_and_can_speak_alone_before_taiwan_trades():
+    days = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 100.2, "value": 800.0}]   # a calm Taiwan day
+    us = ms.us_items(us_bars([5000.0, 5000.0, 5000.0, 4800.0], start=date(2026, 11, 11)), [], TODAY)
+    assert [item["id"] for item in ms.build_status(days, None, [], TODAY, None, us)["items"]] == ["sox"]
+    assert [item["id"] for item in ms.build_status(days, None, [], date(2026, 11, 18), None, us)["items"]] == ["sox"]   # no Taiwan data yet today
+
+
+def test_items_link_to_the_page_that_shows_them():
+    days = sessions([100.0] * 24) + [{"date": TODAY.isoformat(), "close": 96.0, "value": 1200.0}]
+    pe = [("2026-11-12", 24.0), ("2026-11-13", 23.5), ("2026-11-16", 22.5), (TODAY.isoformat(), 20.5)]
+    links = {item["id"]: item["href"] for item in ms.build_status(days, None, pe, TODAY)["items"]}
+    assert links["move"] == "/stocks/" and links["pe"] == "/macro/#macro-leverage"
