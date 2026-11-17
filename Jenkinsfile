@@ -604,6 +604,10 @@ TELEGRAM_CHAT_ID=%s
                                         # 部署 CronJob
                                         envsubst < k8s/cronjob.yaml | kubectl apply -f -
 
+                                        # Cluster watcher (Telegram alert when pods or nodes are stuck); the script ships as a ConfigMap
+                                        kubectl create configmap cluster-watch-script --from-file=cluster_watch.py=scripts/cluster_watch.py -n default --dry-run=client -o yaml | kubectl apply -f -
+                                        kubectl apply -f k8s/cluster-watch.yaml
+
                                         # Keep unrelated IBKR Gateway stable during Maya-only releases.
                                         if [ "${DEPLOY_IBKR_GATEWAY:-false}" = "true" ]; then
                                           kubectl apply -f ibkr-gateway/k8s/deployment.yaml

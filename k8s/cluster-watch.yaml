@@ -1,0 +1,96 @@
+# Tells the owner on Telegram when the cluster is stuck (scripts/cluster_watch.py, docs/CLUSTER_WATCH.md).
+# Pinned to the worker that does NOT run maya-sawa, so a stuck 10.0.158.183 cannot silence it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-watch
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-watch
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "events"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-watch
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-watch
+subjects:
+- kind: ServiceAccount
+  name: cluster-watch
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-watch-state
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-watch-state
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-watch-state
+subjects:
+- kind: ServiceAccount
+  name: cluster-watch
+  namespace: default
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cluster-watch
+  namespace: default
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  startingDeadlineSeconds: 120
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 120
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 600
+      template:
+        spec:
+          serviceAccountName: cluster-watch
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: 10.0.159.167
+          containers:
+          - name: watch
+            image: python:3.12-alpine
+            command: ["python", "/opt/cluster_watch.py"]
+            env:
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef: {name: telegram-notify, key: TELEGRAM_BOT_TOKEN, optional: true}
+            - name: TELEGRAM_CHAT_ID
+              valueFrom:
+                secretKeyRef: {name: telegram-notify, key: TELEGRAM_CHAT_ID, optional: true}
+            resources:
+              requests: {cpu: 5m, memory: 32Mi}
+              limits: {cpu: 100m, memory: 96Mi}
+            volumeMounts:
+            - {name: script, mountPath: /opt}
+          volumes:
+          - name: script
+            configMap:
+              name: cluster-watch-script

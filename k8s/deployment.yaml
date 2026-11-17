@@ -424,7 +424,9 @@ spec:
             # 實測：4 支 1080p 影片 hstack 成 7680x1080 時 ffmpeg 峰值約 1.6GB，
             # 原本的 1536Mi 會直接被 OOMKill
             memory: "3Gi"
-            cpu: "1000m"
+            # 節點只有約 1 vCPU：原本 1000m 等於整顆，ffmpeg 一吃滿就餓死 kubelet／containerd（2026-11-17 事故）。
+            # 留約 40% 給節點本身與其他 pod。
+            cpu: "600m"
         volumeMounts:
         - name: temp-storage
           mountPath: /app/temp
