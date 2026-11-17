@@ -33,15 +33,28 @@ def test_parses_interbank_overnight_rate_skipping_gaps_and_old_history():
 
 def test_fetch_caches_both_and_registers_codes(monkeypatch):
     payloads = {"EH45m01": LENDING, "EG37D01": INTERBANK}
-    monkeypatch.setattr(market_macro, "_request_free_cached",
-        lambda key, url, **kwargs: (200, json.dumps(next(p for f, p in payloads.items() if f in url)).encode()))
+    def request(key, url, **kwargs):
+        if url.endswith("lp-641-1-1-20.html"):
+            return 200, b'<tr><td data-th="date"><span>2026/11/16</span></td><td data-th="rate"><span>0.812</span></td></tr>'
+        if url.endswith("lp-641-1-2-20.html"):
+            return 200, b'''
+                <tr><td><span>2026/10/01</span></td><td><span>0.812</span></td></tr>
+                <tr><td><span>2026/09/30</span></td><td><span>-</span></td></tr>
+                <tr><td><span>2026/09/29</span></td><td><span>0.814</span></td></tr>
+            '''
+        return 200, json.dumps(next(p for f, p in payloads.items() if f in url)).encode()
+
+    monkeypatch.setattr(market_macro, "_request_free_cached", request)
     monkeypatch.setattr(market_macro.market_macro_db, "reserve_source_call", lambda *a, **k: 1)
     monkeypatch.setattr(market_macro.market_macro_db, "finish_source_call", lambda *a, **k: None)
     monkeypatch.setattr(market_macro, "_fetched_within", lambda *a, **k: False)
     service = market_macro.MarketMacroService()
     saved = []
     monkeypatch.setattr(service, "_cache_free_series", lambda rows, *a, **k: saved.extend(rows) or len(rows))
-    assert service._fetch_cbc_borrowing_rates() == 7
+    assert service._fetch_cbc_borrowing_rates() == 9
+    assert {(row["period"], row["value"]) for row in saved if row["code"] == "TW_INTERBANK_OVERNIGHT"} == {
+        ("2026-09-29", "0.814"), ("2026-10-01", "0.812"), ("2026-11-16", "0.812")
+    }
     for code in ("TW_BANK_LOAN_RATE", "TW_CONSUMER_LOAN_RATE", "TW_WORKING_CAPITAL_LOAN_RATE", "TW_INTERBANK_OVERNIGHT"):
         assert code in market_macro.FREE_CACHE_CODES
 

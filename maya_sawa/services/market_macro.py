@@ -1170,9 +1170,41 @@ class MarketMacroService:
         market_macro_db.finish_source_call(run_id, "success", saved, detail=";".join(failures), http_status=status)
         return saved
 
+    def _fetch_cbc_overnight_updates(self, history: list[dict]) -> list[dict]:
+        """Bridge the CBC bulk export's publication lag with its daily table."""
+        latest = max((row["period"] for row in history), default="")
+        code = "TW_INTERBANK_OVERNIGHT"
+        cached = _macro_local_cache.get(f"series:{code}") or {}
+        updates = {}
+        for page in range(1, 4):
+            url = f"https://www.cbc.gov.tw/tw/lp-641-1-{page}-20.html"
+            try:
+                _, raw = _request_free_cached(f"cbc:overnight-daily:{page}", url)
+                records = re.findall(
+                    r"<tr[^>]*>\s*<td[^>]*>\s*<span>\s*(\d{4}/\d{2}/\d{2})\s*</span>\s*</td>"
+                    r"\s*<td[^>]*>\s*<span>\s*([\d.]+|-)\s*</span>\s*</td>\s*</tr>",
+                    raw.decode("utf-8-sig"),
+                )
+                if not records:
+                    raise ValueError("CBC overnight table returned no rows")
+            except Exception:
+                logger.warning("CBC overnight daily page %s unavailable", page, exc_info=True)
+                break
+            for day, value in records:
+                period = day.replace("/", "-")
+                if period > latest and re.fullmatch(r"\d+(?:\.\d+)?", value):
+                    updates.setdefault(period, {"code": code, "period": period, "value": value})
+            if min(day.replace("/", "-") for day, _ in records) <= latest:
+                break
+        else:
+            logger.warning("CBC overnight daily pages did not reach bulk export date %s", latest)
+        for row in cached.get("history", []):
+            if row["period"] > latest:
+                updates.setdefault(row["period"], {**row, "code": code})
+        return [updates[period] for period in sorted(updates)]
+
     def _fetch_cbc_borrowing_rates(self) -> int:
-        """Bank new-loan rates (EH45m01) and the interbank overnight rate (EG37D01). Both update monthly, so skipped
-        when fetched within 12 hours."""
+        """Refresh bank new-loan rates and interbank overnight rates every 12 hours."""
         if _fetched_within("TW_BANK_LOAN_RATE", 12 * 3600):
             return 0
         rows = []
@@ -1188,6 +1220,8 @@ class MarketMacroService:
             except Exception as exc:
                 market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
                 raise
+        history = [row for row in rows if row["code"] == "TW_INTERBANK_OVERNIGHT"]
+        rows.extend(self._fetch_cbc_overnight_updates(history))
         return self._cache_free_series(rows, CBC_BORROWING_SERIES, "CBC", "https://cpx.cbc.gov.tw/Data/ExportToAPIInfo")
 
     def _fetch_cbc_observations(self) -> int:
