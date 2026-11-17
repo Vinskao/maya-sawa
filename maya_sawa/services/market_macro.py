@@ -224,6 +224,17 @@ TIER_SERIES = {
     "TIER_TW_GDP_FORECAST": ("TIER Taiwan real GDP growth forecast", "percent", "annual"),
     "TIER_TW_CPI_FORECAST": ("TIER Taiwan CPI inflation forecast", "percent", "annual"),
 }
+# 2026-11-17 slow variables: yearly population of the four economies the page follows, in millions. Our World in Data
+# republishes the UN estimates (the only free single source with Taiwan; the World Bank and IMF do not list it).
+POPULATION_SERIES = {
+    "US_POPULATION": ("United States population", "million persons", "annual"),
+    "JP_POPULATION": ("Japan population", "million persons", "annual"),
+    "TW_POPULATION": ("Taiwan population", "million persons", "annual"),
+    "KR_POPULATION": ("South Korea population", "million persons", "annual"),
+}
+POPULATION_COUNTRY = {"USA": "US_POPULATION", "JPN": "JP_POPULATION", "TWN": "TW_POPULATION", "KOR": "KR_POPULATION"}
+POPULATION_URL = ("https://ourworldindata.org/grapher/population.csv?v=1&csvType=filtered&useColumnShortNames=true"
+    "&country=USA~JPN~TWN~KOR&time=1990..latest")
 TIER_FORECAST_URL = "https://www.tier.org.tw/forecast/macro_trends_annual.aspx"
 PMI_SERIES = {
     "TW_PMI": ("Taiwan manufacturing PMI", "index points", "monthly"),
@@ -274,7 +285,7 @@ class LocalTTLCache:
 
 
 # One entry per cached series plus the raw responses of free sources (ECB, BoJ, CBC, DGBAS, ...).
-_macro_local_cache = LocalTTLCache(max_entries=128)
+_macro_local_cache = LocalTTLCache(max_entries=160)
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 # Past freshForSeconds a series is shown as stale; past this window it is dropped.
 FREE_SERIES_FALLBACK_SECONDS = 30 * 24 * 3600
@@ -283,7 +294,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -330,6 +341,18 @@ def carry_forward_weekdays(code: str, history: list[dict], start: date, end: dat
         if current is not None and day.weekday() < 5:
             rows.append({"code": code, "period": day.isoformat(), "value": current})
         day += timedelta(days=1)
+    return rows
+
+
+def parse_owid_population_csv(raw: bytes) -> list[dict]:
+    """Entity,Code,Year,<population> rows for the four economies, persons converted to millions; blank values are skipped."""
+    rows = []
+    for item in csv.reader(io.StringIO(raw.decode('utf-8-sig'))):
+        if len(item) < 4 or item[1] not in POPULATION_COUNTRY or not re.fullmatch(r'\d{4}', item[2]):
+            continue
+        try: persons = float(item[3])
+        except ValueError: continue
+        if persons > 0: rows.append({'code': POPULATION_COUNTRY[item[1]], 'period': item[2], 'value': round(persons / 1e6, 3)})
     return rows
 
 
@@ -890,7 +913,7 @@ class MarketMacroService:
                 ("UMichInflation", self._fetch_umich_inflation_expectations),
                 ("PMI", self._fetch_pmi_series),
                 ("TIER", self._fetch_tier_forecast), ("TAIFEXVix", self._fetch_tw_vix), ("CboeVixFutures", self._fetch_vix_futures),
-                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi),
+                ("WorldMoney", self._fetch_world_money), ("BISCPI", self._fetch_asia_cpi), ("Population", self._fetch_population),
                 ("TreasuryDTS", self._fetch_treasury_dts)):
                 try: output["sources"][source_name] = fetch()
                 except Exception as exc:
@@ -1628,6 +1651,23 @@ class MarketMacroService:
             if not rows and not stored: raise ValueError("cboe_vix_settlement_not_found")
             saved = self._cache_free_series(volatility.merge_history(stored, rows, "VIX_FUT_FRONT"), VIX_FUTURES_SERIES, "Cboe",
                                             "https://www.cboe.com/tradable_products/vix/vix_futures/", fresh_for_seconds=6 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
+            raise
+
+    def _fetch_population(self) -> int:
+        """Cache the four economies' yearly population from one Our World in Data CSV; it changes once a year."""
+        if all(_fetched_within(code, 24 * 3600) for code in POPULATION_SERIES): return 0
+        run_id = market_macro_db.reserve_source_call("OWIDPopulation", daily_limit=4, minute_limit=1)
+        if run_id is None: raise RuntimeError("population_daily_budget_exhausted")
+        try:
+            status, raw = _request_free_cached("owid:population", POPULATION_URL, ttl_seconds=24 * 3600, extra_headers=BROWSER_AGENT)
+            rows = parse_owid_population_csv(raw)
+            if {row["code"] for row in rows} != set(POPULATION_SERIES): raise RuntimeError("population_response_incomplete")
+            saved = self._cache_free_series(rows, POPULATION_SERIES, "Our World in Data (UN World Population Prospects)",
+                "https://ourworldindata.org/grapher/population", fresh_for_seconds=14 * 24 * 3600)
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
         except Exception as exc:
