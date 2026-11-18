@@ -17,4 +17,4 @@ def test_bias_skips_bad_closes_and_short_history():
 
 
 def test_windows_are_month_quarter_year_lines():
-    assert BIAS_WINDOWS == {20: "TW_TAIEX_BIAS_20", 60: "TW_TAIEX_BIAS_60", 240: "TW_TAIEX_BIAS_240"}
+    assert BIAS_WINDOWS == {20: "TW_TAIEX_BIAS_20", 60: "TW_TAIEX_BIAS_60", 120: "TW_TAIEX_BIAS_120", 240: "TW_TAIEX_BIAS_240"}

@@ -209,6 +209,7 @@ TWSE_TURNOVER_SERIES = {
 TAIEX_BIAS_SERIES = {
     "TW_TAIEX_BIAS_20": ("TAIEX bias from the 20-session average (derived from TWSE FMTQIK)", "percent", "daily"),
     "TW_TAIEX_BIAS_60": ("TAIEX bias from the 60-session average (derived from TWSE FMTQIK)", "percent", "daily"),
+    "TW_TAIEX_BIAS_120": ("TAIEX bias from the 120-session average (derived from TWSE FMTQIK)", "percent", "daily"),
     "TW_TAIEX_BIAS_240": ("TAIEX bias from the 240-session average (derived from TWSE FMTQIK)", "percent", "daily"),
 }
 TWSE_TURNOVER_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={day}&response=json"
