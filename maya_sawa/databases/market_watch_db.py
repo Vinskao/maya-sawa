@@ -62,6 +62,15 @@ class MarketWatchDatabase:
                  "lastMentioned": market_watch.last_mentioned(row).isoformat(), "reason": max(row["mentions"], key=lambda m: m["at"])["reason"]}
                 for row in self.load() if row["status"] == "candidate"]
 
+    def dismiss(self, code: str, now: datetime | None = None, held: set[str] | None = None) -> bool:
+        """True when the stock was on the list. It leaves the custom area and the freed slot goes to the next candidate."""
+        now = now or datetime.now(timezone.utc)
+        rows = self.load()
+        if not any(row["code"] == code for row in rows):
+            return False
+        self._save(market_watch.evaluate(market_watch.dismiss(rows, code), set(held or ()), now), now)
+        return True
+
     def nominate(self, code: str, market: str, name: str, mentions: list[dict], now: datetime | None = None,
                  held: set[str] | None = None) -> tuple[list[dict], list[str]]:
         now = now or datetime.now(timezone.utc)

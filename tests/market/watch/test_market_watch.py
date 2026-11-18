@@ -113,3 +113,17 @@ def test_repeating_a_nomination_with_higher_conviction_firms_up_the_same_mention
     firmer = watch.nominate(once, "3711", "TW", "日月光投控", mention("r1", 0, conviction="high", reason="這次報告明確給出 2027 年訂單"), now=NOW)
     assert len(firmer[0]["mentions"]) == 1 and firmer[0]["status"] == "watching"
     assert firmer[0]["mentions"][0]["reason"].startswith("這次報告")
+
+
+def test_a_dismissed_stock_stays_out_even_while_reports_keep_supporting_it():
+    rows = watch.dismiss([row("3711", [mention("r1", 10), mention("r2", 2)], status="watching", promoted_ago=3)], "3711")
+    assert status_of(rows, "3711") == "dismissed" and watch.visible(rows) == []
+    again = watch.nominate(rows, "3711", "TW", "3711", mention("r3", 0, conviction="high"), NOW)
+    assert status_of(again, "3711") == "dismissed"
+
+
+def test_dismissing_frees_the_slot_for_a_waiting_candidate():
+    rows = [row(code, [mention("a", 1), mention("b", 0)], status="watching", promoted_ago=9) for code in ("1101", "1102", "1103")]
+    rows.append(row("2330", [mention("c", 1), mention("d", 0)]))
+    rows = watch.evaluate(watch.dismiss(rows, "1101"), set(), NOW)
+    assert status_of(rows, "2330") == "watching" and status_of(rows, "1101") == "dismissed"

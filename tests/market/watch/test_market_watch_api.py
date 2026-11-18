@@ -224,3 +224,10 @@ def test_custom_rows_merge_watched_stocks_without_duplicating_the_owners_picks()
                                    taken={("stock", "2330")})
     assert [(item["code"], item.get("source")) for item in rows] == [("2454", None), ("3711", "ai-watch")]
     assert watch.merge_into_custom([], [{"code": "2330", "productType": "stock", "market": "TW"}], taken={("stock", "2330")}) == []
+
+
+def test_dismiss_removes_a_watched_stock_from_the_custom_area(db):
+    db.nominate("3711", "TW", "日月光投控", [mention("r1", 2), mention("r2", 0)], NOW, held=set())
+    assert db.dismiss("3711", NOW, held=set()) is True
+    assert db.current(NOW, held=set()) == []
+    assert db.dismiss("0000", NOW, held=set()) is False

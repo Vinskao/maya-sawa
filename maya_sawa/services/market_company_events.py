@@ -165,11 +165,13 @@ class MarketCompanyEventsService:
             key = (code, today.isoformat())
             if key not in self._volume_histories:
                 try:
-                    self._volume_histories[key] = source(code, today)
+                    loaded = source(code, today)
                 except Exception:
                     logger.warning("Volume history unavailable for %s", code, exc_info=True)
-                    self._volume_histories[key] = []
-            history = self._volume_histories[key]
+                    loaded = []
+                if loaded:   # a failed or empty read is retried on the next request, not remembered for the whole day
+                    self._volume_histories[key] = loaded
+            history = self._volume_histories.get(key, [])
             if len(volume_rank.trailing_volumes(history, today)) < volume_rank.MIN_HISTORY_DAYS:
                 continue
             week = volume_rank.week_summary(history, today, week_start, live.get(code))

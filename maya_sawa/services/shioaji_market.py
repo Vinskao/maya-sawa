@@ -248,6 +248,12 @@ class ShioajiMarketService:
     def _taiwan_only(items: list[dict[str, str]]) -> list[dict[str, str]]:
         return [item for item in items if str(item.get("market") or "TW").upper() == "TW"]
 
+    @classmethod
+    def quote_selection(cls, items: list[dict[str, str]]) -> list[dict[str, str]]:
+        """The Taiwan instruments the refresh quotes, one per (type, code). The live quote cache is keyed by this exact list,
+        so anything that reads those quotes (the dashboard events) must build its list the same way or it never hits the cache."""
+        return list({(item.get("productType"), item.get("code", "").upper()): item for item in cls._taiwan_only(items)}.values())
+
     @staticmethod
     def _traded_this_week() -> list[dict[str, str]]:
         """Stocks held or traded since Monday stay quoted (and in the intraday alert scope) after they are sold."""
@@ -268,8 +274,7 @@ class ShioajiMarketService:
             from ..databases.market_fundamentals_db import market_fundamentals_db
             selected = market_dashboard_db.latest_auto().get("positions", []) + market_dashboard_db.custom_symbols() + market_dashboard_db.watch_symbols() + self._traded_this_week()
             japan = [item for item in selected if item.get("productType") == "stock" and str(item.get("market") or "").upper() == "JP"]
-            selected = self._taiwan_only(selected)  # Shioaji only knows Taiwan contracts; JP/US codes would match the wrong company
-            selected = list({(item.get("productType"), item.get("code", "").upper()): item for item in selected}.values())
+            selected = self.quote_selection(selected)  # Shioaji only knows Taiwan contracts; JP/US codes would match the wrong company
             if selected:
                 rows = await self._run_with_relogin(lambda api: self._fetch_dashboard_quotes(api, selected))
                 # When a holding is a stock future, also snapshot its underlying cash

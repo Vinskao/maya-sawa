@@ -93,6 +93,11 @@ def nominate(rows: list[dict], code: str, market: str, name: str, mention: dict,
     return evaluate(rows, set(held), now)
 
 
+def dismiss(rows: list[dict], code: str) -> list[dict]:
+    """The owner removed a stock from the custom area: it stays out whatever the reports say (evaluate never touches it)."""
+    return [{**row, "mentions": list(row["mentions"]), **({"status": "dismissed", "promotedAt": None} if row["code"] == code else {})} for row in rows]
+
+
 def merge_into_custom(custom_rows: list[dict], watched: list[dict], taken: set[tuple[str, str]]) -> list[dict]:
     """The owner's own picks come first; a watched stock already shown (or already a holding) is not added twice."""
     shown = {(row.get("productType"), str(row["code"]).upper()) for row in custom_rows} | set(taken)

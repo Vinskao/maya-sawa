@@ -543,6 +543,20 @@ async def nominate_watch(body: WatchNomination, request: Request):
     return {"code": body.code, "status": status, "promoted": body.code in promoted}
 
 
+@router.delete("/watch/{code}")
+async def dismiss_watch(code: str, _claims: dict = Depends(require_manage_users_request)):
+    """Owner only: take a stock the analyst found out of the custom area. Reports mentioning it again do not bring it back."""
+    code = code.strip().upper()
+    try:
+        removed = await asyncio.to_thread(market_watch_db.dismiss, code, None, _held_stock_codes())
+    except Exception as exc:
+        logger.exception("Watch list dismiss failed")
+        raise HTTPException(status_code=503, detail="Watch list unavailable") from exc
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"{code} is not on the AI watch list")
+    return {"code": code, "status": "dismissed"}
+
+
 @router.get("/watch", **public_data("AI 觀察名單：觀察中與候選的標的", "AI 觀察名單"))
 async def get_watch():
     """Public: the stocks in the custom area because of the analyst's reading, and the candidates still waiting."""
@@ -818,7 +832,7 @@ async def get_market_dashboard_events():
     symbols = event_symbols(market_dashboard_db, datetime.now(ZoneInfo("Asia/Taipei")))
     quote_rows: list = []
     try:
-        quote_rows = await shioaji_market_service.get_dashboard_quotes(symbols)
+        quote_rows = await shioaji_market_service.get_dashboard_quotes(shioaji_market_service.quote_selection(symbols))
         await asyncio.to_thread(attach_underlying, symbols, quote_rows)
     except Exception as exc:
         logger.info("Unable to resolve company underlyings for event targets: %s", exc)
