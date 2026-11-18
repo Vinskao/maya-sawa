@@ -254,3 +254,26 @@ def test_a_japanese_stock_with_a_heavy_day_this_week_gets_a_spike_event_marked_j
     result = asyncio.run(service.get(["6857"], japan=[{"code": "6857", "name": "ADVANTEST CORP"}]))
     spikes = [event for event in result["events"] if event["type"] == "volume_spike"]
     assert [(event["code"], event.get("market"), event["flag"]) for event in spikes] == [("6857", "JP", "top5")]
+
+
+# 2026-11-18: when today itself is not a spike but an earlier day this week was, the week still shows and today's rank is added.
+def test_an_earlier_spike_keeps_the_week_marked_and_says_where_today_ranks():
+    week = vr.week_summary(week_history([199_000, 20_000]), date(2026, 11, 18), date(2026, 11, 16), 30_000)
+    event = vr.volume_spike_event("3443", "創意", week)
+    assert event["flag"] == "top5" and [day["weekday"] for day in event["days"]] == ["週一"]
+    assert event["today"]["weekday"] == "週三" and event["today"]["flag"] is None and event["today"]["rank"] > 10
+    assert f"今日（週三）第 {event['today']['rank']} 名，未進前 10" in event["period"]
+    assert "週二" not in event["period"]   # other quiet days stay unlisted
+
+
+def test_when_today_is_itself_a_spike_it_is_listed_once_and_not_repeated_as_a_note():
+    week = vr.week_summary(week_history([199_000]), date(2026, 11, 17), date(2026, 11, 16), 195_000)
+    event = vr.volume_spike_event("6857", "宜特", week)
+    assert event["today"] == {"weekday": "週二", "rank": 7, "flag": "top10"}
+    assert "未進前 10" not in event["period"] and event["period"].count("週二") == 1
+
+
+def test_without_a_volume_for_today_there_is_no_today_note():
+    week = vr.week_summary(week_history([199_000]), date(2026, 11, 17), date(2026, 11, 16), None)
+    event = vr.volume_spike_event("6857", "宜特", week)
+    assert "today" not in event and "今日" not in event["period"]

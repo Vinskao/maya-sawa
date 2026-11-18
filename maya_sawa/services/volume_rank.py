@@ -50,8 +50,14 @@ def volume_spike_event(code: str, name: str, week: list[dict]) -> dict | None:
     if not flagged:
         return None
     parts = [f"{day['weekday']}{'（今日）' if day['today'] else ''}第 {day['rank']} 名（前 {5 if day['flag'] == 'top5' else 10}）" for day in flagged]
-    return {"code": code, "name": name, "type": "volume_spike", "date": flagged[-1]["date"], "status": "recent", "highlight": True,
-            "flag": "top5" if any(day["flag"] == "top5" for day in flagged) else "top10",
-            "period": "本週成交量進入近一年前 10 大：" + "、".join(parts),
-            "days": [{"weekday": day["weekday"], "rank": day["rank"], "flag": day["flag"], "today": day["today"]} for day in flagged],
-            "source": "證交所／櫃買日成交量（今日用即時成交量）近一年排名"}
+    today = next((day for day in week if day["today"]), None)
+    period = "本週成交量進入近一年前 10 大：" + "、".join(parts)
+    if today and not today["flag"]:   # an earlier day made the week; say where today stands instead of hiding it
+        period += f"；今日（{today['weekday']}）第 {today['rank']} 名，未進前 10"
+    event = {"code": code, "name": name, "type": "volume_spike", "date": flagged[-1]["date"], "status": "recent", "highlight": True,
+             "flag": "top5" if any(day["flag"] == "top5" for day in flagged) else "top10",
+             "period": period,
+             "days": [{"weekday": day["weekday"], "rank": day["rank"], "flag": day["flag"], "today": day["today"]} for day in flagged],
+             "source": "證交所／櫃買日成交量（今日用即時成交量）近一年排名"}
+    if today: event["today"] = {"weekday": today["weekday"], "rank": today["rank"], "flag": today["flag"]}
+    return event
