@@ -814,8 +814,8 @@ async def get_market_status():
 @router.get("/dashboard/events", **public_data("近期營收／財報發布與法說會", "行情與標的"))
 async def get_market_dashboard_events():
     """Recent revenue/report releases and upcoming investor conferences for selected stock targets."""
-    auto = market_dashboard_db.latest_auto()
-    symbols = [*auto.get("positions", []), *market_dashboard_db.custom_symbols(), *market_dashboard_db.watch_symbols()]
+    from ..services.market_company_events import event_symbols
+    symbols = event_symbols(market_dashboard_db, datetime.now(ZoneInfo("Asia/Taipei")))
     quote_rows: list = []
     try:
         quote_rows = await shioaji_market_service.get_dashboard_quotes(symbols)

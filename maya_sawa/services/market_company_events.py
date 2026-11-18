@@ -85,6 +85,18 @@ def live_volumes_from_quotes(rows: list[dict], today: date) -> dict[str, float]:
     return volumes
 
 
+def event_symbols(db, now: datetime) -> list[dict]:
+    """The stocks the dashboard marks: holdings, custom and watch symbols, plus every stock held or traded since Monday.
+    The last group matches the Telegram volume alert's scope, so a stock sold this week still gets its mark (2026-11-18)."""
+    traded: list[dict] = []
+    try:
+        from .intraday_alerts import week_start
+        traded = db.traded_since(week_start(now))
+    except Exception:
+        logger.warning("This week's traded symbols unavailable for event marks", exc_info=True)
+    return [*db.latest_auto().get("positions", []), *db.custom_symbols(), *db.watch_symbols(), *traded]
+
+
 class MarketCompanyEventsService:
     def __init__(self) -> None:
         self._conference_cache: tuple[float, list[dict[str, Any]]] | None = None
