@@ -205,6 +205,12 @@ TWSE_TURNOVER_SERIES = {
     # Same FMTQIK response; the benchmark for stock relative strength (services/relative_strength.py).
     "TW_TAIEX": ("TAIEX close (TWSE FMTQIK)", "index points", "daily"),
 }
+# 乖離率 of the TAIEX close from its 20/60/240-session averages, derived from the stored TW_TAIEX (services/taiex_bias.py).
+TAIEX_BIAS_SERIES = {
+    "TW_TAIEX_BIAS_20": ("TAIEX bias from the 20-session average (derived from TWSE FMTQIK)", "percent", "daily"),
+    "TW_TAIEX_BIAS_60": ("TAIEX bias from the 60-session average (derived from TWSE FMTQIK)", "percent", "daily"),
+    "TW_TAIEX_BIAS_240": ("TAIEX bias from the 240-session average (derived from TWSE FMTQIK)", "percent", "daily"),
+}
 TWSE_TURNOVER_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={day}&response=json"
 # TAIEX futures roll cost (services/futures_roll.py): next-month minus near-month settlement, and that spread above fair
 # carry (CBC rediscount rate, cash dividends going ex between the two expiries).
@@ -319,7 +325,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES) | set(CSP_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES) | set(CSP_SERIES) | set(TAIEX_BIAS_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -1481,6 +1487,12 @@ class MarketMacroService:
                     for name, history in stored.items() for period, value in sorted(history.items())]
             saved = self._cache_free_series(rows, TWSE_TURNOVER_SERIES, "TWSE FMTQIK",
                                             "https://www.twse.com.tw/zh/trading/historical/fmtqik.html") if rows else 0
+            from maya_sawa.services.taiex_bias import BIAS_WINDOWS, bias_series
+            closes = {period: float(value) for period, value in stored["TW_TAIEX"].items()}
+            bias_rows = [{"code": BIAS_WINDOWS[window], "period": period, "value": value}
+                         for window in BIAS_WINDOWS for period, value in sorted(bias_series(closes, window).items())]
+            if bias_rows: saved += self._cache_free_series(bias_rows, TAIEX_BIAS_SERIES, "TWSE FMTQIK (computed)",
+                                                           "https://www.twse.com.tw/zh/trading/historical/fmtqik.html")
             market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
             return saved
         except Exception as exc:
