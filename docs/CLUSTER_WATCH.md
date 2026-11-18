@@ -10,7 +10,7 @@ CronJob 每 5 分鐘跑一次，**釘在另一台 worker `10.0.159.167`**，所�
 - pod 卡在 `CreateContainerError`、`ContainerCreating`、`ImagePullBackOff`、`CrashLoopBackOff` 等超過 10 分鐘，或 `Pending`／`Terminating` 超過 10 分鐘。
 - 節點不是 `Ready`。
 - 近 15 分鐘有 `FailedKillPod` 事件（容器執行環境卡住的徵兆）。
-- `http://maya-sawa/healthz` 與 `https://tymultiverse.cc/` 連兩次失敗（間隔 5 秒）。
+- `http://maya-sawa/healthz` 與 `https://tymultiverse.cc/` 連兩次失敗（間隔 5 秒），**且持續 10 分鐘以上**才報。maya-sawa 部署時用 `Recreate` 策略，舊 pod 先關、新 pod 啟動要幾分鐘，這段時間健康檢查本來就會失敗，不是異常（2026-11-18 修正誤報）；失敗起點記在 ConfigMap `cluster-watch-state` 的 `probeFirst`，回應一次就歸零。
 
 通知（Telegram，與其他排程共用 secret `telegram-notify`）：問題清單變化時發一則、同樣的問題每小時提醒一次、恢復時發一則「已恢復」。狀態存在 ConfigMap `cluster-watch-state`，所以不會每 5 分鐘洗版。沒設 Telegram 憑證時只印 log。發送失敗不存狀態，下次再試。
 

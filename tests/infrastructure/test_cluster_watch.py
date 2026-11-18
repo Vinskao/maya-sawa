@@ -66,10 +66,29 @@ def test_a_recovery_is_reported_once_and_a_quiet_cluster_stays_quiet():
     assert cw.decide([], cleared, NOW + timedelta(minutes=10))[0] is None
 
 
-def test_an_endpoint_that_fails_twice_is_a_problem():
+def test_an_endpoint_that_fails_twice_in_a_row_is_failing_now():
     calls = []
     def fetch(url):
         calls.append(url); raise OSError("down")
-    problems = cw.probe_endpoints({"site": "https://example.test/"}, fetch=fetch, pause=lambda s: None)
-    assert problems and "site" in problems[0] and len(calls) == 2
-    assert cw.probe_endpoints({"site": "https://example.test/"}, fetch=lambda url: 200, pause=lambda s: None) == []
+    failing = cw.probe_endpoints({"site": "https://example.test/"}, fetch=fetch, pause=lambda s: None)
+    assert list(failing) == ["site"] and "site" in failing["site"] and len(calls) == 2
+    assert cw.probe_endpoints({"site": "https://example.test/"}, fetch=lambda url: 200, pause=lambda s: None) == {}
+
+
+# A deploy (maya-sawa restarts with the Recreate strategy) makes the health check fail for a few minutes. That is not an
+# outage: an endpoint is only reported once it has been failing for PROBE_GRACE_MINUTES.
+def test_a_health_check_that_just_started_failing_is_not_reported_yet():
+    reported, first = cw.settle_probes({"maya": "maya down"}, {}, NOW)
+    assert reported == [] and first == {"maya": NOW.isoformat()}
+    reported, first = cw.settle_probes({"maya": "maya down"}, first, NOW + timedelta(minutes=5))
+    assert reported == []   # a normal deploy is over by now
+
+
+def test_a_health_check_failing_for_ten_minutes_is_reported_and_recovery_resets_the_clock():
+    _, first = cw.settle_probes({"maya": "maya down"}, {}, NOW)
+    reported, first = cw.settle_probes({"maya": "maya down"}, first, NOW + timedelta(minutes=10))
+    assert reported == ["maya down"]
+    reported, first = cw.settle_probes({}, first, NOW + timedelta(minutes=15))   # it answered again
+    assert reported == [] and first == {}
+    reported, _ = cw.settle_probes({"maya": "maya down"}, first, NOW + timedelta(minutes=20))
+    assert reported == []   # the clock starts over

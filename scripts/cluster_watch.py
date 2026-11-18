@@ -3,7 +3,8 @@
 so a stuck 10.0.158.183 (where maya-sawa lives) cannot silence it. Standard library only: it runs in python:3.12-alpine.
 
 Problems it reports: a pod stuck creating, pending or terminating for 10+ minutes, a node that is not Ready, FailedKillPod
-events in the last 15 minutes (the container runtime hanging), and the maya-sawa health check / the public site failing twice.
+events in the last 15 minutes (the container runtime hanging), and the maya-sawa health check / the public site failing for
+10+ minutes (a deploy restarts maya-sawa for a few minutes, which is not reported).
 One message when the set of problems changes, a reminder each hour, one message when everything is fine again.
 """
 import hashlib
@@ -17,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 STUCK_MINUTES = 10
 EVENT_MINUTES = 15
+PROBE_GRACE_MINUTES = 10   # a deploy restarts maya-sawa (Recreate) and the health check fails for a few minutes: not an outage
 REMIND_MINUTES = 60
 BAD_WAITING = {"CreateContainerError", "CreateContainerConfigError", "ContainerCreating", "ImagePullBackOff", "ErrImagePull",
                "CrashLoopBackOff", "RunContainerError", "InvalidImageName"}
@@ -56,9 +58,10 @@ def find_problems(pods: list[dict], events: list[dict], nodes: list[dict], now: 
     return problems
 
 
-def probe_endpoints(endpoints: dict[str, str], fetch=None, pause=time.sleep) -> list[str]:
+def probe_endpoints(endpoints: dict[str, str], fetch=None, pause=time.sleep) -> dict[str, str]:
+    """{label: message} for every endpoint that failed twice in a row right now."""
     fetch = fetch or (lambda url: urllib.request.urlopen(url, timeout=10).status)
-    problems = []
+    failing = {}
     for label, url in endpoints.items():
         for attempt in range(2):
             try:
@@ -69,8 +72,18 @@ def probe_endpoints(endpoints: dict[str, str], fetch=None, pause=time.sleep) -> 
                 pass
             if attempt == 0: pause(5)
         else:
-            problems.append(f"{label} 連兩次失敗（{url}）")
-    return problems
+            failing[label] = f"{label} 連兩次失敗（{url}）"
+    return failing
+
+
+def settle_probes(failing: dict[str, str], first_seen: dict[str, str], now: datetime) -> tuple[list[str], dict[str, str]]:
+    """Report an endpoint only after it has been failing for PROBE_GRACE_MINUTES; an answer resets its clock."""
+    kept, reported = {}, []
+    for label, message in failing.items():
+        started = _time(first_seen.get(label)) or now
+        kept[label] = started.isoformat()
+        if now - started >= timedelta(minutes=PROBE_GRACE_MINUTES): reported.append(message)
+    return reported, kept
 
 
 def decide(problems: list[str], state: dict, now: datetime) -> tuple[str | None, dict]:
@@ -122,8 +135,13 @@ def _telegram(text: str) -> None:
 def main() -> int:
     now = datetime.now(timezone.utc)
     problems = find_problems(_api("/api/v1/pods")["items"], _api("/api/v1/events?fieldSelector=reason%3DFailedKillPod")["items"], _api("/api/v1/nodes")["items"], now)
-    problems += probe_endpoints(ENDPOINTS)
-    message, state = decide(problems, _load_state(), now)
+    saved = _load_state()
+    try: first_seen = json.loads(saved.get("probeFirst") or "{}")
+    except ValueError: first_seen = {}
+    waited, first_seen = settle_probes(probe_endpoints(ENDPOINTS), first_seen, now)
+    problems += waited
+    message, state = decide(problems, saved, now)
+    state["probeFirst"] = json.dumps(first_seen)
     if message:
         try: _telegram(message)
         except Exception as error:   # keep the state unsaved so the next run tries again
