@@ -188,6 +188,13 @@ TWSE_PE_PAGE = "https://www.twse.com.tw/zh/trading/historical/bwibbu-day.html"
 PE_BACKFILL_DAYS = 90      # how far back a fresh install fills
 PE_DAYS_PER_RUN = 6        # one request per missing day, so a few per run keeps TWSE traffic light
 _pe_days_without_data: set[str] = set()   # holidays answer "no data"; not asked again until the process restarts
+# 2026-11-18: five cloud service providers' quarterly capital spending and operating cash flow (SEC EDGAR companyfacts), USD billions.
+CSP_SERIES = {
+    "CSP_CAPEX": ("Microsoft, Alphabet, Amazon, Meta and Oracle capital spending (SEC filings, quarterly total)", "USD billion", "quarterly"),
+    "CSP_OPERATING_CASH_FLOW": ("Microsoft, Alphabet, Amazon, Meta and Oracle operating cash flow (SEC filings, quarterly total)", "USD billion", "quarterly"),
+}
+CSP_SOURCE_PAGE = "https://www.sec.gov/edgar/sec-api-documentation"
+SEC_AGENT = {"User-Agent": os.getenv("SEC_USER_AGENT", "TYMultiverseResearch/1.0 (https://tymultiverse.cc)")}
 TWSE_MARGIN_SERIES = {
     "TW_MARGIN_MAINTENANCE": ("Taiwan listed-market margin maintenance ratio (TWSE: collateral value / margin loans)", "percent", "daily"),
     "TW_MARGIN_BALANCE": ("Taiwan listed-market margin loan balance (TWSE MI_MARGN)", "TWD 100 million", "daily"),
@@ -312,7 +319,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES) | set(CSP_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -962,7 +969,7 @@ class MarketMacroService:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("CBCBorrowing", self._fetch_cbc_borrowing_rates), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
-                ("TWSEMargin", self._fetch_twse_margin_maintenance), ("TWSEMarketTurnover", self._fetch_twse_turnover),
+                ("CSPCapex", self._fetch_csp_capex), ("TWSEMargin", self._fetch_twse_margin_maintenance), ("TWSEMarketTurnover", self._fetch_twse_turnover),
                 ("TAIFEXRollSpread", self._fetch_tx_roll_spread), ("BISPolicyRates", self._fetch_policy_rates),
                 ("DGBAS", self._fetch_dgbas_employment),
                 ("DGBASPrices", self._fetch_taiwan_prices),
@@ -1763,6 +1770,30 @@ class MarketMacroService:
             saved = self._cache_free_series(rows, TWSE_MARGIN_CALL_SERIES, "TWSE 臺股儀表板 (BFIJ3U)", TWSE_MARGIN_CALL_PAGE,
                                             fresh_for_seconds=48 * 3600)
             market_macro_db.finish_source_call(run_id, "success", len(fresh), http_status=status)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
+            raise
+
+    def _fetch_csp_capex(self) -> int:
+        """The five companies' SEC filings change four times a year, so one refresh a day is plenty (five requests, a few MB each)."""
+        if _fetched_within("CSP_CAPEX", 12 * 3600): return 0
+        from .csp_capex import CAPEX_TAGS, CSP_COMPANIES, OPERATING_CASH_TAG, csp_totals
+        run_id = market_macro_db.reserve_source_call("SECCompanyFacts", daily_limit=12, minute_limit=6)
+        if run_id is None: raise RuntimeError("sec_daily_budget_exhausted")
+        try:
+            companies: dict[str, dict] = {}
+            for name, cik in CSP_COMPANIES.items():
+                _, raw = _request(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json", extra_headers=SEC_AGENT)
+                facts = json.loads(raw).get("facts", {}).get("us-gaap", {})
+                companies[name] = {tag: facts[tag] for tag in (*CAPEX_TAGS, OPERATING_CASH_TAG) if tag in facts}
+            rows = [{"code": code, "period": row["period"], "value": row["value"]}
+                    for code, tags in (("CSP_CAPEX", CAPEX_TAGS), ("CSP_OPERATING_CASH_FLOW", (OPERATING_CASH_TAG,)))
+                    for row in csp_totals(companies, tags)]
+            if not rows: raise RuntimeError("csp_capex_empty")
+            saved = self._cache_free_series(rows, CSP_SERIES, "SEC EDGAR companyfacts (MSFT, GOOGL, AMZN, META, ORCL)", CSP_SOURCE_PAGE,
+                                            fresh_for_seconds=3 * 24 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved)
             return saved
         except Exception as exc:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
