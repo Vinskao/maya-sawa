@@ -11,12 +11,14 @@ import math
 import re
 import time
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from datetime import time as clock
 from zoneinfo import ZoneInfo
 
 from ..databases.ibkr_research_db import get_ibkr_research_db
 
 MARKETS = {'USD': 'US', 'JPY': 'JP', 'KRW': 'KR', 'HKD': 'HK', 'GBP': 'GB', 'EUR': 'EU', 'TWD': 'TW'}
+TAIPEI = ZoneInfo('Asia/Taipei')
 ZONES = {'US': 'America/New_York', 'JP': 'Asia/Tokyo', 'KR': 'Asia/Seoul', 'HK': 'Asia/Hong_Kong'}
 FIELDS = '31,55,70,71,82,83,84,86,87,6509,7051,7087,7088,7762'
 
@@ -107,6 +109,16 @@ def technical_summary(bars):
     return result
 
 
+REFRESH_CHECKPOINTS = (clock(15, 30), clock(23, 0))  # Taipei: after Japan/Korea close, and after the evening session
+
+
+def latest_checkpoint(now):
+    """The most recent daily refresh checkpoint (15:30 or 23:00 Taipei) that has passed."""
+    local = now.astimezone(TAIPEI)
+    stamps = [datetime.combine(local.date() - timedelta(days=back), at, TAIPEI) for back in (0, 1) for at in REFRESH_CHECKPOINTS]
+    return max(stamp for stamp in stamps if stamp <= local)
+
+
 class IbkrResearchCollector:
     def __init__(self, db=None):
         self._db = db
@@ -117,10 +129,19 @@ class IbkrResearchCollector:
     def db(self):
         return self._db or get_ibkr_research_db()
 
-    def due(self, code, market, kind, seconds, retry_failed=False):
+    def due(self, code, market, kind, seconds, retry_failed=False, now=None):
         attempt = self.db.latest(code, market, kind, successful=False)
         if not attempt:
             return True
+        if kind == 'history_raw':
+            # 2026-11-19: every day's bars are refreshed once after each checkpoint, whenever the owner's IB session is alive then,
+            # instead of waiting out the 6 h cache (a login at 16:00 would otherwise keep bars fetched at 12:00).
+            now = now or datetime.now(timezone.utc)
+            done = self.db.latest(code, market, kind)
+            if (not done or datetime.fromisoformat(done['fetchedAt']) < latest_checkpoint(now)) and (
+                    retry_failed or attempt['status'] == 'ok'
+                    or (now - datetime.fromisoformat(attempt['fetchedAt'])).total_seconds() >= 3600):
+                return True
         if retry_failed and attempt['status'] != 'ok':  # the session just came back; don't wait out the backoff
             return True
         elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(attempt['fetchedAt'])).total_seconds()

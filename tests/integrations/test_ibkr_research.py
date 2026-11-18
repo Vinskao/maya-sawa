@@ -289,3 +289,23 @@ def test_shioaji_background_refresh_keeps_overseas_selection_without_mutating_ta
     assert asyncio.run(service._refresh_payload('PORTFOLIO', None))
     assert recorded[0]['ibkr']['positions'][0]['code'] == 'META'
     assert 'ibkr' not in payload
+
+
+def test_bars_are_refetched_once_after_each_daily_checkpoint():
+    from datetime import datetime, timezone
+    from maya_sawa.services.ibkr_research import latest_checkpoint
+    taipei = lambda day, hour, minute: datetime(2026, 11, day, hour, minute, tzinfo=timezone.utc).astimezone() and datetime(2026, 11, day, hour, minute, tzinfo=__import__('zoneinfo').ZoneInfo('Asia/Taipei'))
+    assert latest_checkpoint(taipei(19, 15, 29)) == taipei(18, 23, 0)
+    assert latest_checkpoint(taipei(19, 15, 30)) == taipei(19, 15, 30)
+    assert latest_checkpoint(taipei(19, 23, 5)) == taipei(19, 23, 0)
+    db = IbkrResearchDatabase(engine=create_engine('sqlite://'))
+    collector = IbkrResearchCollector(db=db)
+    db.save('6857', 'JP', 1, 'history_raw', {'ok': 1})
+    fetched = datetime.fromisoformat(db.latest('6857', 'JP', 'history_raw')['fetchedAt'])
+    after_first = fetched.astimezone(__import__('zoneinfo').ZoneInfo('Asia/Taipei')).replace(hour=0, minute=0)
+    def at(hour, minute): return after_first.replace(hour=hour, minute=minute)
+    # fetched "now"; the next checkpoint after that moment is not yet reached -> not due
+    assert not collector.due('6857', 'JP', 'history_raw', 6 * 3600, now=fetched)
+    # the next checkpoint passes -> due again, even though the 6 h cache has not expired
+    later = [t for t in (at(15, 30), at(23, 0), at(15, 30) + __import__('datetime').timedelta(days=1)) if t > fetched][0]
+    assert collector.due('6857', 'JP', 'history_raw', 6 * 3600, now=later + __import__('datetime').timedelta(minutes=1))
