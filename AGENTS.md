@@ -1,5 +1,7 @@
 # Maya Sawa - Agent 開發指南
 
+LinkedIn 職缺收信、核准及投遞：[流程與開發方法](docs/LINKEDIN_JOBS.md)。
+
 唯讀市場研究 MCP：[端點、權限與驗收](docs/RESEARCH_MCP.md)。
 
 Benchmark 年報強弱、持股定位與量化驗證：[方法、API 與測試](docs/BENCHMARK_MONITOR.md)。

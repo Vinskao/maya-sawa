@@ -64,6 +64,7 @@ from .api.reader_events import router as reader_events_router
 from .api.ai_visibility import router as ai_visibility_router
 from .api.publisher_mcp import router as publisher_mcp_router
 from .api.research_mcp import router as research_mcp_router
+from .api.linkedin_jobs import router as linkedin_jobs_router, linkedin_gmail_loop
 from .api.social_publishing import router as social_publishing_router
 from .services.social import runner as social_runner
 from .services.social_publish_queue import start_monitor as start_publishing_monitor, stop_monitor as stop_publishing_monitor
@@ -440,6 +441,7 @@ app.include_router(make_podcast_router(market_audio_db, daily_maya_db))
 app.include_router(admin_users_router)
 app.include_router(reader_events_router)
 app.include_router(ai_visibility_router)
+app.include_router(linkedin_jobs_router)
 app.include_router(publisher_mcp_router)
 app.include_router(research_mcp_router)
 app.include_router(social_publishing_router)
@@ -475,6 +477,7 @@ async def _startup_event():
         asyncio.create_task(_youtube_daily_loop())
         asyncio.create_task(_insider_transfer_loop())
         asyncio.create_task(_social_metrics_loop())
+        asyncio.create_task(linkedin_gmail_loop())
         global _brief_mail_task
         if _brief_mail_task is None and market_dashboard_db.engine:
             _brief_mail_task = asyncio.create_task(_brief_mail_loop(BriefMailer(brief_subscribers_db)))

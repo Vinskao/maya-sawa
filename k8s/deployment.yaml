@@ -207,6 +207,26 @@ spec:
               name: market-routine-fire
               key: MARKET_ROUTINE_US_TOKEN
               optional: true
+        - name: LINKEDIN_APPLY_KEY_SHA256
+          value: "52ef21dbf95cffdff5bce46f3c4bde8bb22ecb47f85d898df24adeee9150610f"
+        - name: LINKEDIN_GMAIL_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: linkedin-gmail
+              key: client_id
+              optional: true
+        - name: LINKEDIN_GMAIL_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: linkedin-gmail
+              key: client_secret
+              optional: true
+        - name: LINKEDIN_GMAIL_REFRESH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: linkedin-gmail
+              key: refresh_token
+              optional: true
         # SHA-256 of the scheduled analysis routine's write key (not the key itself); see docs/MARKET_AGENT_KEY.md
         - name: MARKET_AGENT_KEY_SHA256
           value: "29d818d0c562f10ae617790b91bd48efbce40acda652128bcf2bef0c41ce6f5d"
