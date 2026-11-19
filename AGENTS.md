@@ -769,123 +769,9 @@ curl -X POST "http://localhost:8000/maya-sawa/paprika/articles/sync" \
 curl -X DELETE "http://localhost:8000/maya-sawa/paprika/articles/1" | jq .
 ```
 
-### 4. Maya-v2 對話管理 (`/maya-v2/*`)
+### 4–6. Maya-v2（已移除）
 
-#### 對話列表
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/" | jq .
-```
-
-#### 創建對話
-```bash
-curl -X POST "http://localhost:8000/maya-sawa/maya-v2/conversations/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "conversation_type": "general",
-    "title": "測試對話"
-  }' | jq .
-```
-
-#### 獲取單個對話
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" | jq .
-```
-
-#### 更新對話
-```bash
-curl -X PUT "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "更新後的測試對話",
-    "status": "active"
-  }' | jq .
-```
-
-#### 發送訊息
-```bash
-curl -X POST "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/send_message/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "content": "你好，這是測試訊息"
-  }' | jq .
-```
-
-#### 獲取對話訊息
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/messages/" | jq .
-```
-
-#### 刪除對話
-```bash
-curl -X DELETE "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" | jq .
-```
-
-### 5. AI 模型管理 (`/maya-v2/*`)
-
-#### AI 模型列表
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-models/" | jq .
-```
-
-#### 包含非活躍模型
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-models/?include_inactive=true" | jq .
-```
-
-#### 單個模型詳情
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-models/1" | jq .
-```
-
-#### 可用模型列表
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/available-models/" | jq .
-```
-
-#### AI 提供者配置
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-providers/" | jq .
-```
-
-#### 添加模型
-```bash
-curl -X POST "http://localhost:8000/maya-sawa/maya-v2/add-model/" | jq .
-```
-
-### 6. 多模型問答 (`/maya-v2/*`)
-
-#### 同步問答
-```bash
-curl -X POST "http://localhost:8000/maya-sawa/maya-v2/ask-with-model/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "請解釋什麼是機器學習",
-    "model_name": "gpt-4o-mini",
-    "sync": true,
-    "use_knowledge_base": true
-  }' | jq .
-```
-
-#### 異步問答
-```bash
-curl -X POST "http://localhost:8000/maya-sawa/maya-v2/ask-with-model/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "請解釋什麼是深度學習",
-    "model_name": "gpt-4o-mini",
-    "sync": false,
-    "use_knowledge_base": true
-  }' | jq .
-
-# 從回應中獲取 task_id，然後檢查狀態
-TASK_ID="從上面回應中獲取的任務ID"
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/task-status/$TASK_ID" | jq .
-```
-
-#### 聊天歷史 (Maya-v2 版本)
-```bash
-curl -X GET "http://localhost:8000/maya-sawa/maya-v2/qa/chat-history/qa-12345678" | jq .
-```
+2026-11-19：`/maya-v2/*`（對話、AI 模型、多模型問答）連同前端 v2 聊天介面已移除，所有提問走 `POST /maya-sawa/qa/query`。資料表留著，沒有端點。
 
 ### 7. Legacy 聊天歷史 (向後兼容)
 
@@ -940,22 +826,6 @@ celery -A maya_sawa.tasks.celery_app worker -Q maya_sawa -l info
 | | `/paprika/articles/sync` | POST | 批量同步文章 | `curl -X POST "http://localhost:8000/maya-sawa/paprika/articles/sync" -H "Content-Type: application/json" -d '{"articles": [{"file_path": "sync1.md", "content": "# Sync 1", "file_date": "2024-01-01T00:00:00Z"}]}' \| jq .` | `{"success": true, "message": "Articles synced successfully", "data": {"created": 1, "updated": 0, "skipped": 0}}` |
 | | `/paprika/articles/{id}` | PUT | 更新文章 | `curl -X PUT "http://localhost:8000/maya-sawa/paprika/articles/1" -H "Content-Type: application/json" -d '{"content": "# Updated", "file_date": "2024-01-01T00:00:00Z"}' \| jq .` | `{"success": true, "message": "Article updated successfully", "data": {...}}` |
 | | `/paprika/articles/{id}` | DELETE | 刪除文章 | `curl -X DELETE "http://localhost:8000/maya-sawa/paprika/articles/1" \| jq .` | `{"success": true, "message": "Article deleted successfully"}` |
-| **Maya-v2 對話管理** | `/maya-v2/conversations/` | GET | 對話列表 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/" \| jq .` | `{"success": true, "data": [...], "count": 2}` |
-| | `/maya-v2/conversations/` | POST | 創建對話 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/conversations/" -H "Content-Type: application/json" -d '{"conversation_type": "general", "title": "測試對話"}' \| jq .` | `{"success": true, "data": {"id": "...", "title": "測試對話", ...}}` |
-| | `/maya-v2/conversations/{id}/` | GET | 單個對話 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" \| jq .` | `{"success": true, "data": {"id": "...", "title": "...", ...}}` |
-| | `/maya-v2/conversations/{id}/` | PUT | 更新對話 | `curl -X PUT "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" -H "Content-Type: application/json" -d '{"title": "更新後的對話", "status": "active"}' \| jq .` | `{"success": true, "data": {...}}` |
-| | `/maya-v2/conversations/{id}/` | DELETE | 刪除對話 | `curl -X DELETE "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/" \| jq .` | `{"success": true, "message": "Conversation deleted"}` |
-| | `/maya-v2/conversations/{id}/send_message/` | POST | 發送訊息 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/send_message/" -H "Content-Type: application/json" -d '{"content": "你好"}' \| jq .` | `{"success": true, "data": {...}}` |
-| | `/maya-v2/conversations/{id}/messages/` | GET | 獲取訊息 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/conversations/550e8400-e29b-41d4-a716-446655440000/messages/" \| jq .` | `{"success": true, "data": [...], "count": 1}` |
-| **Maya-v2 AI 模型管理** | `/maya-v2/ai-models/` | GET | AI 模型列表 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-models/" \| jq .` | `{"success": true, "data": [...], "count": 3}` |
-| | `/maya-v2/ai-models/{id}` | GET | 單個模型 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-models/1" \| jq .` | `{"success": true, "data": {"id": 1, "name": "...", ...}}` |
-| | `/maya-v2/available-models/` | GET | 可用模型列表 | `curl -X GET "http://localhost:8000/maya-sawa/maya-vawa/maya-v2/available-models/" \| jq .` | `{"success": true, "models": [...], "providers": {...}}` |
-| | `/maya-v2/ai-providers/` | GET | AI 提供者配置 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/ai-providers/" \| jq .` | `{"success": true, "providers": {...}}` |
-| | `/maya-v2/add-model/` | POST | 添加模型 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/add-model/" \| jq .` | `{"success": true, "message": "Model added", "data": {...}}` |
-| **Maya-v2 多模型問答** | `/maya-v2/ask-with-model/` | POST | 同步問答 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/ask-with-model/" -H "Content-Type: application/json" -d '{"question": "請解釋機器學習", "model_name": "gpt-4o-mini", "sync": true}' \| jq .` | `{"success": true, "answer": "...", "model_used": "gpt-4o-mini"}` |
-| | `/maya-v2/ask-with-model/` | POST | 異步問答 | `curl -X POST "http://localhost:8000/maya-sawa/maya-v2/ask-with-model/" -H "Content-Type: application/json" -d '{"question": "深度學習是什麼", "model_name": "gpt-4o-mini", "sync": false}' \| jq .` | `{"success": true, "task_id": "...", "status": "queued"}` |
-| | `/maya-v2/task-status/{id}` | GET | 任務狀態 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/task-status/task-123" \| jq .` | `{"success": true, "status": "completed", "result": {...}}` |
-| | `/maya-v2/qa/chat-history/{session_id}` | GET | 聊天歷史 | `curl -X GET "http://localhost:8000/maya-sawa/maya-v2/qa/chat-history/qa-12345678" \| jq .` | `{"success": true, "history": [...], "session_id": "qa-12345678"}` |
 | **Legacy 聊天歷史** | `/maya-sawa/qa/chat-history/{user_id}` | GET | 舊版聊天歷史 | `curl -X GET "http://localhost:8000/maya-sawa/maya-sawa/qa/chat-history/test_user" \| jq .` | `{"success": true, "history": [...], "user_id": "test_user"}` |
 
 ### 測試腳本
@@ -1025,10 +895,6 @@ QA_RESPONSE=$(curl -s -X POST "${BASE_URL}/qa/query" \
   }')
 
 echo "QA 查詢結果: $(echo $QA_RESPONSE | jq '.success')"
-
-# 5. AI 模型測試
-echo "5. AI 模型列表"
-curl -s -X GET "${BASE_URL}/maya-v2/available-models/" | jq '.models | length'
 
 echo "=== 測試完成 ==="
 ```
@@ -1100,10 +966,6 @@ QA_RESPONSE=$(curl -s -X POST "http://localhost:8000/maya-sawa/qa/query" \
   }')
 
 echo "QA 查詢結果: $(echo $QA_RESPONSE | jq '.success')"
-
-# 5. AI 模型測試
-echo "5. AI 模型列表"
-curl -s -X GET "http://localhost:8000/maya-sawa/maya-v2/available-models/" | jq '.models | length'
 
 echo "=== 測試完成 ==="
 ```

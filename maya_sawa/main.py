@@ -50,9 +50,7 @@ from .api.qa import router as qa_router
 from .api.articles import router as articles_router
 from .api.blog import router as blog_router
 from .services.blog_worker import blog_worker
-from .api.ai_models import router as ai_models_router
-from .api.conversations import router as conversations_router, legacy_router as legacy_chat_router
-from .api.ask import router as ask_router
+from .api.legacy_chat_history import legacy_router as legacy_chat_router
 from .api.people import router as people_router
 from .api.voyeur import router as voyeur_router
 from .api.proxy import router as proxy_router
@@ -132,7 +130,6 @@ app = FastAPI(
     
     - **/qa/** - Document Q&A system (Original maya-sawa-v1)
     - **/paprika/** - Article management (Migrated from Laravel)
-    - **/maya-v2/** - Conversation & AI model management (Migrated from Django)
     
     All APIs maintain backward compatibility with their original endpoints.
     """,  # API 描述
@@ -172,17 +169,8 @@ app.include_router(qa_router)
 app.include_router(articles_router)
 app.include_router(blog_router)
 
-# 註冊 Maya-v2 AI 模型管理 API 路由 (從 Django 移植)
-app.include_router(ai_models_router)
-
-# 註冊 Maya-v2 對話管理 API 路由 (從 Django 移植)
-app.include_router(conversations_router)
-
 # 註冊 Legacy 聊天歷史 API 路由 (向後兼容)
 app.include_router(legacy_chat_router)
-
-# 註冊 Maya-v2 問答 API 路由 (從 Django 移植)
-app.include_router(ask_router)
 
 # 註冊 People API 路由 (新增 - 用於支援前端獲取角色列表)
 app.include_router(people_router)
