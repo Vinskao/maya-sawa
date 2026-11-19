@@ -500,6 +500,15 @@ async def get_article_stats():
         logger.error(f"獲取統計資訊時發生錯誤: {str(e)}")
         raise HTTPException(status_code=500, detail=f"獲取統計資訊失敗: {str(e)}")
 
+BUSY_ANSWER = "Maya 目前還沒上班，今天的額度暫時用完了。先去逛逛站上的文章與市場頁，晚點或明天再來找我聊，我會在的。"
+BUSY_ANSWER_EN = "Maya is not on shift yet: today's AI allowance has run out for now. Look around the articles and market pages, and come back a little later or tomorrow."
+
+
+def busy_answer(language: str) -> str:
+    """Soft reply for when the language model cannot answer (usually the paid allowance is used up), 2026-11-19."""
+    return BUSY_ANSWER_EN if (language or "").lower() == "english" else BUSY_ANSWER
+
+
 @router.post("/query")
 async def query_document(request: QueryRequest, http_request: Request):
     """
@@ -564,9 +573,13 @@ async def query_document(request: QueryRequest, http_request: Request):
         logger.info("未提供前端來源，預設啟用文章QA功能")
     
     # 獲取核心組件實例
-    vector_store = get_vector_store()
-    qa_chain = get_qa_chain()
-    chat_history_manager = get_chat_history()
+    try:
+        vector_store = get_vector_store()
+        qa_chain = get_qa_chain()
+        chat_history_manager = get_chat_history()
+    except Exception:
+        logger.exception("QA components unavailable; replying with the busy message")
+        return {"success": True, "answer": busy_answer(request.language), "data": []}
     
     # 根據前端來源決定是否搜索文件
     if enable_article_qa:
@@ -575,7 +588,11 @@ async def query_document(request: QueryRequest, http_request: Request):
         initial_k = Config.ARTICLE_MATCH_COUNT
         # Use a more practical threshold for better recall
         initial_threshold = max(Config.SIMILARITY_THRESHOLD, 0.5)
-        documents = vector_store.similarity_search(request.text, k=initial_k, threshold=initial_threshold)
+        try:
+            documents = vector_store.similarity_search(request.text, k=initial_k, threshold=initial_threshold)
+        except Exception:   # the embedding call needs the same paid allowance
+            logger.exception("Document search failed; replying with the busy message")
+            return {"success": True, "answer": busy_answer(request.language), "data": []}
         logger.info(f"啟用文章QA功能，搜索到 {len(documents)} 個相關文檔 (k={initial_k}, threshold={initial_threshold})")
 
         # Fallback：若沒有找到文檔，放寬條件再試一次
@@ -593,8 +610,13 @@ async def query_document(request: QueryRequest, http_request: Request):
     
     # 獲取答案和分析結果
     # 將前端傳入的 name 轉給 QAChain，若未提供則沿用預設 "Maya"
-    result = qa_chain.get_answer(request.text, documents, self_name=(request.name or "Maya"), user_id=request.user_id)
-    
+    try:
+        result = qa_chain.get_answer(request.text, documents, self_name=(request.name or "Maya"), user_id=request.user_id)
+    except Exception:
+        # Provider out of credit / down: answer softly instead of showing an error; the conversation is not saved.
+        logger.exception("QA chain failed; replying with the busy message")
+        return {"success": True, "answer": busy_answer(request.language), "data": []}
+
     # 如果語言為英語，翻譯答案
     if request.language.lower() == "english":
         translated_answer = await translate_to_english(result["answer"])
