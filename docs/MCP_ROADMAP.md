@@ -30,7 +30,7 @@
 
 每一步先寫失敗測試，再實作，再跑測試，最後 commit 推 `main`（SSH URL）。
 
-1. **抽共用核心。** 新增 `maya_sawa/api/mcp_core.py`：JSON-RPC 解析、`initialize`／`ping`／`tools/list`／`tools/call`、body 上限、錯誤格式，以及 `Tool` 註冊（名稱、說明、pydantic 輸入模型、處理函式、`readOnlyHint`）。`research_mcp.py` 改成只註冊工具；行為不變，現有 `tests/test_research_mcp.py` 必須原封不動通過。Birch 的 `publisher_mcp.py` 這次不動。
+1. **抽共用核心（已完成，示範版）。** 新增 `maya_sawa/api/mcp_core.py`：JSON-RPC 解析、`initialize`／`ping`／`tools/list`／`tools/call`、body 上限、錯誤格式，以及 `Tool` 註冊（名稱、說明、pydantic 輸入模型、處理函式、`readOnlyHint`）。`research_mcp.py` 改成只註冊工具；行為不變，現有 `tests/test_research_mcp.py` 必須原封不動通過。Birch 的 `publisher_mcp.py` 這次不動。
 2. **階段 1 的三個工具。** 每個工具一個處理函式，回傳 `structuredContent` 與一份文字 JSON；輸入用 `extra='forbid'`；查無資料回 `status: not_found`，不丟例外；例外一律回 `isError`，內容不洩漏內部訊息。
 3. **回傳大小控制。** 每個工具的輸出上限（例如 24 KB），超過就截斷並附 `truncated: true` 與提示改用較窄的參數。
 4. **文件。** 更新 `docs/RESEARCH_MCP.md` 的工具清單與 Mermaid 圖；站上 `/api` 頁加一段 MCP 說明與 Claude Code／Codex 的加入範例。
@@ -49,3 +49,7 @@
 - 不開持股、IB、個人資產類資料。
 - 不開任何寫入工具。
 - 不另建 MCP 專用 repo；沿用 maya-sawa。
+
+## 進度
+
+- 步驟 1 完成：`api/mcp_core.py`（`McpServer`、`Tool`）、`tests/test_mcp_core.py`；`research_mcp.py` 縮成認證加一筆 `Tool` 註冊，既有測試未改且通過。新增工具只需寫處理函式與輸入模型，再加進 `server` 的清單。
