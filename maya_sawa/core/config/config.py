@@ -187,6 +187,10 @@ class Config:
         or ""
     )
     KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID") or os.getenv("KEYCLOAK_RESOURCE") or os.getenv("KEYCLOAK_CLIENT", "peoplesystem")
+    RESEARCH_MCP_RESOURCE_URL = os.getenv(
+        "RESEARCH_MCP_RESOURCE_URL",
+        "https://tymultiverse.cc/maya-sawa/market/research/mcp",
+    )
     SECURITY_ENABLED = os.getenv("SECURITY_ENABLED", "true").lower() == "true"
     SECURITY_TRUSTED_PROXY_CIDRS = os.getenv(
         "SECURITY_TRUSTED_PROXY_CIDRS",

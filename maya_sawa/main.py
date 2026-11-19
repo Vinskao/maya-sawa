@@ -63,6 +63,7 @@ from .api.admin_users import router as admin_users_router
 from .api.reader_events import router as reader_events_router
 from .api.ai_visibility import router as ai_visibility_router
 from .api.publisher_mcp import router as publisher_mcp_router
+from .api.research_mcp import router as research_mcp_router
 from .api.social_publishing import router as social_publishing_router
 from .services.social import runner as social_runner
 from .services.social_publish_queue import start_monitor as start_publishing_monitor, stop_monitor as stop_publishing_monitor
@@ -440,6 +441,7 @@ app.include_router(admin_users_router)
 app.include_router(reader_events_router)
 app.include_router(ai_visibility_router)
 app.include_router(publisher_mcp_router)
+app.include_router(research_mcp_router)
 app.include_router(social_publishing_router)
 
 # RunPod GPU cost & balance observability (GraphQL-backed, read-only).

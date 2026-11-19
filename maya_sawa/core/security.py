@@ -113,11 +113,13 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         claims = None
         token = get_bearer_token(request)
-        # This exact endpoint verifies a dedicated resource audience/scope in its own dependency.
-        # Do not turn its token into a general request.state.user identity for other routes.
-        publisher_path = request.url.path in {
-            '/market/publishing/mcp', request.scope.get('root_path', '') + '/market/publishing/mcp'}
-        if token and Config.SECURITY_ENABLED and not publisher_path:
+        # These exact routes verify their own resource audience and scope.
+        resource_paths = ('/market/publishing/mcp', '/market/research/mcp')
+        root = request.scope.get('root_path', '')
+        resource_path = request.url.path in resource_paths or request.url.path in {
+            root + path for path in resource_paths
+        }
+        if token and Config.SECURITY_ENABLED and not resource_path:
             try:
                 claims = verify_bearer_token(token)
                 request.state.user = claims
