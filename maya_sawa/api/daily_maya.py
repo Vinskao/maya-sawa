@@ -45,7 +45,7 @@ class Review(BaseModel):
     note: str = Field(min_length=1, max_length=1000)
 
 
-def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.utc), on_approved=None, conference_check=None):
+def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.utc), on_approved=None, conference_check=None, coverage_check=None):
     router = APIRouter(prefix='/market/daily-maya', tags=['daily maya'])
 
     async def invented_conferences(content, day):
@@ -82,6 +82,17 @@ def make_router(db, analyses, authorized, clock=lambda: datetime.now(timezone.ut
         if invented:
             from ..services.daily_maya_events import message
             raise HTTPException(422, message(invented))
+        # Held stocks with a highlighted event must be in the text (2026-11-19); an unreadable list never blocks a draft.
+        if coverage_check is not None:
+            try:
+                skipped = await coverage_check(body.content, body.day)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning('Coverage check unavailable', exc_info=True)
+                skipped = []
+            if skipped:
+                from ..services.daily_maya_coverage import message as coverage_message
+                raise HTTPException(422, coverage_message(skipped))
         # Most rejected drafts stopped at a stock's next checkpoint; refuse them here so the writer fixes it in the same run.
         if not body.content.strip().endswith(FAREWELL) or (body.reading is not None and not body.reading.strip().endswith(FAREWELL)):
             raise HTTPException(422, f'缺整集結語：content 與 reading 最後都要有獨立結語段，用兩到三句收束總經與個股的判斷、'

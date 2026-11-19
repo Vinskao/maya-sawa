@@ -292,6 +292,14 @@ async def _daily_conference_check(content, day):
     return unlisted_conferences(content, day, company_names(symbols), events)
 
 
+async def _daily_coverage_check(content, day):
+    """Held Taiwan stocks with a highlighted event that the draft never mentions (services/daily_maya_coverage.py)."""
+    from .api.market import get_market_dashboard_events
+    from .services.daily_maya_coverage import uncovered_holdings
+    positions = market_dashboard_db.latest_auto().get("positions", [])
+    return uncovered_holdings(content, positions, (await get_market_dashboard_events())["events"])
+
+
 async def _social_metrics_loop():
     """Daily follower / reach snapshot of every social channel for /palais (services/social_metrics.py)."""
     from .databases.youtube_db import YoutubeDatabase
@@ -415,7 +423,7 @@ def _on_daily_approved(row):
 app.include_router(make_daily_maya_router(daily_maya_db,
                                          market_ai_analysis_db, _daily_maya_authorized,
                                          on_approved=_on_daily_approved,
-                                         conference_check=_daily_conference_check))
+                                         conference_check=_daily_conference_check, coverage_check=_daily_coverage_check))
 app.include_router(make_market_audio_router(market_audio_db, daily_maya_db))
 
 # Daily reading by email: sign-ups are stored at once; mail goes out only once SMTP is configured.
