@@ -55,7 +55,9 @@ def test_resource_discovery_and_signed_token_isolation(client, token):
     assert client.post(PATH, headers=headers, json={'jsonrpc': '2.0', 'method': 'notifications/initialized'}).status_code == 202
     assert rpc(client, 'initialize', {'protocolVersion': '2025-11-25'}, reader).json()['result']['protocolVersion'] == '2025-11-25'
     tools = rpc(client, 'tools/list', bearer=reader).json()['result']['tools']
-    assert [tool['name'] for tool in tools] == ['get_stock_analysis']
+    assert [tool['name'] for tool in tools] == [
+        'get_stock_analysis', 'get_macro_snapshot', 'get_benchmark_monitor', 'get_daily_reading',
+    ]
     assert tools[0]['annotations']['readOnlyHint'] is True
 
 

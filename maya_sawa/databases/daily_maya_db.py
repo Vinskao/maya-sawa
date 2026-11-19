@@ -1,5 +1,6 @@
 """Isolated daily brief proposals; only reviewed records are public."""
 from datetime import datetime
+from functools import lru_cache
 import hashlib
 import json
 import uuid
@@ -97,8 +98,18 @@ class DailyMayaDatabase:
             ).values(status=decision, review_note=note, reviewed_at=now)).rowcount
             return changed == 1
 
-    def published(self):
+    def published(self, *, day=None, limit=100):
         with self.sessions() as session:
-            rows = session.query(DailyMayaProposal).filter_by(status='approved').order_by(
-                DailyMayaProposal.day.desc(), DailyMayaProposal.reviewed_at.desc()).limit(100).all()
+            query = session.query(DailyMayaProposal).filter_by(status='approved')
+            if day is not None:
+                query = query.filter_by(day=day)
+            rows = query.order_by(
+                DailyMayaProposal.day.desc(), DailyMayaProposal.reviewed_at.desc()).limit(limit).all()
             return [_row(row) for row in rows]
+
+
+@lru_cache(maxsize=1)
+def get_daily_maya_db():
+    from .market_dashboard_db import market_dashboard_db
+
+    return DailyMayaDatabase(market_dashboard_db.engine)

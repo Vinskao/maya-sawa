@@ -198,7 +198,7 @@ app.include_router(market_reports_router)
 app.include_router(benchmark_router)
 from .api.daily_maya import make_router as make_daily_maya_router
 from .api.market import _verify_agent_key
-from .databases.daily_maya_db import DailyMayaDatabase
+from .databases.daily_maya_db import get_daily_maya_db
 from .databases.market_audio_db import MarketAudioDatabase
 from .databases.market_dashboard_db import market_dashboard_db
 from .databases.market_ai_analysis_db import market_ai_analysis_db
@@ -209,7 +209,7 @@ from .services.market_audio_worker import MarketAudioWorker, audio_autogen_is_co
 from .services.market_presenters import presenter_for_day
 
 market_audio_db = MarketAudioDatabase(market_dashboard_db.engine)
-daily_maya_db = DailyMayaDatabase(market_dashboard_db.engine)
+daily_maya_db = get_daily_maya_db()
 
 def _today_approved_daily_audio_ids():
     today = datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()

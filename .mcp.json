@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ty-research": {
+      "type": "http",
+      "url": "https://tymultiverse.cc/maya-sawa/market/research/mcp"
+    }
+  }
+}

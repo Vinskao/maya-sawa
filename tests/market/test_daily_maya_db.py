@@ -31,6 +31,18 @@ def test_rejection_never_publishes_and_reviewer_must_explain(db):
     assert db.published() == []
 
 
+def test_published_filters_day_before_limit_and_ignores_pending(db):
+    now = datetime(2026, 11, 3, tzinfo=timezone.utc)
+    older, _ = db.submit('2026-11-02', 'Older approved', ['stock:2330:2'], now)
+    newer, _ = db.submit('2026-11-03', 'Newer approved', ['stock:2330:2'], now)
+    db.submit('2026-11-04', 'Pending', ['stock:2330:2'], now)
+    for row in (older, newer):
+        assert db.review(row['id'], 'approved', 'Verified', now)
+    assert [row['id'] for row in db.published(limit=1)] == [newer['id']]
+    assert [row['id'] for row in db.published(day='2026-11-02', limit=1)] == [older['id']]
+    assert db.published(day='2026-11-04', limit=1) == []
+
+
 def test_pending_inbox_is_bounded_and_only_lists_pending(db):
     now = datetime(2026, 11, 3, tzinfo=timezone.utc)
     first, _ = db.submit('2026-11-03', '第一份', ['stock:2330:2'], now, limit=2)

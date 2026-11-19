@@ -7,9 +7,11 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable
+from inspect import iscoroutinefunction
+from typing import Any, Awaitable, Callable
 
 from fastapi import HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ValidationError
 
@@ -23,13 +25,37 @@ class Tool:
     name: str
     description: str
     model: type[BaseModel]
-    handler: Callable[[Any], dict]  # sync; run in a thread so database reads do not block the loop
+    handler: Callable[[Any], dict | Awaitable[dict]]
     usage: str  # shown when the arguments are invalid
     unavailable: str  # shown when the handler raises; never expose the exception itself
+    narrow: str = 'Use the public API for the complete result.'
+    max_output_bytes: int = 24000
 
 
 def _error(text: str) -> dict:
     return {'isError': True, 'content': [{'type': 'text', 'text': text}]}
+
+
+def _output(tool: Tool, data: dict) -> dict:
+    data = jsonable_encoder(data)
+    serialized = json.dumps(data, ensure_ascii=False, allow_nan=False)
+    result = {'content': [{'type': 'text', 'text': serialized}], 'structuredContent': data}
+    # Count both copies, including the JSON escaping on the text copy.
+    if len(JSONResponse(result).body) <= tool.max_output_bytes:
+        return result
+    summary = {'status': data.get('status', 'found'), 'truncated': True, 'message': tool.narrow}
+    for preview_length in (1500, 0):
+        if preview_length:
+            summary['preview'] = serialized[:preview_length]
+        else:
+            summary.pop('preview', None)
+        result = {
+            'content': [{'type': 'text', 'text': json.dumps(summary, ensure_ascii=False)}],
+            'structuredContent': summary,
+        }
+        if len(JSONResponse(result).body) <= tool.max_output_bytes:
+            return result
+    raise ValueError('MCP output limit too small for truncation notice')
 
 
 class McpServer:
@@ -48,11 +74,14 @@ class McpServer:
         except ValidationError:
             return _error(tool.usage)
         try:
-            output = await asyncio.to_thread(tool.handler, arguments)
+            if iscoroutinefunction(tool.handler):
+                output = await tool.handler(arguments)
+            else:
+                output = await asyncio.to_thread(tool.handler, arguments)
+            return _output(tool, output)
         except Exception:
             logger.exception('MCP tool %s failed', tool.name)
             return _error(tool.unavailable)
-        return {'content': [{'type': 'text', 'text': json.dumps(output, ensure_ascii=False)}], 'structuredContent': output}
 
     def list_tools(self) -> list[dict]:
         return [{

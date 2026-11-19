@@ -2,7 +2,7 @@
 
 目標：讓同事與他們的 Agent 能用同一個登入，查到 Maya Sawa 已公開的研究資料。Maya 仍是 FastAPI，MCP 只是同一批資料的另一個介面。
 
-現況：`/market/research/mcp` 只有一個工具 `get_stock_analysis`（`api/research_mcp.py`），Birch 發文 MCP 在 `api/publisher_mcp.py`。兩者各自手寫一份 JSON-RPC，再加工具就會複製第三份。
+研究 MCP 透過 `api/research_mcp.py` 註冊工具，傳輸與工具執行由 `api/mcp_core.py` 處理。Birch 發文 MCP 沿用獨立的 `api/publisher_mcp.py`。
 
 ## 原則
 
@@ -39,7 +39,7 @@
 
 ## 驗收
 
-- 測試：`poetry run python -m pytest tests/test_research_mcp.py tests/test_mcp_core.py -q`（新工具各自有成功、查無、參數錯誤、超大輸出四種案例）。
+- 測試：`poetry run python -m pytest tests/test_research_mcp.py tests/test_research_mcp_tools.py tests/test_mcp_core.py -q`（新工具各自有成功、查無、參數錯誤、超大輸出四種案例）。
 - 部署後：未登入 401 帶 `WWW-Authenticate`；Codex 與 Claude Code 各登入一次，`tools/list` 看到全部工具；每個工具的回傳與公開 API 版本一致；研究 token 打 Birch 端點被拒。
 - 部署與 Keycloak 驗證由 TY 或有權限的人執行，GPT 不要自己改 Keycloak。
 
@@ -53,3 +53,6 @@
 ## 進度
 
 - 步驟 1 完成：`api/mcp_core.py`（`McpServer`、`Tool`）、`tests/test_mcp_core.py`；`research_mcp.py` 縮成認證加一筆 `Tool` 註冊，既有測試未改且通過。新增工具只需寫處理函式與輸入模型，再加進 `server` 的清單。
+- 步驟 2–3：三個階段 1 工具已註冊，四個工具共用每項 24,000 bytes 的輸出上限。
+- 步驟 4–6：更新 [研究 MCP 文件](RESEARCH_MCP.md)、網站 `/api-reference/#research-mcp`、repo 根目錄 `.mcp.json`、`keycloak-mcp-oauth` 與 `research-mcp` skill。
+- 待部署驗收：正式環境工具發現、Codex／Claude Code 登入及與公開 API 逐項核對。
