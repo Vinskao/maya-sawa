@@ -1,6 +1,6 @@
 # LinkedIn 職缺與投遞
 
-每 15 分鐘由 Maya Sawa 用 Gmail 唯讀 API 匯入最近 30 天的職缺通知。已匯入的 Gmail message ID 和 LinkedIn 職缺 ID 存在 market dashboard PostgreSQL。/palais 用 Keycloak 管理權限讀取及核准職缺。Codex 投遞排程每兩小時以專用金鑰領取一筆已核准職缺。
+每 15 分鐘由 Maya Sawa 用 Gmail 唯讀 API 匯入最近 30 天的職缺通知。已匯入的 Gmail message ID 和 LinkedIn 職缺 ID 存在 market dashboard PostgreSQL。/palais 用 Keycloak 管理權限讀取及核准職缺。Codex 投遞排程每週一 03:00（台灣時間）以專用金鑰逐筆領取累積的已核准職缺（單次最多 10 筆）。原本每兩小時一次，因 LinkedIn 通知一週僅數封而改為每週。
 
 ```mermaid
 flowchart LR
