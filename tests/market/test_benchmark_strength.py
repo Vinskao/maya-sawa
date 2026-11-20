@@ -223,3 +223,33 @@ def test_pace_observations_are_cached_instead_of_refetched_on_every_request():
     benchmark_monitor.attach_pace([{'code': '8996', 'benchmarks': ['2308']}], {}, observe, now=benchmark_monitor.PACE_CACHE_SECONDS + 1)
     assert len(calls) == 2
     benchmark_monitor._pace_cache.clear()
+
+
+def _aged(period, max_age=60, weight=4):
+    check = dict(code='2330', metric='monthly.yoyPercent', operator='gte', threshold=0, maxAgeDays=max_age, weight=weight)
+    data = {'2330': {'monthly': {'period': period, 'yoyPercent': 5, 'source': 'MOPS'}}}
+    return evaluate_checks([check], data, date(2026, 11, 30))['checks'][0]
+
+
+def test_old_evidence_weighs_less_than_fresh_evidence():
+    fresh = _aged('2026-11')    # 0 days old: full weight
+    older = _aged('2026-09')    # 61 days > 60 -> expired, so use a longer window
+    assert fresh['effectiveWeight'] == 4
+    aged = _aged('2026-08', max_age=120)  # 91 days of 120: past the grace half, decays
+    assert aged['effectiveWeight'] < 4
+    assert aged['effectiveWeight'] >= 4 * 0.25
+    assert older['outcome'] == 'unknown'
+
+
+def test_effective_weight_drives_percentages_and_stale_unknown_keeps_base_weight():
+    fresh = dict(code='A', metric='monthly.yoyPercent', operator='gte', threshold=0, maxAgeDays=120, weight=2)
+    old = {**fresh, 'code': 'B'}
+    gone = {**fresh, 'code': 'C'}
+    data = {'A': {'monthly': {'period': '2026-11', 'yoyPercent': 5, 'source': 's'}},
+            'B': {'monthly': {'period': '2026-08', 'yoyPercent': -5, 'source': 's'}}}
+    result = evaluate_checks([fresh, old, gone], data, date(2026, 11, 30))
+    by_code = {item['code']: item for item in result['checks']}
+    assert by_code['C']['effectiveWeight'] == 2
+    assert by_code['B']['effectiveWeight'] < by_code['A']['effectiveWeight']
+    assert result['supportPercent'] > result['headwindPercent']
+    assert result['method'] == 'weighted-evidence-v2'

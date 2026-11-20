@@ -38,6 +38,16 @@ def position_from_groups(holdings, groups, benchmark_codes):
 
 
 MIN_CHECKS_FOR_PERCENT = 3
+# Evidence keeps its full weight through the first half of its allowed age, then fades linearly to this floor
+# at expiry. Beyond expiry it is unknown. The base weight itself is the reviewer's judgement of importance.
+RECENCY_FLOOR = 0.25
+
+
+def recency_factor(age_days, max_age_days):
+    half = max_age_days / 2
+    if age_days <= half:
+        return 1.0
+    return round(1 - (1 - RECENCY_FLOOR) * (age_days - half) / half, 4)
 
 
 def finite(value):
@@ -83,19 +93,21 @@ def evaluate_checks(checks, observations, today):
         except (ValueError, TypeError):
             valid = False
         outcome = 'unknown'
+        effective = check['weight']
         if valid:
+            effective = round(check['weight'] * recency_factor((today - period_day).days, check['maxAgeDays']), 4)
             supported = value >= check['threshold'] if check['operator'] == 'gte' else value <= check['threshold']
             outcome = 'support' if supported else 'headwind'
-        totals[outcome] += check['weight']
+        totals[outcome] += effective
         results.append({**check, 'value': value if finite(value) else None, 'period': period,
-                        'source': row.get('source'), 'outcome': outcome})
+                        'source': row.get('source'), 'outcome': outcome, 'effectiveWeight': effective})
     denominator = sum(totals.values())
     counts = {key: sum(1 for item in results if item['outcome'] == key) for key in totals}
     # With one or two checks a percentage reads as far more certain than it is; publish the counts instead.
     shown = denominator and len(results) >= MIN_CHECKS_FOR_PERCENT
     return {**{key + 'Percent': round(value / denominator * 100, 2) if shown else None
                for key, value in totals.items()}, 'counts': {**counts, 'total': len(results)}, 'checks': results,
-            'method': 'weighted-evidence-v1', 'denominator': denominator}
+            'method': 'weighted-evidence-v2', 'denominator': denominator}
 
 
 PACE_GAP_PP = 10
