@@ -70,8 +70,8 @@ def test_yahoo_markets_keeps_other_symbols_when_one_fails(monkeypatch):
     service = market_macro.MarketMacroService()
     saved = []
     monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
-    assert service._fetch_yahoo_markets() == 6  # yen, dollar index, VIX, euro (2026-10-29), WTI (2026-11-03) and KRW (2026-11-12); gold failed
-    assert {row["code"] for row in saved} == {"USD_JPY", "US_DOLLAR_INDEX", "US_VIX", "EUR_USD", "WTI_CRUDE_USD", "USD_KRW"}
+    assert service._fetch_yahoo_markets() == 7  # yen, dollar index, VIX, euro (2026-10-29), WTI (2026-11-03), KRW (2026-11-12) and S&P 500 (2026-11-20); gold failed
+    assert {row["code"] for row in saved} == {"USD_JPY", "US_DOLLAR_INDEX", "US_VIX", "EUR_USD", "WTI_CRUDE_USD", "USD_KRW", "US_SP500"}
 
 
 def test_yahoo_markets_skips_series_restored_fresh_after_a_restart(monkeypatch):
@@ -96,16 +96,16 @@ def test_yahoo_markets_skips_series_restored_fresh_after_a_restart(monkeypatch):
     service = market_macro.MarketMacroService()
     saved = []
     monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
-    assert service._fetch_yahoo_markets() == 4      # VIX, the euro (2026-10-29), WTI (2026-11-03) and KRW (2026-11-12) were never cached
-    assert [row["code"] for row in saved] == ["US_VIX", "EUR_USD", "WTI_CRUDE_USD", "USD_KRW"]
-    assert len(urls) == 4 and "%5EVIX" in urls[0] and "EURUSD" in urls[1] and "CL%3DF" in urls[2] and "KRW%3DX" in urls[3]
+    assert service._fetch_yahoo_markets() == 5      # VIX, the euro (2026-10-29), WTI (2026-11-03), KRW (2026-11-12) and S&P 500 (2026-11-20) were never cached
+    assert [row["code"] for row in saved] == ["US_VIX", "EUR_USD", "WTI_CRUDE_USD", "USD_KRW", "US_SP500"]
+    assert len(urls) == 5 and "%5EVIX" in urls[0] and "EURUSD" in urls[1] and "CL%3DF" in urls[2] and "KRW%3DX" in urls[3]
     assert len(reservations) == 1
 
     # Once these are cached too, a further restart spends nothing.
-    for code in ("US_VIX", "EUR_USD", "WTI_CRUDE_USD", "USD_KRW"):
+    for code in ("US_VIX", "EUR_USD", "WTI_CRUDE_USD", "USD_KRW", "US_SP500"):
         cache.set(f"series:{code}", {"code": code, "fetchedAt": fresh, "history": []}, 3600)
     assert service._fetch_yahoo_markets() == 0
-    assert len(urls) == 4 and len(reservations) == 1
+    assert len(urls) == 5 and len(reservations) == 1
 
 
 def _sdmx(periods, values):
@@ -156,3 +156,28 @@ def test_dgbas_prices_cache_taiwan_cpi_and_ppi(monkeypatch):
         ("TW_PPI", "2025-09", "107.53"), ("TW_PPI", "2026-09", "127.03")}
     assert sorted(seen) == ["A030101015", "A030701015"]
     assert "TW_CPI" in market_macro.FREE_CACHE_CODES and "TW_UNEMPLOYMENT_RATE" in market_macro.FREE_CACHE_CODES
+
+
+def test_sp500_closes_also_store_us_bias_series(monkeypatch):
+    # 2026-11-20: the macro bias chart drew only Taiwan; the U.S. line had no series behind it.
+    stamps = [1792123200 + 16 * 3600 + day * 86400 for day in range(25)]  # midday New York: one date each, across DST
+    closes = [100.0] * 24 + [120.0]
+    sp = {"chart": {"result": [{"meta": {"exchangeTimezoneName": "America/New_York"}, "timestamp": stamps,
+                                 "indicators": {"quote": [{"close": closes}]}}]}}
+
+    def fake_request(key, url, ttl_seconds=0, extra_headers=None):
+        if "%5EGSPC" not in url: raise RuntimeError("not_this_test")
+        return 200, json.dumps(sp).encode()
+
+    monkeypatch.setattr(market_macro, "_request_free_cached", fake_request)
+    monkeypatch.setattr(market_macro, "_fetched_within", lambda *args: False)
+    monkeypatch.setattr(market_macro.market_macro_db, "reserve_source_call", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(market_macro.market_macro_db, "finish_source_call", lambda *args, **kwargs: None)
+    service = market_macro.MarketMacroService()
+    saved = []
+    monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: saved.extend(rows) or len(rows))
+    service._fetch_yahoo_markets()
+    assert market_macro.YAHOO_SYMBOLS["US_SP500"] == "^GSPC"
+    bias = [row for row in saved if row["code"] == "US_SP500_BIAS_20"]
+    assert len(bias) == 6 and bias[-1]["value"] == "18.81"     # 120 / mean(19 x 100, 120) - 1
+    assert {"US_SP500_BIAS_20", "US_SP500_BIAS_240"} <= market_macro.FREE_CACHE_CODES

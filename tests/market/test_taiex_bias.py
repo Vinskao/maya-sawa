@@ -18,3 +18,8 @@ def test_bias_skips_bad_closes_and_short_history():
 
 def test_windows_are_month_quarter_year_lines():
     assert BIAS_WINDOWS == {20: "TW_TAIEX_BIAS_20", 60: "TW_TAIEX_BIAS_60", 120: "TW_TAIEX_BIAS_120", 240: "TW_TAIEX_BIAS_240"}
+
+
+def test_us_windows_mirror_the_taiwan_ones():
+    from maya_sawa.services.taiex_bias import US_BIAS_WINDOWS
+    assert US_BIAS_WINDOWS == {20: "US_SP500_BIAS_20", 60: "US_SP500_BIAS_60", 120: "US_SP500_BIAS_120", 240: "US_SP500_BIAS_240"}

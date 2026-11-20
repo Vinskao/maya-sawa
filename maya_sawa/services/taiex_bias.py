@@ -4,6 +4,8 @@
 TW_TAIEX closes, so it needs no extra request; the first (window - 1) sessions have no value.
 """
 BIAS_WINDOWS = {20: "TW_TAIEX_BIAS_20", 60: "TW_TAIEX_BIAS_60", 120: "TW_TAIEX_BIAS_120", 240: "TW_TAIEX_BIAS_240"}
+# 2026-11-20: the same windows over S&P 500 closes (Yahoo ^GSPC), so the chart can draw both markets for one period.
+US_BIAS_WINDOWS = {20: "US_SP500_BIAS_20", 60: "US_SP500_BIAS_60", 120: "US_SP500_BIAS_120", 240: "US_SP500_BIAS_240"}
 
 
 def bias_series(closes: dict[str, float], window: int) -> dict[str, str]:
