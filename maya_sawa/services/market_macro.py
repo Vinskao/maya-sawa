@@ -168,9 +168,10 @@ YAHOO_SERIES = {
     "USD_KRW": ("South Korean won per U.S. dollar, daily close", "KRW/USD", "daily"),
     # 2026-11-20: S&P 500 closes feed the U.S. line of the bias chart (US_SP500_BIAS_*).
     "US_SP500": ("S&P 500 index, daily close", "index points", "daily"),
+    "US_SOX": ("Philadelphia Semiconductor Index, daily close", "index points", "daily"),
 }
 YAHOO_SYMBOLS = {"COMEX_GOLD_USD": "GC=F", "USD_JPY": "JPY=X", "US_DOLLAR_INDEX": "DX-Y.NYB", "US_VIX": "^VIX", "EUR_USD": "EURUSD=X",
-                 "WTI_CRUDE_USD": "CL=F", "USD_KRW": "KRW=X", "US_SP500": "^GSPC"}
+                 "WTI_CRUDE_USD": "CL=F", "USD_KRW": "KRW=X", "US_SP500": "^GSPC", "US_SOX": "^SOX"}
 # TWSE publishes no market-wide margin maintenance ratio; it is estimated from two public tables (margin_maintenance).
 # 2026-11-17: TWSE 臺股儀表板 (launched 2026-09-23) publishes the accounts whose whole-account maintenance ratio is below 130%
 # (shown there as 追繳戶數). The trend endpoint returns the latest 60 trading days, so stored days are merged and history grows.
@@ -214,8 +215,14 @@ TAIEX_BIAS_SERIES = {
     "TW_TAIEX_BIAS_120": ("TAIEX bias from the 120-session average (derived from TWSE FMTQIK)", "percent", "daily"),
     "TW_TAIEX_BIAS_240": ("TAIEX bias from the 240-session average (derived from TWSE FMTQIK)", "percent", "daily"),
 }
-SP500_BIAS_SERIES = {f"US_SP500_BIAS_{days}": (f"S&P 500 bias from the {days}-session average (derived from Yahoo ^GSPC)", "percent", "daily")
-                     for days in (20, 60, 120, 240)}
+YAHOO_BIAS_WINDOWS = (20, 60, 120, 240)
+YAHOO_BIAS_INDICES = {"US_SP500": "S&P 500", "US_SOX": "Philadelphia Semiconductor Index"}
+YAHOO_BIAS_SERIES = {
+    f"{code}_BIAS_{days}": (f"{label} bias from the {days}-session average (derived from Yahoo {YAHOO_SYMBOLS[code]})",
+                             "percent", "daily")
+    for code, label in YAHOO_BIAS_INDICES.items()
+    for days in YAHOO_BIAS_WINDOWS
+}
 TWSE_TURNOVER_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={day}&response=json"
 # TAIEX futures roll cost (services/futures_roll.py): next-month minus near-month settlement, and that spread above fair
 # carry (CBC rediscount rate, cash dividends going ex between the two expiries).
@@ -330,7 +337,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES) | set(CSP_SERIES) | set(TAIEX_BIAS_SERIES) | set(SP500_BIAS_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES) | set(CSP_SERIES) | set(TAIEX_BIAS_SERIES) | set(YAHOO_BIAS_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -1397,7 +1404,7 @@ class MarketMacroService:
             raise
 
     def _fetch_yahoo_markets(self) -> int:
-        """Cache one year of daily closes per Yahoo symbol; one failing symbol does not drop the others.
+        """Cache five years of daily closes per Yahoo symbol; one failing symbol does not drop the others.
 
         Symbols whose series was fetched within the last five hours are skipped, so a pod restarted by a deploy
         (which restores the cache, then refreshes) spends no budget; the six-hourly loop still refetches them."""
@@ -1415,15 +1422,17 @@ class MarketMacroService:
                 closes = ((result.get("indicators", {}).get("quote") or [{}])[0]).get("close") or []
                 rows = [{"code": code, "period": datetime.fromtimestamp(stamp, zone).date().isoformat(), "value": round(close, 2)}
                     for stamp, close in zip(result.get("timestamp") or [], closes) if close]
-                saved += self._cache_free_series(rows, YAHOO_SERIES, "Yahoo Finance",
-                    f"https://finance.yahoo.com/quote/{urllib.parse.quote(symbol)}/")
-                if code == "US_SP500":
-                    from maya_sawa.services.taiex_bias import US_BIAS_WINDOWS, bias_series
-                    closes = {row["period"]: float(row["value"]) for row in rows}
-                    bias_rows = [{"code": name, "period": period, "value": value} for window, name in US_BIAS_WINDOWS.items()
-                                 for period, value in sorted(bias_series(closes, window).items())]
-                    if bias_rows: saved += self._cache_free_series(bias_rows, SP500_BIAS_SERIES, "Yahoo Finance ^GSPC (computed)",
-                                                                   "https://finance.yahoo.com/quote/%5EGSPC/")
+                source_url = f"https://finance.yahoo.com/quote/{urllib.parse.quote(symbol)}/"
+                if code in YAHOO_BIAS_INDICES:
+                    from maya_sawa.services.taiex_bias import bias_series
+                    closes_by_date = {row["period"]: float(row["value"]) for row in rows}
+                    bias_rows = [
+                        {"code": f"{code}_BIAS_{window}", "period": period, "value": value}
+                        for window in YAHOO_BIAS_WINDOWS
+                        for period, value in bias_series(closes_by_date, window).items()
+                    ]
+                    saved += self._cache_free_series(bias_rows, YAHOO_BIAS_SERIES, f"Yahoo Finance {symbol} (computed)", source_url)
+                saved += self._cache_free_series(rows, YAHOO_SERIES, "Yahoo Finance", source_url)
             except Exception as exc:
                 failures.append(f"{code}:{str(exc)[:30]}")
         if len(failures) == len(due):

@@ -32,3 +32,21 @@ ty-backend 每週掃描 `/maya-sawa/market/dashboard/macro`，檢查每條序列
 - 0 點、最新一期過期，或比上週變短：當成故障提醒。
 - 「已延長抓取」那幾條在部署後一到兩週內仍不足三年：提醒，代表回補沒有成功。
 - 每週只報與上週相比的變化。
+
+## 美股指數乖離率
+
+```mermaid
+flowchart LR
+    Yahoo["Yahoo Finance 日收盤：S&P 500、費城半導體指數"] --> Refresh["既有總經資料更新"]
+    Refresh --> Bias["依各指數的交易日計算 20、60、120、240 日乖離率"]
+    Bias --> Cache["總經資料快取與重啟備份"]
+    Cache --> Dashboard["總經 API 與台美股市指數乖離率圖"]
+```
+
+## 開發方法
+
+1. 費半採用 Yahoo Finance 的 `^SOX` 指數日收盤，沿用 S&P 500 的資料來源與更新排程，無需新增憑證。採集最近五年的收盤價，每條乖離率會扣除前 `窗口 − 1` 個交易日。
+2. 沿用既有的移動平均算法，將四種百分比序列存入總經快取。測試先用 Yahoo 格式的固定回應驗證資料識別、均線計算與快取註冊。
+3. 部署後由下一次既有的總經資料更新回補。從總經 API 帶 `historyMonths=60` 檢查 `US_SOX_BIAS_20/60/120/240`，再核對圖表的均線選單和日期讀值。
+
+測試指令為 `poetry run python -m pytest tests/market/macro/test_market_macro_sources.py tests/market/test_taiex_bias.py -q`。
