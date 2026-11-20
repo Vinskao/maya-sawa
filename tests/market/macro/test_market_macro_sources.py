@@ -181,3 +181,19 @@ def test_sp500_closes_also_store_us_bias_series(monkeypatch):
     bias = [row for row in saved if row["code"] == "US_SP500_BIAS_20"]
     assert len(bias) == 6 and bias[-1]["value"] == "18.81"     # 120 / mean(19 x 100, 120) - 1
     assert {"US_SP500_BIAS_20", "US_SP500_BIAS_240"} <= market_macro.FREE_CACHE_CODES
+
+
+def test_dgbas_requests_four_years_of_months(monkeypatch):
+    # 2026-11-20 integrity scan: Taiwan employment started 2024-10 (two years), short of the three-year bar.
+    urls = []
+    empty = {"data": {"dataSets": [{"series": {}}], "structure": {"dimensions": {"observation": [{"values": []}]}}}}
+    monkeypatch.setattr(market_macro, "_request_free_cached", lambda key, url: urls.append(url) or (200, json.dumps(empty).encode()))
+    monkeypatch.setattr(market_macro, "_fetched_within", lambda *args: False)
+    monkeypatch.setattr(market_macro.market_macro_db, "reserve_source_call", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(market_macro.market_macro_db, "finish_source_call", lambda *args, **kwargs: None)
+    service = market_macro.MarketMacroService()
+    monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: len(rows))
+    try: service._fetch_dgbas_employment()
+    except Exception: pass
+    year = market_macro.date.today().year
+    assert urls and any(f"startTime={year - 4}-M" in url or f"startTime={year - 3}-M1&" in url for url in urls)

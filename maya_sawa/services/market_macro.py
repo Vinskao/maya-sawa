@@ -1443,7 +1443,7 @@ class MarketMacroService:
         history, balances = stored("TW_MARGIN_MAINTENANCE"), stored("TW_MARGIN_BALANCE")
         day, attempts, added, status = today or datetime.now(ZoneInfo("Asia/Taipei")).date(), 0, 0, None
         try:
-            while attempts < max_days and day > date.today() - timedelta(days=366):
+            while attempts < max_days and day > date.today() - timedelta(days=365 * 3 + 30):
                 iso = day.isoformat()
                 if day.weekday() < 5 and (iso not in history or iso not in balances):
                     attempts += 1
@@ -1473,7 +1473,7 @@ class MarketMacroService:
             market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
             raise
 
-    def _fetch_twse_turnover(self, today: date | None = None, months: int = 37) -> int:
+    def _fetch_twse_turnover(self, today: date | None = None, months: int = 49) -> int:
         """Daily listed-market trading value, one FMTQIK request per month: the current month every run (it is
         still filling in), earlier months only while they have no stored day. Skipped within five hours of a fetch."""
         code = "TW_MARKET_TURNOVER"
@@ -1566,13 +1566,13 @@ class MarketMacroService:
             raise
 
     def _fetch_policy_rates(self, today: date | None = None) -> int:
-        """Two years of daily policy rates: BIS for the U.S., euro area, Japan and Korea (it lags about a week), and
+        """Four years of daily policy rates: BIS for the U.S., euro area, Japan and Korea (it lags about a week), and
         Taiwan's CBC rediscount rate carried to every weekday from the cached CBC series. Skipped within 12 hours."""
         if all(_fetched_within(code, 12 * 3600) for code in BIS_POLICY_AREAS.values()): return 0
         run_id = market_macro_db.reserve_source_call("BISPolicy", daily_limit=4, minute_limit=2)
         if run_id is None: raise RuntimeError("bis_policy_daily_budget_exhausted")
         today = today or datetime.now(ZoneInfo("Asia/Taipei")).date()
-        start = today - timedelta(days=730)
+        start = today - timedelta(days=365 * 4)   # 2026-11-20: was 730; the weekly integrity scan wants 3 full years
         try:
             status, raw = _request_free_cached(f"bis:cbpol:{start:%Y-%m}", BIS_POLICY_URL.format(start=start.isoformat()),
                                                ttl_seconds=12 * 3600)
@@ -1596,7 +1596,7 @@ class MarketMacroService:
         try:
             today = date.today()
             end_year, end_month = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
-            start_year, start_month = end_year - 2, end_month + 1
+            start_year, start_month = end_year - 4, end_month + 1   # 2026-11-20: 4 years, so 3 full years always show
             if start_month > 12:
                 start_year, start_month = start_year + 1, 1
             start_period = f"{start_year}-M{start_month}"

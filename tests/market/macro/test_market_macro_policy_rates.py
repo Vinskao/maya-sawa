@@ -57,3 +57,16 @@ def test_policy_rates_and_euro_are_defined_for_the_dashboard():
     assert all(spec[1:] == ("percent", "daily") for spec in market_macro.POLICY_RATE_SERIES.values())
     assert market_macro.YAHOO_SYMBOLS["EUR_USD"] == "EURUSD=X"
     assert {"POLICY_RATE_TW", "EUR_USD"} <= market_macro.FREE_CACHE_CODES
+
+
+def test_policy_rates_request_four_years_so_three_full_years_always_show(monkeypatch):
+    # 2026-11-20 integrity scan: the policy rates started 2024-11-20, two years back, short of the three-year bar.
+    urls = []
+    monkeypatch.setattr(market_macro, "_macro_local_cache", market_macro.LocalTTLCache(max_entries=32))
+    monkeypatch.setattr(market_macro, "_request_free_cached", lambda key, url, **kwargs: urls.append(url) or (200, RAW))
+    monkeypatch.setattr(market_macro.market_macro_db, "reserve_source_call", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(market_macro.market_macro_db, "finish_source_call", lambda *args, **kwargs: None)
+    service = market_macro.MarketMacroService()
+    monkeypatch.setattr(service, "_cache_free_series", lambda rows, *args, **kwargs: len(rows))
+    service._fetch_policy_rates(today=date(2026, 11, 20))
+    assert "startPeriod=2022-11-21" in urls[0]
