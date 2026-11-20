@@ -253,3 +253,16 @@ def test_effective_weight_drives_percentages_and_stale_unknown_keeps_base_weight
     assert by_code['B']['effectiveWeight'] < by_code['A']['effectiveWeight']
     assert result['supportPercent'] > result['headwindPercent']
     assert result['method'] == 'weighted-evidence-v2'
+
+
+def test_annual_claims_fade_with_age_but_never_become_unknown():
+    claim = lambda year: {'direction': 'tailwind', 'year': year}
+    today = date(2026, 11, 30)
+    fresh = annual_strength([claim(2025)], today)      # FY end 2025-12-31: 11 months old
+    assert fresh['recency'] == 1 and fresh['direction'] == 'tailwind'
+    mid = annual_strength([claim(2024)], today)        # 23 months old: fading
+    assert 0.25 < mid['recency'] < 1
+    old = annual_strength([claim(2020)], today)
+    assert old['recency'] == 0.25 and old['direction'] == 'tailwind'
+    assert annual_strength([], today)['recency'] is None
+    assert annual_strength([{'direction': 'tailwind'}], today)['recency'] is None  # no year -> no claim about age

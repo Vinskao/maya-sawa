@@ -128,7 +128,7 @@ def snapshot(engine, portfolio_db, reports_db, observations=None, industry_group
             if holding['code'] == code:
                 holding['role'] = company['segment']
                 holding.setdefault('benchmarks', []).append(code)
-        nodes.append({'code': code, 'annual': annual_strength(claims), 'claims': claims,
+        nodes.append({'code': code, 'annual': annual_strength(claims, datetime.now(ZoneInfo('Asia/Taipei')).date()), 'claims': claims,
                       'filing': latest.get(code), 'validation': validation,
                       'configuration': {'checks': rule['checks'], 'holdings': rule['holdings'],
                                         'revision': rule_revision}})

@@ -13,12 +13,28 @@ def holding_identity(holding):
     return code if market == 'TW' else f'{code}-{market}'
 
 
-def annual_strength(claims):
+ANNUAL_GRACE_DAYS = 365   # a shareholder report is current for a year after its fiscal year ends
+ANNUAL_FLOOR_DAYS = 730   # then it fades linearly and stays at the floor; a newer report replaces it
+
+
+def annual_recency(year, today):
+    """Weight of a report's direction by age, 1 -> RECENCY_FLOOR. None when the fiscal year is unknown."""
+    if not isinstance(year, int) or not today:
+        return None
+    age = (today - date(year, 12, 31)).days
+    if age <= ANNUAL_GRACE_DAYS:
+        return 1
+    fade = min(1, (age - ANNUAL_GRACE_DAYS) / (ANNUAL_FLOOR_DAYS - ANNUAL_GRACE_DAYS))
+    return round(1 - (1 - RECENCY_FLOOR) * fade, 4)
+
+
+def annual_strength(claims, today=None):
     counts = {kind: sum(row.get('direction') == kind for row in claims)
               for kind in ('tailwind', 'headwind', 'neutral')}
     active = [kind for kind, count in counts.items() if count]
+    year = next((row['year'] for row in claims if isinstance(row.get('year'), int)), None)
     return {'direction': active[0] if len(active) == 1 else 'mixed' if active else 'unknown',
-            'counts': counts, 'claimCount': len(claims)}
+            'counts': counts, 'claimCount': len(claims), 'recency': annual_recency(year, today) if claims else None}
 
 
 def position_from_groups(holdings, groups, benchmark_codes):
