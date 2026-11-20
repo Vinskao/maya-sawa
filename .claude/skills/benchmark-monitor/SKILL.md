@@ -60,7 +60,7 @@ description: 操作或修改「半導體供應鏈 Benchmark」：龍頭股東年
 ## 前端顯示（`ty-multiverse-frontend`）
 
 - `src/scripts/market/benchmarkMonitor.ts`：`monitorDiagram`（節點只放真實證據，無資料就純灰）、`monitorCoverage`（圖下「N 家已有年報主張」與未定位持股）、`paceLabel`。
-- `src/components/SemiconductorBenchmark.astro`：說明文字、證據選單（只列有主張的公司）。
+- `src/components/SemiconductorBenchmark.astro`：首頁「探索研究圖」連到固定展開的綜觀圖，靠近視窗時載入 Mermaid；證據選單只列有主張的公司。
 - `src/scripts/market/researchDiagramZoom.ts`：Ctrl＋滾輪縮放、拖曳、＋／−／重設。
 
 ## 排查
