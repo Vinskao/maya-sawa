@@ -31,6 +31,7 @@ description: 操作或修改「半導體供應鏈 Benchmark」：龍頭股東年
 - 必填 `theme`（年度格局主軸 T1～T9）、`relation`（customer／supplier／self）、`rationale`（門檻與方向理由，註明是代理門檻）。
 - 兩條以上不可全是 `self`：沿 `benchmark/versions` 的 links 找客戶或供應商交叉驗證。
 - `weight`（1～100）由你判斷，不要一律填 1：越即時、越直接驗證該主張的指標權重越高（月營收年增率通常高於季營收／毛利率；年報已揭露的門檻高於自選代理門檻；總營收驗證特定產品者要調低）。資料變舊系統會自動折減（`effectiveWeight`：`maxAgeDays` 前一半維持全額，之後降到 25%，過期視為未知），所以不要為了「舊資料」自己壓低權重，只評估指標本身的重要性，並在 `rationale` 寫出為何給這個權重。
+- 年報方向的新舊折減（`annual.recency`）由系統算，是和驗證資料折減分開的另一條軸；不要自己調低年報主張的權重，也不要因此改動驗證條件的 `weight`。
 - `maxAgeDays`：月營收 45～60、季報 120～150，依主張時間跨度，不要一律 60。
 - 指標白名單：`monthly.yoyPercent`、`quarterly.revenueYoYPercent`、`quarterly.grossMarginPercent`、`quarterly.grossMarginYoYPp`、`quarterly.operatingMarginPercent`。
 - 少於三條只公布條數，不算百分比。
