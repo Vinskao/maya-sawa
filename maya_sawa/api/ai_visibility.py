@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from ..core.auth.keycloak import require_manage_users_request
+from ..core.auth.keycloak import require_palais_reader
 from ..databases.ai_visibility_db import InboxFull, ai_visibility_db
 import os
 
@@ -113,7 +113,7 @@ async def record_fixes(run_id: str, body: VisibilityFixes, request: Request):
 
 
 @router.get("/admin/ai-visibility")
-async def owner_view(_claims: dict = Depends(require_manage_users_request)):
+async def owner_view(_claims: dict = Depends(require_palais_reader)):
     try:
         accepted = await asyncio.to_thread(ai_visibility_db.list, "accepted", 12)
         pending = await asyncio.to_thread(ai_visibility_db.count, "pending")

@@ -106,7 +106,7 @@ def web(monkeypatch):
             raise HTTPException(status_code=403, detail="Requires manage-users role")
         return state["user"]
 
-    app.dependency_overrides[reader_events.require_manage_users_request] = owner_only
+    app.dependency_overrides[reader_events.require_palais_reader] = owner_only
     client = TestClient(app)
     client.state, client.db = state, database
     return client

@@ -141,6 +141,9 @@ class Config:
     # API Configuration
     PUBLIC_API_BASE_URL = os.getenv("PUBLIC_API_BASE_URL", "")
     PUBLIC_TYMB_URL = os.getenv("PUBLIC_TYMB_URL", "")
+    PALAIS_ACCESS_VERIFICATION_URL = os.getenv(
+        "PALAIS_ACCESS_VERIFICATION_URL", "http://ty-multiverse-backend/tymb/palais-access/verify-read",
+    )
     
     # Vector Search Configuration
     # Default to 3 matches if not set, per product requirement

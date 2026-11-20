@@ -15,7 +15,7 @@ from fastapi.responses import PlainTextResponse, Response
 
 from ..core.public_api import public_data
 from ..core import public_schemas
-from ..core.auth.keycloak import require_authenticated, require_manage_users_request
+from ..core.auth.keycloak import require_authenticated, require_manage_users_request, require_palais_reader
 from ..core.auth.internal import require_internal_secret
 
 from ..services.shioaji_market import (
@@ -1237,7 +1237,7 @@ async def get_mini_tsmc_futures_quote():
 
 
 @router.get("/portfolio")
-async def get_portfolio(_claims: dict = Depends(require_manage_users_request)):
+async def get_portfolio(_claims: dict = Depends(require_palais_reader)):
     if not shioaji_market_service.portfolio_enabled:
         raise HTTPException(
             status_code=403,
@@ -1316,7 +1316,7 @@ async def _ibkr_snapshot_or_503() -> dict:
 
 @router.get("/portfolio/history")
 async def get_portfolio_history(
-    limit: int = 90, _claims: dict = Depends(require_manage_users_request)
+    limit: int = 90, _claims: dict = Depends(require_palais_reader)
 ):
     return await _portfolio_history(limit)
 

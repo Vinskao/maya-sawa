@@ -210,3 +210,28 @@ async def require_member_request(request: Request) -> Dict[str, Any]:
     if not roles & {Config.MEMBER_ROLE, Config.GIT_COMMIT_REQUIRED_ROLE}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Requires {Config.MEMBER_ROLE} role")
     return payload
+
+
+async def require_palais_reader(request: Request) -> Dict[str, Any]:
+    """Palais business reads also accept the application role."""
+    payload = await require_authenticated(request)
+    roles = set(payload.get("_roles", []))
+    realm_roles = payload.get("realm_access", {}).get("roles", [])
+    if Config.GIT_COMMIT_REQUIRED_ROLE in roles:
+        return payload
+    if "palais-checker" not in realm_roles:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires Palais read access")
+    token = get_bearer_token(request)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    endpoint = Config.PALAIS_ACCESS_VERIFICATION_URL
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0), trust_env=False) as client:
+            response = await client.get(endpoint, headers={"Authorization": f"Bearer {token}"})
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=503, detail="Palais permission verification unavailable") from error
+    if response.status_code in {401, 403}:
+        raise HTTPException(status_code=403, detail="Requires active Palais read access")
+    if response.status_code != 204:
+        raise HTTPException(status_code=503, detail="Palais permission verification unavailable")
+    return payload

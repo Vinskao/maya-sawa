@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
 from maya_sawa.api import ai_visibility
-from maya_sawa.core.auth.keycloak import require_manage_users_request
+from maya_sawa.core.auth.keycloak import require_palais_reader
 from maya_sawa.databases.ai_visibility_db import AiVisibilityDatabase, InboxFull
 from maya_sawa.services.ai_visibility import KEYWORDS, MAIN_KEYWORD, PLATFORMS, summarize, validate_results, weekly_keywords
 
@@ -102,7 +102,7 @@ def client(db, monkeypatch):
     monkeypatch.setattr(ai_visibility, "ai_visibility_db", db)
     app = FastAPI()
     app.include_router(ai_visibility.router)
-    app.dependency_overrides[require_manage_users_request] = lambda: {"sub": "owner"}
+    app.dependency_overrides[require_palais_reader] = lambda: {"sub": "owner"}
     return TestClient(app)
 
 

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..core.auth.internal import require_internal_secret
-from ..core.auth.keycloak import require_manage_users_request
+from ..core.auth.keycloak import require_palais_reader
 from ..databases.reader_events_db import EVENTS, TARGET_LIMIT, VISITOR_PATTERN, reader_events_db
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ async def report_reader_event(body: ReaderEventReport):
 
 
 @router.get("/admin/north-star")
-async def north_star(weeks: int = Query(default=8, ge=1, le=26), _claims: dict = Depends(require_manage_users_request)):
+async def north_star(weeks: int = Query(default=8, ge=1, le=26), _claims: dict = Depends(require_palais_reader)):
     try:
         return {"metric": "weekly_returning_research_readers", "weeks": await asyncio.to_thread(reader_events_db.north_star, weeks)}
     except Exception as exc:
