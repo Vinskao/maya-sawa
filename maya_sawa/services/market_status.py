@@ -173,6 +173,29 @@ def us_items(sox: list[dict], vix: list[dict], today: date, now: datetime | None
     return items
 
 
+TW_VIX_STALE_DAYS = 5
+
+
+def tw_vix_item(rows: list[tuple[str, float]], today: date) -> dict | None:
+    """Taiwan VIX (TAIFEX, daily close stored by market_macro): same levels as the U.S. VIX; calm days are info only,
+    so it rides along with a banner but never raises one by itself."""
+    if len(rows) < 2: return None
+    last_day = date.fromisoformat(rows[-1][0])
+    if not 0 <= (today - last_day).days <= TW_VIX_STALE_DAYS: return None
+    closes = [value for _, value in rows]
+    jump, up = (closes[-1] / closes[-2] - 1) * 100, _streak(closes, rising=True)
+    level = ("alert" if closes[-1] >= VIX_ALERT or jump >= VIX_JUMP_ALERT else
+             "warn" if closes[-1] >= VIX_WARN or jump >= VIX_JUMP_WARN or up >= 3 else "info")
+    day = last_day.strftime("%m/%d")
+    zh, en = f"台灣 VIX {closes[-1]:.1f}（{jump:+.1f}%，{day} 收盤）", f"Taiwan VIX {closes[-1]:.1f} ({jump:+.1f}%, {day} close)"
+    if up >= 2:
+        zh += f"，連漲 {up} 日（{closes[-up - 1]:.1f}→{closes[-1]:.1f}）"
+        en += f", up {up} sessions in a row ({closes[-up - 1]:.1f} to {closes[-1]:.1f})"
+    if closes[-1] >= VIX_WARN:
+        zh += "，進入恐慌區"; en += ", in the fear zone"
+    return {"id": "tw-vix", "href": "/macro/#macro-volatility", "level": level, "dir": "down" if jump > 0 else "up", "zh": zh, "en": en}
+
+
 def drawdown_item(item_id: str, name_zh: str, name_en: str, history: list[dict], recent: list[dict]) -> dict | None:
     """How far an index sits below its all-time closing high; only a fall of 20% or more (a bear market) is an item."""
     bars = [*history, *recent]
@@ -234,7 +257,7 @@ def build_status(days: list[dict], live: dict | None, pe: list[tuple[str, float]
         close, final, value = live["price"], False, None
     else:
         # No day-session data for today (before the open, at night after midnight): only the night session can speak.
-        early = list(us or []) + [i for i in (extra or []) if i["id"] == "sox-ath"] + ([_night_item(night)] if night and abs(night["pct"]) >= NIGHT_NOTICE else [])
+        early = list(us or []) + [i for i in (extra or []) if i["id"] in ("sox-ath", "tw-vix")] + ([_night_item(night)] if night and abs(night["pct"]) >= NIGHT_NOTICE else [])
         if early:
             early.sort(key=lambda item: {"alert": 0, "warn": 1, "info": 2}[item["level"]])
             return {"items": _tag(early), "asOf": iso, "final": False, "session": "night" if night else "day"}
@@ -351,6 +374,15 @@ class MarketStatusService:
             except (KeyError, TypeError, ValueError): continue
         return out
 
+    def _tw_vix(self, today: date) -> list[dict]:
+        from . import market_macro
+        rows = []
+        for row in (market_macro._macro_local_cache.get("series:TW_VIX") or {}).get("history") or []:
+            try: rows.append((row["period"], float(row["value"])))
+            except (KeyError, TypeError, ValueError): continue
+        item = tw_vix_item(sorted(rows), today)
+        return [item] if item else []
+
     def get(self, now: datetime | None = None, txf: dict | None = None) -> dict:
         now = now or datetime.now(TAIPEI)
         if self._cache and time.monotonic() - self._cache[0] < CACHE_SECONDS:
@@ -358,7 +390,7 @@ class MarketStatusService:
         today = now.astimezone(TAIPEI).date()
         days, live = self._load(today)
         status = build_status(days, live, self._pe_history(), today, parse_txf_night(txf, now),
-                              us_items(self._us_bars(US_SOX_YAHOO), self._us_bars(US_VIX_YAHOO), today), self._drawdowns())
+                              us_items(self._us_bars(US_SOX_YAHOO), self._us_bars(US_VIX_YAHOO), today), self._drawdowns() + self._tw_vix(today))
         status["checkedAt"] = now.isoformat()
         self._cache = (time.monotonic(), status)
         return status

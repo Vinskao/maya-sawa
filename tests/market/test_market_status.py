@@ -292,3 +292,20 @@ def test_a_deep_drawdown_alone_raises_the_bar_in_the_right_market_row():
     extra = [{"id": "twii-ath", "href": "/stocks/", "level": "warn", "dir": "down", "zh": "a", "en": "a"}]
     status = ms.build_status(days, None, [], TODAY, None, None, extra)
     assert [(i["id"], i["group"]) for i in status["items"]] == [("twii-ath", "tw")]
+
+
+def test_taiwan_vix_is_reported_beside_the_us_one():
+    # 2026-11-20: the banner carried only the U.S. VIX; the Taiwan VIX (TAIFEX, stored daily) was never shown.
+    rows = [("2026-11-17", 18.0), ("2026-11-18", 21.5), ("2026-11-19", 27.3)]
+    item = ms.tw_vix_item(rows, date(2026, 11, 20))
+    assert item["id"] == "tw-vix" and item["level"] == "alert"   # +27% in a day
+    assert "台灣 VIX 27.3" in item["zh"] and "+27.0%" in item["zh"] and "11/19" in item["zh"] and "恐慌區" in item["zh"]
+    assert "Taiwan VIX 27.3" in item["en"]
+    assert ms.GROUPS.get("tw-vix", "tw") == "tw"
+
+
+def test_calm_taiwan_vix_is_info_only_and_stale_is_dropped():
+    calm = ms.tw_vix_item([("2026-11-18", 15.0), ("2026-11-19", 15.4)], date(2026, 11, 20))
+    assert calm["level"] == "info" and "台灣 VIX 15.4" in calm["zh"]
+    assert ms.tw_vix_item([("2026-10-01", 15.0), ("2026-10-02", 30.0)], date(2026, 11, 20)) is None
+    assert ms.tw_vix_item([("2026-11-19", 30.0)], date(2026, 11, 20)) is None
