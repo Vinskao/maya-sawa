@@ -29,6 +29,10 @@
 - 最後回報寫：送出 N 份、M 項主張（其中逆風 X 項）、跳過 K 份與原因、剩下幾份待處理。
 - 有送出任何提案、或發生錯誤時，以 curl POST https://tymultiverse.cc/maya-sawa/market/notify，Content-Type application/json，body 為 {"kind":"update" 或 "attention","title":"年報主張萃取","body":"送出 N 份、M 項主張，剩 K 份待處理"}（用 python json.dump 產生）。沒有待處理報告且沒有錯誤時不通知。body 不放任何憑證。
 
-## 5. 回報用量（真正的最後一步，沒有待處理報告時也要做）
+## 5. 回報用量（沒有待處理報告時也要做）
 工作目錄就是 maya-sawa 倉庫。執行：python3 maya_sawa/public_scripts/report_routine_usage.py "年報主張萃取"
 這支腳本只把本次對話紀錄裡每個模型的 token 數加總後回報給本站，不輸出對話內容、不需要也不會讀取金鑰。把它印出的那一行寫進最後回報；失敗不影響前面結果。
+
+## 6. 最後交付主張圖
+- 每份提案 POST 成功後，保留這次實際成功送出的 JSON。最後用 `python3 maya_sawa/public_scripts/report_claim_diagram.py <提案 JSON> <報告 ID>.svg --title "<報告標題>"` 產出一份 SVG。每條主張都要有一個節點，並標示頁碼、歸在順風／逆風／中性底下。圖上的狀態一律是「待審提案」，正式狀態由審核班決定。
+- 在最後回覆顯示或附上生成的 SVG 圖檔。有圖檔時直接交付可開啟的附件；只有文字或程式碼區塊時，將圖片交付列為失敗。任何失敗只回報原因，不重送已收到的提案。沒有成功送出含主張的報告時，寫明本輪沒有主張圖。

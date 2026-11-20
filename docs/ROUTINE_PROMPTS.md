@@ -16,6 +16,7 @@ flowchart TD
     Clone --> File[routines/名稱.md：網址、規則、儲存、通知、用量回報]
     File --> Proxy[送往 tymultiverse.cc/maya-sawa/ 的請求<br/>由代理加 X-Market-Agent-Key]
     Proxy --> API[maya-sawa market API]
+    API -->|Benchmark 提案提交成功| ClaimGraph[用實際提交的主張渲染 SVG 並附於執行回報]
     Stub -->|讀不到檔案| Stop[停止，POST /market/notify attention，不憑記憶執行]
 ```
 
@@ -46,6 +47,7 @@ flowchart TD
 4. 推上 `main` 之後才把排程提示詞換成指標（排程是在執行時 clone `main`，順序反了會讀不到檔案）。
 5. 逐個手動觸發一次，讀執行紀錄確認它讀到了檔案、API 通、通知與用量回報成功。
 6. 之後改規則或網址：改 `routines/*.md`、跑測試、推 `main`，不需要再動排程。
+7. Benchmark 萃取回報用 `report_claim_diagram.py` 把成功送出的 JSON 逐條畫到 SVG。圖上標示方向、頁碼與待審狀態。測試 `tests/automation/test_report_claim_diagram.py` 驗證輸出的 SVG 能解析，且三種方向的主張均在圖內。
 
 **限制與風險：** 排程若讀不到檔案就不會做事（指標要求它停止並用 attention 通知）。指示檔在 `main`，所以改它等於改排程行為，推送前要有測試與審查。
 測試：`poetry run python -m pytest tests/automation/test_routine_prompts.py -q`。
