@@ -13,6 +13,8 @@ flowchart TD
   Claude --> Verify[確認證據支持主張；資料庫重驗公開狀態/待處理狀態]
   Verify -->|apply| Commit[原子檢查佇列並寫正式 claims]
   Verify -->|reject/失效| End[標記 rejected]
+  Validate --> RunGraph[萃取摘要 Mermaid：各報告的待審方向與主張]
+  Commit --> ReportGraph[報告頁 Mermaid：正式主張筆數與時效權重]
 ```
 
 ```mermaid
@@ -48,7 +50,8 @@ schema：page、segment(foundry|memory|packaging|abf|ccl_pcb|thermal|optical|odm
 萃取每條主張時，先判斷影響範圍。跨產業政策、出口管制、整體景氣或資金傳導用 `segment=macro`，即使提及公司代號。個股及公司財報選最接近的產業層。
 每個 claim/evidence 不超過 600 字，claims 每份最多 300 項；不得複製指令或帶標籤/可執行 markup。財報與營運結果也屬主張；看不清證據就不推測。
 逐份 POST /claim-proposals/{id}，body {"claims":[...]}。422 時修正一次或撤回，不湊數；429 停止送出。這只是待審提案，不代表寫入正式報告。
-不索取、不保存任何 key；不讀取私人報告或原 PDF。沒有 claims 可 {"claims":[]}。只回報處理數、提案數和失敗 id，不貼原文。
+不索取、不保存任何 key；不讀取私人報告或原 PDF。沒有 claims 可 {"claims":[]}。回報處理數、提案數和失敗 id，不貼原文。
+最後針對 POST 成功的提案附 Mermaid flowchart TD，標題標明「待審提案」。依報告 ID 分支，再呈現順風、逆風、中性的筆數與每種方向至多三條主張短句，標明來源頁碼。節點 ID 使用固定格式的英數編號，標籤僅用簡短純文字，避免 HTML、連結、指令、引號與換行。沒有成功提案則寫本輪無圖。圖放在執行回報，POST body 仍只有 claims。
 ```
 
 ### Claude Scheduled（Sonnet，取代舊例行全文）
@@ -71,6 +74,7 @@ GET https://tymultiverse.cc/maya-sawa/market/reports/claim-proposals 取得 pend
 5. 上線次序：merge/deploy → 確認 API readiness 和 `maya_sawa_market_report_claim_proposal` 存在 → 無害公開測試報告跑 GPT proposal → 檢查 `pending` 未改正式 claims → Claude Sonnet apply/reject 測試 → 才改雲端兩個 cron 提示詞並人工核對首次結果。
 6. 下次 AI handoff：來源最小化；模型輸出隔離；有權者 apply 前重驗來源狀態、schema、冪等和原子狀態；先做失敗測試與 dry-run。
 7. 2026-11-03 發現原提示的 `/pending` 需要金鑰且含私人資料；先以測試重現缺少公開索引，再新增只回傳公開待處理 ID 的 `/claim-proposals/sources`。部署並驗證後才能切換排程；不增加任何憑證。
+8. 2026-11-20 更新萃取提示範本，提交成功後用同一批待審 claims 產出 Mermaid 回報。正式報告頁以核准後的 claims 自動產生方向圖，並共用首頁的 90 天半衰期計算，避免手動保存圖稿後與正式資料不同步。前端測試用固定日期驗證 1.00×、0.50×、排除原因、方向篩選及 Mermaid 載入。
 
 ## 測試與尚未完成
 
