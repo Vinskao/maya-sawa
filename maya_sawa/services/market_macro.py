@@ -79,6 +79,8 @@ FRED_SERIES = {
     # Credit spreads, bank delinquency/charge-off rates and financial stress.
     "BAMLH0A0HYM2": ("ICE BofA U.S. high yield option-adjusted spread", "percent", "daily"),
     "BAMLC0A0CM": ("ICE BofA U.S. investment grade corporate option-adjusted spread", "percent", "daily"),
+    "BAMLH0A3HYC": ("ICE BofA CCC and lower U.S. high yield option-adjusted spread", "percent", "daily"),
+    "BAMLC0A4CBBB": ("ICE BofA BBB U.S. corporate option-adjusted spread", "percent", "daily"),
     "BAA10Y": ("Moody's Baa corporate yield minus 10-year Treasury", "percent", "daily"),
     "DRALACBS": ("U.S. bank delinquency rate, all loans", "percent", "quarterly"),
     "DRBLACBS": ("U.S. bank delinquency rate, business loans", "percent", "quarterly"),
@@ -110,7 +112,8 @@ ASIA_CPI_SERIES = {
 # Source units converted to the units declared above: millions -> billions, 100 million yen -> trillion yen.
 FRED_SCALE = {"WALCL": 1 / 1000, "WTREGEN": 1 / 1000, "ECBASSETSW": 1 / 1000, "JPNASSETS": 1 / 10000}
 FRED_SOURCE_LABELS = {"GBRSLRTTO01GPSAM": "OECD (via FRED)", "GBRSLRTTO01GYSAM": "OECD (via FRED)",
-    "IRSTCI01JPM156N": "OECD (via FRED)", "BAMLH0A0HYM2": "ICE BofA (via FRED)", "BAMLC0A0CM": "ICE BofA (via FRED)"}
+    "IRSTCI01JPM156N": "OECD (via FRED)", "BAMLH0A0HYM2": "ICE BofA (via FRED)", "BAMLC0A0CM": "ICE BofA (via FRED)",
+    "BAMLH0A3HYC": "ICE BofA (via FRED)", "BAMLC0A4CBBB": "ICE BofA (via FRED)"}
 FRED_SOURCE_LABELS.update({code: 'Federal Reserve (via FRED)' if code == 'DEXKOUS' else 'OECD (via FRED)' for code in ASIA_FRED_SERIES})
 # Series written to PostgreSQL before section 22; everything newer stays in process memory (postgres has 100m CPU).
 FRED_PERSISTED = {"DFEDTARL", "DFEDTARU", "RSAFS", "DGS10", "DCOILWTICO", "ICSA"}
@@ -195,6 +198,7 @@ _pe_days_without_data: set[str] = set()   # holidays answer "no data"; not asked
 CSP_SERIES = {
     "CSP_CAPEX": ("Microsoft, Alphabet, Amazon, Meta and Oracle capital spending (SEC filings, quarterly total)", "USD billion", "quarterly"),
     "CSP_OPERATING_CASH_FLOW": ("Microsoft, Alphabet, Amazon, Meta and Oracle operating cash flow (SEC filings, quarterly total)", "USD billion", "quarterly"),
+    "CSP_CAPEX_OCF_RATIO": ("Capital spending as a percentage of operating cash flow, five cloud providers (derived; above 100 means spending exceeds the quarter's operating cash)", "percent", "quarterly"),
 }
 CSP_SOURCE_PAGE = "https://www.sec.gov/edgar/sec-api-documentation"
 SEC_AGENT = {"User-Agent": os.getenv("SEC_USER_AGENT", "TYMultiverseResearch/1.0 (https://tymultiverse.cc)")}
@@ -1824,6 +1828,9 @@ class MarketMacroService:
                     for code, tags in (("CSP_CAPEX", CAPEX_TAGS), ("CSP_OPERATING_CASH_FLOW", (OPERATING_CASH_TAG,)))
                     for row in csp_totals(companies, tags)]
             if not rows: raise RuntimeError("csp_capex_empty")
+            from .csp_capex import capex_cash_flow_ratio
+            by_code = {code: [r for r in rows if r["code"] == code] for code in ("CSP_CAPEX", "CSP_OPERATING_CASH_FLOW")}
+            rows += [{"code": "CSP_CAPEX_OCF_RATIO", **r} for r in capex_cash_flow_ratio(by_code["CSP_CAPEX"], by_code["CSP_OPERATING_CASH_FLOW"])]
             saved = self._cache_free_series(rows, CSP_SERIES, "SEC EDGAR companyfacts (MSFT, GOOGL, AMZN, META, ORCL)", CSP_SOURCE_PAGE,
                                             fresh_for_seconds=3 * 24 * 3600)
             market_macro_db.finish_source_call(run_id, "success", saved)

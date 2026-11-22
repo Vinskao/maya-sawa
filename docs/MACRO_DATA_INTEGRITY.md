@@ -50,3 +50,18 @@ flowchart LR
 3. 部署後由下一次既有的總經資料更新回補。從總經 API 帶 `historyMonths=60` 檢查 `US_SOX_BIAS_20/60/120/240`，再核對圖表的均線選單和日期讀值。
 
 測試指令為 `poetry run python -m pytest tests/market/macro/test_market_macro_sources.py tests/market/test_taiex_bias.py -q`。
+
+## AI 融資供應鏈指標（2026-11-22）
+
+- `CSP_CAPEX_OCF_RATIO`：五家雲端大廠資本支出 ÷ 營業現金流（%），由 `CSP_CAPEX` 與 `CSP_OPERATING_CASH_FLOW` 在每次 SEC 抓取時衍生，只算兩者都有的季度。超過 100 代表擴建花費超過當季本業現金，缺口要靠舉債或外部資金。
+- `BAMLC0A4CBBB`（BBB 級）、`BAMLH0A3HYC`（CCC 級以下）：ICE BofA 利差，走既有 FRED 流程。CCC 利差對高槓桿的新興雲端業者（如 CoreWeave）最敏感，但不等於其個別債券殖利率。
+- 尚未涵蓋：輝達的投資與採購承諾、CoreWeave 申報數字、通電率。
+
+```mermaid
+flowchart LR
+    SEC["SEC companyfacts"] --> Capex["CSP_CAPEX、CSP_OPERATING_CASH_FLOW"]
+    Capex --> Ratio["CSP_CAPEX_OCF_RATIO"]
+    FRED["FRED ICE BofA"] --> Spreads["BBB、CCC 利差"]
+    Ratio --> Card["總經頁信用與違約風險卡"]
+    Spreads --> Card
+```

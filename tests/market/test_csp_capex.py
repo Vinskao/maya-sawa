@@ -37,3 +37,22 @@ def test_the_tag_with_the_newest_quarter_is_used():
     old = {"units": {"USD": [fact("2017-01-01", "2017-03-31", 1)]}}
     new = {"units": {"USD": [fact("2026-07-01", "2026-09-30", 77)]}}
     assert csp.best_series({"PaymentsToAcquirePropertyPlantAndEquipment": old, "PaymentsToAcquireProductiveAssets": new}, csp.CAPEX_TAGS) == {"2026-09-30": 77.0}
+
+
+def test_capex_to_cash_flow_ratio_is_a_percentage_over_quarters_both_series_have():
+    from maya_sawa.services.csp_capex import capex_cash_flow_ratio
+    capex = [{"period": "2026-06", "value": 150.0}, {"period": "2026-09", "value": 230.0}]
+    cash = [{"period": "2026-09", "value": 200.0}, {"period": "2026-12", "value": 210.0}]
+    assert capex_cash_flow_ratio(capex, cash) == [{"period": "2026-09", "value": 115.0}]
+
+
+def test_ratio_skips_quarters_with_zero_or_negative_cash_flow():
+    from maya_sawa.services.csp_capex import capex_cash_flow_ratio
+    assert capex_cash_flow_ratio([{"period": "2026-09", "value": 5.0}], [{"period": "2026-09", "value": 0.0}]) == []
+
+
+def test_ratio_and_credit_tier_spreads_are_registered():
+    from maya_sawa.services import market_macro
+    assert market_macro.CSP_SERIES["CSP_CAPEX_OCF_RATIO"][1] == "percent"
+    assert {"BAMLH0A3HYC", "BAMLC0A4CBBB"} <= set(market_macro.FRED_SERIES)
+    assert {"BAMLH0A3HYC", "BAMLC0A4CBBB", "CSP_CAPEX_OCF_RATIO"} <= market_macro.FREE_CACHE_CODES

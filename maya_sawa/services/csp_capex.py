@@ -80,3 +80,11 @@ def csp_totals(companies: dict[str, dict], tags: tuple[str, ...], quarters: int 
         return []
     common = sorted(set.intersection(*(set(series) for series in per_company)))[-quarters:]
     return [{"period": period, "value": round(sum(series[period] for series in per_company) / 1e9, 2)} for period in common]
+
+
+def capex_cash_flow_ratio(capex: list[dict], cash_flow: list[dict]) -> list[dict]:
+    """[{period, value}] in percent: capital spending over operating cash flow, for quarters both series have.
+    Above 100 the build-out costs more than the quarter's operating cash. Quarters with no positive cash flow are skipped."""
+    cash = {row["period"]: row["value"] for row in cash_flow}
+    return [{"period": row["period"], "value": round(row["value"] / cash[row["period"]] * 100, 1)}
+            for row in capex if cash.get(row["period"], 0) > 0]
