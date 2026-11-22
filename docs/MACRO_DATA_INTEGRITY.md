@@ -55,13 +55,18 @@ flowchart LR
 
 - `CSP_CAPEX_OCF_RATIO`：五家雲端大廠資本支出 ÷ 營業現金流（%），由 `CSP_CAPEX` 與 `CSP_OPERATING_CASH_FLOW` 在每次 SEC 抓取時衍生，只算兩者都有的季度。超過 100 代表擴建花費超過當季本業現金，缺口要靠舉債或外部資金。
 - `BAMLC0A4CBBB`（BBB 級）、`BAMLH0A3HYC`（CCC 級以下）：ICE BofA 利差，走既有 FRED 流程。CCC 利差對高槓桿的新興雲端業者（如 CoreWeave）最敏感，但不等於其個別債券殖利率。
-- 尚未涵蓋：輝達的投資與採購承諾、CoreWeave 申報數字、通電率。
+- CoreWeave（SEC companyfacts，CIK 1769628）：`CRWV_DEBT`、`CRWV_CASH`、`CRWV_DEBT_DUE_12M`（12 個月內到期本金）、`CRWV_RPO`（合約積壓）、單季 `CRWV_OPERATING_CASH_FLOW`、`CRWV_CAPEX`、`CRWV_INTEREST_EXPENSE`，以及衍生的 `CRWV_CASH_TO_DEBT_DUE_12M`（現金 ÷ 12 個月內到期本金，倍）與 `CRWV_OCF_TO_CAPEX`（%）。現金倍數低於 1 代表要靠再融資或展延。2026-09 讀數約 0.38 倍（現金 41 億對 110 億到期）。
+- 輝達（CIK 1045810）：`NVDA_NON_MARKETABLE_EQUITY`（非上市股權投資）、`NVDA_GUARANTEE_EXPOSURE`（擔保最大曝險，2026-09 約 1,085 億）、`NVDA_OPERATING_CASH_FLOW`。輝達會計年度在 1、4、7、10 月底結束，按最近的曆年季度對齊。
+- 這些是申報數字，每季才更新，且每天最多抓一次（兩個請求）。只保留最近 20 季。CoreWeave 2025 年才上市，序列不足三年，輝達擔保曝險只有兩筆，都列在 ty-backend `KNOWN_SHORT` 避免每週誤報。
+- 尚未涵蓋：輝達對個別客戶的投資明細與採購承諾（SEC 數值欄位不全）、CoreWeave 債券殖利率（無免費來源）、通電率。
 
 ```mermaid
 flowchart LR
     SEC["SEC companyfacts"] --> Capex["CSP_CAPEX、CSP_OPERATING_CASH_FLOW"]
     Capex --> Ratio["CSP_CAPEX_OCF_RATIO"]
     FRED["FRED ICE BofA"] --> Spreads["BBB、CCC 利差"]
+    SEC2["SEC companyfacts CoreWeave、輝達"] --> Fin["CRWV_*、NVDA_* 與衍生倍數"]
+    Fin --> Card
     Ratio --> Card["總經頁信用與違約風險卡"]
     Spreads --> Card
 ```

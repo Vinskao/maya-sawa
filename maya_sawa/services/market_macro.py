@@ -200,6 +200,7 @@ CSP_SERIES = {
     "CSP_OPERATING_CASH_FLOW": ("Microsoft, Alphabet, Amazon, Meta and Oracle operating cash flow (SEC filings, quarterly total)", "USD billion", "quarterly"),
     "CSP_CAPEX_OCF_RATIO": ("Capital spending as a percentage of operating cash flow, five cloud providers (derived; above 100 means spending exceeds the quarter's operating cash)", "percent", "quarterly"),
 }
+from .ai_financing import COMPANIES as FINANCING_COMPANIES, FINANCING_SERIES, SPECS as FINANCING_SPECS, financing_rows
 CSP_SOURCE_PAGE = "https://www.sec.gov/edgar/sec-api-documentation"
 SEC_AGENT = {"User-Agent": os.getenv("SEC_USER_AGENT", "TYMultiverseResearch/1.0 (https://tymultiverse.cc)")}
 TWSE_MARGIN_SERIES = {
@@ -332,7 +333,7 @@ class LocalTTLCache:
 
 
 # One entry per cached series plus the raw responses of free sources (ECB, BoJ, CBC, DGBAS, ...).
-_macro_local_cache = LocalTTLCache(max_entries=160)
+_macro_local_cache = LocalTTLCache(max_entries=240)
 LOCAL_MACRO_TTL_SECONDS = 12 * 3600
 # Past freshForSeconds a series is shown as stale; past this window it is dropped.
 FREE_SERIES_FALLBACK_SECONDS = 30 * 24 * 3600
@@ -341,7 +342,7 @@ DTS_TGA_ACCOUNT = "Treasury General Account (TGA) Closing Balance"
 FREE_CACHE_CODES = (set(CBC_SERIES) | set(TAIWAN_SERIES) | set(TPEX_SERIES) | set(YAHOO_SERIES) | set(DGBAS_SERIES)
     | set(DGBAS_COMMODITY_SERIES) | set(UMICH_SERIES) | set(PMI_SERIES) | (set(FRED_SERIES) - FRED_PERSISTED)
     | set(WORLD_MONEY_SERIES) | set(DERIVED_SERIES) | set(ASIA_CPI_SERIES) | set(TWSE_MARGIN_SERIES) | set(TWSE_TURNOVER_SERIES)
-    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES) | set(CSP_SERIES) | set(TAIEX_BIAS_SERIES) | set(YAHOO_BIAS_SERIES))
+    | set(TX_ROLL_SERIES) | set(POLICY_RATE_SERIES) | set(TREASURY_DTS_SERIES) | set(CBC_BORROWING_SERIES) | set(TIER_SERIES) | set(TW_VIX_SERIES) | set(VIX_FUTURES_SERIES) | set(POPULATION_SERIES) | set(TWSE_MARGIN_CALL_SERIES) | set(TWSE_MARKET_PE_SERIES) | set(CSP_SERIES) | set(FINANCING_SERIES) | set(TAIEX_BIAS_SERIES) | set(YAHOO_BIAS_SERIES))
 
 
 def parse_tier_forecast(html: str) -> tuple[list[dict], str | None]:
@@ -991,7 +992,7 @@ class MarketMacroService:
                 logger.warning("Fed calendar refresh failed: %s", str(exc)[:80]); _record_run("FederalReserve", "error", detail=str(exc))
             for source_name, fetch in (("CBC", self._fetch_cbc_observations), ("CBCBorrowing", self._fetch_cbc_borrowing_rates), ("TaiwanCustoms", self._fetch_taiwan_trade),
                 ("TPExGold", self._fetch_tpex_gold), ("YahooMarkets", self._fetch_yahoo_markets),
-                ("CSPCapex", self._fetch_csp_capex), ("TWSEMargin", self._fetch_twse_margin_maintenance), ("TWSEMarketTurnover", self._fetch_twse_turnover),
+                ("CSPCapex", self._fetch_csp_capex), ("AIFinancing", self._fetch_ai_financing), ("TWSEMargin", self._fetch_twse_margin_maintenance), ("TWSEMarketTurnover", self._fetch_twse_turnover),
                 ("TAIFEXRollSpread", self._fetch_tx_roll_spread), ("BISPolicyRates", self._fetch_policy_rates),
                 ("DGBAS", self._fetch_dgbas_employment),
                 ("DGBASPrices", self._fetch_taiwan_prices),
@@ -1832,6 +1833,28 @@ class MarketMacroService:
             by_code = {code: [r for r in rows if r["code"] == code] for code in ("CSP_CAPEX", "CSP_OPERATING_CASH_FLOW")}
             rows += [{"code": "CSP_CAPEX_OCF_RATIO", **r} for r in capex_cash_flow_ratio(by_code["CSP_CAPEX"], by_code["CSP_OPERATING_CASH_FLOW"])]
             saved = self._cache_free_series(rows, CSP_SERIES, "SEC EDGAR companyfacts (MSFT, GOOGL, AMZN, META, ORCL)", CSP_SOURCE_PAGE,
+                                            fresh_for_seconds=3 * 24 * 3600)
+            market_macro_db.finish_source_call(run_id, "success", saved)
+            return saved
+        except Exception as exc:
+            market_macro_db.finish_source_call(run_id, "error", detail=str(exc)[:70])
+            raise
+
+    def _fetch_ai_financing(self) -> int:
+        """CoreWeave and NVIDIA SEC filings change four times a year: one refresh a day, two requests."""
+        if _fetched_within("CRWV_DEBT", 12 * 3600): return 0
+        run_id = market_macro_db.reserve_source_call("SECCompanyFacts", daily_limit=12, minute_limit=6)
+        if run_id is None: raise RuntimeError("sec_daily_budget_exhausted")
+        try:
+            wanted = {tag for _, tag, _ in FINANCING_SPECS.values()}
+            companies: dict[str, dict] = {}
+            for ticker, cik in FINANCING_COMPANIES.items():
+                _, raw = _request(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json", extra_headers=SEC_AGENT)
+                facts = json.loads(raw).get("facts", {}).get("us-gaap", {})
+                companies[ticker] = {tag: facts[tag] for tag in wanted if tag in facts}
+            rows = financing_rows(companies)
+            if not rows: raise RuntimeError("ai_financing_empty")
+            saved = self._cache_free_series(rows, FINANCING_SERIES, "SEC EDGAR companyfacts (CoreWeave, NVIDIA)", CSP_SOURCE_PAGE,
                                             fresh_for_seconds=3 * 24 * 3600)
             market_macro_db.finish_source_call(run_id, "success", saved)
             return saved
