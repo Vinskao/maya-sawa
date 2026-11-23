@@ -32,9 +32,34 @@ flowchart TD
     V -->|否| X[reject + 理由]
     V -->|是| A[accept]
     A --> D[/palais 最上方儀表板]
-    A --> F[依落差改網站：開 PR 分支，不直接推 main]
+    C0 --> S[SEO 週檢：抽查公開網頁及讀取可用的 Search Console 資料]
+    S --> R[週報：SEO 指標、技術問題與複查日期]
+    S --> F
+    A --> F[依證據修繕網站並開 PR]
     F -->|POST /runs/id/fixes| D
 ```
+
+## 自然搜尋 SEO 週檢
+
+沿用 Claude 週一 04:30（Asia/Taipei）的例行任務。優先檢查首頁、`/work` 列表和一篇文章。文章選擇優先順序為已知索引問題、有明顯成效落差的頁面、本週 AI 文章關鍵字對應頁面。
+
+| 指標 | 計算與用途 |
+|---|---|
+| Google 自然搜尋點擊、曝光 | 讀 Google Search Console 的 Web Search，列全站與 `/work`，比較最近兩個完整且已定稿的 7 天窗口 |
+| CTR、平均排名 | CTR 用總點擊除以總曝光，零曝光時留空；平均排名取 Search Console 同範圍的彙總值。另比較前後兩個完整 28 天窗口，核對同頁、相同意圖及相近排名 |
+| 抽樣索引狀態 | 有 URL Inspection 權限才記錄 Google 索引狀態，並列出已檢查 URL 和覆蓋數 |
+| 技術檢查通過數 | 依 URL 檢查 HTTP 200、爬取／索引指令、canonical、sitemap、title、description、H1、站內連結，記錄每類通過數、分母與失敗 URL |
+| 修繕追蹤 | 記錄 URL、證據、PR、實際上線日期與複查日期。上線後追蹤重新爬取及完整 28 天趨勢 |
+
+Search Console 權限或資料不可用時，週報標記缺失原因並繼續技術檢查。Google 搜尋、AI 引用和社群平台各自回報。SEO 指標先留在排程週報。可附於已接受 AI 執行紀錄的修繕摘要，沿用既有 `/palais` 修繕紀錄。
+
+資料定義見 [Search Console 成效報告](https://support.google.com/webmasters/answer/17011364) 與 [Google Sitemap 指南](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)。
+
+## 開發方法
+
+1. （2026-11-24）核對 Claude、ChatGPT 和本機 Codex 排程。沿用已啟用的 Claude 任務及原有 PR 入口，讓 AI 與 SEO 共用同一份修繕清單。
+2. 使用公開 HTML 建立第一週技術基準。Search Console 只用已授權的唯讀來源；目前雲端 routine 的存取尚未驗證。既有 Maya agent key 仍由環境代理注入。
+3. 更新 `routines/ai-visibility-fix.md` 並推 `main`。以 `git diff --check` 驗證文件變更。程式與 API 未改動。第一次執行後核對週報、已產生的 PR 及正式修繕紀錄。
 
 ## 設計重點
 
@@ -68,8 +93,8 @@ flowchart TD
 
 | 排程 | 時間（Asia/Taipei） | 說明 |
 |---|---|---|
-| ChatGPT「TY Multiverse｜AI 搜尋曝光檢視」 | 週六 03:00（週五深夜，每週一次） | 只查 ChatGPT 的 3 格 |
-| Claude「AI 曝光審核與網站修繕」 | 週一 04:30（`30 4 * * 1`） | 先自動檢視 Gemini、Claude，再審核修繕；在週一 09:00 排程前結束 |
+| ChatGPT「TY Multiverse｜AI 搜尋曝光檢視」 | 已暫停 | 歷史任務 |
+| Claude「AI 曝光審核與網站修繕」 | 週一 04:30（`30 4 * * 1`） | 自動檢視 Gemini、Claude 並執行 SEO 週檢，合併有證據的修繕 |
 
 ## ChatGPT 任務提示詞（試跑版，每週六 03:00）
 

@@ -29,7 +29,7 @@ flowchart TD
 | `weekly-maintenance-{backend,maya-sawa,frontend}.md` | 每週維護，各自週三／週六／週日 01:00 |
 | `benchmark-claim-extraction.md` | 年報主張萃取（Sonnet），每天 19:30（台北）；只萃取 Benchmark 龍頭年報、每輪 6 份，提案由 20:30 的 Sonnet 審核班處理（2026-11-18） |
 | `report-claim-extraction.md` | 市場報告｜萃取主張，每天 20:30 |
-| `ai-visibility-fix.md` | AI 曝光審核與網站修繕，週一 04:30（試跑至 2026-12-15）（見 AI_VISIBILITY.md） |
+| `ai-visibility-fix.md` | AI 曝光審核、自然搜尋 SEO 週檢與網站修繕，週一 04:30（見 AI_VISIBILITY.md） |
 | `GPT_REPORT_CLAIM_EXTRACTION.md` | GPT 萃取並提交隔離提案；Claude 只做審核與資料庫寫入。API 部署後才切換雲端排程 |
 
 **未遷移（原因）：**
