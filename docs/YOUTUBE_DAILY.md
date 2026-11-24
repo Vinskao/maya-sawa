@@ -8,7 +8,8 @@ flowchart LR
   B --> C[ffmpeg: 公開主播片段 + 音訊 = H.264/AAC MP4]
   C --> D[YouTube Data API videos.insert 可續傳]
   D --> E[(maya_sawa_youtube_upload day -> 影片 ID)]
-  C --> F[(maya_sawa_youtube_latest_video 只留最新一集)]
+  C --> G[分段寫入 PostgreSQL large object]
+  G --> F[(同一交易替換最新 MP4 並清理暫存物件)]
 ```
 
 - **每 10 分鐘檢查一次**（`main._youtube_daily_loop`）：已核准且還沒上傳的最新 3 集（第一次部署補最近三集，之後每天一集），音訊還沒好的下一輪再試。
@@ -54,3 +55,10 @@ Uiobbeci 的集數以自己的版本標記（`presenter-top-half-2-uiobbeci`）�
 - 失敗後改為每小時重試（`retry_delay_seconds`），Telegram 第一次失敗立刻通知、第三次（約兩小時後）再通知一次。
 
 開發方法：`tests/market/test_youtube_daily.py` 測指令前綴、preset、逾時與重試間隔；兩個真 ffmpeg 測試確認輸出仍是 1920×540 H.264/AAC。
+
+## 開發方法
+
+2026-11-24 查到 11/22 至 11/24 已取得 YouTube 影片 ID，PostgreSQL 程序卻在寫入最新 MP4 時遭 SIGKILL。psycopg2 會將直接綁定的 `bytea` 轉成大型十六進位 SQL 常值。
+
+1. 用 `test_postgres_latest_video_stages_binary_in_bounded_writes` 先重現備份一次送出整支影片的問題。改為每次最多 1 MiB 寫入 PostgreSQL large object，再由資料庫在同一筆交易讀取物件、替換最新 MP4 並刪除暫存物件。交易失敗會保留上一次的備份。
+2. 執行 `poetry run python -m pytest tests/market/test_youtube_daily.py -q`。部署後檢查最新核准集數的影片 ID、備份日期及位元組數，並比對 PostgreSQL 日誌。備份故障時保留已記錄的影片 ID。

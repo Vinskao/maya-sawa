@@ -1,7 +1,7 @@
 """Which daily readings are already on YouTube, and the latest episode's MP4 (docs/YOUTUBE_DAILY.md)."""
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, LargeBinary, Text, delete, select
+from sqlalchemy import Column, DateTime, LargeBinary, Text, delete, select, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
@@ -52,9 +52,31 @@ class YoutubeDatabase:
                                         uploaded_at=now or datetime.now(timezone.utc)))
 
     def save_latest(self, day: str, mp4: bytes, now: datetime | None = None) -> None:
+        created_at = now or datetime.now(timezone.utc)
         with self.sessions.begin() as session:
+            connection = session.connection()
+            if connection.dialect.name != "postgresql":
+                session.execute(delete(YoutubeLatestVideo))
+                session.add(YoutubeLatestVideo(day=day, mp4=mp4, created_at=created_at))
+                return
+
+            # psycopg2 expands bound bytea values into hex SQL literals. Stream the
+            # video through a transaction-local large object to avoid that expansion.
+            blob = connection.connection.driver_connection.lobject(mode="wb")
+            oid = blob.oid
+            chunk_size = 1024 * 1024
+            try:
+                for offset in range(0, len(mp4), chunk_size):
+                    blob.write(mp4[offset:offset + chunk_size])
+            finally:
+                blob.close()
             session.execute(delete(YoutubeLatestVideo))
-            session.add(YoutubeLatestVideo(day=day, mp4=mp4, created_at=now or datetime.now(timezone.utc)))
+            session.execute(
+                text("INSERT INTO maya_sawa_youtube_latest_video (day, mp4, created_at) "
+                     "VALUES (:day, lo_get(:oid), :created_at)"),
+                {"day": day, "oid": oid, "created_at": created_at},
+            )
+            session.execute(text("SELECT lo_unlink(:oid)"), {"oid": oid})
 
     def latest(self):
         with self.sessions() as session:

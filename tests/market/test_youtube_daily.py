@@ -3,6 +3,7 @@ import json
 import shutil
 import subprocess
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -87,6 +88,28 @@ def test_only_the_latest_episodes_mp4_is_kept_in_the_database(db):
     for _ in range(3):
         job.process_one(ROWS)
     assert db.latest() == ("2026-11-16", b"MP4(MP3:id-2026-11-16,zh-CN-Xiaoqi:DragonHDFlashLatestNeural)")
+
+
+def test_postgres_latest_video_stages_binary_in_bounded_writes():
+    db = YoutubeDatabase(None)
+    db.sessions = MagicMock()
+    session = db.sessions.begin.return_value.__enter__.return_value
+    connection = session.connection.return_value
+    connection.dialect.name = "postgresql"
+    driver = connection.connection.driver_connection
+    blob = driver.lobject.return_value
+    blob.oid = 42
+    video = b"\x00" * (3 * 1024 * 1024 + 1)
+
+    db.save_latest("2026-11-24", video)
+
+    chunks = [call.args[0] for call in blob.write.call_args_list]
+    assert chunks and max(map(len, chunks)) <= 1024 * 1024
+    assert b"".join(chunks) == video
+    blob.close.assert_called_once()
+    statements = [str(call.args[0]) for call in session.execute.call_args_list]
+    assert "lo_get" in statements[1] and "lo_unlink" in statements[2]
+    session.add.assert_not_called()
 
 
 def test_audio_not_ready_yet_is_retried_later_and_unapproved_days_are_ignored(db):
