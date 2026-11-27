@@ -13,7 +13,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 MAX_LENGTH = 3500  # Telegram allows 4096; leave room for the header
-PREFIX = {"update": "✅ ", "attention": "⚠️ 需要處理 · "}
+PREFIX = {"update": "✅ ", "attention": "⚠️ 需要處理 · ", "news": "📢 "}  # news: macro_releases.py
 _SECRET = re.compile(r"\d{6,}:[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_.-]+")
 
 

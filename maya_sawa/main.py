@@ -526,6 +526,12 @@ async def _startup_event():
         except Exception as e:
             logger.error(f"Failed to start low-frequency fundamentals collection: {e}")
 
+        try:  # central-bank decisions and US data releases -> Telegram within seconds (docs/MACRO_RELEASES.md)
+            from .services.macro_releases import macro_release_monitor
+            await macro_release_monitor.start()
+        except Exception as e:
+            logger.error(f"Failed to start macro release monitor: {e}")
+
         try:
             from .services.market_price_targets import price_target_collector
             await price_target_collector.start()
