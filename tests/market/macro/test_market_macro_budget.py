@@ -53,3 +53,22 @@ def test_fred_budget_survives_a_day_of_deploys():
     # and starved the release calendar. FRED itself only limits requests per minute (120), not per day.
     from maya_sawa.services import market_macro
     assert market_macro.FRED_DAILY_BUDGET >= 600
+
+
+def test_a_restart_does_not_refetch_what_the_database_already_has(monkeypatch):
+    """Every successful FRED call is recorded with what it fetched; a restart reads that and skips it."""
+    from datetime import timedelta
+    db = database()
+    monkeypatch.setattr(market_macro, 'market_macro_db', db)
+    now = datetime.now(timezone.utc)
+    with db.sessions.begin() as session:
+        session.add(MacroFetchRun(source='FRED', started_at=now - timedelta(hours=1), status='success',
+                                  record_count=3, detail='series:DGS10'))
+        session.add(MacroFetchRun(source='FRED', started_at=now - timedelta(hours=7), status='success',
+                                  record_count=3, detail='dates:10'))
+        session.add(MacroFetchRun(source='FRED', started_at=now - timedelta(minutes=5), status='error',
+                                  record_count=0, detail='series:ICSA'))
+    assert db.succeeded_within('FRED', 'series:DGS10', 5 * 3600)
+    assert not db.succeeded_within('FRED', 'dates:10', 5 * 3600)       # older than the refresh interval
+    assert not db.succeeded_within('FRED', 'series:ICSA', 5 * 3600)    # a failure is retried
+    assert not db.succeeded_within('FRED', 'series:WALCL', 5 * 3600)   # never fetched

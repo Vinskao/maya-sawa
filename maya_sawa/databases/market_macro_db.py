@@ -186,6 +186,17 @@ class MarketMacroDatabase:
             session.add(run); session.flush()
             return run.id
 
+    def succeeded_within(self, source: str, detail: str, seconds: float) -> bool:
+        """True when a call recorded with exactly this detail (e.g. 'series:DGS10') succeeded less than seconds ago.
+        Lets a restart skip what PostgreSQL already holds instead of refetching every provider."""
+        if not self.sessions:
+            return False
+        since = datetime.now(timezone.utc) - timedelta(seconds=seconds)
+        with self.sessions() as session:
+            return session.query(MacroFetchRun.id).filter(
+                MacroFetchRun.source == source, MacroFetchRun.detail == detail,
+                MacroFetchRun.status == "success", MacroFetchRun.started_at >= since).first() is not None
+
     def finish_source_call(self, run_id: int, status: str, count: int = 0, detail: str = "", http_status: int | None = None) -> None:
         if not self.sessions:
             return

@@ -301,6 +301,9 @@ BLS_DAILY_BUDGET = _bounded_budget("MACRO_BLS_DAILY_BUDGET", 40, 40)
 # (~96 calls/day); the 15 cached weekly/monthly/quarterly series are refetched once a day. A
 # restart refetches all 39. FRED limits requests per minute (120), not per day; 200 ran out on a day of five
 # deploys (2026-11-27) and starved the release calendar, so 600 leaves room for deploys and manual recovery.
+# A successful call is recorded with its series/release id; anything fetched within this window (just under the 6-hour
+# refresh) is read from PostgreSQL instead of FRED, so restarts and deploys cost no FRED calls.
+FRED_REFETCH_SECONDS = 5.5 * 3600
 FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 600, 600)
 
 
@@ -1061,6 +1064,8 @@ class MarketMacroService:
         count = 0
         failures = 0
         for release_id, (group, title) in FRED_RELEASES.items():
+            if market_macro_db.succeeded_within("FRED", f"dates:{release_id}", FRED_REFETCH_SECONDS):
+                continue  # already in PostgreSQL from this refresh window (e.g. the pod just restarted)
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=60)
             if run_id is None:
                 raise RuntimeError("fred_daily_or_minute_budget_exhausted")
@@ -1096,7 +1101,7 @@ class MarketMacroService:
                         "scheduleVerification": "confirmed" if local_time else "date_only",
                         "sourceUrl": "https://fred.stlouisfed.org/releases/calendar"})
                 saved = market_macro_db.save_events("FRED", events); count += saved
-                market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+                market_macro_db.finish_source_call(run_id, "success", saved, detail=f"dates:{release_id}", http_status=status)
             except Exception as exc:
                 market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
                 failures += 1
@@ -1138,6 +1143,9 @@ class MarketMacroService:
             if cached and FRED_SERIES[code][2] != "daily" and \
                     (datetime.now(UTC) - datetime.fromisoformat(cached["fetchedAt"])).total_seconds() < 24 * 3600:
                 continue
+            window = FRED_REFETCH_SECONDS if FRED_SERIES[code][2] == "daily" else 24 * 3600
+            if market_macro_db.succeeded_within("FRED", f"series:{code}", window):
+                continue  # PostgreSQL already has it; a restart must not refetch
             attempted += 1
             run_id = market_macro_db.reserve_source_call("FRED", daily_limit=FRED_DAILY_BUDGET, minute_limit=60)
             if run_id is None: raise RuntimeError("fred_daily_or_minute_budget_exhausted")
@@ -1162,7 +1170,7 @@ class MarketMacroService:
                 else:
                     saved = market_macro_db.save_observations("FRED", rows)
                 count += saved
-                market_macro_db.finish_source_call(run_id, "success", saved, http_status=status)
+                market_macro_db.finish_source_call(run_id, "success", saved, detail=f"series:{code}", http_status=status)
             except Exception as exc:
                 market_macro_db.finish_source_call(run_id, "error", detail=str(exc))
                 failures += 1

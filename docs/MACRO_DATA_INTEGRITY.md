@@ -70,3 +70,9 @@ flowchart LR
     Ratio --> Card["總經頁信用與違約風險卡"]
     Spreads --> Card
 ```
+
+## 重啟不重抓（FRED）
+每次成功的 FRED 呼叫都在 `maya_sawa_macro_fetch_runs.detail` 記下抓了什麼（`series:DGS10`、`dates:10`）。
+下一次刷新先查 `succeeded_within`：日頻序列與公布日期 5.5 小時內、其他頻率 24 小時內成功過就直接用 PostgreSQL 的資料，不打 FRED。
+所以 pod 重啟、部署都不會再花 FRED 呼叫；只有 6 小時一輪的例行刷新會真的去抓。
+背景：2026-11-27 一天五次部署，每次重啟重抓約 39 次，把自設的每日上限（當時 200，現在 600）用完，經濟數據行事曆因此沒更新。
