@@ -532,6 +532,12 @@ async def _startup_event():
         except Exception as e:
             logger.error(f"Failed to start macro release monitor: {e}")
 
+        try:  # Taiwan / US pre-open announcement + news digest, Gemini summary (docs/NEWS_DIGEST.md)
+            from .services.news_digest import news_digest_scheduler
+            await news_digest_scheduler.start()
+        except Exception as e:
+            logger.error(f"Failed to start news digest: {e}")
+
         try:
             from .services.market_price_targets import price_target_collector
             await price_target_collector.start()
