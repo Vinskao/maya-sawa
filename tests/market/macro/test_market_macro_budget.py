@@ -48,11 +48,21 @@ def test_a_source_budget_counts_only_its_own_calls_not_names_that_start_with_it(
     assert db.reserve_source_call('DGBAS', daily_limit=1) is not None
 
 
-def test_fred_budget_survives_a_day_of_deploys():
-    # A restart refetches ~39 FRED calls; five deploys plus the 6-hour refreshes passed the old 200 cap on 2026-11-27
-    # and starved the release calendar. FRED itself only limits requests per minute (120), not per day.
-    from maya_sawa.services import market_macro
-    assert market_macro.FRED_DAILY_BUDGET >= 600
+def test_fred_has_no_daily_cap_only_a_per_minute_guard():
+    # FRED limits requests per minute (120); a self-imposed daily cap only blocked our own refreshes (2026-11-27).
+    from datetime import timedelta
+    db = database()
+    now = datetime.now(timezone.utc)
+    with db.sessions.begin() as session:
+        for i in range(1000):  # a busy day, all older than a minute
+            session.add(MacroFetchRun(source='FRED', started_at=now - timedelta(hours=2, seconds=i), status='success',
+                                      record_count=1, detail=''))
+    assert market_macro.FRED_DAILY_BUDGET is None
+    assert db.reserve_source_call('FRED', daily_limit=None, minute_limit=60) is not None
+    with db.sessions.begin() as session:
+        for _ in range(60):
+            session.add(MacroFetchRun(source='FRED', started_at=now, status='success', record_count=1, detail=''))
+    assert db.reserve_source_call('FRED', daily_limit=None, minute_limit=60) is None  # stays under FRED's 120/min
 
 
 def test_a_restart_does_not_refetch_what_the_database_already_has(monkeypatch):

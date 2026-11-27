@@ -297,14 +297,12 @@ def _bounded_budget(name: str, default: int, ceiling: int) -> int:
 
 
 BLS_DAILY_BUDGET = _bounded_budget("MACRO_BLS_DAILY_BUDGET", 40, 40)
-# 17 daily series, RSAFS/ICSA (persisted) and 5 release schedules run every 6-hour refresh
-# (~96 calls/day); the 15 cached weekly/monthly/quarterly series are refetched once a day. A
-# restart refetches all 39. FRED limits requests per minute (120), not per day; 200 ran out on a day of five
-# deploys (2026-11-27) and starved the release calendar, so 600 leaves room for deploys and manual recovery.
 # A successful call is recorded with its series/release id; anything fetched within this window (just under the 6-hour
 # refresh) is read from PostgreSQL instead of FRED, so restarts and deploys cost no FRED calls.
 FRED_REFETCH_SECONDS = 5.5 * 3600
-FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 600, 600)
+# FRED limits requests per minute (120), not per day, so there is no daily cap: a self-imposed one blocked our own
+# refreshes on 2026-11-27. The per-minute guard (60) at each call keeps us well under FRED's limit.
+FRED_DAILY_BUDGET = None
 
 
 class LocalTTLCache:
@@ -950,7 +948,7 @@ class MarketMacroService:
                 await self.refresh()
             except Exception:
                 logger.exception("Macro scheduled refresh failed")
-            # Four refreshes daily stay inside FRED_DAILY_BUDGET (see its comment).
+            # Four refreshes daily; restarts reuse PostgreSQL (FRED_REFETCH_SECONDS).
             await asyncio.sleep(6 * 3600)
 
     async def refresh(self) -> dict:

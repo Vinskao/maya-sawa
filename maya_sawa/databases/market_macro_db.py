@@ -167,8 +167,9 @@ class MarketMacroDatabase:
         finally:
             connection.close()
 
-    def reserve_source_call(self, source: str, daily_limit: int, minute_limit: int = 10) -> int | None:
-        """Cross-worker provider budget. Reserved attempts count even when the upstream fails."""
+    def reserve_source_call(self, source: str, daily_limit: int | None, minute_limit: int = 10) -> int | None:
+        """Cross-worker provider budget. Reserved attempts count even when the upstream fails.
+        daily_limit=None means the provider only limits per minute (FRED), so only the minute guard applies."""
         if not self.sessions:
             return None
         now = datetime.now(timezone.utc)
@@ -180,7 +181,7 @@ class MarketMacroDatabase:
             minute_count = session.query(MacroFetchRun).filter(MacroFetchRun.source == source,
                 ~MacroFetchRun.detail.like("%budget_exhausted%"),
                 MacroFetchRun.started_at >= now - timedelta(minutes=1), MacroFetchRun.status.in_(["reserved", "success", "error"])).count()
-            if day_count >= daily_limit or minute_count >= minute_limit:
+            if (daily_limit is not None and day_count >= daily_limit) or minute_count >= minute_limit:
                 return None
             run = MacroFetchRun(source=source, started_at=now, status="reserved", record_count=0, detail="")
             session.add(run); session.flush()
