@@ -151,6 +151,58 @@ def due_session(now: datetime) -> tuple[str, date] | None:
     return None
 
 
+# ---------- economic calendar preview ----------
+
+EVENT_LABEL = {"cpi": "美國 CPI", "ppi": "美國 PPI", "employment": "美國非農就業", "claims": "美國初領失業金",
+               "retail_sales": "零售銷售", "fed": "美國 FOMC 利率決策"}
+
+
+def upcoming_events(events: list[dict], now: datetime, hours: int = 24) -> list[dict]:
+    """Calendar rows (market_macro_db events) due within `hours`; one row per release even when two sources list it.
+    Date-only rows count when their New York date falls in the window."""
+    end = now + timedelta(hours=hours)
+    chosen: dict[tuple, dict] = {}
+    for event in events:
+        at = event.get("scheduledAt")
+        if at is not None:
+            if not now <= at < end:
+                continue
+            identity = (event["groupId"], at) if event["groupId"] != "other" else (event["title"], at)
+        else:
+            day = event.get("scheduledDate")
+            if not day or not now.astimezone(NY).date() <= day <= end.astimezone(NY).date():
+                continue
+            identity = (event["groupId"] if event["groupId"] != "other" else event["title"], day)
+        current = chosen.get(identity)
+        if current is None or (not current.get("consensusValue") and event.get("consensusValue")):
+            chosen[identity] = event
+    return sorted(chosen.values(), key=lambda e: (e.get("scheduledAt") or datetime.combine(e["scheduledDate"], time(23, 59), NY)))
+
+
+def calendar_section(events: list[dict]) -> str:
+    if not events:
+        return "📅 未來 24 小時沒有排定的重大經濟數據。"
+    lines = ["📅 未來 24 小時經濟數據（台北時間）："]
+    for event in events:
+        at = event.get("scheduledAt")
+        when = at.astimezone(TPE).strftime("%m/%d %H:%M") if at else event["scheduledDate"].strftime("%m/%d") + " 時間未定"
+        label = EVENT_LABEL.get(event["groupId"]) or event["title"]
+        lines.append(f"・{when} {label}" + (f"（預期 {event['consensusValue']}）" if event.get("consensusValue") else ""))
+    return "\n".join(lines)
+
+
+def load_events(now: datetime) -> list[dict]:
+    from ..databases.market_macro_db import MacroEvent, market_macro_db
+    if not market_macro_db.sessions:
+        return []
+    today = now.astimezone(NY).date()
+    with market_macro_db.sessions() as session:
+        rows = session.query(MacroEvent).filter(MacroEvent.scheduled_date >= today - timedelta(days=1),
+                                                MacroEvent.scheduled_date <= today + timedelta(days=2)).all()
+        return [{"groupId": r.group_id, "title": r.title, "scheduledDate": r.scheduled_date,
+                 "scheduledAt": r.scheduled_at, "consensusValue": r.consensus_value} for r in rows]
+
+
 # ---------- summary ----------
 
 def _limited(items: list[dict]) -> dict[str, list[dict]]:
@@ -312,6 +364,12 @@ async def run_session(store, session: str, day: date, now: datetime, client) -> 
         key = os.getenv("GEMINI_API_KEY", "").strip()
         summary = await asyncio.to_thread(gemini_summary, build_prompt(items, names), key) if key else None
         body = summary or ("（AI 摘要暫時無法使用，以下為標題）\n" + fallback_summary(items, names))
+    try:
+        calendar = calendar_section(upcoming_events(await asyncio.to_thread(load_events, now), now))
+    except Exception:
+        logger.exception("Economic calendar preview unavailable")
+        calendar = "📅 經濟數據行事曆暫時讀不到。"
+    body = f"{calendar}\n\n{body}"
     return await asyncio.to_thread(deliver, store, session, day, digest_title(session, len(items)), body)
 
 

@@ -29,3 +29,8 @@ flowchart LR
 - 同一個 pod 每場只收集一次（不會在 15 分鐘時段內重複叫 Gemini）；多 pod 由 `news-digest:{tw|us}` + 當地日期去重。
 - 解析器都是純函式並有測試：`tests/market/test_news_digest.py`（真實欄位名，例如證交所的「主旨 」有尾端空白、民國日期）。
 - AI 排程的深度解讀不變；之後可以改讓排程讀這份摘要，而不是自己搜尋。
+
+## 經濟數據預告
+每則摘要最上面先列「📅 未來 24 小時經濟數據（台北時間）」，來源是 `maya_sawa_macro_events`（FRED 公布日期＋Finance Calendar 預期值，`market_macro.py` 寫入）。
+台北 08:00 那則就會預告當晚 20:30／21:30 的美國數據；同一筆數據兩個來源都有時只列一次，優先用有預期值的那筆（`upcoming_events`）。
+限制：行事曆只涵蓋 `FRED_RELEASES` 與 Finance Calendar 篩出的項目；Finance Calendar 失效（401）或 FRED 額度用完時可能漏列，例如 GDP、PCE。

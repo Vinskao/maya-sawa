@@ -139,3 +139,22 @@ def test_targets_put_japanese_holdings_in_the_overseas_session(monkeypatch):
     taiwan, overseas, names = nd.targets()
     assert taiwan == {"2330"} and overseas == {"6857-JP", "NVDA"}
     assert names["6857-JP"] == "ADVANTEST CORP"
+
+
+def test_calendar_preview_lists_tonights_release_once_in_taipei_time():
+    nfp = datetime(2026, 12, 4, 13, 30, tzinfo=UTC)
+    events = [
+        {"groupId": "employment", "title": "Nonfarm payrolls", "scheduledDate": nfp.date(), "scheduledAt": nfp, "consensusValue": None},
+        {"groupId": "employment", "title": "US NFP", "scheduledDate": nfp.date(), "scheduledAt": nfp, "consensusValue": "+120K"},
+        {"groupId": "claims", "title": "Claims", "scheduledDate": datetime(2026, 12, 10).date(),
+         "scheduledAt": datetime(2026, 12, 10, 13, 30, tzinfo=UTC), "consensusValue": None},
+    ]
+    morning = datetime(2026, 12, 4, 0, 0, tzinfo=UTC)  # 08:00 Taipei
+    upcoming = nd.upcoming_events(events, morning)
+    assert len(upcoming) == 1
+    assert nd.calendar_section(upcoming) == "📅 未來 24 小時經濟數據（台北時間）：\n・12/04 21:30 美國非農就業（預期 +120K）"
+
+
+def test_calendar_preview_says_so_when_nothing_is_scheduled():
+    assert nd.upcoming_events([], NOW) == []
+    assert "沒有排定" in nd.calendar_section([])
