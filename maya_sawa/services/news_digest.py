@@ -248,6 +248,9 @@ def targets() -> tuple[set[str], set[str], dict[str, str]]:
             taiwan.add(code)
         elif market == "US" and re.fullmatch(r"[A-Z][A-Z.]{0,5}", code):
             us.add(code)
+        elif market not in ("TW", "", "UNKNOWN") and re.fullmatch(r"[A-Z0-9.]{1,8}", code):
+            code = f"{code}-{market}"  # e.g. 6857-JP: same label the routines use, never mixed up with Taiwan 6857
+            us.add(code)
         else:
             continue
         if row.get("name") and str(row["name"]).strip().upper() != code:
@@ -285,7 +288,9 @@ async def collect(client, session: str, now: datetime) -> tuple[list[dict], dict
             if ticker in cik_by_ticker:
                 url = f"https://data.sec.gov/submissions/CIK{cik_by_ticker[ticker]:010d}.json"
                 items += await safe("sec", _then(get_json(url, **sec), lambda s, t=ticker: sec_8k(s, t, since)))
-            query = quote(f"{ticker} {names.get(ticker, '')} stock".strip())
+            # Non-US listings (6857-JP) are found by company name; a bare number would match unrelated stories.
+            query = quote(f"\"{names[ticker]}\"" if "-" in ticker and names.get(ticker)
+                          else f"{ticker} {names.get(ticker, '')} stock".strip())
             url = f"https://news.google.com/rss/search?q={query}+when:1d&hl=en-US&gl=US&ceid=US:en"
             items += await safe("google", _then(client.get(url), lambda r, t=ticker: google_news(r.text, t, since)))
             await asyncio.sleep(0.2)  # SEC asks for at most 10 requests a second

@@ -121,3 +121,21 @@ def test_fund_holding_filler_is_dropped_from_google_news():
 <item><title>Nvidia signs supply deal with Samsung - Reuters</title><link>c</link><pubDate>Thu, 26 Nov 2026 22:00:00 GMT</pubDate></item>
 </channel></rss>"""
     assert [i["title"] for i in nd.google_news(feed, "NVDA", SINCE)] == ["Nvidia signs supply deal with Samsung - Reuters"]
+
+
+def test_targets_put_japanese_holdings_in_the_overseas_session(monkeypatch):
+    from maya_sawa.databases import market_dashboard_db as module
+
+    class FakeDb:
+        def latest_auto(self):
+            return {"positions": [{"code": "6857", "market": "JP", "name": "ADVANTEST CORP"},
+                                  {"code": "2330", "name": "台積電"}]}
+        def custom_symbols(self):
+            return [{"code": "NVDA", "market": "US", "name": "NVIDIA"}]
+        def watch_symbols(self):
+            return []
+
+    monkeypatch.setattr(module, "market_dashboard_db", FakeDb())
+    taiwan, overseas, names = nd.targets()
+    assert taiwan == {"2330"} and overseas == {"6857-JP", "NVDA"}
+    assert names["6857-JP"] == "ADVANTEST CORP"
