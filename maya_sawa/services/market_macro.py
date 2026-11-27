@@ -299,9 +299,9 @@ def _bounded_budget(name: str, default: int, ceiling: int) -> int:
 BLS_DAILY_BUDGET = _bounded_budget("MACRO_BLS_DAILY_BUDGET", 40, 40)
 # 17 daily series, RSAFS/ICSA (persisted) and 5 release schedules run every 6-hour refresh
 # (~96 calls/day); the 15 cached weekly/monthly/quarterly series are refetched once a day. A
-# restart refetches all 39. The rest of the 200 covers deploys and manual recovery while
-# remaining well below FRED's per-minute limit.
-FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 200, 200)
+# restart refetches all 39. FRED limits requests per minute (120), not per day; 200 ran out on a day of five
+# deploys (2026-11-27) and starved the release calendar, so 600 leaves room for deploys and manual recovery.
+FRED_DAILY_BUDGET = _bounded_budget("MACRO_FRED_DAILY_BUDGET", 600, 600)
 
 
 class LocalTTLCache:

@@ -46,3 +46,10 @@ def test_a_source_budget_counts_only_its_own_calls_not_names_that_start_with_it(
         for _ in range(3):
             session.add(MacroFetchRun(source='DGBASPrices', started_at=datetime.now(timezone.utc), status='success', record_count=1, detail=''))
     assert db.reserve_source_call('DGBAS', daily_limit=1) is not None
+
+
+def test_fred_budget_survives_a_day_of_deploys():
+    # A restart refetches ~39 FRED calls; five deploys plus the 6-hour refreshes passed the old 200 cap on 2026-11-27
+    # and starved the release calendar. FRED itself only limits requests per minute (120), not per day.
+    from maya_sawa.services import market_macro
+    assert market_macro.FRED_DAILY_BUDGET >= 600
