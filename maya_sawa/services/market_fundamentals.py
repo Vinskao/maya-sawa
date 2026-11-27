@@ -177,6 +177,7 @@ class MarketFundamentalsService:
             period = str(event.get("period") or event.get("date") or "")
             grouped.setdefault((kind, period, published.isoformat()), set()).add(code)
         store = market_automation.automation_store()
+        await self._warn_margin_drops(store, sorted({c for (k, _, _), cs in grouped.items() if k == "financial_report" for c in cs}))
         for (kind, period, published), event_codes in sorted(grouped.items()):
             code_list = sorted(event_codes)
             key = f"taiwan-disclosure:{kind}:{period}:{published}:{','.join(code_list)}"
@@ -184,6 +185,20 @@ class MarketFundamentalsService:
                 store, event_key=key, codes=code_list,
                 reason=f"台股 {kind}（期間 {period}，公布日 {published}）",
             )
+
+    async def _warn_margin_drops(self, store, codes: list[str]) -> None:
+        """Immediate rule-based Telegram warning (services/earnings_alerts.py) for stocks whose report just landed."""
+        if not codes:
+            return
+        from . import earnings_alerts, telegram_notify
+        try:
+            metrics = {}
+            for code in codes:
+                payload = await self.get(code)
+                metrics[code] = (payload.get("metrics") or {}).get("quarterly", [])
+            await asyncio.to_thread(earnings_alerts.notify_margin_drops, store, metrics, telegram_notify.send)
+        except Exception:
+            logger.exception("Earnings margin alert failed")
 
     def _enqueue(self, code: str, urgent: bool = False) -> None:
         if code in self._queue:

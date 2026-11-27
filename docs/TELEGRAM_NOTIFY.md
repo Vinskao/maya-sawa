@@ -68,3 +68,22 @@
 - 腳本放在套件目錄 `maya_sawa/public_scripts/`，不能放 `scripts/`：Docker 映像用 `.dockerignore` 排除了 `scripts/`。
 - 每週文章排程沒有寫入金鑰（也不該有），所以它的用量不會被記錄。
 - 2026-10-28 實測：一次性測試排程回報成功，資料庫出現 `claude-routine`、`claude-sonnet-5-5`、約 66k token、$0.024。
+
+## 財報毛利率警示（規則式，不經 AI）
+
+`services/earnings_alerts.py`：MOPS 迴圈（每小時，有新資料時每 10 分鐘）偵測到持股／自訂標的／觀察清單的**新財報（公布日 7 天內）**後，
+立刻比較毛利率並送 `attention`：
+
+```mermaid
+flowchart LR
+  MOPS[_mops_loop 每小時] --> Ev[_fire_recent_analysis_events]
+  Ev -->|financial_report ≤7 天| W[_warn_margin_drops]
+  W --> R{margin_alert}
+  R -->|比上季降 ≥2 點 或 連兩季下滑| T[Telegram attention]
+  R -->|否| Q[不通知]
+  Ev --> A[台股 AI 分析排程（另一條，不變）]
+```
+
+- 門檻：`GROSS_MARGIN_DROP_PP = 2.0`（百分點）；只判斷最新一季。
+- 去重：每檔每個財報期間只通知一次（`AutomationStore`，日期 1970-01-02）；未設定 Telegram 或送失敗會釋放，下一輪重試。
+- 範例：`4979 聯亞 毛利率下滑（2026Q2）／毛利率 58.6% → 55.0%，比上一季降 3.6 點`。
