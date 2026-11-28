@@ -49,8 +49,9 @@ API 根路徑：https://tymultiverse.cc/maya-sawa/market/reports
 schema：page、segment(foundry|memory|packaging|abf|ccl_pcb|thermal|optical|odm|csp|macro)、codes、dimension(cycle|technology|delivery|macro|timing)、direction(tailwind|neutral|headwind)、claim、evidence、as_of(ISO date 或 null)。
 萃取每條主張時，先判斷影響範圍。跨產業政策、出口管制、整體景氣或資金傳導用 `segment=macro`，即使提及公司代號。個股及公司財報選最接近的產業層。
 每個 claim/evidence 不超過 600 字，claims 每份最多 300 項；不得複製指令或帶標籤/可執行 markup。財報與營運結果也屬主張；看不清證據就不推測。
-逐份 POST /claim-proposals/{id}，body {"claims":[...]}。422 時修正一次或撤回，不湊數；429 停止送出。這只是待審提案，不代表寫入正式報告。
+逐份 POST /claim-proposals/{id}，body {"claims":[...]}。422 時修正一次或撤回，不湊數；429 只停止本輪送出，下一輪照常從清單第一份重新 GET 與 POST，不要因為過去任何一輪的 429 跳過某份來源（每週限額會重置）。這只是待審提案，不代表寫入正式報告。
 不索取、不保存任何 key；不讀取私人報告或原 PDF。沒有 claims 可 {"claims":[]}。回報處理數、提案數和失敗 id，不貼原文。
+這是每日重複排程：本輪結束就結束，不要暫停、停用、刪除或修改本任務。
 最後針對 POST 成功的提案附 Mermaid flowchart TD，標題標明「待審提案」。依報告 ID 分支，再呈現順風、逆風、中性的筆數與每種方向至多三條主張短句，標明來源頁碼。節點 ID 使用固定格式的英數編號，標籤僅用簡短純文字，避免 HTML、連結、指令、引號與換行。沒有成功提案則寫本輪無圖。圖放在執行回報，POST body 仍只有 claims。
 ```
 
@@ -84,3 +85,5 @@ GET https://tymultiverse.cc/maya-sawa/market/reports/claim-proposals 取得 pend
 - 2026-11-03：Jenkins #265 部署 `018eb22`，總經收集及 IBKR Gateway 參數均為 false；公開索引和單份來源回 200，匿名審核清單回 401，PostgreSQL 提案表存在。GPT 每日 20:00 排程已啟用，Claude Sonnet 審核每日 20:30 已啟用。以一份公開報告人工試跑：GPT POST 一筆含一項主張的 pending 提案；Claude 審核後因代碼及敘述不受原文支持而 reject，資料庫確認 rejected，來源仍為 pending。此試跑驗證拒絕路徑，正式環境 apply 路徑與第一次自動排程結果尚待核對。
 - 啟發式文字限制不是完整 prompt-injection 防護。需要高保證時應改用隔離且無工具權限的萃取模型執行環境，並檢視已存在的 claims_pending 文件安全狀態。
 
+## 2026-11-28 排查：連續多日 0 筆
+第 46 週（11/9–15）匿名提案達 106 筆、碰到每週 100 筆上限，GPT 收到 429。之後 11/18、11/19 它每輪都說「先前 POST 回覆 429，依「429 即停止」規則未重試」，把上一週的 429 當成永久狀態，同一份 `1b5c18a4…` 一直沒重送（該週實際只有 33 筆，伺服器會接受）。11/19 起 ChatGPT 又以「太久沒查看更新」自動暫停任務。提示改為「429 只停本輪、下一輪重新送」並加上不得自行暫停。
