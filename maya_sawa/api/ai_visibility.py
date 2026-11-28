@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["ai-visibility"])
 RUNS_PER_WEEK = 6  # one GPT run plus retries
 AUTO_PER_WEEK = 10  # Gemini probe + Claude routine, with retries
-GEMINI_MODEL = os.getenv("AI_VISIBILITY_GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("AI_VISIBILITY_GEMINI_MODEL", "gemini-flash-latest")  # 2.5-flash retired for this key on 2026-11-28
 
 
 class VisibilityResult(BaseModel):
