@@ -23,7 +23,7 @@ flowchart LR
 ```
 
 ## 規則與開發方法
-- Gemini 只根據給它的公告與新聞寫摘要，不推測股價、不給買賣建議（`build_prompt`）。模型可用 `NEWS_DIGEST_GEMINI_MODEL` 改，預設 `gemini-2.5-flash`。
+- Gemini 只根據給它的公告與新聞寫摘要，不推測股價、不給買賣建議（`build_prompt`）。模型可用 `NEWS_DIGEST_GEMINI_MODEL` 改，預設別名 `gemini-flash-latest`（2.5-flash 已於 2026-11-28 下架）；503／404／逾時依序改用 `GEMINI_FALLBACK_MODELS`，429 額度用完就停。
 - SEC 拒絕瀏覽器樣式的 User-Agent，用 `SEC_USER_AGENT`（預設 `maya-sawa research bot`，不帶個人 email）。每次請求間隔 0.2 秒。
 - 沒有新資料也會送一則「沒有新公告或新聞」，讓你知道排程有跑。
 - 同一個 pod 每場只收集一次（不會在 15 分鐘時段內重複叫 Gemini）；多 pod 由 `news-digest:{tw|us}` + 當地日期去重。
@@ -33,7 +33,7 @@ flowchart LR
 ## 大盤回顧（Gemini＋Google 搜尋）
 持股與觀察清單沒消息時摘要不能是空的，所以每場最前面先放「📈 大盤回顧」：`market_brief_prompt` 交給 Gemini 並開 `google_search` 工具（`gemini_summary(..., search=True)`），
 美股場寫最近一個交易日三大指數與費半收盤（點位、漲跌、週線、假期註明）、重點個股與原因、盤前期指、接下來的觀察重點；台股場寫加權指數與三大法人、昨晚美股與台積電 ADR、重點個股、本週觀察重點。
-規則：只寫搜尋到的數字、不給建議、15 行內。搜尋失敗時寫「大盤回顧暫時無法產生」，持股段落照常。標題沒有持股消息時不再顯示「（0 則）」。
+規則：只寫搜尋到的數字、不給建議、15 行內。Google 搜尋額度用完（429，2026-11-28 實測）時改用 Yahoo 收盤（三大指數、費半、台積電 ADR、VIX／加權指數，含本週漲跌）＋ Google News 市場標題，交給 Gemini（不開搜尋）整理；Gemini 也失敗就直接列報價與標題。標題沒有持股消息時不再顯示「（0 則）」。
 
 ## 經濟數據預告
 每則摘要最上面先列「📅 未來 24 小時經濟數據（台北時間）」，來源是 `maya_sawa_macro_events`（FRED 公布日期＋Finance Calendar 預期值，`market_macro.py` 寫入）。

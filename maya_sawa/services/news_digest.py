@@ -27,7 +27,9 @@ NY = ZoneInfo("America/New_York")
 LOOKBACK = timedelta(hours=24)
 SESSIONS = {"tw": (TPE, time(8, 0)), "us": (NY, time(8, 0))}
 SESSION_LABEL = {"tw": "台股盤前摘要", "us": "美股盤前摘要"}
-GEMINI_MODEL = os.getenv("NEWS_DIGEST_GEMINI_MODEL", "gemini-2.5-flash")
+# An alias: gemini-2.5-flash was retired for this key on 2026-11-28 (404), which silently turned every summary into headlines.
+GEMINI_MODEL = os.getenv("NEWS_DIGEST_GEMINI_MODEL", "gemini-flash-latest")
+GEMINI_FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3.8-flash")
 MAX_ITEMS_PER_CODE = 8
 SEC_ITEMS = {"1.01": "重大合約", "1.02": "合約終止", "2.01": "併購／處分資產", "2.02": "財報", "2.03": "新增負債",
              "2.05": "重組費用", "2.06": "資產減損", "3.01": "下市通知", "5.02": "高層異動", "7.01": "公開說明",
@@ -258,23 +260,109 @@ def market_brief_prompt(session: str, now: datetime) -> str:
             "4. 今天與本週觀察重點：國內外數據、央行、法說會、除權息，附日期。\n" + rules)
 
 
+# Fallback when Google Search grounding is unavailable (its quota is separate and was exhausted on 2026-11-28):
+# Yahoo daily closes plus market headlines, written up by Gemini without search, or listed as-is without Gemini.
+YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=1mo&interval=1d"
+MARKET_SYMBOLS = {
+    "us": [("^DJI", "道瓊", "America/New_York"), ("^GSPC", "標普 500", "America/New_York"), ("^IXIC", "那斯達克", "America/New_York"),
+           ("^SOX", "費城半導體", "America/New_York"), ("TSM", "台積電 ADR", "America/New_York"), ("^VIX", "VIX", "America/New_York")],
+    "tw": [("^TWII", "加權指數", "Asia/Taipei"), ("^SOX", "費城半導體", "America/New_York"), ("TSM", "台積電 ADR", "America/New_York"),
+           ("^GSPC", "標普 500", "America/New_York"), ("^IXIC", "那斯達克", "America/New_York")],
+}
+MARKET_NEWS_QUERY = {"us": ("stock market today Dow S&P Nasdaq", "en-US", "US", "US:en"),
+                     "tw": ("台股 加權指數 收盤 外資", "zh-TW", "TW", "TW:zh-Hant")}
+
+
+def index_move(chart: dict, tz: str) -> dict | None:
+    """Last daily close, change against the previous close, and change against the last close before this week's Monday."""
+    from zoneinfo import ZoneInfo
+    result = chart["chart"]["result"][0]
+    rows = [(datetime.fromtimestamp(t, ZoneInfo(tz)).date(), c)
+            for t, c in zip(result.get("timestamp") or [], result["indicators"]["quote"][0].get("close") or []) if c is not None]
+    if len(rows) < 2:
+        return None
+    day, close = rows[-1]
+    prev = rows[-2][1]
+    monday = day - timedelta(days=day.weekday())
+    before = [c for d, c in rows if d < monday]
+    week = before[-1] if before else None
+    return {"day": day.isoformat(), "close": close, "change": close - prev, "pct": (close / prev - 1) * 100,
+            "week_pct": (close / week - 1) * 100 if week else None}
+
+
+def move_line(label: str, move: dict) -> str:
+    sign = lambda v: f"+{v:,.2f}" if v >= 0 else f"{v:,.2f}"
+    line = f"{label} {move['day'][5:].replace('-', '/')} 收 {move['close']:,.2f}，{sign(move['change'])}（{sign(move['pct'])}%）"
+    if move.get("week_pct") is not None:
+        line += f"，本週 {sign(move['week_pct'])}%"
+    return line
+
+
+async def market_facts(client, session: str) -> tuple[list[str], list[str]]:
+    lines: list[str] = []
+    for symbol, label, tz in MARKET_SYMBOLS[session]:
+        try:
+            response = await client.get(YAHOO_CHART.format(symbol=quote(symbol)), headers={"User-Agent": "Mozilla/5.0"})
+            response.raise_for_status()
+            move = index_move(response.json(), tz)
+            if move:
+                lines.append(move_line(label, move))
+        except Exception as exc:
+            logger.warning("Market quote %s failed: %s", symbol, type(exc).__name__)
+    headlines: list[str] = []
+    try:
+        q, hl, gl, ceid = MARKET_NEWS_QUERY[session]
+        response = await client.get(f"https://news.google.com/rss/search?q={quote(q)}+when:1d&hl={hl}&gl={gl}&ceid={ceid}")
+        headlines = [i["title"] for i in google_news(response.text, "MARKET", datetime.now(timezone.utc) - LOOKBACK)][:15]
+    except Exception as exc:
+        logger.warning("Market headlines failed: %s", type(exc).__name__)
+    return lines, headlines
+
+
+async def market_brief(client, session: str, now: datetime, key: str) -> str | None:
+    """Grounded recap first; without search, a recap of our own quotes and headlines; without Gemini, those listed."""
+    if key:
+        grounded = await asyncio.to_thread(gemini_summary, market_brief_prompt(session, now), key, None, True)
+        if grounded:
+            return grounded
+    lines, headlines = await market_facts(client, session)
+    if not lines and not headlines:
+        return None
+    facts = "收盤報價：\n" + "\n".join(lines) + "\n\n過去 24 小時市場新聞標題：\n" + "\n".join(f"- {h}" for h in headlines)
+    if key:
+        prompt = (market_brief_prompt(session, now).replace("用 Google 搜尋整理", "只根據下面的報價與新聞標題整理")
+                  + "\n資料沒有的項目直接略過，不要用自己的知識補。\n\n" + facts)
+        written = await asyncio.to_thread(gemini_summary, prompt, key, None, False)
+        if written:
+            return written
+    return "\n".join(lines) + ("\n\n" + "\n".join(f"・{h}" for h in headlines[:8]) if headlines else "")
+
+
 def gemini_summary(prompt: str, key: str, client=None, search: bool = False) -> str | None:
     import httpx
     own = client is None
-    client = client or httpx.Client(timeout=60)
+    client = client or httpx.Client(timeout=120)
     try:
-        response = client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
-            headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-            json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2},
-                  **({"tools": [{"google_search": {}}]} if search else {})})
-        if response.status_code != 200:
-            logger.warning("Gemini digest returned %s", response.status_code)
-            return None
-        parts = response.json()["candidates"][0]["content"]["parts"]
-        return "".join(part.get("text", "") for part in parts).strip() or None
-    except Exception as exc:
-        logger.warning("Gemini digest failed: %s", type(exc).__name__)
+        # An overloaded (503), retired (404) or slow model moves on to the next; a quota error (429) is shared by all, so stop.
+        for model in dict.fromkeys([GEMINI_MODEL, *GEMINI_FALLBACK_MODELS]):
+            try:
+                response = client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+                    json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2},
+                          **({"tools": [{"google_search": {}}]} if search else {})})
+            except Exception as exc:
+                logger.warning("Gemini digest %s failed: %s", model, type(exc).__name__)
+                continue
+            if response.status_code == 200:
+                parts = response.json()["candidates"][0]["content"]["parts"]
+                text = "".join(part.get("text", "") for part in parts).strip()
+                if text:
+                    return text
+                continue
+            logger.warning("Gemini digest %s returned %s", model, response.status_code)
+            if response.status_code in (400, 401, 403, 429):
+                return None
         return None
     finally:
         if own:
@@ -379,7 +467,11 @@ async def _then(coro, fn):
 async def run_session(store, session: str, day: date, now: datetime, client) -> bool:
     items, names = await collect(client, session, now)
     key = os.getenv("GEMINI_API_KEY", "").strip()
-    brief = await asyncio.to_thread(gemini_summary, market_brief_prompt(session, now), key, None, True) if key else None
+    try:
+        brief = await market_brief(client, session, now, key)
+    except Exception:
+        logger.exception("Market brief failed")
+        brief = None
     if not items:
         holdings = "過去 24 小時持股與觀察清單沒有新公告或新聞。"
     else:

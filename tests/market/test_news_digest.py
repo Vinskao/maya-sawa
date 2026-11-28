@@ -204,3 +204,66 @@ def test_a_quiet_watch_list_still_gets_the_market_brief(monkeypatch):
     assert "🇺🇸 三大指數齊漲" in sent["body"]
     assert sent["body"].index("三大指數") < sent["body"].index("持股與觀察清單")
     assert sent["title"] == "美股盤前摘要"
+
+
+def _chart(closes, days):
+    from datetime import datetime, timezone
+    ts = [int(datetime.fromisoformat(d).replace(hour=21, tzinfo=timezone.utc).timestamp()) for d in days]
+    return {"chart": {"result": [{"timestamp": ts, "indicators": {"quote": [{"close": closes}]}}]}}
+
+
+def test_index_move_has_close_day_change_and_week():
+    chart = _chart([47000.0, 48145.0, None, 50182.95, 50774.94],
+                   ["2026-11-20", "2026-11-21", "2026-11-24", "2026-11-26", "2026-11-27"])
+    move = news_digest.index_move(chart, "America/New_York")
+    assert move["day"] == "2026-11-27" and move["close"] == 50774.94
+    assert round(move["change"], 2) == 591.99 and round(move["pct"], 2) == 1.18
+    assert round(move["week_pct"], 2) == round((50774.94 / 48145 - 1) * 100, 2)  # against the last close before Monday
+    line = news_digest.move_line("道瓊", move)
+    assert line.startswith("道瓊 11/27 收 50,774.94，+591.99（+1.18%）")
+    assert "本週" in line
+
+
+def test_market_brief_falls_back_to_quotes_and_headlines_when_search_is_unavailable(monkeypatch):
+    import asyncio
+    calls = []
+    def fake(prompt, key, client=None, search=False):
+        calls.append(search)
+        return None if search else "📈 根據報價：三大指數齊漲"
+    monkeypatch.setattr(news_digest, "gemini_summary", fake)
+    async def facts(client, session):
+        return ["道瓊 11/27 收 50,774.94，+591.99（+1.18%）"], ["Stocks rally after Thanksgiving"]
+    monkeypatch.setattr(news_digest, "market_facts", facts)
+    from datetime import datetime, timezone
+    text = asyncio.run(news_digest.market_brief(None, "us", datetime(2026, 11, 28, tzinfo=timezone.utc), "k"))
+    assert text == "📈 根據報價：三大指數齊漲" and calls == [True, False]
+    monkeypatch.setattr(news_digest, "gemini_summary", lambda *a, **k: None)
+    text = asyncio.run(news_digest.market_brief(None, "us", datetime(2026, 11, 28, tzinfo=timezone.utc), "k"))
+    assert "道瓊 11/27 收 50,774.94" in text and "Stocks rally" in text  # no AI at all: still the numbers and headlines
+
+
+def test_default_model_is_an_alias_that_survives_retirements():
+    assert news_digest.GEMINI_MODEL == "gemini-flash-latest"
+
+
+def test_an_overloaded_model_falls_through_to_the_next_but_quota_stops():
+    urls = []
+
+    def client_with(*codes):
+        replies = iter(codes)
+        class Client:
+            def post(self, url, headers, json):
+                urls.append(url)
+                code = next(replies)
+                class R:
+                    status_code = code
+                    def json(self):
+                        return {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+                return R()
+        return Client()
+
+    assert news_digest.gemini_summary("p", "k", client=client_with(503, 200)) == "ok"
+    assert "gemini-3.5-flash" in urls[-1]
+    urls.clear()
+    assert news_digest.gemini_summary("p", "k", client=client_with(429, 200), search=True) is None
+    assert len(urls) == 1
