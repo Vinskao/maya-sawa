@@ -239,7 +239,26 @@ def fallback_summary(items: list[dict], names: dict[str, str]) -> str:
     return "\n".join(lines)
 
 
-def gemini_summary(prompt: str, key: str, client=None) -> str | None:
+def market_brief_prompt(session: str, now: datetime) -> str:
+    """Market-wide recap written by Gemini with Google Search, so a quiet watch list never means an empty digest."""
+    from zoneinfo import ZoneInfo
+    taipei = now.astimezone(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M")
+    rules = ("只寫搜尋到、可查證的事實與數字（點位、漲跌點數與百分比），不要給買賣建議，不要編造。"
+             "用繁體中文，條列，總長 15 行以內，不要開場白或結尾問句。")
+    if session == "us":
+        return (f"現在是台北時間 {taipei}。用 Google 搜尋整理美股：\n"
+                "1. 最近一個交易日收盤：道瓊、標普 500、那斯達克的收盤點位與漲跌（點數、百分比），本週累計，費城半導體指數；假期或提前收盤要註明。\n"
+                "2. 重點族群與個股：漲跌最大或消息最重要的 4–6 檔，附漲跌幅與原因（財報、法說、監管、併購）。\n"
+                "3. 今天盤前：三大期指方向與幅度、盤前大動的個股；週末休市就寫休市並跳過。\n"
+                "4. 接下來的觀察重點：今天到下週的經濟數據、Fed、重要財報與政策事件，附日期。\n" + rules)
+    return (f"現在是台北時間 {taipei}。用 Google 搜尋整理台股開盤前要知道的事：\n"
+            "1. 台股最近一個交易日：加權指數收盤點位與漲跌、成交量、外資／投信／自營商買賣超。\n"
+            "2. 昨晚美股：三大指數與費城半導體漲跌、台積電 ADR 漲跌幅與溢價，以及報導提到的對台股影響。\n"
+            "3. 重點個股與族群：前一交易日漲跌最大或消息最重要的 4–6 檔台股，附原因。\n"
+            "4. 今天與本週觀察重點：國內外數據、央行、法說會、除權息，附日期。\n" + rules)
+
+
+def gemini_summary(prompt: str, key: str, client=None, search: bool = False) -> str | None:
     import httpx
     own = client is None
     client = client or httpx.Client(timeout=60)
@@ -247,7 +266,8 @@ def gemini_summary(prompt: str, key: str, client=None) -> str | None:
         response = client.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
             headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-            json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}})
+            json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2},
+                  **({"tools": [{"google_search": {}}]} if search else {})})
         if response.status_code != 200:
             logger.warning("Gemini digest returned %s", response.status_code)
             return None
@@ -358,19 +378,22 @@ async def _then(coro, fn):
 
 async def run_session(store, session: str, day: date, now: datetime, client) -> bool:
     items, names = await collect(client, session, now)
+    key = os.getenv("GEMINI_API_KEY", "").strip()
+    brief = await asyncio.to_thread(gemini_summary, market_brief_prompt(session, now), key, None, True) if key else None
     if not items:
-        body = "過去 24 小時持股與觀察清單沒有新公告或新聞。"
+        holdings = "過去 24 小時持股與觀察清單沒有新公告或新聞。"
     else:
-        key = os.getenv("GEMINI_API_KEY", "").strip()
         summary = await asyncio.to_thread(gemini_summary, build_prompt(items, names), key) if key else None
-        body = summary or ("（AI 摘要暫時無法使用，以下為標題）\n" + fallback_summary(items, names))
+        holdings = summary or ("（AI 摘要暫時無法使用，以下為標題）\n" + fallback_summary(items, names))
+    body = f"📈 大盤回顧\n{brief or '（大盤回顧暫時無法產生）'}\n\n💼 持股與觀察清單\n{holdings}"
     try:
         calendar = calendar_section(upcoming_events(await asyncio.to_thread(load_events, now), now))
     except Exception:
         logger.exception("Economic calendar preview unavailable")
         calendar = "📅 經濟數據行事曆暫時讀不到。"
     body = f"{calendar}\n\n{body}"
-    return await asyncio.to_thread(deliver, store, session, day, digest_title(session, len(items)), body)
+    title = digest_title(session, len(items)) if items else SESSION_LABEL[session]
+    return await asyncio.to_thread(deliver, store, session, day, title, body)
 
 
 class NewsDigestScheduler:

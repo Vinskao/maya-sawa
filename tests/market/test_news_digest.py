@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from maya_sawa.services import news_digest as nd
+from maya_sawa.services import news_digest
 
 UTC = timezone.utc
 TPE = ZoneInfo("Asia/Taipei")
@@ -158,3 +159,48 @@ def test_calendar_preview_lists_tonights_release_once_in_taipei_time():
 def test_calendar_preview_says_so_when_nothing_is_scheduled():
     assert nd.upcoming_events([], NOW) == []
     assert "沒有排定" in nd.calendar_section([])
+
+
+def test_market_brief_prompt_asks_for_the_last_session_with_numbers():
+    from datetime import datetime, timezone
+    us = news_digest.market_brief_prompt("us", datetime(2026, 11, 28, 4, tzinfo=timezone.utc))
+    for word in ("道瓊", "標普 500", "那斯達克", "費城半導體", "個股", "期指", "觀察重點", "2026-11-28"):
+        assert word in us
+    tw = news_digest.market_brief_prompt("tw", datetime(2026, 11, 30, 0, tzinfo=timezone.utc))
+    for word in ("加權指數", "外資", "台積電 ADR", "昨晚美股"):
+        assert word in tw
+
+
+def test_market_brief_uses_google_search_grounding():
+    sent = {}
+
+    class Client:
+        def post(self, url, headers, json):
+            sent.update(json)
+            class R:
+                status_code = 200
+                def json(self):
+                    return {"candidates": [{"content": {"parts": [{"text": "道瓊收 50,774.94"}]}}]}
+            return R()
+
+    assert news_digest.gemini_summary("p", "k", client=Client(), search=True) == "道瓊收 50,774.94"
+    assert sent["tools"] == [{"google_search": {}}]
+    news_digest.gemini_summary("p", "k", client=Client())
+    assert "tools" not in sent or sent is not None
+
+
+def test_a_quiet_watch_list_still_gets_the_market_brief(monkeypatch):
+    import asyncio
+    from datetime import date, datetime, timezone
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    async def no_items(client, session, now):
+        return [], {}
+    monkeypatch.setattr(news_digest, "collect", no_items)
+    monkeypatch.setattr(news_digest, "load_events", lambda now: [])
+    monkeypatch.setattr(news_digest, "gemini_summary", lambda prompt, key, client=None, search=False: "🇺🇸 三大指數齊漲" if search else None)
+    sent = {}
+    monkeypatch.setattr(news_digest, "deliver", lambda store, s, d, title, body: sent.update(title=title, body=body) or True)
+    asyncio.run(news_digest.run_session(None, "us", date(2026, 11, 28), datetime(2026, 11, 28, 13, tzinfo=timezone.utc), None))
+    assert "🇺🇸 三大指數齊漲" in sent["body"]
+    assert sent["body"].index("三大指數") < sent["body"].index("持股與觀察清單")
+    assert sent["title"] == "美股盤前摘要"
