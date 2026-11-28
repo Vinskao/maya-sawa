@@ -4,6 +4,7 @@
 > - **Gemini**：週一 routine 呼叫 `POST /ai-visibility/probe/gemini`，後端用 Google AI Studio 免費 API key（`gemini-2.5-flash`＋Google 搜尋 grounding）逐字問本週 3 個關鍵字；名次＝tymultiverse.cc 在引用來源中的位置。key 放 k8s Secret `gemini-visibility`（`GEMINI_API_KEY`，optional，未設定回 503）。
 > - **Claude**：同一 routine 用自己的網頁搜尋逐字搜關鍵字，`POST /ai-visibility/auto`（agent key，只收 gemini／claude）。
 > - **ChatGPT／Grok**：定時任務無法搜尋、Grok 無排程入口，自動化只能用付費 API；沒有額度前停查，儀表板顯示「—」。
+> - **2026-11-28 備援**：Google 搜尋額度 429 時，gemini 格記為 unavailable（`gemini_result`，不猜、不進分母）。Claude 格照常查（兩種措辭交叉確認）；ChatGPT 定時任務（週二、五 03:00）的結果走無密鑰收件匣，由週一 routine 審核。ChatGPT 排程是否真的能搜尋網頁尚未驗證（2026-11-15 曾失敗），結果以收件匣內容為準。
 > - 以下舊段落（手填、GPT 任務）保留作歷史紀錄。
 
 > **2026-11-15 晚間更新：** ChatGPT 定時任務實測失敗（排程執行沒有網頁搜尋，3 格都 unavailable；任務也沒寄出 email，Gmail 橋接不可行），且沒有 OpenAI API 額度，所以 ChatGPT 也改為擁有者手填，GPT 定時任務已暫停。手動在聊天中用「臨時聊天＋網頁搜尋」查詢結果正常。

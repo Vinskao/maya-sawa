@@ -10,6 +10,9 @@ AI 搜尋或 Maya API 失敗時，記錄失敗步驟與狀態，仍完成獨立�
 2. Claude：GET /ai-visibility/keywords 取 thisWeek。每個關鍵字用你自己的網頁搜尋，當作一般使用者逐字搜尋該關鍵字，依搜尋結果判斷：appeared＝前 20 筆結果是否有 tymultiverse.cc（或「TY 市場研究室」）；rank＝它在結果中的名次（1–20）；cited＝有該網站連結；snippet＝提到它的那段原文（300 字內）；competitors＝排在前面的其他網域（最多 5 個）。搜尋失敗就 status="unavailable"，不可猜測，也不可為了好看去搜站名。
    POST /ai-visibility/auto {"results":[3 筆，platform 全是 "claude"]}，422 就依訊息修正後重送。
 
+3. Gemini 備援（2026-11-28 起 Google 搜尋額度 429）：probe 回來的 gemini 格若是 unavailable（429／503／逾時），不重試、不猜；當週這一格留「無法檢視」並從分母排除。這時 Claude 那 3 格更重要，務必完成，且每個關鍵字至少用兩種不同措辭的搜尋交叉確認再填，搜尋都失敗才 unavailable。
+4. ChatGPT 備援：ChatGPT 定時任務（每週二、五 03:00）若有送件，會在無密鑰收件匣以 pending 出現，第 1 節審核時照常 accept。週一 04:30 當下若本週沒有 chatgpt 格，只在週報註明「GPT 本週無資料」，不要自己用 platform="chatgpt" 填寫（那是 Claude 的搜尋，不是 ChatGPT 的回答）。
+
 ## 1. 審核
 GET /ai-visibility/runs?status=pending。自動結果已直接 accepted，pending 通常是空的；有的話（舊的外部送件）逐筆檢查關鍵字×平台是否齊全、名次與 snippet 是否自洽，合理 accept、不合理 reject 並寫理由。沒有 pending 也繼續第 2 節。
 
